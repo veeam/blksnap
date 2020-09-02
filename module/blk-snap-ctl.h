@@ -1,5 +1,8 @@
 #pragma once
 
+#define MODULE_NAME "blk-snap"
+#define SNAP_IMAGE_NAME "blk-snap-image"
+
 #define SUCCESS 0
 
 #define MAX_TRACKING_DEVICE_COUNT    256

@@ -801,7 +801,7 @@ int snapimage_create( dev_t original_dev )
         }
         image->disk = disk;
 
-        if (snprintf( disk->disk_name, DISK_NAME_LEN, "%s%d", VEEAM_SNAP_IMAGE, minor ) < 0){
+        if (snprintf( disk->disk_name, DISK_NAME_LEN, "%s%d", SNAP_IMAGE_NAME, minor ) < 0){
             log_err_d( "Unable to set disk name for snapshot image device: invalid minor ", minor );
             res = -EINVAL;
             break;
@@ -1028,7 +1028,7 @@ int snapimage_init( void )
 
     init_rwsem(&snap_image_destroy_lock);
 
-    res = register_blkdev( g_snapimage_major, VEEAM_SNAP_IMAGE );
+    res = register_blkdev( g_snapimage_major, SNAP_IMAGE_NAME );
     if (res >= SUCCESS){
         g_snapimage_major = res;
         log_tr_format( "Snapshot image block device major %d was registered", g_snapimage_major );
@@ -1080,7 +1080,7 @@ int snapimage_done( void )
             log_err("Failed to release snapshot images container" );
         }
 
-        unregister_blkdev( g_snapimage_major, VEEAM_SNAP_IMAGE );
+        unregister_blkdev( g_snapimage_major, SNAP_IMAGE_NAME );
         log_tr_format( "Snapshot image block device [%d] was unregistered", g_snapimage_major );
     }
     up_write(&snap_image_destroy_lock);

@@ -36,9 +36,6 @@
 
 #define DESCRIPTION_STR "Veeam Snapshot Kernel Module"
 
-#define MODULE_NAME "veeamsnap"
-#define VEEAM_SNAP_IMAGE "veeamimage"
-
 #ifndef SECTOR_SHIFT
 #define SECTOR_SHIFT 9
 #endif

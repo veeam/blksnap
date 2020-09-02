@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "log.h"
 #include "queue_spinlocking.h"
+#include "blk-snap-ctl.h"
 #include <linux/time.h>
 
 #define SECTION "logging   "
