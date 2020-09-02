@@ -38,10 +38,5 @@ static inline void *dbg_kmalloc( size_t size, gfp_t flags )
 
 void * dbg_kmalloc_huge( size_t max_size, size_t min_size, gfp_t flags, size_t* p_allocated_size );
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-#define mem_kmap_atomic(__page) kmap_atomic(__page,KM_BOUNCE_READ)
-#define mem_kunmap_atomic(__mem) kunmap_atomic(__mem,KM_BOUNCE_READ)
-#else
 #define mem_kmap_atomic(__page) kmap_atomic(__page)
 #define mem_kunmap_atomic(__mem) kunmap_atomic(__mem)
-#endif

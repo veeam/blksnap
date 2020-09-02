@@ -21,23 +21,15 @@ uint64_t _notify_counter = 0;
 // major
 
 int get_veeamsnap_major(void);
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
+
 static ssize_t major_show(struct class *class, struct class_attribute *attr, char *buf)
-#else
-static ssize_t major_show(struct class *class, char *buf)
-#endif
 {
     sprintf(buf, "%d", get_veeamsnap_major());
     return strlen(buf);
 }
 
 // blkdev_notify
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
 static ssize_t blkdev_notify_show(struct class *class, struct class_attribute *attr, char *buf)
-#else
-static ssize_t blkdev_notify_show(struct class *class, char *buf)
-#endif
 {
     log_tr_lld("Show notify counter ", _notify_counter);
     sprintf(buf, "%lld", _notify_counter);
@@ -51,11 +43,7 @@ enum ENotifyCommandType
     NotifyCommandRemove = 2
 };
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
 static ssize_t blkdev_notify_store(struct class *class, struct class_attribute *attr, const char *buf, size_t count) 
-#else
-static ssize_t blkdev_notify_store(struct class *class, const char *buf, size_t count) 
-#endif
 {
     int res = SUCCESS;
     /*
@@ -148,11 +136,7 @@ static ssize_t blkdev_notify_store(struct class *class, const char *buf, size_t 
 
 #ifdef VEEAMSNAP_SYSFS_PARAMS
 // params
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
 static ssize_t params_show(struct class *class, struct class_attribute *attr, char *buf)
-#else
-static ssize_t params_show(struct class *class, char *buf)
-#endif
 {
     int res = get_params(buf);
     if (res == SUCCESS)
@@ -162,11 +146,7 @@ static ssize_t params_show(struct class *class, char *buf)
     return 0;
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
 static ssize_t params_store(struct class *class, struct class_attribute *attr, const char *buf, size_t count)
-#else
-static ssize_t params_store(struct class *class, const char *buf, size_t count)
-#endif
 {
     int res = -EINVAL;
     size_t ofs = 0;
@@ -220,7 +200,7 @@ static ssize_t params_store(struct class *class, const char *buf, size_t count)
     return count;
 }
 #endif
-
+/*
 #ifndef __ATTR_RW
 #define __ATTR_RW(_name) __ATTR(_name, 0644, _name##_show, _name##_store)
 #endif
@@ -240,7 +220,7 @@ struct class_attribute class_attr_##_name = __ATTR_RW(_name)
 #define CLASS_ATTR_RO(_name) \
 struct class_attribute class_attr_##_name = __ATTR_RO(_name)
 #endif
-
+*/
 #ifdef PERSISTENT_CBT
 CLASS_ATTR_RW(blkdev_notify);
 CLASS_ATTR_RO(major);

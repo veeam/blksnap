@@ -84,9 +84,9 @@ static int _check_is_mounted(struct block_device* blk_dev, bool* p_is_mounted)
 
     if (sb->s_type && sb->s_type->name)
         log_tr_s("Type of mounted fs: ", sb->s_type->name);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,39,0)
+
     log_tr_uuid("fs uuid: ", (veeam_uuid_t*)&sb->s_uuid);
-#endif
+
     drop_super(sb);
     *p_is_mounted = true;
     return SUCCESS;

@@ -15,9 +15,7 @@
 #include "cbt_storage.h"
 #include "cbt_checkfs.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION( 2, 6, 39 )
 #include <linux/syscore_ops.h>
-#endif
 
 #define SECTION "cbt_prst  "
 #include "log_format.h"
@@ -909,18 +907,14 @@ void cbt_persistent_device_attach(char* dev_name, char* dev_path)
             //log_tr_sect("Partition sector start at ", bd_part->start_sect);
             //log_tr_sect("Partition sector size ", bd_part->nr_sects);
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
-            if (bd_part->info){
+            if (bd_part->info) {
                 struct partition_meta_info *info = bd_part->info;
 
                 log_tr("Partition information found");
                 log_tr_s("volume uuid ", info->uuid);
                 log_tr_s("volume name ", info->volname);
             }
-#endif
         }
-
-
     }
 
     // Lock allows only one block device to be processed at a time

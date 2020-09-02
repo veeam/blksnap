@@ -10,12 +10,10 @@
 #define SECTION "blk       "
 #include "log_format.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 18, 0 )
-struct bio_set* BlkDeferredBioset = NULL;
-#else
+
 struct bio_set g_BlkDeferredBioset = { 0 };
 #define BlkDeferredBioset &g_BlkDeferredBioset
-#endif
+
 
 typedef struct dio_bio_complete_s{
     blk_deferred_request_t* dio_req;
@@ -126,48 +124,19 @@ blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_des
 
 int blk_deferred_bioset_create( void )
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 18, 0 )
-    BlkDeferredBioset = blk_bioset_create(sizeof(dio_bio_complete_t));
-    if (BlkDeferredBioset == NULL){
-        log_err( "Failed to create bio set for defer IO" );
-        return -ENOMEM;
-    }
-    log_tr( "Bio set for defer IO create" );
-    return SUCCESS;
-#else
     return bioset_init(BlkDeferredBioset, 64, sizeof(dio_bio_complete_t), BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
-#endif
 }
 
 void blk_deferred_bioset_free( void )
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 18, 0 )
-    if (BlkDeferredBioset != NULL){
-        bioset_free( BlkDeferredBioset );
-        BlkDeferredBioset = NULL;
-
-        log_tr( "Bio set for defer IO free" );
-    }
-#else
     bioset_exit(BlkDeferredBioset);
-#endif
 }
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
-void blk_deferred_bio_free( struct bio* bio )
-{
-    bio_free( bio, BlkDeferredBioset );
-}
-#endif
 
 struct bio* _blk_deferred_bio_alloc( int nr_iovecs )
 {
     struct bio* new_bio = bio_alloc_bioset( GFP_NOIO, nr_iovecs, BlkDeferredBioset );
     if (new_bio){
         new_bio->bi_end_io = blk_deferred_bio_endio;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
-        new_bio->bi_destructor = blk_deferred_bio_free;
-#endif
         new_bio->bi_private = ((void*)new_bio) - sizeof( dio_bio_complete_t );
     }
     return new_bio;
@@ -189,12 +158,7 @@ void blk_deferred_complete( blk_deferred_request_t* dio_req, sector_t portion_se
     }
 }
 
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
-void blk_deferred_bio_endio( struct bio *bio, int err )
-#else
 void blk_deferred_bio_endio( struct bio *bio )
-#endif
 {
     int local_err;
     dio_bio_complete_t* complete_param = (dio_bio_complete_t*)bio->bi_private;
@@ -202,20 +166,11 @@ void blk_deferred_bio_endio( struct bio *bio )
     if (complete_param == NULL){
 //        WARN( true, "bio already end." );
     }else{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
-        local_err = err;
-#else
-
-#ifndef BLK_STS_OK//#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 13, 0 )
-        local_err = bio->bi_error;
-#else
         if (bio->bi_status != BLK_STS_OK)
             local_err = -EIO;
         else
             local_err = SUCCESS;
-#endif
 
-#endif
         blk_deferred_complete( complete_param->dio_req, complete_param->bio_sect_len, local_err );
         bio->bi_private = NULL;
     }
@@ -257,14 +212,12 @@ sector_t _blk_deferred_submit_pages(
     bio->bi_bdev = blk_dev;
 #endif
 
-#ifndef REQ_OP_BITS //#if LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0)
-    bio->bi_rw = direction;
-#else
+
     if (direction == READ)
         bio_set_op_attrs( bio, REQ_OP_READ, 0 );
     else
         bio_set_op_attrs( bio, REQ_OP_WRITE, 0 );
-#endif
+
     bio_bi_sector( bio ) = ofs_sector;
 
     {//add first
@@ -301,11 +254,7 @@ sector_t _blk_deferred_submit_pages(
     ((dio_bio_complete_t*)bio->bi_private)->dio_req = dio_req;
     ((dio_bio_complete_t*)bio->bi_private)->bio_sect_len = process_sect;
 
-#ifndef REQ_OP_BITS //#if LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0)
-    submit_bio( direction, bio );
-#else
     submit_bio( bio );
-#endif
 
     return process_sect;
 }

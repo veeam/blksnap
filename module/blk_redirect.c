@@ -6,62 +6,29 @@
 #define SECTION "blk       "
 #include "log_format.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 18, 0 )
-struct bio_set* BlkRedirectBioset = NULL;
-#else
 struct bio_set g_BlkRedirectBioset = { 0 };
 #define BlkRedirectBioset &g_BlkRedirectBioset
-#endif
 
 int blk_redirect_bioset_create( void )
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 18, 0 )
-    BlkRedirectBioset = blk_bioset_create(0);
-    if (BlkRedirectBioset == NULL){
-        log_err( "Failed to create bio set for redirect IO" );
-        return -ENOMEM;
-    }
-    log_tr( "Bio set for redirect IO create" );
-    return SUCCESS;
-#else
     return bioset_init(BlkRedirectBioset, 64, 0, BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
-#endif
 }
 
 void blk_redirect_bioset_free( void )
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 18, 0 )
-    if (BlkRedirectBioset != NULL){
-        bioset_free( BlkRedirectBioset );
-        BlkRedirectBioset = NULL;
-
-        log_tr( "Bio set for redirect IO free" );
-    }
-#else
     bioset_exit(BlkRedirectBioset);
-#endif
 }
 
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
-void blk_redirect_bio_endio( struct bio *bb, int err )
-#else
 void blk_redirect_bio_endio( struct bio *bb )
-#endif
 {
     blk_redirect_bio_endio_t* rq_endio = (blk_redirect_bio_endio_t*)bb->bi_private;
 
-    if (rq_endio != NULL){
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,3,0)
+    if (rq_endio != NULL) {
         int err = SUCCESS;
-#ifndef BLK_STS_OK//#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 13, 0 )
-        err = bb->bi_error;
-#else
+
         if (bb->bi_status != BLK_STS_OK)
             err = -EIO;
-#endif
 
-#endif
         if (err != SUCCESS){
             log_err_d( "Failed to process redirect IO request. errno=", 0 - err );
             //log_err_sect( "offset=", bio_bi_sector( bb ) );
@@ -76,12 +43,6 @@ void blk_redirect_bio_endio( struct bio *bb )
     bio_put( bb );
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
-void _blk_dev_redirect_bio_free( struct bio* bio )
-{
-    bio_free( bio, BlkRedirectBioset );
-}
-#endif
 
 struct bio* _blk_dev_redirect_bio_alloc( int nr_iovecs, void* bi_private )
 {
@@ -89,9 +50,6 @@ struct bio* _blk_dev_redirect_bio_alloc( int nr_iovecs, void* bi_private )
     if (new_bio){
         new_bio->bi_end_io = blk_redirect_bio_endio;
         new_bio->bi_private = bi_private;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
-        new_bio->bi_destructor = _blk_dev_redirect_bio_free;
-#endif
     }
     return new_bio;
 }
@@ -141,13 +99,8 @@ int _blk_dev_redirect_part_fast( blk_redirect_bio_endio_t* rq_endio, int directi
 
     int res = SUCCESS;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
-    struct bio_vec* bvec;
-    unsigned short iter;
-#else
     struct bio_vec bvec;
     struct bvec_iter iter;
-#endif
 
     struct bio* new_bio = NULL;
 
@@ -211,20 +164,12 @@ __reprocess_bv:
             new_bio->bi_bdev = blk_dev;
 #endif
 
-            if (direction == READ){
-#ifndef REQ_OP_BITS //#if LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0)
-                new_bio->bi_rw = READ;
-#else
+            if (direction == READ)
                 bio_set_op_attrs( new_bio, REQ_OP_READ, 0 );
-#endif
-            }
-            if (direction == WRITE){
-#ifndef REQ_OP_BITS //#if LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0)
-                new_bio->bi_rw = WRITE;
-#else
+
+            if (direction == WRITE)
                 bio_set_op_attrs( new_bio, REQ_OP_WRITE, 0 );
-#endif
-            }
+
             bio_bi_sector( new_bio ) = target_pos + processed_sectors;// +bvec_ofs;
         }
 
@@ -302,12 +247,9 @@ void blk_dev_redirect_submit( blk_redirect_bio_endio_t* rq_endio )
     head = curr = rq_endio->bio_endio_head_rec;
     rq_endio->bio_endio_head_rec = NULL;
 
-    while (curr != NULL){
-#ifndef REQ_OP_BITS //#if LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0)
-        submit_bio( bio_data_dir( rq_endio->bio ), curr->this );
-#else
+    while (curr != NULL) {
         submit_bio( curr->this );
-#endif
+
         curr = curr->next;
     }
 
@@ -317,14 +259,8 @@ void blk_dev_redirect_submit( blk_redirect_bio_endio_t* rq_endio )
 
 int blk_dev_redirect_memcpy_part( blk_redirect_bio_endio_t* rq_endio, int direction, void* buff, sector_t rq_ofs, sector_t rq_count )
 {
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
-    struct bio_vec* bvec;
-    unsigned short iter;
-#else
     struct bio_vec bvec;
     struct bvec_iter iter;
-#endif
 
     sector_t sect_ofs = 0;
     sector_t processed_sectors = 0;
@@ -377,13 +313,8 @@ int blk_dev_redirect_memcpy_part( blk_redirect_bio_endio_t* rq_endio, int direct
 
 int blk_dev_redirect_zeroed_part( blk_redirect_bio_endio_t* rq_endio, sector_t rq_ofs, sector_t rq_count )
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
-    struct bio_vec* bvec;
-    unsigned short iter;
-#else
     struct bio_vec bvec;
     struct bvec_iter iter;
-#endif
 
     sector_t sect_ofs = 0;
     sector_t processed_sectors = 0;

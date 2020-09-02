@@ -53,11 +53,8 @@ int _collector_init( snapdata_collector_t* collector, dev_t dev_id, void* MagicU
     }
 
     collector->magic_size = MagicLength;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,13,0)
-    collector->magic_buff = dbg_kmalloc( collector->magic_size, GFP_KERNEL | __GFP_REPEAT );
-#else
     collector->magic_buff = dbg_kmalloc( collector->magic_size, GFP_KERNEL | __GFP_RETRY_MAYFAIL );
-#endif
+
     if (collector->magic_buff == NULL){
         log_err( "Unable to initialize snapstore collector: not enough memory" );
         return -ENOMEM;
@@ -353,22 +350,15 @@ int _snapdata_collect_bvec( snapdata_collector_t* collector, sector_t ofs, struc
         log_err_format( "Unable to collect snapstore data location: large PAGE_SIZE [%ld] is not supported yet. bv_len=%d", PAGE_SIZE, bv_len );
         return -EINVAL;
     }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-    mem = kmap_atomic( bvec->bv_page, KM_BOUNCE_READ );
-#else
+
     mem = kmap_atomic( bvec->bv_page ) ;
-#endif
     for (buff_ofs = bv_offset; buff_ofs < ( bv_offset + bv_len ); buff_ofs+=SECTOR_SIZE){
         size_t compare_len = min( (size_t)SECTOR_SIZE, collector->magic_size );
 
         if (0 == memcmp( mem + buff_ofs, collector->magic_buff, compare_len ))
             sectors_map |= (stream_size_t)1 << (stream_size_t)(buff_ofs >> SECTOR_SHIFT);
     }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-    kunmap_atomic( mem, KM_BOUNCE_READ );
-#else
     kunmap_atomic( mem );
-#endif
 
     mutex_lock(&collector->locker);
     for (buff_ofs = bv_offset; buff_ofs < (bv_offset + bv_len); buff_ofs += SECTOR_SIZE){
@@ -435,22 +425,14 @@ void snapdata_collect_Process( snapdata_collector_t* collector, struct bio *bio 
     size = bio_sectors( bio );
 
     {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
-        struct bio_vec* bvec;
-        unsigned short iter;
-#else
         struct bio_vec bvec;
         struct bvec_iter iter;
-#endif
+
         bio_for_each_segment( bvec, bio, iter ) {
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
-            int err = _snapdata_collect_bvec( collector, ofs, bvec );
-            ofs += sector_from_size( bvec->bv_len );
-#else
+
             int err = _snapdata_collect_bvec( collector, ofs, &bvec );
             ofs += sector_from_size( bvec.bv_len );
-#endif
             if (err){
                 collector->fail_code = err;
                 log_err_d( "Failed to collect snapstore data location. errno=", collector->fail_code );

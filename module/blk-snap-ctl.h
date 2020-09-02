@@ -116,43 +116,6 @@ struct ioctl_range_s{
 };
 
 //////////////////////////////////////////////////////////////////////////
-// snapshotdata - not supported 
-/*
-
-struct ioctl_snapshotdata_memory_s
-{
-    unsigned char id[16];
-    unsigned long long snapshotdatasize;
-};
-#define IOCTL_SNAPSHOTDATA_MEMORY    _IOR(VEEAM_SNAP, 0x20, struct ioctl_snapshotdata_memory_s)
-
-
-struct ioctl_snapshotdata_clean_s
-{
-    unsigned char id[16];
-};
-#define IOCTL_SNAPSHOTDATA_CLEAN    _IOR(VEEAM_SNAP, 0x21, struct ioctl_snapshotdata_clean_s)
-
-
-struct ioctl_snapshotdata_common_s{
-    unsigned char id[16];
-    struct ioctl_dev_id_s dev_id_host_data;
-    unsigned int range_count;
-    union{
-        struct ioctl_range_s* ranges;
-        unsigned long long ull_ranges;
-    };
-};
-#define IOCTL_SNAPSHOTDATA_COMMON        _IOR(VEEAM_SNAP, 0x22, struct ioctl_snapshotdata_common_s)
-
-
-struct ioctl_snapshotdata_add_dev_s{
-    unsigned char id[16];
-    struct ioctl_dev_id_s dev_id;
-};
-#define IOCTL_SNAPSHOTDATA_ADD_DEV        _IOR(VEEAM_SNAP, 0x23, struct ioctl_snapshotdata_add_dev_s)
-*/
-//////////////////////////////////////////////////////////////////////////
 // snapstore
 struct ioctl_snapstore_create_s
 {

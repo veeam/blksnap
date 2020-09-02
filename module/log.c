@@ -12,38 +12,12 @@
 #define MAX_LOGLINE_SIZE 256
 #define MAX_FILENAME_SIZE 256
 #define MAX_TIMESTRING_SIZE 256
-/*
-
-void log_dump( void* p, size_t size )
-{
-    unsigned char* pch = (unsigned char*)p;
-    int pos = 0;
-    char str[16*3+1+1];
-    char* pstr = (char*)str;
-
-    while(pos<size) {
-        sprintf(pstr, "%02x ",pch[pos++]);
-        pstr+=3;
-
-        if ( 0==(pos %16) ){
-            pr_err( "%s\n", str );
-            pstr = str;
-        }
-    }
-    if ( 0!=(pos %16) ){
-        pr_err( "%s\n", str );
-    }
-}
-*/
 
 typedef struct _logging_request_t
 {
     queue_content_sl_t content;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    struct timespec m_time;
-#else
     struct timespec64 m_time;
-#endif
+
     pid_t m_pid;
     const char* m_section;
     unsigned m_level;
@@ -69,11 +43,9 @@ typedef struct _logging_t
     unsigned long m_logmaxsize;
     struct file* m_filp;
     char m_filepath[MAX_FILENAME_SIZE];
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    struct timespec m_modify_time;
-#else
+
     struct timespec64 m_modify_time;
-#endif
+
     volatile bool m_is_file_logging;
     volatile int m_state;
 
@@ -129,22 +101,6 @@ static void __logging_filp_close( logging_t* logging )
     }
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
-static ssize_t __logging_kernel_write( struct file *file, const void *buf, size_t count, loff_t *pos )
-{
-    mm_segment_t old_fs;
-    ssize_t res;
-
-    old_fs = get_fs( );
-    set_fs( get_ds( ) );
-    /* The cast to a user pointer is valid due to the set_fs() */
-    res = vfs_write( file, (__force const char __user *)buf, count, pos );
-    set_fs( old_fs );
-
-    return res;
-}
-#endif
-
 static int __logging_filp_write( logging_t* logging, const char* buff, const size_t len )
 {
     int res = SUCCESS;
@@ -163,11 +119,7 @@ static int __logging_filp_write( logging_t* logging, const char* buff, const siz
     }
 
     {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
-        ssize_t result = __logging_kernel_write( logging->m_filp, buff, len, &logging->m_filp->f_pos );
-#else
         ssize_t result = kernel_write( logging->m_filp, buff, len, &logging->m_filp->f_pos );
-#endif
         if (result < 0)
             res = result;
     }
@@ -196,13 +148,9 @@ static int _logging_filename_create( logging_t* logging )
     else
     {
         struct tm modify_time;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-        getnstimeofday(&logging->m_modify_time);
-        time_to_tm(logging->m_modify_time.tv_sec, 0, &modify_time);
-#else
         ktime_get_real_ts64(&logging->m_modify_time);
         time64_to_tm(logging->m_modify_time.tv_sec, 0, &modify_time);
-#endif
+
         snprintf(logging->m_filepath, sizeof(logging->m_filepath), "%s/%s-%04ld%02d%02d.log",
             logging->m_logdir,
             MODULE_NAME,
@@ -234,11 +182,7 @@ static void _logging_close( logging_t* logging )
 static void _logging_check_renew( logging_t* logging )
 {
     loff_t sz = 0;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    struct timespec _time;
-#else
     struct timespec64 _time;
-#endif
     struct tm current_time;
     struct tm modify_time;
 
@@ -247,15 +191,9 @@ static void _logging_check_renew( logging_t* logging )
         return;
     log_tr_lld( "Log file size: ", sz );
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    getnstimeofday(&_time);
-    time_to_tm( _time.tv_sec, 0, &current_time );
-    time_to_tm( logging->m_modify_time.tv_sec, 0, &modify_time );
-#else
     ktime_get_real_ts64(&_time);
     time64_to_tm(_time.tv_sec, 0, &current_time);
     time64_to_tm(logging->m_modify_time.tv_sec, 0, &modify_time);
-#endif
     if (
         (modify_time.tm_mday == current_time.tm_mday) &&
         (modify_time.tm_mon == current_time.tm_mon) &&
@@ -368,11 +306,9 @@ static int _logging_process( logging_t* logging )
 
             struct tm _time;
             char timebuff[MAX_TIMESTRING_SIZE];
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-            time_to_tm( rq->m_time.tv_sec, 0, &_time );
-#else
+
             time64_to_tm(rq->m_time.tv_sec, 0, &_time);
-#endif
+
             _log_prefix( timebuff, sizeof( timebuff ), &_time, rq, _log_level_to_text( rq->m_level ) );
 
 #ifdef LOGFILE
@@ -532,11 +468,9 @@ static int _logging_buffer( const char* section, const unsigned level, const cha
     rq->m_section = section;
     rq->m_level = level;
     rq->m_pid = get_current( )->pid;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    getnstimeofday(&rq->m_time);
-#else
+
     ktime_get_real_ts64(&rq->m_time);
-#endif
+
     rq->m_len = len;
     if ((len != 0) && (buff != NULL))
         memcpy( rq->m_buff, buff, len );
@@ -733,11 +667,8 @@ void log_format( const char* section, const int level, const char* frm, ... )
     log_vformat( section, level, frm, args );
     va_end( args );
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-void log_s_sec(const char* section, const unsigned level, const char* s, const time_t totalsecs)
-#else
+
 void log_s_sec(const char* section, const unsigned level, const char* s, const time64_t totalsecs)
-#endif
 {
     struct tm _time;
     char _tmp[MAX_LOGLINE_SIZE];
@@ -745,11 +676,7 @@ void log_s_sec(const char* section, const unsigned level, const char* s, const t
     if (strlen(s) > (MAX_LOGLINE_SIZE - 20))
         return;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    time_to_tm(totalsecs, 0, &_time);
-#else
     time64_to_tm(totalsecs, 0, &_time);
-#endif
 
     snprintf(_tmp, MAX_LOGLINE_SIZE, "%s%02d.%02d.%04ld %02d:%02d:%02d",
         s,

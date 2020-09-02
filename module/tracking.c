@@ -79,21 +79,9 @@ bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
 
 #else //CONFIG_BLK_FILTER
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
-
-#ifdef HAVE_MAKE_REQUEST_INT
-int tracking_make_request(struct request_queue *q, struct bio *bio)
-#else
-void tracking_make_request(struct request_queue *q, struct bio *bio)
-#endif
-
-#else
 blk_qc_t tracking_make_request( struct request_queue *q, struct bio *bio )
-#endif
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)
     blk_qc_t result = 0;
-#endif
     sector_t bi_sector;
     unsigned int bi_size;
     tracker_queue_t* tracker_queue = NULL;
@@ -106,11 +94,7 @@ blk_qc_t tracking_make_request( struct request_queue *q, struct bio *bio )
         //find tracker by queue
         BUG_ON((tracker_queue->original_make_request_fn == NULL));
 
-#ifndef REQ_OP_BITS //#if LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0)
-        if ( bio->bi_rw & WRITE ){// only write request processed
-#else
         if ( op_is_write( bio_op( bio ) ) ){// only write request processed
-#endif
             if (SUCCESS == snapdata_collect_Find( q, bio, &collector ))
                 snapdata_collect_Process( collector, bio );
         }
@@ -186,15 +170,7 @@ blk_qc_t tracking_make_request( struct request_queue *q, struct bio *bio )
 
     bio_put(bio);
 
-#if  LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
-
-#ifdef HAVE_MAKE_REQUEST_INT
-    return 0;
-#endif
-
-#else
     return result;
-#endif
 }
 
 #endif //CONFIG_BLK_FILTER

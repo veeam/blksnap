@@ -5,10 +5,6 @@
 #include <linux/module.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,18,0)
-#define VEEAMSNAP_MQ_IO
-#endif
-
 #include <linux/fs.h>
 #include <linux/types.h>
 #include <linux/genhd.h> // For basic block driver framework
@@ -28,9 +24,6 @@
 #include <asm/atomic.h>
 #include <linux/random.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0)
-#define HAVE_MAKE_REQUEST_INT
-#endif
 
 #ifndef pr_warn
 #define pr_warn pr_warning

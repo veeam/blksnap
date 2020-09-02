@@ -76,11 +76,8 @@ void * dbg_kmalloc_huge( size_t max_size, size_t min_size, gfp_t flags, size_t* 
     void * ptr = NULL;
 
     do{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,13,0)
-        ptr = dbg_kmalloc( max_size, flags | __GFP_NOWARN | __GFP_REPEAT );
-#else
         ptr = dbg_kmalloc( max_size, flags | __GFP_NOWARN | __GFP_RETRY_MAYFAIL );
-#endif
+
         if (ptr != NULL){
             *p_allocated_size = max_size;
             return ptr;

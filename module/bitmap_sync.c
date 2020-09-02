@@ -27,36 +27,14 @@ void bitmap_sync_done( bitmap_sync_t* bitmap )
 void bitmap_sync_set( bitmap_sync_t* bitmap, unsigned int index )
 {
     spin_lock( &bitmap->lock );
-    do{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
-        {
-            unsigned int long_inx = index / BITS_PER_LONG;
-            unsigned int bit_inx = index % BITS_PER_LONG;
-
-            bitmap->map[long_inx] |= (unsigned long)1 << bit_inx;
-        }
-#else
-        bitmap_set( bitmap->map, index, (int)1 );
-#endif
-    } while (false);
+    bitmap_set( bitmap->map, index, (int)1 );
     spin_unlock( &bitmap->lock );
 }
 
 void bitmap_sync_clear( bitmap_sync_t* bitmap, unsigned int index )
 {
     spin_lock( &bitmap->lock );
-    do{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
-        {
-            unsigned int long_inx = index / BITS_PER_LONG;
-            unsigned int bit_inx = index % BITS_PER_LONG;
-
-            bitmap->map[long_inx] &= ~( (unsigned long)1 << bit_inx );
-        }
-#else
-        bitmap_clear( bitmap->map, index, (int)1 );
-#endif
-    } while (false);
+    bitmap_clear( bitmap->map, index, (int)1 );
     spin_unlock( &bitmap->lock );
 }
 
@@ -64,9 +42,7 @@ int bitmap_sync_find_clear_and_set( bitmap_sync_t* bitmap )
 {
     int index = 0;
     spin_lock( &bitmap->lock );
-    do{
-        index = bitmap_find_free_region( bitmap->map, bitmap->max_bit_count, 0 );
-    } while (false);
+    index = bitmap_find_free_region( bitmap->map, bitmap->max_bit_count, 0 );
     spin_unlock( &bitmap->lock );
     return index;
 }

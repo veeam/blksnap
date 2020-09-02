@@ -6,12 +6,7 @@
 int  blk_redirect_bioset_create( void );
 void blk_redirect_bioset_free( void );
 
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
-void blk_redirect_bio_endio( struct bio *bb, int err );
-#else
 void blk_redirect_bio_endio( struct bio *bb );
-#endif
 
 typedef struct blk_redirect_bio_endio_list_s{
     struct blk_redirect_bio_endio_list_s* next;

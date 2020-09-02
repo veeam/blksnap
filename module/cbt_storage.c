@@ -67,11 +67,8 @@ static int _cbt_storage_read_page(cbt_storage_accessor_t* accessor)
 
     return SUCCESS;
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-static int _cbt_storage_write_page(cbt_storage_accessor_t* accessor, struct timespec* optional_time)
-#else
+
 static int _cbt_storage_write_page(cbt_storage_accessor_t* accessor, struct timespec64* optional_time)
-#endif
 {
     int res;
     sector_t phys_offset = 0;
@@ -238,11 +235,9 @@ int cbt_storage_check(cbt_storage_accessor_t* accessor)
     if (accessor->time.tv_sec != 0ull){
         //show time
         struct tm modify_time;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-        time_to_tm(accessor->time.tv_sec, 0, &modify_time);
-#else
+
         time64_to_tm(accessor->time.tv_sec, 0, &modify_time);
-#endif
+
         log_tr_format("Persistent CBT data from %04ld.%02d.%02d %02ld:%02d:%02d %d",
             modify_time.tm_year + 1900,
             modify_time.tm_mon + 1,
@@ -279,11 +274,8 @@ int cbt_storage_prepare4read(cbt_storage_accessor_t* accessor)
 
     //set CBT data empty
     {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-        struct timespec tm = {0}; //
-#else
         struct timespec64 tm = { 0 }; //
-#endif
+
         res = _cbt_storage_write_page(accessor, &tm);
         if (res != SUCCESS){
             log_err("Failed to write first page ");
@@ -307,11 +299,9 @@ int cbt_storage_prepare4write(cbt_storage_accessor_t* accessor)
         return res;
     }
     //get time
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    getnstimeofday(&accessor->time);
-#else
+
     ktime_get_real_ts64(&accessor->time);
-#endif
+
     return res;
 }
 
@@ -452,11 +442,8 @@ int cbt_storage_write_finish(cbt_storage_accessor_t* accessor)
     accessor->page_offset = 0;
 
     {//store empty unused pages
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-        struct timespec tm = {0}; 
-#else
         struct timespec64 tm = { 0 };
-#endif
+
         memset(accessor->page->data, 0, CBT_PAGE_DATA_SIZE);
 
         while (accessor->page_number < accessor->page_count){

@@ -31,11 +31,9 @@ typedef struct cbt_storage_accessor_s
     unsigned long long page_number;
     unsigned long long used_page_count;
     size_t page_offset;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-    struct timespec time;//cbt data time marker
-#else
+
     struct timespec64 time;//cbt data time marker
-#endif
+
     unsigned long long padding;
 }cbt_storage_accessor_t;
 #pragma pack(pop)

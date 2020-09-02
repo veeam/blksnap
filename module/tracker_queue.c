@@ -100,18 +100,7 @@ int tracker_queue_find(struct gendisk *disk, u8 partno, tracker_queue_t** ptrack
 
 #else //CONFIG_BLK_FILTER
 
-#if  LINUX_VERSION_CODE < KERNEL_VERSION(4,4,0)
-
-#ifdef HAVE_MAKE_REQUEST_INT
-int tracking_make_request(struct request_queue *q, struct bio *bio);
-#else
-void tracking_make_request(struct request_queue *q, struct bio *bio);
-#endif
-
-#else
 blk_qc_t tracking_make_request( struct request_queue *q, struct bio *bio );
-#endif
-
 
 // find or create new tracker queue
 int tracker_queue_ref(struct request_queue* queue, tracker_queue_t** ptracker_queue)

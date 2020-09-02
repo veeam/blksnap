@@ -48,11 +48,7 @@ void blk_deferred_print_state( void );
 blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_descr_unify_t* blk_descr );
 void blk_deferred_free( blk_deferred_t* dio );
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
-void blk_deferred_bio_endio( struct bio *bio, int err );
-#else
 void blk_deferred_bio_endio( struct bio *bio );
-#endif
 
 void blk_deferred_complete( blk_deferred_request_t* dio_req, sector_t portion_sect_cnt, int result );
 

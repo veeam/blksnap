@@ -26,32 +26,21 @@ static int _cbt_prst_parse_device(char* str, dev_t* p_device)
 
     separator[0] = '\0';
     ++separator;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-    {
-        char* endptr = NULL;
-        major = simple_strtoul(str, &endptr, 10);
-    }
-#else
+
     res = kstrtouint(str, 10, &major);
     if (SUCCESS != res){
         log_err_s("Failed to parse: ", str);
         return res;
     }
-#endif
 
     str = separator;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-    {
-        char* endptr = NULL;
-        minor = simple_strtoul(str, &endptr, 10);
-}
-#else
+
     res = kstrtouint(str, 10, &minor);
     if (SUCCESS != res){
         log_err_s("Failed to parse: ", str);
         return res;
     }
-#endif
+
     *p_device = MKDEV(major, minor);
     return res;
 }
@@ -76,24 +65,18 @@ static int _cbt_prst_parse_part_uuid(char* str, veeam_uuid_t* p_part_uuid)
             tmp[ch_cnt] = ch;
             ++ch_cnt;
         }
-        else if (ch_cnt == 1){
+        else if (ch_cnt == 1) {
+            int res = SUCCESS;
             tmp[ch_cnt] = ch;
             ch_cnt = 0;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-            {
-                char* endp = NULL;
-                p_part_uuid->b[inx] = (__u8)simple_strtoul(tmp, &endp, 16);
+    
+            res = kstrtou8(tmp, 16, &p_part_uuid->b[inx]);
+            if (SUCCESS != res){
+                log_err_s("Failed to parse: ", tmp);
+                return res;
             }
-#else
-            {
-                int res = SUCCESS;
-                res = kstrtou8(tmp, 16, &p_part_uuid->b[inx]);
-                if (SUCCESS != res){
-                    log_err_s("Failed to parse: ", tmp);
-                    return res;
-                }
-            }
-#endif
+            
+
             ++inx;
         }
 
@@ -116,12 +99,7 @@ static int _cbt_prst_parse_range(char* str, stream_size_t* p_ofs, stream_size_t*
 
     separator[0] = '\0';
     ++separator;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-    {
-        char* endp = NULL;
-        *p_ofs = simple_strtoull(str, &endp, 10);
-    }
-#else
+
     {
         int res = kstrtou64(str, 10, p_ofs);
         if (SUCCESS != res){
@@ -129,14 +107,9 @@ static int _cbt_prst_parse_range(char* str, stream_size_t* p_ofs, stream_size_t*
             return res;
         }
     }
-#endif
+
     str = separator;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-    {
-        char* endp = NULL;
-        *p_len = simple_strtoull(str, &endp, 10);
-    }
-#else
+
     {
         int res = kstrtou64(str, 10, p_len);
         if (SUCCESS != res){
@@ -144,7 +117,7 @@ static int _cbt_prst_parse_range(char* str, stream_size_t* p_ofs, stream_size_t*
             return res;
         }
     }
-#endif
+
     return SUCCESS;
 }
 

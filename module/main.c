@@ -108,18 +108,12 @@ int set_params(char* param_name, char* param_value)
             res = -ENOMEM;
     }
     else if (0 == strcmp(param_name, "logmaxsize")) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-        {
-            char* endptr = NULL;
-            g_param_logmaxsize = simple_strtoul(param_value, &endptr, 10);
-        }
-#else
         res = kstrtoul(param_value, 10, &g_param_logmaxsize);
         if (SUCCESS != res) {
             log_err_s("Failed to parse: ", param_value);
             return res;
         }
-#endif
+
 #ifdef PERSISTENT_CBT
     else if (0 == strcmp(param_name, "cbtdata")){
         char* old_value = g_cbtdata;
@@ -136,32 +130,18 @@ int set_params(char* param_name, char* param_value)
     }
 #endif
     else if (0 == strcmp(param_name, "snapstore_block_size_pow")){
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-        {
-            char* endptr = NULL;
-            g_param_snapstore_block_size_pow = simple_strtol(param_value, &endptr, 10);
-        }
-#else
         res = kstrtoint(param_value, 10, &g_param_snapstore_block_size_pow);
         if (SUCCESS != res){
             log_err_s("Failed to parse: ", param_value);
             return res;
         }
-#endif
     }
-    else if (0 == strcmp(param_name, "change_tracking_block_size_pow")){
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-        {
-            char* endptr = NULL;
-            g_param_change_tracking_block_size_pow = simple_strtol(param_value, &endptr, 10);
-        }
-#else
+    else if (0 == strcmp(param_name, "change_tracking_block_size_pow")) {
         res = kstrtoint(param_value, 10, &g_param_change_tracking_block_size_pow);
         if (SUCCESS != res){
             log_err_s("Failed to parse: ", param_value);
             return res;
         }
-#endif
     }
     else
         res = -EINVAL;

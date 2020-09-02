@@ -26,11 +26,9 @@ void log_s_bytes(const char* section, const unsigned level, const unsigned char*
 
 void log_vformat( const char* section, const int level, const char *frm, va_list args );
 void log_format( const char* section, const int level, const char* frm, ... );
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-void log_s_sec(const char* section, const unsigned level, const char* s, const time_t totalsecs);
-#else
+
 void log_s_sec(const char* section, const unsigned level, const char* s, const time64_t totalsecs);
-#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 #define LOGGING_LEVEL_CMD ('C'<<24 | 'M'<<16 | 'D'<<8 | '\0')
 #define LOGGING_LEVEL_ERR ('E'<<24 | 'R'<<16 | 'R'<<8 | '\0')
@@ -55,11 +53,9 @@ void log_s_sec(const char* section, const unsigned level, const char* s, const t
 #define log_tr_uuid(msg, uuid) log_s_uuid(SECTION, LOGGING_LEVEL_TR, msg, uuid)
 #define log_tr_range(msg, range) log_s_range(SECTION, LOGGING_LEVEL_TR, msg, range)
 #define log_tr_bytes(bytes, count) log_s_bytes(SECTION, LOGGING_LEVEL_TR, bytes, count)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-#define log_tr_s_sec(s, totalsecs) log_s_sec(SECTION, LOGGING_LEVEL_TR, s, (time_t)totalsecs);
-#else
+
 #define log_tr_s_sec(s, totalsecs) log_s_sec(SECTION, LOGGING_LEVEL_TR, s, (time64_t)totalsecs);
-#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 #define log_warn(msg) log_s(SECTION, LOGGING_LEVEL_WRN, msg)
 #define log_warn_s(msg, value) log_s_s(SECTION, LOGGING_LEVEL_WRN, msg, value)
@@ -80,11 +76,8 @@ void log_s_sec(const char* section, const unsigned level, const char* s, const t
 #define log_warn_range(msg, range) log_s_range(SECTION, LOGGING_LEVEL_WRN, msg, range)
 #define log_warn_bytes(bytes, count) log_s_bytes(SECTION, LOGGING_LEVEL_WRN, bytes, count)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-#define log_warn_s_sec(s, totalsecs) log_s_sec(SECTION, LOGGING_LEVEL_WRN, s, (time_t)totalsecs);
-#else
 #define log_warn_s_sec(s, totalsecs) log_s_sec(SECTION, LOGGING_LEVEL_WRN, s, (time64_t)totalsecs);
-#endif
+
 //////////////////////////////////////////////////////////////////////////
 #define log_err(msg) log_s(SECTION, LOGGING_LEVEL_ERR, msg)
 #define log_err_s(msg, value) log_s_s(SECTION, LOGGING_LEVEL_ERR, msg, value)
@@ -105,10 +98,6 @@ void log_s_sec(const char* section, const unsigned level, const char* s, const t
 #define log_err_range(msg, range) log_s_range(SECTION, LOGGING_LEVEL_ERR, msg, range)
 #define log_err_bytes(bytes, count) log_s_bytes(SECTION, LOGGING_LEVEL_ERR, bytes, count)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
-#define log_err_s_sec(s, totalsecs) log_s_sec(SECTION, LOGGING_LEVEL_ERR, s, (time_t)totalsecs);
-#else
 #define log_err_s_sec(s, totalsecs) log_s_sec(SECTION, LOGGING_LEVEL_ERR, s, (time64_t)totalsecs);
-#endif
 //////////////////////////////////////////////////////////////////////////
 //void log_dump(void* p, size_t size);

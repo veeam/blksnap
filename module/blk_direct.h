@@ -5,12 +5,7 @@
 int  blk_direct_bioset_create( void );
 void blk_direct_bioset_free( void );
 
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
-void blk_direct_bio_endio( struct bio *bb, int err );
-#else
 void blk_direct_bio_endio( struct bio *bb );
-#endif
 
 #ifndef READ_SYNC
 #define READ_SYNC		(READ | REQ_SYNC)

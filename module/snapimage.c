@@ -1,9 +1,8 @@
 #include "stdafx.h"
 #include <asm/div64.h>
 #include <linux/cdrom.h>
-#ifdef VEEAMSNAP_MQ_IO
 #include <linux/blk-mq.h>
-#endif
+
 static inline unsigned long int do_div_inline( unsigned long long int division, unsigned long int divisor )
 {
     unsigned long int result;
@@ -316,12 +315,7 @@ int _snapimage_getgeo( struct block_device* bdev, struct hd_geometry * geo )
     return res;
 }
 
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
-int _snapimage_close( struct gendisk *disk, fmode_t mode )
-#else
 void _snapimage_close( struct gendisk *disk, fmode_t mode )
-#endif
 {
     if (disk->private_data != NULL){
         down_read(&snap_image_destroy_lock);
@@ -342,16 +336,8 @@ void _snapimage_close( struct gendisk *disk, fmode_t mode )
         } while (false);
         up_read(&snap_image_destroy_lock);
     }
-    else{
+    else
         log_err( "Unable to to close snapshot image: private data is not initialized" );
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
-        return -ENODEV;
-#endif
-    }
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
-    return SUCCESS;
-#endif
 }
 
 int _snapimage_ioctl( struct block_device *bdev, fmode_t mode, unsigned cmd, unsigned long arg )
@@ -628,15 +614,7 @@ int _snapimage_throttling( defer_io_t* defer_io )
     return wait_event_interruptible( defer_io->queue_throttle_waiter, queue_sl_empty( defer_io->dio_queue ) );
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 4, 0 )
-
-#ifdef HAVE_MAKE_REQUEST_INT
-int _snapimage_make_request( struct request_queue *q, struct bio *bio )
-#else
-void _snapimage_make_request( struct request_queue *q, struct bio *bio )
-#endif
-{
-#elif LINUX_VERSION_CODE < KERNEL_VERSION( 5, 9, 0 )
+#if LINUX_VERSION_CODE < KERNEL_VERSION( 5, 9, 0 )
 blk_qc_t _snapimage_make_request(struct request_queue *q, struct bio *bio)
 {
 #else
@@ -645,38 +623,18 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
     struct request_queue *q = bio->bi_disk->queue;
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION( 4, 4, 0 )
+
     blk_qc_t result = SUCCESS;
-#else
 
-#ifdef HAVE_MAKE_REQUEST_INT
-    int result = SUCCESS;
-#endif
-
-#endif
     snapimage_t* image = q->queuedata;
 
-    //bio_get( bio );
-#ifdef VEEAMSNAP_MQ_IO
+
     if (unlikely(blk_mq_queue_stopped(q)))
-#else
-    if (unlikely(q->queue_flags & ((1 << QUEUE_FLAG_STOPPED) | (1 << QUEUE_FLAG_DEAD))))
-#endif
     {
         log_tr_lx( "Failed to make snapshot image request. Queue already is not active. Queue flags=", q->queue_flags );
         _snapimage_bio_complete( bio, -ENODEV );
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 4, 0 )
-
-#ifdef HAVE_MAKE_REQUEST_INT
         return result;
-#else
-        return;
-#endif
-
-#else
-        return result;
-#endif
     }
 
     atomic_inc( &image->own_cnt );
@@ -708,11 +666,6 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
             _snapimage_bio_complete( bio, -ENOMEM );
             break;
         }
-/*
-#ifdef SNAPIMAGE_TRACER
-        image_trace_add(image, bio_bi_sector(bio), bio_bi_size(bio), bio_data_dir(bio));
-#endif
-*/
         rq_endio->bio = bio;
         rq_endio->complete_cb = _snapimage_bio_complete_cb;
         rq_endio->complete_param = (void*)image;
@@ -735,15 +688,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
     }while (false);
     atomic_dec( &image->own_cnt );
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION( 4, 4, 0 )
-
-#ifdef HAVE_MAKE_REQUEST_INT
     return result;
-#endif
-
-#else
-    return result;
-#endif
 }
 
 
@@ -822,29 +767,20 @@ int snapimage_create( dev_t original_dev )
         mutex_init( &image->open_locker );
         image->open_bdev = NULL;
         image->open_cnt = 0;
-#ifdef VEEAMSNAP_MQ_IO
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,7,0)
-        image->queue = blk_alloc_queue(GFP_KERNEL);
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(5,8,0)
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(5,8,0)
         image->queue = blk_alloc_queue(_snapimage_make_request, NUMA_NO_NODE);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
         image->queue = blk_alloc_queue(NUMA_NO_NODE);
 #endif
-#else
-        if (get_fixflags() & FIXFLAG_RH6_SPINLOCK)
-            image->queue = blk_init_queue(NULL, NULL);
-        else
-            image->queue = blk_init_queue(NULL, &image->queue_lock);
-#endif //VEEAMSNAP_MQ_IO
+
         if (NULL == image->queue){
             log_err( "Unable to create snapshot image: failed to allocate block device queue" );
             res = -ENOMEM;
             break;
         }
         image->queue->queuedata = image;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,7,0)
-        blk_queue_make_request( image->queue, _snapimage_make_request );
-#endif
+
         blk_queue_max_segment_size( image->queue, 1024 * PAGE_SIZE );
 
         {
@@ -872,12 +808,9 @@ int snapimage_create( dev_t original_dev )
         }
 
         log_tr_format( "Snapshot image disk name [%s]", disk->disk_name );
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+
         disk->flags |= GENHD_FL_NO_PART_SCAN;
-        //disk->flags |= GENHD_FL_NATIVE_CAPACITY;
-        //disk->flags |= GENHD_FL_SUPPRESS_PARTITION_INFO;
         disk->flags |= GENHD_FL_REMOVABLE;
-#endif
 
         disk->major = g_snapimage_major;
         disk->minors = 1;    // one disk have only one partition.
@@ -943,16 +876,7 @@ void _snapimage_stop( snapimage_t* image )
 
             if (!blk_queue_stopped( q )){
                 blk_sync_queue(q);
-#ifdef VEEAMSNAP_MQ_IO
                 blk_mq_stop_hw_queues(q);
-#else
-                {
-                    unsigned long flags;
-                    spin_lock_irqsave(q->queue_lock, flags);
-                    blk_stop_queue(q);
-                    spin_unlock_irqrestore(q->queue_lock, flags);
-                }
-#endif
             }
         }
 
