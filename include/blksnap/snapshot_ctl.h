@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <sys/types.h>
+#include "types.h"
 
 
 struct snap_ctx;
@@ -18,11 +19,7 @@ int snap_ctx_destroy(struct snap_ctx* ctx);
 //@todo: [TBD] little documentation
 int snap_add_to_tracking(struct snap_ctx* ctx, dev_t dev);
 int snap_remove_from_tracking(struct snap_ctx* ctx, dev_t dev);
-
-//void RemoveFromTracking(const DeviceId_t
-//
-//& devId );
-
+int snap_get_tracking(struct snap_ctx* ctx, struct cbt_info_s* cbtInfos, unsigned int* count);
 
 #ifdef  __cplusplus
 }

@@ -3,3 +3,6 @@ target_link_libraries(add_to_tracking BlkSnapLib)
 
 add_executable(remove_from_tracking remove_from_tracking.cpp)
 target_link_libraries(remove_from_tracking BlkSnapLib)
+
+add_executable(get_tracking get_tracking.cpp)
+target_link_libraries(get_tracking BlkSnapLib)
