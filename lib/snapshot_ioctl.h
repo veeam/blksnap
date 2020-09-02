@@ -39,6 +39,13 @@ struct ioctl_getversion_s {
 
 #define IOCTL_TRACKING_REMOVE	_IOW(VEEAM_SNAP, 3, struct ioctl_dev_id_s)
 
+struct ioctl_tracking_collect_s{
+    unsigned int count;
+    union{
+        struct cbt_info_s* p_cbt_info;
+        unsigned long long ull_cbt_info;
+    };
+};
 #define IOCTL_TRACKING_COLLECT		_IOW(VEEAM_SNAP, 4, struct ioctl_tracking_collect_s)
 
 

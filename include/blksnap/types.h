@@ -16,14 +16,6 @@ struct cbt_info_s{
     unsigned char generationId[16];
 };
 
-struct ioctl_tracking_collect_s{
-    unsigned int count;
-    union{
-        struct cbt_info_s* p_cbt_info;
-        unsigned long long ull_cbt_info;
-    };
-};
-
 #pragma pack(pop)
 
 #endif //BLK_SNAP_TYPES_H
