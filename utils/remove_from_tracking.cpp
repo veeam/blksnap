@@ -17,6 +17,7 @@ int main(int argc, char *argv[])
     if (snap_remove_from_tracking(snapCtx, dev_stat.st_rdev) != 0)
         throw std::system_error(errno, std::generic_category(), "Failed to remove tracking");
 
+    snap_ctx_destroy(snapCtx);
     std::cout << "Successfully remove device(" << argv[1] << ") from tracking" << std::endl;
 }
 

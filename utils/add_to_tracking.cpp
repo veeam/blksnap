@@ -17,6 +17,7 @@ int main(int argc, char *argv[])
     if (snap_add_to_tracking(snapCtx, dev_stat.st_rdev) != 0)
         throw std::system_error(errno, std::generic_category(), "Failed to add tracking");
 
+    snap_ctx_destroy(snapCtx);
     std::cout << "Successfully add devide(" << argv[1] << ") to tracking" << std::endl;
 }
 
