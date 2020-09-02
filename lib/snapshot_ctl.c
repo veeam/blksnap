@@ -1,4 +1,4 @@
-#include "blksnap/snapshot_ctl.h"
+#include "blk-snap/snapshot_ctl.h"
 
 #include <stdlib.h>
 #include <errno.h>
@@ -9,9 +9,9 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#include "snapshot_ioctl.h"
+#include "../module/blk-snap-ctl.h"
 
-#define SNAP_DEV_PATH "/dev/veeamsnap"
+#define SNAP_DEV_PATH "/dev/blk-snap"
 
 struct snap_ctx
 {
