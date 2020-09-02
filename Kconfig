@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# blk-snap block io layer filter module configuration
+#
+#
+#select BLK_FILTER
+
+config BLK_SNAP
+	tristate "Block device snapshot filter"
+	depends on BLK_FILTER
+
+	help
+	  Allow to create snapshots and track block changes for a block devices. 
