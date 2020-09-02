@@ -9,7 +9,6 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#include "../module/blk-snap-ctl.h"
 
 #define SNAP_DEV_PATH "/dev/blk-snap"
 
