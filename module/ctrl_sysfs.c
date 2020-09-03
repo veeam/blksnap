@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "ctrl_sysfs.h"
+#include "blk-snap-ctl.h"
 
 #ifdef PERSISTENT_CBT
 #include "cbt_persistent.h"
@@ -235,7 +236,7 @@ static struct class *veeamsnap_class = NULL;
 int ctrl_sysfs_init(struct device **p_device)
 {
     int res;
-    veeamsnap_class = class_create(THIS_MODULE, "veeamsnap");
+    veeamsnap_class = class_create(THIS_MODULE, MODULE_NAME);
     if (IS_ERR(veeamsnap_class)){
         res = PTR_ERR(veeamsnap_class);
         log_err_d("bad class create. Error code ", 0-res);
@@ -267,7 +268,7 @@ int ctrl_sysfs_init(struct device **p_device)
         }
 #endif
         {
-            struct device *dev = device_create(veeamsnap_class, NULL, MKDEV(get_veeamsnap_major(), 0), NULL, "veeamsnap");
+            struct device *dev = device_create(veeamsnap_class, NULL, MKDEV(get_veeamsnap_major(), 0), NULL, MODULE_NAME);
             if (IS_ERR(dev)){
                 res = PTR_ERR(dev);
                 log_err_d("Failed to create device, result=", res);

@@ -425,7 +425,7 @@ int logging_init( const char* logdir, unsigned long logmaxsize )
     }
 
     {
-        struct task_struct* task = kthread_create( _logging_thread, logging, "veeamsnap_log" );
+        struct task_struct* task = kthread_create( _logging_thread, logging, MODULE_NAME"_log" );
         if (IS_ERR( task )) {
             pr_err( "ERR %s:%s Failed to create request processing thread\n", MODULE_NAME, SECTION);
             return PTR_ERR( task );

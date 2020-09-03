@@ -191,7 +191,7 @@ static const struct blk_filter_ops g_filter_ops = {
 };
 
 static struct blk_filter g_filter = {
-    .name = "veeamsnap",
+    .name = MODULE_NAME,
     .ops = &g_filter_ops,
     .altitude = VEEAMSNAP_DEFAULT_ALTITUDE,
     .blk_filter_ctx = NULL
