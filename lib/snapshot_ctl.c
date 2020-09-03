@@ -8,7 +8,11 @@
 #include <sys/sysmacros.h>
 #include <sys/ioctl.h>
 #include <stdio.h>
+#include <string.h>
+#include "utils.h"
 
+//@todo: move declaration of id to common space
+#define ID_LENGTH 16
 
 struct snap_ctx
 {
@@ -17,6 +21,12 @@ struct snap_ctx
     //error num
     //error string
 };
+
+struct snap_store_ctx
+{
+    unsigned char id[16];
+};
+
 
 int snap_ctx_create(struct snap_ctx** ctx)
 {
@@ -52,6 +62,12 @@ int snap_ctx_destroy(struct snap_ctx* ctx)
 
     errno = error;
     return -1;
+}
+
+int snap_store_ctx_free(struct snap_store_ctx* ctx)
+{
+    free(ctx);
+    return 0;
 }
 
 int snap_add_to_tracking(struct snap_ctx* ctx, dev_t dev)
@@ -97,4 +113,34 @@ int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int leng
     bitmap.buff   = buffer;
 
     return ioctl(ctx->fd, IOCTL_TRACKING_READ_CBT_BITMAP, &bitmap);
+}
+
+
+struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
+                                                  struct ioctl_dev_id_s store_dev,
+                                                  struct ioctl_dev_id_s snap_dev)
+{
+    struct ioctl_snapstore_create_s param;
+    if (generate_random(param.id, ID_LENGTH) != ID_LENGTH)
+        return NULL;
+
+    param.count =1;
+    param.snapstore_dev_id.minor = store_dev.minor;
+    param.snapstore_dev_id.major = store_dev.major;
+
+    param.p_dev_id = &snap_dev;
+
+    struct snap_store_ctx* snap_store_ctx = malloc(sizeof(struct snap_store_ctx));
+    if (snap_store_ctx == NULL)
+        return NULL;
+
+    int result = ioctl( ctx->fd, IOCTL_SNAPSTORE_CREATE, &param);
+    if(result != 0)
+    {
+        snap_store_ctx_free(snap_store_ctx);
+        return NULL;
+    }
+
+    memcpy(param.id, snap_store_ctx->id, ID_LENGTH);
+    return snap_store_ctx;
 }
