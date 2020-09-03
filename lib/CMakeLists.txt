@@ -3,6 +3,7 @@ project(BlkSnapLib)
 
 set(SOURCE_FILES
     ./snapshot_ctl.c
+    ./utils.c
     )
 
 add_library(${PROJECT_NAME} ${SOURCE_FILES})

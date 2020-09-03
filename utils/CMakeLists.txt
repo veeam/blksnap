@@ -9,3 +9,6 @@ target_link_libraries(get_tracking BlkSnapLib)
 
 add_executable(read_cbt read_cbt.cpp)
 target_link_libraries(read_cbt BlkSnapLib)
+
+add_executable(create_snapstore create_snapstore.cpp)
+target_link_libraries(create_snapstore BlkSnapLib)
