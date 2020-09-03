@@ -1,3 +1,7 @@
 .*
 cmake*
 bins
+*.o
+*.a
+*.so
+*.ko
