@@ -16,7 +16,6 @@ static inline unsigned long int do_div_inline( unsigned long long int division, 
 #include "blk_util.h"
 #include "defer_io.h"
 #include "queue_spinlocking.h"
-#include "bitmap_sync.h"
 #include "cbt_map.h"
 #include "tracker.h"
 
@@ -24,7 +23,9 @@ static inline unsigned long int do_div_inline( unsigned long long int division, 
 #include "log_format.h"
 
 static int g_snapimage_major = 0;
-static bitmap_sync_t g_snapimage_minors;
+static unsigned long* g_snapimage_minors;
+static DEFINE_SPINLOCK(g_snapimage_minors_lock);
+
 static container_t SnapImages;
 struct rw_semaphore snap_image_destroy_lock;
 
@@ -736,7 +737,10 @@ int snapimage_create( dev_t original_dev )
     }
 
     do{
-        minor = bitmap_sync_find_clear_and_set( &g_snapimage_minors );
+        spin_lock( &g_snapimage_minors_lock );
+        minor = bitmap_find_free_region( g_snapimage_minors, SNAPIMAGE_MAX_DEVICES, 0 );
+        spin_unlock( &g_snapimage_minors_lock );
+
         if (minor < SUCCESS){
             log_err_d( "Failed to allocate minor for snapshot image device. errno=", 0-minor );
             break;
@@ -912,7 +916,9 @@ int _snapimage_destroy( snapimage_t* image )
     }
     queue_sl_done( &image->rq_proc_queue );
 
-    bitmap_sync_clear(&g_snapimage_minors, MINOR(image->image_dev));
+    spin_lock( &g_snapimage_minors_lock );
+    bitmap_clear( g_snapimage_minors, MINOR(image->image_dev), (int)1 );
+    spin_unlock( &g_snapimage_minors_lock );
 
 #ifdef SNAPIMAGE_TRACER
     image_trace_done(image);
@@ -1035,10 +1041,12 @@ int snapimage_init( void )
         res = SUCCESS;
 
         res = container_init( &SnapImages, sizeof( snapimage_t ));
-        if (res == SUCCESS){
-            res = bitmap_sync_init( &g_snapimage_minors, SNAPIMAGE_MAX_DEVICES );
-            if (res != SUCCESS)
+        if (res == SUCCESS) {
+            spin_lock( &g_snapimage_minors_lock );
+            g_snapimage_minors = bitmap_zalloc(SNAPIMAGE_MAX_DEVICES, GFP_KERNEL);
+            if (g_snapimage_minors == NULL)
                 log_err( "Failed to initialize bitmap of minors" );
+            spin_unlock( &g_snapimage_minors_lock );
         }
         else
             log_err("Failed to create container for snapshot images");
@@ -1073,7 +1081,11 @@ int snapimage_done( void )
     }
 
     if (res == SUCCESS){
-        bitmap_sync_done( &g_snapimage_minors );
+        //bitmap_sync_done( &g_snapimage_minors );
+        spin_lock(&g_snapimage_minors_lock);
+        bitmap_free(g_snapimage_minors);
+        g_snapimage_minors = NULL;
+        spin_unlock(&g_snapimage_minors_lock);
 
         res = container_done( &SnapImages );
         if (res != SUCCESS){

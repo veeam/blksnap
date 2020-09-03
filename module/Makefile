@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-blk-snap-y += bitmap_sync.o
 blk-snap-y += blk_deferred.o
 blk-snap-y += blk_descr_array.o
 blk-snap-y += blk_descr_file.o

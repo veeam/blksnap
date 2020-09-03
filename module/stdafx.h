@@ -47,6 +47,7 @@
 
 #define SUCCESS 0
 
+#define SNAPIMAGE_MAX_DEVICES 2048
 #define SNAPSHOTDATA_MEMORY_SIZE ( 128 << 20 )
 
 typedef unsigned char    byte_t;
