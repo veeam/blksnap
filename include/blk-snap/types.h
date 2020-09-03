@@ -1,8 +1,11 @@
 #ifndef BLK_SNAP_TYPES_H
 #define BLK_SNAP_TYPES_H
 
-#pragma pack(push,1)
+//@todo: [TBD] should be a common part or in <linux/*>
+#include "../../module/blk-snap-ctl.h"
 
+#pragma pack(push,1)
+/*
 struct ioctl_dev_id_s{
     int major;
     int minor;
@@ -15,7 +18,7 @@ struct cbt_info_s{
     unsigned char snap_number;
     unsigned char generationId[16];
 };
-
+*/
 #pragma pack(pop)
 
 #endif //BLK_SNAP_TYPES_H

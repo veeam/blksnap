@@ -1,6 +1,6 @@
 #include <iostream>
 #include <system_error>
-#include <blksnap/snapshot_ctl.h>
+#include <blk-snap/snapshot_ctl.h>
 #include <sys/stat.h>
 
 int main(int argc, char *argv[])

@@ -9,7 +9,6 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#include "../module/blk-snap-ctl.h"
 
 struct snap_ctx
 {
@@ -86,3 +85,16 @@ int snap_get_tracking(struct snap_ctx* ctx, struct cbt_info_s* cbtInfos, unsigne
     return 0;
 }
 
+int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int length, unsigned char* buffer)
+{
+    struct ioctl_tracking_read_cbt_bitmap_s bitmap;
+    bitmap.dev_id.major = major(dev);
+    bitmap.dev_id.minor = minor(dev);
+    bitmap.offset = offset;
+    bitmap.length = length;
+
+    bitmap.ull_buff = 0ULL;
+    bitmap.buff   = buffer;
+
+    return ioctl(ctx->fd, IOCTL_TRACKING_READ_CBT_BITMAP, &bitmap);
+}
