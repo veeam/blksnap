@@ -50,7 +50,7 @@ void blk_descr_array_reset( blk_descr_array_t* header )
             void* group = NULL;
             if (SUCCESS == page_array_ptr_get(header->groups, gr_idx, &group)){
                 if (group != NULL){
-                    dbg_kfree(group);
+                    kfree(group);
                     page_array_ptr_set(header->groups, gr_idx, NULL);
                 }
             }
@@ -81,7 +81,7 @@ int blk_descr_array_set( blk_descr_array_t* header, blk_descr_array_index_t inx,
         }
         if (group == NULL){
 
-            group = dbg_kzalloc(sizeof(blk_descr_array_group_t), GFP_NOIO);
+            group = kzalloc(sizeof(blk_descr_array_group_t), GFP_NOIO);
             if (group == NULL){
                 res = -ENOMEM;
                 break;

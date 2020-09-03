@@ -2,8 +2,6 @@
 #include "blk-snap-ctl.h"
 
 
-#define SNAPIMAGE_MAX_DEVICES 2048
-
 int snapimage_init( void );
 int snapimage_done( void );
 int snapimage_create_for( dev_t* p_dev, int count );

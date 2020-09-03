@@ -5,12 +5,28 @@
 #include "log_format.h"
 
 
-#define _POOL_EL_MAX_SIZE (8*PAGE_SIZE)
+static void * kmalloc_huge( size_t max_size, size_t min_size, gfp_t flags, size_t* p_allocated_size )
+{
+    void * ptr = NULL;
+
+    do{
+        ptr = kmalloc( max_size, flags | __GFP_NOWARN | __GFP_RETRY_MAYFAIL );
+
+        if (ptr != NULL){
+            *p_allocated_size = max_size;
+            return ptr;
+        }
+        log_err_sz( "Failed to allocate buffer size=", max_size );
+        max_size = max_size >> 1;
+    } while (max_size >= min_size);
+    log_err( "Failed to allocate buffer." );
+    return NULL;
+}
 
 static pool_el_t* pool_el_alloc( size_t blk_descr_size )
 {
     size_t el_size;
-    pool_el_t* el = (pool_el_t*)dbg_kmalloc_huge( _POOL_EL_MAX_SIZE, PAGE_SIZE, GFP_NOIO, &el_size );
+    pool_el_t* el = (pool_el_t*)kmalloc_huge( 8*PAGE_SIZE, PAGE_SIZE, GFP_NOIO, &el_size );
     if (NULL == el)
         return NULL;
 
@@ -25,7 +41,7 @@ static pool_el_t* pool_el_alloc( size_t blk_descr_size )
 static void _pool_el_free( pool_el_t* el )
 {
     if (el != NULL)
-        dbg_kfree( el );
+        kfree( el );
 }
 
 void blk_descr_pool_init( blk_descr_pool_t* pool, size_t available_blocks )

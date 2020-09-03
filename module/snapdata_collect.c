@@ -53,7 +53,7 @@ int _collector_init( snapdata_collector_t* collector, dev_t dev_id, void* MagicU
     }
 
     collector->magic_size = MagicLength;
-    collector->magic_buff = dbg_kmalloc( collector->magic_size, GFP_KERNEL | __GFP_RETRY_MAYFAIL );
+    collector->magic_buff = kmalloc( collector->magic_size, GFP_KERNEL | __GFP_RETRY_MAYFAIL );
 
     if (collector->magic_buff == NULL){
         log_err( "Unable to initialize snapstore collector: not enough memory" );
@@ -126,7 +126,7 @@ void _collector_free( snapdata_collector_t* collector )
         page_array_free( collector->changes );
 #endif
     if (collector->magic_buff != NULL){
-        dbg_kfree( collector->magic_buff );
+        kfree( collector->magic_buff );
         collector->magic_buff = NULL;
     }
 

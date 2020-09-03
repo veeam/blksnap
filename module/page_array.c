@@ -36,7 +36,7 @@ page_array_t* page_array_alloc( size_t count, int gfp_opt )
     int res = SUCCESS;
     size_t inx;
     page_array_t* arr = NULL;
-    while (NULL == (arr = dbg_kzalloc( sizeof( page_array_t ) + count*sizeof( page_info_t ), gfp_opt ))){
+    while (NULL == (arr = kzalloc( sizeof( page_array_t ) + count*sizeof( page_info_t ), gfp_opt ))){
         log_err( "Failed to allocate page_array buffer" );
         return NULL;
     }
@@ -72,7 +72,7 @@ void page_array_free( page_array_t* arr )
             atomic64_inc( &page_free_count );
         }
     }
-    dbg_kfree( arr );
+    kfree( arr );
     atomic64_inc( &page_array_free_count );
 }
 

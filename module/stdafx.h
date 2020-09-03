@@ -31,8 +31,6 @@
 
 #include "log.h"
 
-#define VEEAMSNAP_MEMORY_LEAK_CONTROL
-#include "mem_alloc.h"
 
 #define DESCRIPTION_STR "Veeam Snapshot Kernel Module"
 

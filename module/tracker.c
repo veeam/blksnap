@@ -556,7 +556,7 @@ void tracker_print_state( void )
     }
 
     sz = tracksers_cnt * sizeof( tracker_t* );
-    trackers = dbg_kzalloc( sz, GFP_KERNEL );
+    trackers = kzalloc( sz, GFP_KERNEL );
     if (trackers == NULL){
         log_err_sz( "Failed to allocate buffer for trackers. Size=", sz );
         return;
@@ -588,7 +588,7 @@ void tracker_print_state( void )
         }
     } while (false);
 
-    dbg_kfree( trackers );
+    kfree( trackers );
 }
 
 void tracker_snapshot_id_set(tracker_t* tracker, unsigned long long snapshot_id)

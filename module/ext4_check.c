@@ -34,14 +34,14 @@ static int _ext4_get_sb(struct block_device* bdev, struct ext4_super_block **p_s
     }
     es = (struct ext4_super_block *)(bh->b_data + offset);
     do{
-        struct ext4_super_block* sb = dbg_kmalloc(sizeof(struct ext4_super_block), GFP_KERNEL);
+        struct ext4_super_block* sb = kmalloc(sizeof(struct ext4_super_block), GFP_KERNEL);
         if (sb == NULL){
             res = -ENOMEM;
             break;
         }
         if (le16_to_cpu(es->s_magic) != EXT4_SUPER_MAGIC){
             log_tr("Ext fs not found");
-            dbg_kfree(sb);
+            kfree(sb);
             res = ENOENT;
             break;
         }
@@ -90,7 +90,7 @@ int ext4_check_offline_changes(struct block_device* bdev, uint32_t previous_crc)
             res = ENOENT;
         }
     }
-    dbg_kfree(sb);
+    kfree(sb);
 
     return res;
 }
@@ -120,7 +120,7 @@ int ext4_check_unmount_status(struct block_device* bdev, uint32_t* p_sb_crc)
         *p_sb_crc = crc;
         res = SUCCESS;
     }
-    dbg_kfree(sb);
+    kfree(sb);
 
     return res;
 }

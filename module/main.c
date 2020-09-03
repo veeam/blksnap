@@ -99,11 +99,11 @@ int set_params(char* param_name, char* param_value)
         char* new_value = NULL;
         size_t len = strlen(param_value);
 
-        new_value = dbg_kzalloc(len, GFP_KERNEL);
+        new_value = kzalloc(len, GFP_KERNEL);
         if (new_value){
             strcpy(new_value, param_value);
             g_logdir = new_value;
-            dbg_kfree(old_value);
+            kfree(old_value);
         }else
             res = -ENOMEM;
     }
@@ -120,11 +120,11 @@ int set_params(char* param_name, char* param_value)
         char* new_value = NULL;
         size_t len = strlen(param_value);
 
-        new_value = dbg_kzalloc(len, GFP_KERNEL);
+        new_value = kzalloc(len, GFP_KERNEL);
         if (new_value){
             strcpy(new_value, param_value);
             g_cbtdata = new_value;
-            dbg_kfree(old_value);
+            kfree(old_value);
         }else
             res = -ENOMEM;
     }
@@ -308,9 +308,6 @@ int __init veeamsnap_init(void)
     //int conteiner_cnt = 0;
     int result = SUCCESS;
 
-#ifdef VEEAMSNAP_MEMORY_LEAK_CONTROL
-    dbg_mem_init( );
-#endif
     logging_init( g_logdir, g_param_logmaxsize );
     log_tr( "================================================================================" );
     log_tr( "Loading" );
@@ -470,18 +467,6 @@ void __exit veeamsnap_exit(void)
     int result;
     log_tr("Unloading module");
 
-/*
-    conteiner_cnt = container_alloc_counter( );
-    log_tr_d( "start. container_alloc_counter=", conteiner_cnt );
-    conteiner_cnt = container_sl_alloc_counter( );
-    log_tr_d( "start. container_sl_alloc_counter=", conteiner_cnt );*/
-
-
-#ifdef VEEAMSNAP_MEMORY_LEAK_CONTROL
-    //log_tr_d( "mem_cnt=", atomic_read( &g_mem_cnt ) );
-    //log_tr_d( "vmem_cnt=", atomic_read( &g_vmem_cnt ) );
-#endif
-
 
     log_tr("Unregistering reboot notification");
 #ifdef _LINUX_SYSCORE_OPS_H
@@ -539,12 +524,6 @@ void __exit veeamsnap_exit(void)
     conteiner_cnt = container_sl_alloc_counter( );
     if (conteiner_cnt != 0)
         log_err_d( "container_sl_alloc_counter=", conteiner_cnt );
-
-#ifdef VEEAMSNAP_MEMORY_LEAK_CONTROL
-    if (atomic_read( &g_mem_cnt ) != 0)
-        log_err_d( "mem_cnt=", atomic_read( &g_mem_cnt ) );
-#endif
-
 }
 
 module_init(veeamsnap_init);

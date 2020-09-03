@@ -84,7 +84,7 @@ static ssize_t blkdev_notify_store(struct class *class, struct class_attribute *
                     }
                     break;
                 case 1://device name
-                    dev_name = dbg_kzalloc(5+len+1, GFP_KERNEL);
+                    dev_name = kzalloc(5+len+1, GFP_KERNEL);
                     if (dev_name == NULL){
                         res = -ENOMEM;
                         log_err("Failed allocate memory for device name");
@@ -95,7 +95,7 @@ static ssize_t blkdev_notify_store(struct class *class, struct class_attribute *
                     //log_tr_s("DEBUG! Found device name", dev_name);
                     break;
                 case 2://device path
-                    dev_path = dbg_kzalloc(len+1, GFP_KERNEL);
+                    dev_path = kzalloc(len+1, GFP_KERNEL);
                     if (dev_path == NULL){
                         res = -ENOMEM;
                         log_err("Failed allocate memory for device path");
@@ -127,9 +127,9 @@ static ssize_t blkdev_notify_store(struct class *class, struct class_attribute *
     }
 
     if (dev_name != NULL)
-        dbg_kfree(dev_name);
+        kfree(dev_name);
     if (dev_path != NULL)
-        dbg_kfree(dev_path);
+        kfree(dev_path);
 
     return count;
 }
@@ -162,7 +162,7 @@ static ssize_t params_store(struct class *class, struct class_attribute *attr, c
     {
         if (buf[ofs] == '='){ //separator found
             size_t len = ofs;
-            param_name = dbg_kzalloc(len + 1, GFP_KERNEL);
+            param_name = kzalloc(len + 1, GFP_KERNEL);
             if (param_name == NULL){
                 res = -ENOMEM;
                 break;
@@ -172,7 +172,7 @@ static ssize_t params_store(struct class *class, struct class_attribute *attr, c
 
             ofs += 1;//skip separator
             len = count - ofs;
-            param_value = dbg_kzalloc(len + 1, GFP_KERNEL);
+            param_value = kzalloc(len + 1, GFP_KERNEL);
             if (param_value == NULL){
                 res = -ENOMEM;
                 break;
@@ -193,9 +193,9 @@ static ssize_t params_store(struct class *class, struct class_attribute *attr, c
         log_err_s("Failed to set parameter ", param_name);
 
     if (param_name != NULL)
-        dbg_kfree(param_name);
+        kfree(param_name);
     if (param_value != NULL)
-        dbg_kfree(param_value);
+        kfree(param_value);
 
 
     return count;

@@ -51,7 +51,7 @@ void ctrl_pipe_release_cb( void* resource )
 
     while (!container_empty( &pipe->cmd_to_user )){
         cmd_to_user_t* request = (cmd_to_user_t*)container_get_first( &pipe->cmd_to_user );
-        dbg_kfree( request->request_buffer );
+        kfree( request->request_buffer );
 
         content_free( &request->content );
     }
@@ -116,7 +116,7 @@ ssize_t ctrl_pipe_read( ctrl_pipe_t* pipe, char __user *buffer, size_t length )
 
 
     if (processed > 0){
-        dbg_kfree( cmd_to_user->request_buffer );
+        kfree( cmd_to_user->request_buffer );
         content_free( &cmd_to_user->content );
     }
     else
@@ -199,14 +199,14 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
     int result = SUCCESS;
     ssize_t processed = 0;
 
-    char* kernel_buffer = dbg_kmalloc( length, GFP_KERNEL );
+    char* kernel_buffer = kmalloc( length, GFP_KERNEL );
     if (kernel_buffer == NULL){
         log_err_sz( "Unable to send next portion to pipe: cannot allocate buffer. length=", length );
         return -ENOMEM;
     }
 
     if (0 != copy_from_user( kernel_buffer, buffer, length )){
-        dbg_kfree( kernel_buffer );
+        kfree( kernel_buffer );
         log_err( "Unable to write to pipe: invalid user buffer" );
         return -EINVAL;
     }
@@ -289,7 +289,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
                 snapstore_dev = MKDEV( snapstore_dev_id->major, snapstore_dev_id->minor );
 
             dev_id_set_buffer_size = sizeof( dev_t ) * dev_id_set_length;
-            dev_set = dbg_kzalloc( dev_id_set_buffer_size, GFP_KERNEL );
+            dev_set = kzalloc( dev_id_set_buffer_size, GFP_KERNEL );
             if (NULL == dev_set){
                 log_err( "Unable to process stretch snapstore initiation command: cannot allocate memory" );
                 result = -ENOMEM;
@@ -300,7 +300,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
                 dev_set[inx] = MKDEV( dev_id_list[inx].major, dev_id_list[inx].minor );
 
             result = snapstore_create( unique_id, snapstore_dev, dev_set, dev_id_set_length );
-            dbg_kfree( dev_set );
+            kfree( dev_set );
             if (result != SUCCESS){
                 log_err_dev_t( "Failed to create snapstore on device ", snapstore_dev );
                 break;
@@ -313,7 +313,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
                 }
             }
     } while (false);
-    dbg_kfree( kernel_buffer );
+    kfree( kernel_buffer );
     ctrl_pipe_request_acknowledge( pipe, result );
     
     if (result == SUCCESS)
@@ -499,7 +499,7 @@ void ctrl_pipe_push_request( ctrl_pipe_t* pipe, unsigned int* cmd, size_t cmd_le
     request = (cmd_to_user_t*)content_new( &pipe->cmd_to_user );
     if (request == NULL){
         log_err( "Failed to create acknowledge command." );
-        dbg_kfree( cmd );
+        kfree( cmd );
         return;
     }
 
@@ -515,7 +515,7 @@ void ctrl_pipe_request_acknowledge( ctrl_pipe_t* pipe, unsigned int result )
     unsigned int* cmd = NULL;
     size_t cmd_len = 2;
 
-    cmd = (unsigned int*)dbg_kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
+    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
     if (NULL == cmd){
         log_err( "Unable to create acknowledge command data: not enough memory" );
         return;
@@ -534,7 +534,7 @@ void ctrl_pipe_request_halffill( ctrl_pipe_t* pipe, unsigned long long filled_st
 
     log_tr( "Snapstore is half-full" );
 
-    cmd = (unsigned int*)dbg_kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
+    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
     if (NULL == cmd){
         log_err( "Unable to create acknowledge command data: not enough memory" );
         return;
@@ -554,7 +554,7 @@ void ctrl_pipe_request_overflow( ctrl_pipe_t* pipe, unsigned int error_code, uns
 
     log_tr( "Snapstore overflow" );
 
-    cmd = (unsigned int*)dbg_kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
+    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
     if (NULL == cmd){
         log_err( "Unable to create acknowledge command data: not enough memory" );
         return;
@@ -575,7 +575,7 @@ void ctrl_pipe_request_terminate( ctrl_pipe_t* pipe, unsigned long long filled_s
 
     log_tr( "Snapstore termination" );
 
-    cmd = (unsigned int*)dbg_kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
+    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
     if (NULL == cmd){
         log_err( "Unable to create acknowledge command data: not enough memory" );
         return;
@@ -596,7 +596,7 @@ void ctrl_pipe_request_invalid( ctrl_pipe_t* pipe )
 
     log_tr( "Ctrl pipe received invalid command" );
 
-    cmd = (unsigned int*)dbg_kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
+    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
     if (NULL == cmd){
         log_err( "Unable to create acknowledge command data: not enough memory" );
         return;

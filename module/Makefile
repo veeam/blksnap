@@ -23,7 +23,6 @@ blk-snap-y += defer_io.o
 blk-snap-y += ext4_check.o
 blk-snap-y += log.o
 blk-snap-y += main.o
-blk-snap-y += mem_alloc.o
 blk-snap-y += page_array.o
 blk-snap-y += queue_spinlocking.o
 blk-snap-y += rangelist.o

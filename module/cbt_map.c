@@ -101,7 +101,7 @@ cbt_map_t* cbt_map_create( unsigned int cbt_sect_in_block_degree, sector_t devic
 
     log_tr( "CBT map create" );
 
-    cbt_map = (cbt_map_t*)dbg_kzalloc( sizeof( cbt_map_t ), GFP_KERNEL );
+    cbt_map = (cbt_map_t*)kzalloc( sizeof( cbt_map_t ), GFP_KERNEL );
     if (cbt_map == NULL)
         return NULL;
 
@@ -125,7 +125,7 @@ void cbt_map_destroy( cbt_map_t* cbt_map )
     if (cbt_map != NULL){
         cbt_map_deallocate( cbt_map );
 
-        dbg_kfree( cbt_map );
+        kfree( cbt_map );
     }
 }
 

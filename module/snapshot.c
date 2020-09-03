@@ -63,7 +63,7 @@ int _snapshot_New( dev_t* p_dev, int count, snapshot_t** pp_snapshot )
 
         {
             size_t buffer_length = sizeof( dev_t ) * count;
-            snap_set = (dev_t*)dbg_kzalloc( buffer_length, GFP_KERNEL );
+            snap_set = (dev_t*)kzalloc( buffer_length, GFP_KERNEL );
             if (NULL == snap_set){
                 log_err( "Unable to create snapshot: faile to allocate memory for snapshot map" );
                 result = -ENOMEM;
@@ -81,7 +81,7 @@ int _snapshot_New( dev_t* p_dev, int count, snapshot_t** pp_snapshot )
 
     if (result != SUCCESS){
         if (snap_set != NULL){
-            dbg_kfree( snap_set );
+            kfree( snap_set );
             snap_set = NULL;
         }
 
@@ -95,7 +95,7 @@ int _snapshot_Free( snapshot_t* snapshot )
     int result = SUCCESS;
 
     if (snapshot->dev_id_set != NULL){
-        dbg_kfree( snapshot->dev_id_set );
+        kfree( snapshot->dev_id_set );
         snapshot->dev_id_set = NULL;
         snapshot->dev_id_set_size = 0;
     }

@@ -22,12 +22,12 @@ void rangelist_done( rangelist_t* rglist )
 {
     rangelist_el_t* el;
     while (NULL != (el = _rangelist_get_first( rglist )))
-        dbg_kfree( el );
+        kfree( el );
 }
 
 int rangelist_add( rangelist_t* rglist, range_t* rg )
 {
-    rangelist_el_t* el = dbg_kzalloc( sizeof( rangelist_el_t ), GFP_KERNEL );
+    rangelist_el_t* el = kzalloc( sizeof( rangelist_el_t ), GFP_KERNEL );
     if (el == NULL)
         return -ENOMEM;
 
@@ -50,7 +50,7 @@ int rangelist_get( rangelist_t* rglist, range_t* rg )
     rg->ofs = el->rg.ofs;
     rg->cnt = el->rg.cnt;
 
-    dbg_kfree( el );
+    kfree( el );
 
     return SUCCESS;
 }

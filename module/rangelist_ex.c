@@ -24,12 +24,12 @@ void rangelist_ex_done( rangelist_ex_t* rglist )
 {
     rangelist_el_ex_t* el;
     while (NULL != (el = _rangelist_ex_get_first( rglist )))
-        dbg_kfree( el );
+        kfree( el );
 }
 
 int rangelist_ex_add( rangelist_ex_t* rglist, range_t* rg, void* extension )
 {
-    rangelist_el_ex_t* el = dbg_kzalloc( sizeof( rangelist_el_ex_t ), GFP_KERNEL );
+    rangelist_el_ex_t* el = kzalloc( sizeof( rangelist_el_ex_t ), GFP_KERNEL );
     if (el == NULL)
         return -ENOMEM;
 
@@ -54,7 +54,7 @@ int rangelist_ex_get( rangelist_ex_t* rglist, range_t* rg, void** p_extension )
     rg->cnt = el->rg.cnt;
     *p_extension = el->extension;
 
-    dbg_kfree( el );
+    kfree( el );
 
     return SUCCESS;
 }

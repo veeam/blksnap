@@ -15,7 +15,7 @@ snapstore_mem_t* snapstore_mem_create( size_t available_blocks )
     int res;
     snapstore_mem_t* mem = NULL;
 
-    mem = dbg_kzalloc( sizeof( snapstore_mem_t ), GFP_KERNEL );
+    mem = kzalloc( sizeof( snapstore_mem_t ), GFP_KERNEL );
     if (mem == NULL)
         return NULL;
     
@@ -30,7 +30,7 @@ snapstore_mem_t* snapstore_mem_create( size_t available_blocks )
 
     } while (false);
     if (res != SUCCESS){
-        dbg_kfree( mem );
+        kfree( mem );
         mem = NULL;
     }
 
@@ -54,7 +54,7 @@ void snapstore_mem_destroy( snapstore_mem_t* mem )
 
         blk_descr_mem_pool_done( &mem->pool );
 
-        dbg_kfree( mem );
+        kfree( mem );
     }
 }
 

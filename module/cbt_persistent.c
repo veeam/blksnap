@@ -54,7 +54,7 @@ typedef struct cbt_prst_reg_s
 
 static cbt_prst_reg_t* _cbt_prst_reg_new(dev_t dev_id, uint32_t check_parameters_sz, void* check_parameters, cbt_map_t* cbt_map)
 {
-    cbt_prst_reg_t* reg = dbg_kzalloc(sizeof(cbt_prst_reg_t), GFP_KERNEL);
+    cbt_prst_reg_t* reg = kzalloc(sizeof(cbt_prst_reg_t), GFP_KERNEL);
     if (reg == NULL){
         log_err("Failed to allocate memory for persistent CBT register");
         return NULL;
@@ -74,11 +74,11 @@ static void _cbt_prst_reg_del(cbt_prst_reg_t* reg)
     list_del(&reg->link);
     
     if (reg->check_parameters)
-        dbg_kfree(reg->check_parameters);
+        kfree(reg->check_parameters);
 
     cbt_map_put_resource(reg->cbt_map);
 
-    dbg_kfree(reg);
+    kfree(reg);
 }
 
 static cbt_prst_reg_t* _cbt_prst_reg_find(dev_t dev_id)
@@ -118,7 +118,7 @@ static int _cbt_prst_load_reg(cbt_storage_accessor_t* accessor, cbt_prst_reg_t**
             break;
         }
         else if (0 == memcmp(_b, CBT_REGISTER_ERROR, 8)){
-            cbt_checkfs_status_t* checkfs_status = dbg_kzalloc(sizeof(cbt_checkfs_status_t), GFP_KERNEL);
+            cbt_checkfs_status_t* checkfs_status = kzalloc(sizeof(cbt_checkfs_status_t), GFP_KERNEL);
             if (!checkfs_status){
                 res = -ENOMEM;
                 break;
@@ -157,7 +157,7 @@ static int _cbt_prst_load_reg(cbt_storage_accessor_t* accessor, cbt_prst_reg_t**
 
                 cbt_checkfs_status_log(checkfs_status);
             } while (false);
-            dbg_kfree(check_parameters);
+            kfree(check_parameters);
         }
         else if (0 == memcmp(_b, CBT_REGISTER_MAGIC, 8)){
             dev_t dev_id = 0;
@@ -217,7 +217,7 @@ static int _cbt_prst_load_reg(cbt_storage_accessor_t* accessor, cbt_prst_reg_t**
             }
             {//#0x30 - check_parameters
                 if (check_parameters_sz != 0){
-                    check_parameters = dbg_kzalloc(check_parameters_sz, GFP_KERNEL);
+                    check_parameters = kzalloc(check_parameters_sz, GFP_KERNEL);
                     if (check_parameters == NULL){
                         res = -ENOMEM;
                         break;
@@ -266,7 +266,7 @@ static int _cbt_prst_load_reg(cbt_storage_accessor_t* accessor, cbt_prst_reg_t**
     }
     else{
         if (check_parameters != NULL)
-            dbg_kfree(check_parameters);
+            kfree(check_parameters);
         if (cbt_map != NULL)
             cbt_map_destroy(cbt_map);
         if (reg != NULL)
@@ -444,7 +444,7 @@ static int _cbt_prst_store_all_register(cbt_storage_accessor_t* accessor)
     down_write(&_cbt_prst_registers_list.lock);
     {
         int count = 0;
-        cbt_checkfs_status_t*  checkfs_status = dbg_kzalloc(sizeof(cbt_checkfs_status_t), GFP_KERNEL);
+        cbt_checkfs_status_t*  checkfs_status = kzalloc(sizeof(cbt_checkfs_status_t), GFP_KERNEL);
         if (checkfs_status == NULL)
             return -ENOMEM;
 
@@ -455,7 +455,7 @@ static int _cbt_prst_store_all_register(cbt_storage_accessor_t* accessor)
                 cbt_prst_reg_t* current_reg = list_entry(_current_list_head, cbt_prst_reg_t, link);
 
                 if (current_reg->check_parameters){
-                    dbg_kfree(current_reg->check_parameters);
+                    kfree(current_reg->check_parameters);
                     current_reg->check_parameters = NULL;
                     current_reg->check_parameters_sz = 0ul;
                 }
@@ -478,7 +478,7 @@ static int _cbt_prst_store_all_register(cbt_storage_accessor_t* accessor)
                 ++count;
             }
         }
-        dbg_kfree(checkfs_status);
+        kfree(checkfs_status);
 
         if (count)
             log_tr_format("Stored %d CBT registers", count);

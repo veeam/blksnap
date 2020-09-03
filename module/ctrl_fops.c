@@ -201,7 +201,7 @@ int ioctl_tracking_collect( unsigned long arg )
     {
         struct cbt_info_s* p_cbt_info = NULL;
 
-        p_cbt_info = dbg_kzalloc(get.count * sizeof(struct cbt_info_s), GFP_KERNEL);
+        p_cbt_info = kzalloc(get.count * sizeof(struct cbt_info_s), GFP_KERNEL);
         if (NULL == p_cbt_info){
             log_err("Unable to collect tracing devices: cannot allocate memory");
             return -ENOMEM;
@@ -227,7 +227,7 @@ int ioctl_tracking_collect( unsigned long arg )
 
         } while (false);
 
-        dbg_kfree(p_cbt_info);
+        kfree(p_cbt_info);
         p_cbt_info = NULL;
     }
     return res;
@@ -274,7 +274,7 @@ int ioctl_tracking_mark_dirty_blocks(unsigned long arg)
     }
 
     buffer_size = param.count * sizeof(struct block_range_s);
-    p_dirty_blocks = dbg_kzalloc(buffer_size, GFP_KERNEL);
+    p_dirty_blocks = kzalloc(buffer_size, GFP_KERNEL);
     if (p_dirty_blocks == NULL){
         log_err_format("Unable to mark dirty blocks: cannot allocate [%ld] bytes", buffer_size);
         return -ENOMEM;
@@ -289,7 +289,7 @@ int ioctl_tracking_mark_dirty_blocks(unsigned long arg)
 
         result = snapimage_mark_dirty_blocks(MKDEV(param.image_dev_id.major, param.image_dev_id.minor), p_dirty_blocks, param.count);
     } while (false);
-    dbg_kfree(p_dirty_blocks);
+    kfree(p_dirty_blocks);
 
     return result;
 }
@@ -307,7 +307,7 @@ int ioctl_snapshot_create( unsigned long arg )
     }
 
     dev_id_buffer_size = sizeof( struct ioctl_dev_id_s ) * param.count;
-    pk_dev_id = dbg_kzalloc( dev_id_buffer_size, GFP_KERNEL );
+    pk_dev_id = kzalloc( dev_id_buffer_size, GFP_KERNEL );
     if (NULL == pk_dev_id){
         log_err_format( "Unable to create snapshot: cannot allocate [%ld] bytes.", dev_id_buffer_size );
         return -ENOMEM;
@@ -325,7 +325,7 @@ int ioctl_snapshot_create( unsigned long arg )
         }
 
         dev_buffer_size = sizeof( dev_t ) * param.count;
-        p_dev = dbg_kzalloc( dev_buffer_size, GFP_KERNEL );
+        p_dev = kzalloc( dev_buffer_size, GFP_KERNEL );
         if (NULL == p_dev){
             log_err_format( "Unable to create snapshot: cannot allocate [%ld] bytes", dev_buffer_size );
             status = -ENOMEM;
@@ -337,11 +337,11 @@ int ioctl_snapshot_create( unsigned long arg )
 
         status = snapshot_Create(p_dev, param.count, CBT_BLOCK_SIZE_DEGREE, &param.snapshot_id);
 
-        dbg_kfree( p_dev );
+        kfree( p_dev );
         p_dev = NULL;
 
     } while (false);
-    dbg_kfree( pk_dev_id );
+    kfree( pk_dev_id );
     pk_dev_id = NULL;
 
     if (status == SUCCESS){
@@ -379,7 +379,7 @@ int ioctl_snapstore_create( unsigned long arg )
     }
 
     dev_id_buffer_size = sizeof( struct ioctl_dev_id_s ) * param.count;
-    pk_dev_id = dbg_kzalloc( dev_id_buffer_size, GFP_KERNEL );
+    pk_dev_id = kzalloc( dev_id_buffer_size, GFP_KERNEL );
     if (NULL == pk_dev_id){
         log_err_format( "Unable to create snapstore: cannot allocate [%ld] bytes", dev_id_buffer_size );
         return -ENOMEM;
@@ -407,7 +407,7 @@ int ioctl_snapstore_create( unsigned long arg )
         }
 
         dev_id_set_buffer_size = sizeof( dev_t ) * param.count;
-        dev_id_set = dbg_kzalloc( dev_id_set_buffer_size, GFP_KERNEL );
+        dev_id_set = kzalloc( dev_id_set_buffer_size, GFP_KERNEL );
         if (NULL == dev_id_set){
             log_err_format( "Unable to create snapstore: cannot allocate [%ld] bytes", dev_id_set_buffer_size );
             res = -ENOMEM;
@@ -419,9 +419,9 @@ int ioctl_snapstore_create( unsigned long arg )
 
         res = snapstore_create( id, snapstore_dev_id, dev_id_set, dev_id_set_length );
 
-        dbg_kfree( dev_id_set );
+        kfree( dev_id_set );
     } while (false);
-    dbg_kfree( pk_dev_id );
+    kfree( pk_dev_id );
 
     return res;
 }
@@ -701,7 +701,7 @@ int ioctl_persistentcbt_data(unsigned long arg)
     }
     else 
     {
-        cbtdata = dbg_kzalloc(param.size + 1, GFP_KERNEL);
+        cbtdata = kzalloc(param.size + 1, GFP_KERNEL);
         if (cbtdata == NULL) {
             log_err("[TBD]Unable to receive persistent cbt data. Not enough memory.");
             return -ENOMEM;
@@ -719,7 +719,7 @@ int ioctl_persistentcbt_data(unsigned long arg)
             status = cbt_persistent_cbtdata_new(cbtdata);
 
         } while (false);
-        dbg_kfree(cbtdata);
+        kfree(cbtdata);
     }
     return status;
 }
@@ -729,9 +729,7 @@ int ioctl_printstate( unsigned long arg )
     log_tr( "--------------------------------------------------------------------------" );
     log_tr( "state:" );
     log_tr_format( "version: %d.%d.%d.%d.", version.major, version.minor, version.revision, version.build );
-#ifdef VEEAMSNAP_MEMORY_LEAK_CONTROL
-    dbg_mem_print_state( );
-#endif
+
     snapimage_print_state( );
     tracker_print_state( );
     page_arrays_print_state( );

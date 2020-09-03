@@ -14,7 +14,7 @@ int snapstore_multidev_create( snapstore_multidev_t** p_multidev )
 
     log_tr( "Multidevice file snapstore create" );
 
-    multidev = dbg_kzalloc( sizeof( snapstore_multidev_t ), GFP_KERNEL );
+    multidev = kzalloc( sizeof( snapstore_multidev_t ), GFP_KERNEL );
     if (multidev == NULL)
         return -ENOMEM;
 
@@ -42,7 +42,7 @@ void snapstore_multidev_destroy( snapstore_multidev_t* multidev )
             content_sl_free( content );
         }
 
-        dbg_kfree( multidev );
+        kfree( multidev );
     }
 }
 

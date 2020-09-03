@@ -237,7 +237,7 @@ void _defer_io_destroy( void* this_resource )
     if (defer_io->snapstore_device)
         snapstore_device_put_resource(defer_io->snapstore_device);
     
-    dbg_kfree(defer_io);
+    kfree(defer_io);
     log_tr("Defer IO processor was destroyed");
 }
 
@@ -250,7 +250,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 
     log_tr_dev_t( "Defer IO processor was created for device ", dev_id );
 
-    defer_io = dbg_kzalloc( sizeof( defer_io_t ), GFP_KERNEL );
+    defer_io = kzalloc( sizeof( defer_io_t ), GFP_KERNEL );
     if (defer_io == NULL)
         return -ENOMEM;
 

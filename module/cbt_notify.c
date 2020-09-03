@@ -27,10 +27,10 @@ static cbt_prst_list_t _cbt_prst_notify_devices_list = { { 0 } }; // list of not
 static void _cbt_notify_dev_free(cbt_notify_dev_t* dev_note)
 {
     if (dev_note->dev_name)
-        dbg_kfree(dev_note->dev_name);
+        kfree(dev_note->dev_name);
     if (dev_note->dev_path)
-        dbg_kfree(dev_note->dev_path);
-    dbg_kfree(dev_note);
+        kfree(dev_note->dev_path);
+    kfree(dev_note);
 }
 
 static void _cbt_notify_dev_del(cbt_notify_dev_t* dev_note)
@@ -101,7 +101,7 @@ cbt_notify_dev_t* cbt_notify_dev_new(dev_t dev_id, char* dev_name, char* dev_pat
 
     cbt_notify_list_down_write();
     do{
-        dev_note = dbg_kzalloc(sizeof(cbt_notify_dev_t), GFP_KERNEL);
+        dev_note = kzalloc(sizeof(cbt_notify_dev_t), GFP_KERNEL);
         if (dev_note == NULL){
             log_err("Failed to allocate memory for persistent CBT register");
             res = -ENOMEM;
@@ -113,7 +113,7 @@ cbt_notify_dev_t* cbt_notify_dev_new(dev_t dev_id, char* dev_name, char* dev_pat
 
         {
             int sz = strlen(dev_name);
-            dev_note->dev_name = dbg_kzalloc(sz + 1, GFP_KERNEL);
+            dev_note->dev_name = kzalloc(sz + 1, GFP_KERNEL);
             if (dev_note->dev_name == NULL){
                 log_err("Failed to allocate memory for persistent CBT register data");
                 res = -ENOMEM;
@@ -123,7 +123,7 @@ cbt_notify_dev_t* cbt_notify_dev_new(dev_t dev_id, char* dev_name, char* dev_pat
         }
         if (dev_path != NULL){
             int sz = strlen(dev_path);
-            dev_note->dev_path = dbg_kzalloc(sz + 1, GFP_KERNEL);
+            dev_note->dev_path = kzalloc(sz + 1, GFP_KERNEL);
             if (dev_note->dev_path == NULL){
                 log_err("Failed to allocate memory for persistent CBT register data");
                 res = -ENOMEM;

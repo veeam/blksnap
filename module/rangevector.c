@@ -29,7 +29,7 @@ void rangevector_cleanup( rangevector_t* rangevector )
         list_del( &pCnt->link );
         atomic_dec( &rangevector->blocks_cnt );
 
-        dbg_kfree( pCnt );
+        kfree( pCnt );
     }
 }
 
@@ -48,7 +48,7 @@ int rangevector_add( rangevector_t* rangevector, range_t* rg )
         }
 
         if (el == NULL){
-            el = dbg_kmalloc( sizeof( rangevector_el_t ), GFP_KERNEL );
+            el = kmalloc( sizeof( rangevector_el_t ), GFP_KERNEL );
             if (NULL == el){
                 res = -ENOMEM;
                 break;

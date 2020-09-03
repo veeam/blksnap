@@ -55,7 +55,7 @@ static int _check_unmount_status(struct block_device* blk_dev, uint32_t* p_check
 #endif
 
     if (res == SUCCESS){
-        void* check_parameters = dbg_kmalloc(CHECK_PARAMETERS_SIZE_EXT4, GFP_KERNEL);
+        void* check_parameters = kmalloc(CHECK_PARAMETERS_SIZE_EXT4, GFP_KERNEL);
         if (check_parameters == NULL)
             return -ENOMEM;
 

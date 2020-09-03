@@ -1,7 +1,6 @@
 #include "stdafx.h"
 
 #include "sparse_bitmap.h"
-#include "mem_alloc.h"
 
 #define SECTION "sparse_array"
 #include "log_format.h"
@@ -40,7 +39,7 @@ static inline blocks_array_t* _sparse_block_array_new( int init_value )
 #ifdef SPARSE_BLOCK_CACHEABLE
     blocks_array = kmem_cache_alloc( g_sparse_block_cache, GFP_NOIO );
 #else
-    blocks_array = dbg_kmalloc( sizeof( blocks_array_t ), GFP_NOIO );
+    blocks_array = kmalloc( sizeof( blocks_array_t ), GFP_NOIO );
 #endif
 
     if (blocks_array == NULL)
@@ -56,7 +55,7 @@ static inline void _sparse_block_array_free( blocks_array_t* blocks_array )
 #ifdef SPARSE_BLOCK_CACHEABLE
         kmem_cache_free( g_sparse_block_cache, blocks_array );
 #else
-        dbg_kfree( blocks_array );
+        kfree( blocks_array );
 #endif
     }
 }
@@ -80,7 +79,7 @@ void _sparse_block_init( sparse_block_t* block, char level, void* block_state )
 
 sparse_block_t* _sparse_block_create( char level, void* block_state )
 {
-    sparse_block_t* block = dbg_kmalloc( sizeof( sparse_block_t ), GFP_NOIO );
+    sparse_block_t* block = kmalloc( sizeof( sparse_block_t ), GFP_NOIO );
     if (NULL == block)
         log_err( "Failed to allocate memory for sparse bitmap block" );
     else
@@ -91,7 +90,7 @@ sparse_block_t* _sparse_block_create( char level, void* block_state )
 void _sparse_block_destroy( sparse_block_t* block )
 {
     if (NULL != block)
-        dbg_kfree( block );
+        kfree( block );
 }
 
 void _sparse_block_free( sparse_block_t* block )

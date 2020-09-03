@@ -56,7 +56,7 @@ struct bio* _blk_dev_redirect_bio_alloc( int nr_iovecs, void* bi_private )
 
 blk_redirect_bio_endio_list_t* _bio_endio_alloc_list( struct bio* new_bio )
 {
-    blk_redirect_bio_endio_list_t* next = dbg_kzalloc( sizeof( blk_redirect_bio_endio_list_t ), GFP_NOIO );
+    blk_redirect_bio_endio_list_t* next = kzalloc( sizeof( blk_redirect_bio_endio_list_t ), GFP_NOIO );
     if (next){
         next->next = NULL;
         next->this = new_bio;
@@ -87,7 +87,7 @@ void bio_endio_list_cleanup( blk_redirect_bio_endio_list_t* curr )
 {
     while (curr != NULL){
         blk_redirect_bio_endio_list_t* next = curr->next;
-        dbg_kfree( curr );
+        kfree( curr );
         curr = next;
     }
 }
@@ -287,7 +287,7 @@ int blk_dev_redirect_memcpy_part( blk_redirect_bio_endio_t* rq_endio, int direct
             bvec_sectors = rq_count - processed_sectors;
 
         {
-            void* mem = mem_kmap_atomic( bio_vec_page( bvec ) );
+            void* mem = kmap_atomic( bio_vec_page( bvec ) );
             if (direction == READ){
                 memcpy(
                     mem + bio_vec_offset( bvec ) + sector_to_uint( bvec_ofs ),
@@ -300,7 +300,7 @@ int blk_dev_redirect_memcpy_part( blk_redirect_bio_endio_t* rq_endio, int direct
                     mem + bio_vec_offset( bvec ) + sector_to_uint( bvec_ofs ),
                     sector_to_uint( bvec_sectors ) );
             }
-            mem_kunmap_atomic( mem );
+            kunmap_atomic( mem );
         }
 
         processed_sectors += bvec_sectors;
@@ -341,11 +341,11 @@ int blk_dev_redirect_zeroed_part( blk_redirect_bio_endio_t* rq_endio, sector_t r
             bvec_sectors = rq_count - processed_sectors;
 
         {
-            void* mem = mem_kmap_atomic( bio_vec_page( bvec ) );
+            void* mem = kmap_atomic( bio_vec_page( bvec ) );
 
             memset( mem + bio_vec_offset( bvec ) + sector_to_uint( bvec_ofs ), 0, sector_to_uint( bvec_sectors ) );
 
-            mem_kunmap_atomic( mem );
+            kunmap_atomic( mem );
         }
 
         processed_sectors += bvec_sectors;

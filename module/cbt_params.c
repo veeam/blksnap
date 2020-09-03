@@ -183,7 +183,7 @@ int cbt_prst_parse_parameters(const char* params_str, cbt_persistent_parameters_
     }
     length = strnlen(params_str, PAGE_SIZE); //string limited
 
-    cbtdata_str = dbg_kzalloc(length + 1, GFP_KERNEL);
+    cbtdata_str = kzalloc(length + 1, GFP_KERNEL);
     if (cbtdata_str == NULL){
         log_err("Cannot allocate memory for parameter string");
         return -ENOMEM;
@@ -228,7 +228,7 @@ int cbt_prst_parse_parameters(const char* params_str, cbt_persistent_parameters_
         if (res != SUCCESS)
             break;
     };
-    dbg_kfree(cbtdata_str);
+    kfree(cbtdata_str);
 
     if (res != SUCCESS){
         rangevector_done(&cbt_data->rangevector);

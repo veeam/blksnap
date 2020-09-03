@@ -80,13 +80,13 @@ void blk_deferred_free( blk_deferred_t* dio )
         page_array_free( dio->buff );
         dio->buff = NULL;
     }
-    dbg_kfree( dio );
+    kfree( dio );
 }
 
 blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_descr_unify_t* blk_descr )
 {
     bool success = false;
-    blk_deferred_t* dio = dbg_kmalloc( sizeof( blk_deferred_t ), GFP_NOIO );
+    blk_deferred_t* dio = kmalloc( sizeof( blk_deferred_t ), GFP_NOIO );
     if (dio == NULL)
         return NULL;
 
@@ -297,7 +297,7 @@ blk_deferred_request_t* blk_deferred_request_new( void )
 {
     blk_deferred_request_t* dio_req = NULL;
 
-    dio_req = dbg_kzalloc( sizeof( blk_deferred_request_t ), GFP_NOIO );
+    dio_req = kzalloc( sizeof( blk_deferred_request_t ), GFP_NOIO );
     if (dio_req == NULL)
         return NULL;
 
@@ -382,7 +382,7 @@ void blk_deferred_request_free( blk_deferred_request_t* dio_req )
 
             blk_deferred_free( dio );
         }
-        dbg_kfree( dio_req );
+        kfree( dio_req );
     }
 }
 #else //BLK_DEFER_LIST
@@ -397,7 +397,7 @@ void blk_deferred_request_free( blk_deferred_request_t* dio_req )
                 dio_req->dios[inx] = NULL;
             }
         }
-        dbg_kfree( dio_req );
+        kfree( dio_req );
     }
 }
 #endif //BLK_DEFER_LIST

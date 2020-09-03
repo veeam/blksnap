@@ -40,7 +40,7 @@ int queue_sl_done( queue_sl_t* queue )
 
 queue_content_sl_t* queue_content_sl_new_opt_append( queue_sl_t* queue, gfp_t gfp_opt, size_t append_size )
 {
-    queue_content_sl_t* content = dbg_kmalloc( queue->content_size + append_size, gfp_opt );
+    queue_content_sl_t* content = kmalloc( queue->content_size + append_size, gfp_opt );
 
     if (content){
         atomic_inc( &queue->alloc_cnt );
@@ -63,7 +63,7 @@ void queue_content_sl_free( queue_content_sl_t* content )
         memset( content, 0xFF, queue->content_size );
         atomic_dec( &queue->alloc_cnt );
 
-        dbg_kfree( content );
+        kfree( content );
     }
 }
 

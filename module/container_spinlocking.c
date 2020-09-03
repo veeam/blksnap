@@ -135,7 +135,7 @@ content_sl_t* container_sl_get_first( container_sl_t* pContainer )
 
 content_sl_t* content_sl_new_opt( container_sl_t* pContainer, gfp_t gfp_opt )
 {
-    content_sl_t* pCnt = dbg_kmalloc( pContainer->content_size, gfp_opt );
+    content_sl_t* pCnt = kmalloc( pContainer->content_size, gfp_opt );
 
     if (pCnt){
         atomic_inc( &g_container_sl_alloc_cnt );
@@ -161,7 +161,7 @@ void content_sl_free( content_sl_t* pCnt )
 
         atomic_dec( &g_container_sl_alloc_cnt );
 
-        dbg_kfree( pCnt );
+        kfree( pCnt );
     }
 }
 

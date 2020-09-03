@@ -12,13 +12,13 @@ int snapstore_file_create( dev_t dev_id, snapstore_file_t** pfile )
 
     log_tr_dev_t("Single device file snapstore was created on device ", dev_id);
 
-    file = dbg_kzalloc( sizeof( snapstore_file_t ), GFP_KERNEL );
+    file = kzalloc( sizeof( snapstore_file_t ), GFP_KERNEL );
     if (file == NULL)
         return -ENOMEM;
 
     res = blk_dev_open( dev_id, &file->blk_dev );
     if (res != SUCCESS){
-        dbg_kfree( file );
+        kfree( file );
         log_err_format( "Unable to create snapstore file: failed to open device [%d:%d]. errno=", MAJOR( dev_id ), MINOR( dev_id ), res );
         return res;
     }
@@ -46,7 +46,7 @@ void snapstore_file_destroy( snapstore_file_t* file )
             file->blk_dev = NULL;
         }
 
-        dbg_kfree(file);
+        kfree(file);
     }
 }
 
