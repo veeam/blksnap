@@ -1,5 +1,5 @@
 #pragma once
-#include "uuid_util.h"
+#include <linux/uuid.h>
 #include "range.h"
 
 int logging_init( const char* logdir, unsigned long logmaxsize );
@@ -20,7 +20,7 @@ void log_s_lx( const char* section, const unsigned level, const char* s, const l
 void log_s_llx( const char* section, const unsigned level, const char* s, const long long d );
 void log_s_p( const char* section, const unsigned level, const char* s, const void* p );
 void log_s_dev_id( const char* section, const unsigned level, const char* s, const int major, const int minor );
-void log_s_uuid(const char* section, const unsigned level, const char* s, const veeam_uuid_t* uuid);
+void log_s_uuid(const char* section, const unsigned level, const char* s, const uuid_t* uuid);
 void log_s_range( const char* section, const unsigned level, const char* s, const range_t* range );
 void log_s_bytes(const char* section, const unsigned level, const unsigned char* bytes, const size_t count);
 

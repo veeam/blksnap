@@ -75,7 +75,7 @@ void snapstore_done( )
         log_err( "Unable to perform snapstore cleanup: container is not empty" );
 }
 
-int snapstore_create( veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, size_t dev_id_set_length )
+int snapstore_create( uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, size_t dev_id_set_length )
 {
     int res = SUCCESS;
     size_t dev_id_inx;
@@ -88,7 +88,7 @@ int snapstore_create( veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_se
     if (snapstore == NULL)
         return -ENOMEM;
 
-    veeam_uuid_copy( &snapstore->id, id );
+    uuid_copy( &snapstore->id, id );
 
     log_tr_uuid( "Create snapstore with id ", (&snapstore->id) );
 
@@ -144,7 +144,7 @@ int snapstore_create( veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_se
 }
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_length)
+int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_length)
 {
     int res = SUCCESS;
     size_t dev_id_inx;
@@ -157,7 +157,7 @@ int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id
     if (snapstore == NULL)
         return -ENOMEM;
 
-    veeam_uuid_copy( &snapstore->id, id );
+    uuid_copy( &snapstore->id, id );
 
     log_tr_uuid( "Create snapstore with id ", (&snapstore->id) );
 
@@ -198,7 +198,7 @@ int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id
 #endif
 
 
-int snapstore_cleanup( veeam_uuid_t* id, u64* filled_bytes )
+int snapstore_cleanup( uuid_t* id, u64* filled_bytes )
 {
     int res;
     sector_t filled;
@@ -215,7 +215,7 @@ int snapstore_cleanup( veeam_uuid_t* id, u64* filled_bytes )
     return snapstore_device_cleanup( id );
 }
 
-snapstore_t* _snapstore_find( veeam_uuid_t* id )
+snapstore_t* _snapstore_find( uuid_t* id )
 {
     snapstore_t* result = NULL;
     content_t* content;
@@ -223,7 +223,7 @@ snapstore_t* _snapstore_find( veeam_uuid_t* id )
     CONTAINER_FOREACH_BEGIN( Snapstore, content )
     {
         snapstore_t* snapstore = (snapstore_t*)content;
-        if (veeam_uuid_equal( &snapstore->id, id )){
+        if (uuid_equal( &snapstore->id, id )){
             result = snapstore;
             break;
         }
@@ -233,7 +233,7 @@ snapstore_t* _snapstore_find( veeam_uuid_t* id )
     return result;
 }
 
-int snapstore_stretch_initiate( veeam_uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe, sector_t empty_limit )
+int snapstore_stretch_initiate( uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe, sector_t empty_limit )
 {
     snapstore_t* snapstore = _snapstore_find( unique_id );
     if (NULL == snapstore){
@@ -247,7 +247,7 @@ int snapstore_stretch_initiate( veeam_uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe,
     return SUCCESS;
 }
 
-int snapstore_add_memory( veeam_uuid_t* id, unsigned long long sz )
+int snapstore_add_memory( uuid_t* id, unsigned long long sz )
 {
     int res = SUCCESS;
     snapstore_t* snapstore = NULL;
@@ -332,7 +332,7 @@ int zerosectors_add_ranges( rangevector_t* zero_sectors, page_array_t* ranges, s
     return SUCCESS;
 }
 
-int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
+int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 {
     int res = SUCCESS;
     snapstore_t* snapstore = NULL;
@@ -425,7 +425,7 @@ int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cn
 }
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-int snapstore_add_multidev(veeam_uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt)
+int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt)
 {
     int res = SUCCESS;
     snapstore_t* snapstore = NULL;
@@ -553,7 +553,7 @@ blk_descr_unify_t* snapstore_get_empty_block( snapstore_t* snapstore )
     return result;
 }
 
-int snapstore_check_halffill( veeam_uuid_t* unique_id, sector_t* fill_status )
+int snapstore_check_halffill( uuid_t* unique_id, sector_t* fill_status )
 {
     snapstore_t* snapstore = _snapstore_find( unique_id );
     if (NULL == snapstore){

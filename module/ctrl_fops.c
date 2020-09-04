@@ -27,7 +27,7 @@ static struct ioctl_getversion_s version = {
     .major        = FILEVER_MAJOR,
     .minor        = FILEVER_MINOR,
     .revision    = FILEVER_REVISION,
-    .build        = FILEVER_BUILD
+    .build        = 0
 };
 
 
@@ -389,7 +389,7 @@ int ioctl_snapstore_create( unsigned long arg )
     do{
         size_t inx = 0;
         dev_t* dev_id_set = NULL;
-        veeam_uuid_t* id = (veeam_uuid_t*)param.id;
+        uuid_t* id = (uuid_t*)param.id;
         dev_t snapstore_dev_id;
         size_t dev_id_set_length = (size_t)param.count;
         size_t dev_id_set_buffer_size;
@@ -448,7 +448,7 @@ int ioctl_snapstore_file( unsigned long arg )
     }
 
     do{
-        veeam_uuid_t* id = (veeam_uuid_t*)(param.id);
+        uuid_t* id = (uuid_t*)(param.id);
         size_t ranges_cnt = (size_t)param.range_count;
 
         if (ranges_buffer_size != page_array_user2page( (void*)param.ranges, 0, ranges, ranges_buffer_size ) ){
@@ -474,7 +474,7 @@ int ioctl_snapstore_memory( unsigned long arg )
         return -EINVAL;
     }
 
-    res = snapstore_add_memory( (veeam_uuid_t*)param.id, param.size );
+    res = snapstore_add_memory( (uuid_t*)param.id, param.size );
 
     return res;
 }
@@ -487,8 +487,8 @@ int ioctl_snapstore_cleanup( unsigned long arg )
         log_err( "Unable to perform snapstore cleanup: invalid user buffer" );
         return -EINVAL;
     }
-    log_tr_uuid("id=", ((veeam_uuid_t*)(param.id)));
-    res = snapstore_cleanup((veeam_uuid_t*)param.id, &param.filled_bytes);
+    log_tr_uuid("id=", ((uuid_t*)(param.id)));
+    res = snapstore_cleanup((uuid_t*)param.id, &param.filled_bytes);
 
     if (res == SUCCESS){
         if (0 != copy_to_user( (void*)arg, &param, sizeof( struct ioctl_snapstore_cleanup_s ) )){
@@ -522,7 +522,7 @@ int ioctl_snapstore_file_multidev( unsigned long arg )
     }
 
     do{
-        veeam_uuid_t* id = (veeam_uuid_t*)(param.id);
+        uuid_t* id = (uuid_t*)(param.id);
         dev_t snapstore_device = MKDEV( param.dev_id.major, param.dev_id.minor );
         size_t ranges_cnt = (size_t)param.range_count;
 

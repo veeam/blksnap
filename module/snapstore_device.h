@@ -51,7 +51,7 @@ snapstore_device_t* snapstore_device_find_by_dev_id( dev_t dev_id );
 int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore );
 
 
-int snapstore_device_cleanup( veeam_uuid_t* id );
+int snapstore_device_cleanup( uuid_t* id );
 
 int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, range_t* copy_range, blk_deferred_request_t** dio_copy_req );
 int snapstore_device_store( snapstore_device_t* snapstore_device, blk_deferred_request_t* dio_copy_req );

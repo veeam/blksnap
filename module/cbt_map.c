@@ -71,7 +71,7 @@ int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree,
 
     cbt_map->snap_number_previous = 0;
     cbt_map->snap_number_active = 1;
-    veeam_generate_random_uuid( cbt_map->generationId.b );
+    generate_random_uuid( cbt_map->generationId.b );
     cbt_map->active = true;
     
     cbt_map->state_changed_sectors = 0;
@@ -144,7 +144,7 @@ void cbt_map_switch( cbt_map_t* cbt_map )
 
         page_array_memset( _get_writable( cbt_map ), 0 );
 
-        veeam_generate_random_uuid( cbt_map->generationId.b );
+        generate_random_uuid( cbt_map->generationId.b );
 
         log_tr( "CBT reset" );
     }

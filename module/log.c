@@ -614,7 +614,7 @@ void log_s_dev_id( const char* section, const unsigned level, const char* s, con
     log_s( section, level, _tmp );
 }
 
-void log_s_uuid(const char* section, const unsigned level, const char* s, const veeam_uuid_t* uuid)
+void log_s_uuid(const char* section, const unsigned level, const char* s, const uuid_t* uuid)
 {
     char _tmp[MAX_LOGLINE_SIZE];
     snprintf( _tmp, sizeof( _tmp ), "%s[%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x]", s, uuid->b[0], uuid->b[1], uuid->b[2], uuid->b[3], uuid->b[4], uuid->b[5], uuid->b[6], uuid->b[7], uuid->b[8], uuid->b[9], uuid->b[10], uuid->b[11], uuid->b[12], uuid->b[13], uuid->b[14], uuid->b[15] );
@@ -622,7 +622,7 @@ void log_s_uuid(const char* section, const unsigned level, const char* s, const 
 }
 
 /*
-void log_s_uuid(const char* section, const unsigned level, const char* s, const veeam_uuid_t* uuid)
+void log_s_uuid(const char* section, const unsigned level, const char* s, const uuid_t* uuid)
 {
     char _tmp[MAX_LINE_SIZE];
 

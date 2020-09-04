@@ -2,7 +2,8 @@
 
 #include "page_array.h"
 #include "shared_resource.h"
-#include "uuid_util.h"
+#include <linux/uuid.h>
+
 
 typedef struct cbt_map_s
 {
@@ -19,7 +20,7 @@ typedef struct cbt_map_s
 
     volatile unsigned long snap_number_active;
     volatile unsigned long snap_number_previous;
-    veeam_uuid_t generationId;
+    uuid_t generationId;
 
     volatile bool active;
 

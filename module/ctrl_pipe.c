@@ -3,7 +3,7 @@
 #include "ctrl_pipe.h"
 #include "version.h"
 #include "blk-snap-ctl.h"
-#include "uuid_util.h"
+#include <linux/uuid.h>
 #include "snapstore.h"
 
 #define SECTION "ctrl_pipe "
@@ -214,7 +214,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
     do{
         u64 stretch_empty_limit;
         unsigned int dev_id_list_length;
-        veeam_uuid_t* unique_id;
+        uuid_t* unique_id;
         struct ioctl_dev_id_s* snapstore_dev_id;
         struct ioctl_dev_id_s* dev_id_list;
 
@@ -223,7 +223,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
             log_err_sz( "Unable to get snapstore uuid: invalid ctrl pipe initiate command. length=", length );
             break;
         }
-        unique_id = (veeam_uuid_t*)(kernel_buffer + processed);
+        unique_id = (uuid_t*)(kernel_buffer + processed);
         processed += 16;
         //log_tr_uuid( "unique_id=", unique_id );
 
@@ -328,7 +328,7 @@ ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *bu
     page_array_t* ranges = NULL;
 
     do{
-        veeam_uuid_t unique_id;
+        uuid_t unique_id;
         unsigned int ranges_length;
         size_t ranges_buffer_size;
 
@@ -337,7 +337,7 @@ ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *bu
             log_err_sz( "Unable to get snapstore id: invalid ctrl pipe next portion command. length=", length );
             break;
         }
-        if (0 != copy_from_user(&unique_id, buffer + processed, sizeof(veeam_uuid_t))){
+        if (0 != copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t))){
             log_err( "Unable to write to pipe: invalid user buffer" );
             processed = -EINVAL;
             break;
@@ -403,7 +403,7 @@ ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char _
     page_array_t* ranges = NULL;
 
     do{
-        veeam_uuid_t unique_id;
+        uuid_t unique_id;
         int snapstore_major;
         int snapstore_minor;
         unsigned int ranges_length;
@@ -414,7 +414,7 @@ ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char _
             log_err_sz( "Unable to get snapstore id: invalid ctrl pipe next portion command. length=", length );
             break;
         }
-        if (0 != copy_from_user(&unique_id, buffer + processed, sizeof(veeam_uuid_t))){
+        if (0 != copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t))){
             log_err( "Unable to write to pipe: invalid user buffer" );
             processed = -EINVAL;
             break;

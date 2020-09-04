@@ -68,7 +68,7 @@ snapstore_device_t* snapstore_device_find_by_dev_id( dev_t dev_id )
     return result;
 }
 
-snapstore_device_t* _snapstore_device_get_by_snapstore_id( veeam_uuid_t* id )
+snapstore_device_t* _snapstore_device_get_by_snapstore_id( uuid_t* id )
 {
     content_t* content;
     snapstore_device_t* result = NULL;
@@ -77,7 +77,7 @@ snapstore_device_t* _snapstore_device_get_by_snapstore_id( veeam_uuid_t* id )
     {
         snapstore_device_t* snapstore_device = (snapstore_device_t*)(content);
 
-        if (veeam_uuid_equal( id, &snapstore_device->snapstore->id )){
+        if (uuid_equal( id, &snapstore_device->snapstore->id )){
             result = snapstore_device;
             _container_del( &SnapstoreDevices, content );
             //found
@@ -116,7 +116,7 @@ void snapstore_device_free_cb( void* resource )
     _snapstore_device_destroy( snapstore_device );
 }
 
-int snapstore_device_cleanup( veeam_uuid_t* id )
+int snapstore_device_cleanup( uuid_t* id )
 {
     int result = SUCCESS;
     snapstore_device_t* snapstore_device = NULL;

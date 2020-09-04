@@ -1,6 +1,6 @@
 #pragma once
 
-#include "uuid_util.h"
+#include <linux/uuid.h>
 #include "blk-snap-ctl.h"
 #include "rangevector.h"
 #include "container.h"
@@ -16,7 +16,7 @@ typedef struct snapstore_s
 {
     content_t content;
     shared_resource_t shared;
-    veeam_uuid_t id;
+    uuid_t id;
 
     snapstore_mem_t* mem;
     snapstore_file_t* file;
@@ -35,11 +35,11 @@ typedef struct snapstore_s
 int snapstore_init( void );
 void snapstore_done( void );
 
-int snapstore_create(veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, size_t dev_id_set_length);
+int snapstore_create(uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, size_t dev_id_set_length);
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_length);
+int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_length);
 #endif
-int snapstore_cleanup(veeam_uuid_t* id, u64* filled_bytes);
+int snapstore_cleanup(uuid_t* id, u64* filled_bytes);
 
 static inline snapstore_t* snapstore_get( snapstore_t* snapstore )
 {
@@ -50,12 +50,12 @@ static inline void snapstore_put( snapstore_t* snapstore )
     shared_resource_put( &snapstore->shared );
 };
 
-int snapstore_stretch_initiate( veeam_uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe, sector_t empty_limit );
+int snapstore_stretch_initiate( uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe, sector_t empty_limit );
 
-int snapstore_add_memory(veeam_uuid_t* id, unsigned long long sz);
-int snapstore_add_file(veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cnt);
+int snapstore_add_memory(uuid_t* id, unsigned long long sz);
+int snapstore_add_file(uuid_t* id, page_array_t* ranges, size_t ranges_cnt);
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-int snapstore_add_multidev(veeam_uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt);
+int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt);
 #endif
 
 void snapstore_order_border( range_t* in, range_t* out );
@@ -67,5 +67,5 @@ int snapstore_request_store( snapstore_t* snapstore, blk_deferred_request_t* dio
 int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count );
 int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count );
 
-int snapstore_check_halffill( veeam_uuid_t* unique_id, sector_t* fill_status );
+int snapstore_check_halffill( uuid_t* unique_id, sector_t* fill_status );
 

@@ -92,7 +92,7 @@ int tracker_enum_cbt_info( int max_count, struct cbt_info_s* p_cbt_info, int* p_
             if (tracker->cbt_map){
                 p_cbt_info[count].cbt_map_size = tracker->cbt_map->map_size;
                 p_cbt_info[count].snap_number = (unsigned char)tracker->cbt_map->snap_number_previous;
-                veeam_uuid_copy((veeam_uuid_t*)(p_cbt_info[count].generationId), &tracker->cbt_map->generationId);
+                uuid_copy((uuid_t*)(p_cbt_info[count].generationId), &tracker->cbt_map->generationId);
             }
             else{
                 p_cbt_info[count].cbt_map_size = 0;
@@ -165,11 +165,9 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
             tracker->is_unfreezable = true;
             break;
         }
-#ifdef CONFIG_BLK_FILTER
+
         result = tracker_queue_ref(tracker->target_dev->bd_disk, tracker->target_dev->bd_partno, &tracker->tracker_queue);
-#else
-        result = tracker_queue_ref( bdev_get_queue( tracker->target_dev ), &tracker->tracker_queue );
-#endif
+
         superblock = blk_thaw_bdev( tracker->original_dev_id, tracker->target_dev, superblock );
 
     }while(false);
