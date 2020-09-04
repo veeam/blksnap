@@ -35,7 +35,8 @@ int snap_ctx_create(struct snap_ctx** ctx)
     if (*ctx == NULL)
         return -1;
 
-    (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
+//    (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
+    (*ctx)->fd = open( "/dev/veeamsnap", O_RDWR );
     if ((*ctx)->fd == -1)
     {
         error = errno;
@@ -141,6 +142,17 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
         return NULL;
     }
 
-    memcpy(param.id, snap_store_ctx->id, ID_LENGTH);
+    memcpy(snap_store_ctx->id, param.id, ID_LENGTH);
     return snap_store_ctx;
+}
+
+int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
+                                        struct snap_store_ctx* store_ctx,
+                                        unsigned long long length)
+{
+    struct ioctl_snapstore_memory_limit_s param;
+    memcpy(param.id, store_ctx->id, ID_LENGTH);
+    param.size = length;
+
+    return ioctl(ctx->fd, IOCTL_SNAPSTORE_MEMORY, &param);
 }

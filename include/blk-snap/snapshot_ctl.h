@@ -29,6 +29,10 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
                                                   struct ioctl_dev_id_s store_dev,
                                                   struct ioctl_dev_id_s snap_dev);
 
+int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
+                                        struct snap_store_ctx* store_ctx,
+                                        unsigned long long length);
+
 #ifdef  __cplusplus
 }
 #endif
