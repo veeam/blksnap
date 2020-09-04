@@ -18,7 +18,7 @@ typedef struct cmd_to_user_s
 
 ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer, size_t length );
 ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *buffer, size_t length );
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char __user *buffer, size_t length );
 #endif
 
@@ -162,7 +162,7 @@ ssize_t ctrl_pipe_write( ctrl_pipe_t* pipe, const char __user *buffer, size_t le
                 processed = res;
         }
             break;
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
         case VEEAMSNAP_CHARCMD_NEXT_PORTION_MULTIDEV:
         {
             ssize_t res = ctrl_pipe_command_next_portion_multidev( pipe, buffer + processed, length - processed );
@@ -395,7 +395,7 @@ ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *bu
         return processed;
     return result;
 }
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char __user *buffer, size_t length )
         {
     int result = SUCCESS;

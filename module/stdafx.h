@@ -44,8 +44,6 @@
 
 
 
-#define SNAPSTORE_MULTIDEV 
-
 #define PERSISTENT_CBT
 
 #endif /* STDAFX_H_ */

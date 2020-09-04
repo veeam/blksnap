@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
 #include "rangelist_ex.h"
 
@@ -63,4 +63,4 @@ bool rangelist_ex_empty( rangelist_ex_t* rglist )
 {
     return list_empty( &rglist->head );
 }
-#endif //SNAPSTORE_MULTIDEV
+#endif //CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV

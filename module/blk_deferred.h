@@ -74,7 +74,7 @@ void blk_deferred_bioset_free( void );
 int blk_deferred_request_read_original( struct block_device*  original_blk_dev, blk_deferred_request_t* dio_copy_req );
 
 int blk_deferred_request_store_file( struct block_device*  blk_dev, blk_deferred_request_t* dio_copy_req );
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req );
 #endif
 int blk_deffered_request_store_mem( blk_deferred_request_t* dio_copy_req );

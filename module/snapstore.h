@@ -20,7 +20,7 @@ typedef struct snapstore_s
 
     snapstore_mem_t* mem;
     snapstore_file_t* file;
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     snapstore_multidev_t* multidev;
 #endif
 
@@ -36,7 +36,7 @@ int snapstore_init( void );
 void snapstore_done( void );
 
 int snapstore_create(veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, size_t dev_id_set_length);
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_length);
 #endif
 int snapstore_cleanup(veeam_uuid_t* id, u64* filled_bytes);
@@ -54,7 +54,7 @@ int snapstore_stretch_initiate( veeam_uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe,
 
 int snapstore_add_memory(veeam_uuid_t* id, unsigned long long sz);
 int snapstore_add_file(veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cnt);
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int snapstore_add_multidev(veeam_uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt);
 #endif
 

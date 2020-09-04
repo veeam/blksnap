@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
 #include "blk_deferred.h"
 #include "blk_descr_multidev.h"

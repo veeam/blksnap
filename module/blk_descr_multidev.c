@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
 #include "blk_descr_multidev.h"
 
@@ -66,4 +66,4 @@ blk_descr_multidev_t* blk_descr_multidev_pool_take( blk_descr_pool_t* pool )
     return (blk_descr_multidev_t*)blk_descr_pool_take( pool, sizeof( blk_descr_multidev_t ) );
 }
 
-#endif //SNAPSTORE_MULTIDEV
+#endif //CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV

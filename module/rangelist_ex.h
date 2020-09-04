@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
 #include "range.h"
 
@@ -54,4 +54,4 @@ if (!list_empty( &rglist.head )){ \
     } \
 }
 
-#endif //SNAPSTORE_MULTIDEV
+#endif //CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV

@@ -13,7 +13,7 @@ bool _snapstore_check_halffill( snapstore_t* snapstore, sector_t* fill_status )
     blk_descr_pool_t* pool = NULL;
     if (snapstore->file)
         pool = &snapstore->file->pool;
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     else if (snapstore->multidev)
         pool = &snapstore->multidev->pool;
 #endif
@@ -106,7 +106,7 @@ int snapstore_create( veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_se
         // memory buffer selected
         // snapstore_mem_create( size );
     }
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     else if (snapstore_dev_id == 0xFFFFffff){
         snapstore_multidev_t* multidev = NULL;
         res = snapstore_multidev_create( &multidev );
@@ -143,7 +143,7 @@ int snapstore_create( veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_se
     return res;
 }
 
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_length)
 {
     int res = SUCCESS;
@@ -265,7 +265,7 @@ int snapstore_add_memory( veeam_uuid_t* id, unsigned long long sz )
         log_err( "Unable to add memory block to the snapstore: snapstore file is already created" );
         return -EINVAL;
     }
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     if (snapstore->multidev != NULL){
         log_err( "Unable to add memory block to the snapstore: snapstore multidevice is already created" );
         return -EINVAL;
@@ -424,7 +424,7 @@ int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cn
     return res;
 }
 
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int snapstore_add_multidev(veeam_uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt)
 {
     int res = SUCCESS;
@@ -584,7 +584,7 @@ int snapstore_request_store( snapstore_t* snapstore, blk_deferred_request_t* dio
 
     if (snapstore->file)
         res = blk_deferred_request_store_file( snapstore->file->blk_dev, dio_copy_req );
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     else if (snapstore->multidev)
         res = blk_deferred_request_store_multidev( dio_copy_req );
 #endif
@@ -635,7 +635,7 @@ int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* sn
         RANGELIST_FOREACH_END( );
 
     }
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     else if (snapstore->multidev) {
         range_t* rg;
         void** p_extentsion;
@@ -729,7 +729,7 @@ int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* s
         RANGELIST_FOREACH_END( );
 
     }
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     else if (snapstore->multidev) {
         range_t* rg;
         void** p_extension;

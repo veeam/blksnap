@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
 #include "snapstore_multidev.h"
 #include "blk_util.h"

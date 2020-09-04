@@ -535,7 +535,7 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
     return res;
 }
 
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 {
     int res = SUCCESS;

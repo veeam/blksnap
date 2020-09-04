@@ -128,7 +128,7 @@ int ioctl_compatibility_flags( unsigned long arg )
 
     param.flags = 0;
     param.flags |= VEEAMSNAP_COMPATIBILITY_SNAPSTORE;
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     param.flags |= VEEAMSNAP_COMPATIBILITY_MULTIDEV;
 #endif
 
@@ -501,7 +501,7 @@ int ioctl_snapstore_cleanup( unsigned long arg )
     return res;
 }
 
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int ioctl_snapstore_file_multidev( unsigned long arg )
     {
     int res = SUCCESS;
@@ -769,7 +769,7 @@ static veeam_ioctl_table_t veeam_ioctl_table[] =
     { (IOCTL_SNAPSTORE_FILE), ioctl_snapstore_file },
     { (IOCTL_SNAPSTORE_MEMORY), ioctl_snapstore_memory },
     { (IOCTL_SNAPSTORE_CLEANUP), ioctl_snapstore_cleanup },
-#ifdef SNAPSTORE_MULTIDEV
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
     { (IOCTL_SNAPSTORE_FILE_MULTIDEV), ioctl_snapstore_file_multidev },
 #endif
 
