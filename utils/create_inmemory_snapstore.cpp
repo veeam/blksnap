@@ -29,9 +29,11 @@ int main(int argc, char *argv[])
     if (snap_create_inmemory_snapshot_store(snapCtx, snapStoreCtx, size) != 0)
         throw std::system_error(errno, std::generic_category(), "Failed to create inmemory snapshot store");
 
-    if (snap_create_snapshot(snapCtx, snapDevId) == NULL)
+    struct snap_snapshot_ctx* snapshot = snap_create_snapshot(snapCtx, snapDevId);
+    if (snapshot == NULL)
         throw std::system_error(errno, std::generic_category(), "Failed to create snapshot");
 
+    snap_snapshot_ctx_free(snapshot);
     snap_store_ctx_free(snapStoreCtx);
     snap_ctx_destroy(snapCtx);
     std::cout << "Successfully create in memory snapshot store" << std::endl;
