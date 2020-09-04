@@ -1,10 +1,13 @@
 #include "stdafx.h"
 #include "snapstore_device.h"
 #include "snapstore.h"
+#include "snapstore_blk.h"
 #include "blk_util.h"
 
 #define SECTION "snapstore "
 #include "log_format.h"
+
+int inc_snapstore_block_size_pow(void);
 
 container_t SnapstoreDevices;
 
@@ -159,9 +162,9 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
         blk_descr_array_index_t blocks_count;
 
         sector_t sect_cnt = blk_dev_get_capacity(snapstore_device->orig_blk_dev);
-        if (sect_cnt & SNAPSTORE_BLK_MASK)
-            sect_cnt += SNAPSTORE_BLK_SIZE;
-        blocks_count = (blk_descr_array_index_t)(sect_cnt >> SNAPSTORE_BLK_SHIFT);
+        if (sect_cnt & snapstore_block_mask())
+            sect_cnt += snapstore_block_size();
+        blocks_count = (blk_descr_array_index_t)(sect_cnt >> snapstore_block_shift());
 
         res = blk_descr_array_init(&snapstore_device->store_block_map, 0, blocks_count);
         if (res == SUCCESS)
@@ -175,7 +178,7 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
             break;
         }
 
-        log_warn_format("Snapstore block size increased to %lld sectors", SNAPSTORE_BLK_SIZE);
+        log_warn_format("Snapstore block size increased to %lld sectors", snapstore_block_size());
     }
     if (res != SUCCESS){
         log_err("Unable to create snapstore device");
@@ -266,8 +269,8 @@ int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, ran
 {
     int res = SUCCESS;
     blk_descr_array_index_t inx = 0;
-    blk_descr_array_index_t first = (blk_descr_array_index_t)(copy_range->ofs >> SNAPSTORE_BLK_SHIFT);
-    blk_descr_array_index_t last = (blk_descr_array_index_t)((copy_range->ofs + copy_range->cnt - 1) >> SNAPSTORE_BLK_SHIFT);
+    blk_descr_array_index_t first = (blk_descr_array_index_t)(copy_range->ofs >> snapstore_block_shift());
+    blk_descr_array_index_t last = (blk_descr_array_index_t)((copy_range->ofs + copy_range->cnt - 1) >> snapstore_block_shift());
 
     for (inx = first; inx <= last; inx++){
         if (_snapstore_device_is_block_stored( snapstore_device, inx ))
@@ -326,8 +329,8 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
         return SUCCESS;
     }
 
-    block_index_first = (blk_descr_array_index_t)(rq_range.ofs >> SNAPSTORE_BLK_SHIFT);
-    block_index_last = (blk_descr_array_index_t)((rq_range.ofs + rq_range.cnt - 1) >> SNAPSTORE_BLK_SHIFT);
+    block_index_first = (blk_descr_array_index_t)(rq_range.ofs >> snapstore_block_shift());
+    block_index_last = (blk_descr_array_index_t)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
 
     _snapstore_device_descr_write_lock( snapstore_device );
     for (block_index = block_index_first; block_index <= block_index_last; ++block_index){
@@ -335,7 +338,7 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
         blk_descr_unify_t* blk_descr = NULL;
 
         blk_ofs_count = min_t( sector_t,
-            (((sector_t)(block_index + 1)) << SNAPSTORE_BLK_SHIFT) - (rq_range.ofs + blk_ofs_start),
+            (((sector_t)(block_index + 1)) << snapstore_block_shift()) - (rq_range.ofs + blk_ofs_start),
             rq_range.cnt - blk_ofs_start );
 
         status = blk_descr_array_get( &snapstore_device->store_block_map, block_index, &blk_descr );
@@ -461,8 +464,8 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
     // do copy to snapstore previously
     res = _snapstore_device_copy_on_write( snapstore_device, &rq_range );
 
-    block_index_first = (blk_descr_array_index_t)(rq_range.ofs >> SNAPSTORE_BLK_SHIFT);
-    block_index_last = (blk_descr_array_index_t)((rq_range.ofs + rq_range.cnt - 1) >> SNAPSTORE_BLK_SHIFT);
+    block_index_first = (blk_descr_array_index_t)(rq_range.ofs >> snapstore_block_shift());
+    block_index_last = (blk_descr_array_index_t)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
 
     _snapstore_device_descr_write_lock(snapstore_device);
     for (block_index = block_index_first; block_index <= block_index_last; ++block_index){
@@ -470,7 +473,7 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
         blk_descr_unify_t* blk_descr = NULL;
 
         blk_ofs_count = min_t( sector_t,
-            (((sector_t)(block_index + 1)) << SNAPSTORE_BLK_SHIFT) - (rq_range.ofs + blk_ofs_start),
+            (((sector_t)(block_index + 1)) << snapstore_block_shift()) - (rq_range.ofs + blk_ofs_start),
             rq_range.cnt - blk_ofs_start );
 
         status = blk_descr_array_get( &snapstore_device->store_block_map, block_index, &blk_descr );

@@ -20,6 +20,8 @@
 #include "log_format.h"
 #include "cbt_persistent.h"
 
+int get_change_tracking_block_size_pow(void);
+
 static atomic_t g_dev_open_cnt = ATOMIC_INIT( 0 );
 
 static struct ioctl_getversion_s version = {
@@ -159,7 +161,7 @@ int ioctl_tracking_add( unsigned long arg )
         return -ENODATA;
     }
 
-    return tracking_add( MKDEV( dev.major, dev.minor ), CBT_BLOCK_SIZE_DEGREE, 0ull );
+    return tracking_add( MKDEV( dev.major, dev.minor ), get_change_tracking_block_size_pow(), 0ull );
 }
 
 int ioctl_tracking_remove( unsigned long arg )
@@ -235,7 +237,7 @@ int ioctl_tracking_collect( unsigned long arg )
 
 int ioctl_tracking_block_size( unsigned long arg )
 {
-    unsigned int blk_sz = CBT_BLOCK_SIZE;
+    unsigned int blk_sz = (1<<get_change_tracking_block_size_pow());
 
     if (0 != copy_to_user( (void*)arg, &blk_sz, sizeof( unsigned int ) )){
         log_err( "Unable to get tracking block size: invalid user buffer for arguments" );
@@ -335,7 +337,7 @@ int ioctl_snapshot_create( unsigned long arg )
         for (inx = 0; inx < param.count; ++inx)
             p_dev[inx] = MKDEV( pk_dev_id[inx].major, pk_dev_id[inx].minor );
 
-        status = snapshot_Create(p_dev, param.count, CBT_BLOCK_SIZE_DEGREE, &param.snapshot_id);
+        status = snapshot_Create(p_dev, param.count, get_change_tracking_block_size_pow(), &param.snapshot_id);
 
         kfree( p_dev );
         p_dev = NULL;

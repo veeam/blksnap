@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "blk_descr_pool.h"
+#include "snapstore_blk.h"
 
 #define SECTION "blk_descr "
 #include "log_format.h"
@@ -170,7 +171,7 @@ bool blk_descr_pool_check_halffill( blk_descr_pool_t* pool, sector_t empty_limit
 {
     size_t empty_blocks = (pool->total_cnt - pool->take_cnt);
 
-    *fill_status = (sector_t)(pool->take_cnt) << SNAPSTORE_BLK_SHIFT;
+    *fill_status = (sector_t)(pool->take_cnt) << snapstore_block_shift();
 
-    return (empty_blocks < (size_t)(empty_limit >> SNAPSTORE_BLK_SHIFT));
+    return (empty_blocks < (size_t)(empty_limit >> snapstore_block_shift()));
 }

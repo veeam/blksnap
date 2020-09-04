@@ -6,6 +6,7 @@
 #include "page_array.h"
 #include "range.h"
 #include "snapstore.h"
+#include "snapstore_blk.h"
 
 #define SECTION "blk       "
 #include "log_format.h"
@@ -97,11 +98,11 @@ blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_des
     dio->blk_descr = blk_descr;
     dio->blk_index = block_index;
 
-    dio->sect.ofs = block_index << SNAPSTORE_BLK_SHIFT;
-    dio->sect.cnt = SNAPSTORE_BLK_SIZE;
+    dio->sect.ofs = block_index << snapstore_block_shift();
+    dio->sect.cnt = snapstore_block_size();
 
     do{
-        int page_count = SNAPSTORE_BLK_SIZE / SECTORS_IN_PAGE;
+        int page_count = snapstore_block_size() / SECTORS_IN_PAGE;
 
         dio->buff = page_array_alloc( page_count, GFP_NOIO );
         if (dio->buff == NULL)
@@ -618,8 +619,8 @@ int blk_deffered_request_store_mem( blk_deferred_request_t* dio_copy_req )
 #endif
             blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)dio->blk_descr;
 
-            size_t portion = page_array_pages2mem( blk_descr->buff, 0, dio->buff, (SNAPSTORE_BLK_SIZE * SECTOR_SIZE) );
-            if (unlikely( portion != (SNAPSTORE_BLK_SIZE * SECTOR_SIZE) )){
+            size_t portion = page_array_pages2mem( blk_descr->buff, 0, dio->buff, (snapstore_block_size() * SECTOR_SIZE) );
+            if (unlikely( portion != (snapstore_block_size() * SECTOR_SIZE) )){
                 res = -EIO;
                 break;
             }

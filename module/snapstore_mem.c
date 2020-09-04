@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "snapstore_mem.h"
+#include "snapstore_blk.h"
 
 #define SECTION "snapstore "
 #include "log_format.h"
@@ -44,7 +45,7 @@ void snapstore_mem_destroy( snapstore_mem_t* mem )
 
         while ( NULL != (buffer_el = (buffer_el_t*)container_get_first( &mem->blocks_list )) )
         {
-            //dbg_vfree( buffer_el->buff, SNAPSTORE_BLK_SIZE * SECTOR512 );
+            //dbg_vfree( buffer_el->buff, snapstore_block_size() * SECTOR512 );
             vfree( buffer_el->buff );
             content_free( &buffer_el->content );
         }
@@ -72,9 +73,9 @@ void* snapstore_mem_get_block( snapstore_mem_t* mem )
         return NULL;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
-    buffer_el->buff = __vmalloc(SNAPSTORE_BLK_SIZE * SECTOR_SIZE, GFP_NOIO);
+    buffer_el->buff = __vmalloc(snapstore_block_size() * SECTOR_SIZE, GFP_NOIO);
 #else
-    buffer_el->buff = __vmalloc( SNAPSTORE_BLK_SIZE * SECTOR_SIZE, GFP_NOIO, PAGE_KERNEL );
+    buffer_el->buff = __vmalloc( snapstore_block_size() * SECTOR_SIZE, GFP_NOIO, PAGE_KERNEL );
 #endif
     if (buffer_el->buff == NULL){
         content_free( &buffer_el->content );

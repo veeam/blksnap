@@ -43,19 +43,6 @@
 //#define VEEAMIMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )    //delay 10 ms
 
 
-int get_snapstore_block_size_pow(void);
-int inc_snapstore_block_size_pow(void);
-int get_change_tracking_block_size_pow(void);
-
-#define CBT_BLOCK_SIZE_DEGREE get_change_tracking_block_size_pow()
-#define CBT_BLOCK_SIZE (1<<CBT_BLOCK_SIZE_DEGREE)
-
-#define COW_BLOCK_SIZE_DEGREE get_snapstore_block_size_pow()
-#define COW_BLOCK_SIZE (1<<COW_BLOCK_SIZE_DEGREE)
-
-#define SNAPSTORE_BLK_SHIFT (sector_t)(COW_BLOCK_SIZE_DEGREE - SECTOR_SHIFT)
-#define SNAPSTORE_BLK_SIZE  (sector_t)(1 << SNAPSTORE_BLK_SHIFT)
-#define SNAPSTORE_BLK_MASK  (sector_t)(SNAPSTORE_BLK_SIZE-1)
 
 #define SNAPSTORE_MULTIDEV 
 

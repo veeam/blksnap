@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "snapstore.h"
 #include "snapstore_device.h"
+#include "snapstore_blk.h"
 
 #define SECTION "snapstore "
 #include "log_format.h"
@@ -276,7 +277,7 @@ int snapstore_add_memory( veeam_uuid_t* id, unsigned long long sz )
     }
 
     {
-        size_t available_blocks = (size_t)(sz >> (SNAPSTORE_BLK_SHIFT + SECTOR_SHIFT));
+        size_t available_blocks = (size_t)(sz >> (snapstore_block_shift() + SECTOR_SHIFT));
         size_t current_block = 0;
 
         snapstore->mem = snapstore_mem_create( available_blocks );
@@ -374,7 +375,7 @@ int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cn
                 range_t rg;
 
                 rg.ofs = range.ofs + range_offset;
-                rg.cnt = min_t( sector_t, (range.cnt - range_offset), (SNAPSTORE_BLK_SIZE - current_blk_size) );
+                rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
 
                 range_offset += rg.cnt;
 
@@ -387,7 +388,7 @@ int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cn
                 }
                 current_blk_size += rg.cnt;
 
-                if (current_blk_size == SNAPSTORE_BLK_SIZE){//allocate  block
+                if (current_blk_size == snapstore_block_size()){//allocate  block
                     res = blk_descr_file_pool_add( &snapstore->file->pool, &blk_rangelist );
                     if (res != SUCCESS){
                         log_err( "Unable to add file to snapstore: cannot initialize new block" );
@@ -467,7 +468,7 @@ int snapstore_add_multidev(veeam_uuid_t* id, dev_t dev_id, page_array_t* ranges,
                 range_t rg;
                 void* extension = NULL;
                 rg.ofs = range.ofs + range_offset;
-                rg.cnt = min_t( sector_t, (range.cnt - range_offset), (SNAPSTORE_BLK_SIZE - current_blk_size) );
+                rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
 
                 range_offset += rg.cnt;
 
@@ -486,7 +487,7 @@ int snapstore_add_multidev(veeam_uuid_t* id, dev_t dev_id, page_array_t* ranges,
                 }
                 current_blk_size += rg.cnt;
 
-                if (current_blk_size == SNAPSTORE_BLK_SIZE){//allocate  block
+                if (current_blk_size == snapstore_block_size()){//allocate  block
                     res = blk_descr_multidev_pool_add( &snapstore->multidev->pool, &blk_rangelist );
                     if (res != SUCCESS){
                         log_err( "Unable to add file to snapstore: failed to initialize new block" );
@@ -517,13 +518,13 @@ void snapstore_order_border( range_t* in, range_t* out )
 {
     range_t unorder;
 
-    unorder.ofs = in->ofs & SNAPSTORE_BLK_MASK;
-    out->ofs = in->ofs & ~SNAPSTORE_BLK_MASK;
+    unorder.ofs = in->ofs & snapstore_block_mask();
+    out->ofs = in->ofs & ~snapstore_block_mask();
     out->cnt = in->cnt + unorder.ofs;
 
-    unorder.cnt = out->cnt & SNAPSTORE_BLK_MASK;
+    unorder.cnt = out->cnt & snapstore_block_mask();
     if (unorder.cnt != 0)
-        out->cnt += (SNAPSTORE_BLK_SIZE - unorder.cnt);
+        out->cnt += (snapstore_block_size() - unorder.cnt);
 }
 
 blk_descr_unify_t* snapstore_get_empty_block( snapstore_t* snapstore )
@@ -599,7 +600,7 @@ int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* sn
 {
     int res = SUCCESS;
     sector_t current_ofs = 0;
-    sector_t block_ofs = target_pos & SNAPSTORE_BLK_MASK;
+    sector_t block_ofs = target_pos & snapstore_block_mask();
 
 
     if (snapstore->file){
@@ -691,7 +692,7 @@ int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* s
 {
     int res = SUCCESS;
     sector_t current_ofs = 0;
-    sector_t block_ofs = target_pos & SNAPSTORE_BLK_MASK;
+    sector_t block_ofs = target_pos & snapstore_block_mask();
 
     BUG_ON( NULL == rq_endio );
     BUG_ON( NULL == snapstore );
