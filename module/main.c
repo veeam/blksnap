@@ -28,10 +28,8 @@
 #include "cbt_persistent.h"
 #endif
 
-#ifdef CONFIG_BLK_FILTER
 #include <linux/blk-filter.h>
 #define VEEAMSNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
-#endif
 
 #include <linux/reboot.h>       //use old methon
 //#include <linux/syscore_ops.h>    //more modern method
@@ -159,7 +157,7 @@ int get_params(char* buf)
 }
 #endif //VEEAMSNAP_SYSFS_PARAMS
 
-#ifdef CONFIG_BLK_FILTER
+
 blk_qc_t filter_submit_original_bio(struct bio *bio);
 
 static void filter_disk_add(struct gendisk *disk)
@@ -201,7 +199,6 @@ blk_qc_t filter_submit_original_bio(struct bio *bio)
 {
     return blk_filter_submit_bio_next(&g_filter, bio);
 }
-#endif
 
 static struct device* veeamsnap_device = NULL;
 
@@ -212,7 +209,6 @@ static struct file_operations ctrl_fops = {
     .open   = ctrl_open,
     .release= ctrl_release,
     .poll   = ctrl_poll,
-    //.ioctl  = ctrl_ioctl,
     .unlocked_ioctl = ctrl_unlocked_ioctl
 };
 
@@ -427,16 +423,10 @@ int __init veeamsnap_init(void)
 #endif
 
         if ((result = ctrl_sysfs_init(&veeamsnap_device)) != SUCCESS){
-#if 0
-			log_warn("Cannot initialize sysfs attributes");
-			result = SUCCESS;
-#else
 			log_err("Failed to initialize sysfs attributes");
             break;
-#endif
         }
 
-#ifdef CONFIG_BLK_FILTER
         if ((result = blk_filter_register(&g_filter)) != SUCCESS) {
             const char* exist_filter = blk_filter_check_altitude(g_filter.altitude);
             if (exist_filter)
@@ -445,7 +435,6 @@ int __init veeamsnap_init(void)
             log_err("Failed to register block io layer filter");
             break;
         }
-#endif
 
     }while(false);
 /*
@@ -489,10 +478,8 @@ void __exit veeamsnap_exit(void)
         result = tracker_done( );
         if (SUCCESS == result){
             result = tracker_queue_done( );
-#ifdef CONFIG_BLK_FILTER            
             if (SUCCESS == result)
                 result = blk_filter_unregister(&g_filter);
-#endif
 #ifdef PERSISTENT_CBT
             cbt_persistent_done();
 #endif

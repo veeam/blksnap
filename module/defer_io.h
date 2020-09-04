@@ -43,9 +43,7 @@ static inline void defer_io_put_resource( defer_io_t* defer_io )
 {
     shared_resource_put( &defer_io->sharing_header );
 }
-#ifdef CONFIG_BLK_FILTER
+
 int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker);
-#else
-int defer_io_redirect_bio( defer_io_t* defer_io, struct bio *bio, sector_t sectStart, sector_t sectCount, struct request_queue *q, make_request_fn* TargetMakeRequest_fn, void* tracker );
-#endif
+
 void defer_io_print_state( defer_io_t* defer_io );

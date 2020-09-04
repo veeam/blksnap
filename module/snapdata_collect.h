@@ -45,10 +45,8 @@ int snapdata_collect_LocationGet( dev_t dev_id, rangelist_t* rangelist, size_t* 
 int snapdata_collect_LocationComplete( dev_t dev_id );
 
 int snapdata_collect_Get( dev_t dev_id, snapdata_collector_t** p_collector );
-#ifdef CONFIG_BLK_FILTER
+
 int snapdata_collect_Find(struct bio *bio, snapdata_collector_t** p_collector);
-#else
-int snapdata_collect_Find( struct request_queue *q, struct bio *bio, snapdata_collector_t** p_collector );
-#endif
+
 void snapdata_collect_Process( snapdata_collector_t* collector, struct bio *bio );
 

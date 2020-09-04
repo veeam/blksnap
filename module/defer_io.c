@@ -5,25 +5,15 @@
 #include "tracker.h"
 #include "blk_util.h"
 
-#ifdef CONFIG_BLK_FILTER
-blk_qc_t filter_submit_original_bio(struct bio *bio);
-#endif
-
 #define SECTION "defer_io  "
 #include "log_format.h"
 
+blk_qc_t filter_submit_original_bio(struct bio *bio);
 
 typedef struct defer_io_original_request_s{
     queue_content_sl_t content;
 
     struct bio* bio;
-#ifdef CONFIG_BLK_FILTER
-    //use block io filters api
-#else
-    range_t sect;
-    struct request_queue *q;
-    make_request_fn* make_rq_fn;
-#endif
     tracker_t* tracker;
 
 }defer_io_original_request_t;
@@ -36,9 +26,8 @@ void _defer_io_finish( defer_io_t* defer_io, queue_sl_t* queue_in_progress )
         tracker_t* tracker = NULL;
         bool cbt_locked = false;
         bool is_write_bio;
-#ifdef CONFIG_BLK_FILTER
         sector_t sectCount = 0;
-#endif
+
         defer_io_original_request_t* orig_req = (defer_io_original_request_t*)queue_sl_get_first( queue_in_progress );
 
         is_write_bio = bio_data_dir( orig_req->bio ) && bio_has_data( orig_req->bio );
@@ -49,13 +38,8 @@ void _defer_io_finish( defer_io_t* defer_io, queue_sl_t* queue_in_progress )
             cbt_locked = tracker_cbt_bitmap_lock( tracker );
             if (cbt_locked)
             {
-#ifdef CONFIG_BLK_FILTER
                 sectCount = sector_from_size(bio_bi_size(orig_req->bio));
                 tracker_cbt_bitmap_set(tracker, bio_bi_sector(orig_req->bio), sectCount);
-#else
-                tracker_cbt_bitmap_set(tracker, orig_req->sect.ofs, orig_req->sect.cnt);
-#endif
-
             }
         }
 
@@ -64,18 +48,10 @@ void _defer_io_finish( defer_io_t* defer_io, queue_sl_t* queue_in_progress )
             orig_req->bio = NULL;
 
             bio_put(_bio); //bio_put should be before orig_req->make_rq_fn
-#ifdef CONFIG_BLK_FILTER
             filter_submit_original_bio(_bio);
-#else
-            orig_req->make_rq_fn( orig_req->q, _bio );
-#endif
         }
         atomic64_inc(&defer_io->state_bios_processed);
-#ifdef CONFIG_BLK_FILTER
         atomic64_add(sectCount, &defer_io->state_sectors_processed);
-#else
-        atomic64_add((orig_req->sect.cnt), &defer_io->state_sectors_processed);
-#endif
 
         if (cbt_locked)
             tracker_cbt_bitmap_unlock( tracker );
@@ -100,23 +76,17 @@ int _defer_io_copy_prepare( defer_io_t* defer_io, queue_sl_t* queue_in_process, 
 
         if (!kthread_should_stop( ) && !snapstore_device_is_corrupted( defer_io->snapstore_device )) {
             if (bio_data_dir( dio_orig_req->bio ) && bio_has_data( dio_orig_req->bio )) {
-#ifdef CONFIG_BLK_FILTER
                 range_t copy_range;
+
                 copy_range.ofs = bio_bi_sector(dio_orig_req->bio);
                 copy_range.cnt = sector_from_size(bio_bi_size(dio_orig_req->bio));
                 res = snapstore_device_prepare_requests(defer_io->snapstore_device, &copy_range, dio_copy_req);
-#else
-                res = snapstore_device_prepare_requests( defer_io->snapstore_device, &dio_orig_req->sect, dio_copy_req );
-#endif
                 if (res != SUCCESS){
                     log_err_d( "Unable to execute Copy On Write algorithm: failed to add ranges to copy to snapstore request. errno=", res );
                     break;
                 }
-#ifdef CONFIG_BLK_FILTER
+
                 dios_sectors_count += copy_range.cnt;
-#else
-                dios_sectors_count += dio_orig_req->sect.cnt;
-#endif
             }
         }
         ++dios_count;
@@ -333,16 +303,10 @@ int defer_io_stop( defer_io_t* defer_io )
     return res;
 }
 
-#ifdef CONFIG_BLK_FILTER
-int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
-#else
-int defer_io_redirect_bio( defer_io_t* defer_io, struct bio *bio, sector_t sectStart, sector_t sectCount, struct request_queue *q, make_request_fn* TargetMakeRequest_fn, void* tracker )
-#endif
-{
-#ifdef CONFIG_BLK_FILTER
-    sector_t sectCount;
-#endif
 
+int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
+{
+    sector_t sectCount;
     defer_io_original_request_t* dio_orig_req;
 
     if (snapstore_device_is_corrupted( defer_io->snapstore_device ))
@@ -351,18 +315,8 @@ int defer_io_redirect_bio( defer_io_t* defer_io, struct bio *bio, sector_t sectS
     dio_orig_req = (defer_io_original_request_t*)queue_content_sl_new_opt( &defer_io->dio_queue, GFP_NOIO );
     if (dio_orig_req == NULL)
         return -ENOMEM;
-
-    
-#ifdef CONFIG_BLK_FILTER
+   
     sectCount = sector_from_size(bio_bi_size(bio));
-#else
-    //copy data from bio to dio write buffer
-    dio_orig_req->q = q;
-    dio_orig_req->make_rq_fn = TargetMakeRequest_fn;
-
-    dio_orig_req->sect.ofs = sectStart;
-    dio_orig_req->sect.cnt = sectCount;
-#endif
 
     bio_get(dio_orig_req->bio = bio);
 

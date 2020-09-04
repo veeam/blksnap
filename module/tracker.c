@@ -31,7 +31,6 @@ int tracker_done(void )
     return result;
 }
 
-#ifdef CONFIG_BLK_FILTER
 int tracker_find_by_queue(tracker_queue_t* queue, tracker_t** ptracker)
 {
     int result = -ENODATA;
@@ -54,71 +53,6 @@ int tracker_find_by_queue(tracker_queue_t* queue, tracker_t** ptracker)
     return result;
 }
 
-#else //CONFIG_BLK_FILTER
-
-int tracker_find_by_queue_and_sector( tracker_queue_t* queue, sector_t sector, tracker_t** ptracker )
-{
-    int result = -ENODATA;
-
-    content_sl_t* content = NULL;
-    tracker_t* tracker = NULL;
-    CONTAINER_SL_FOREACH_BEGIN( trackers_container, content )
-    {
-        tracker = (tracker_t*)content;
-        if ((queue == tracker->tracker_queue) &&
-            (sector >= blk_dev_get_start_sect( tracker->target_dev )) &&
-            (sector < (blk_dev_get_start_sect( tracker->target_dev ) + blk_dev_get_capacity( tracker->target_dev )))
-        ){
-            *ptracker = tracker;
-            result = SUCCESS;
-            break;
-        }
-    }
-    CONTAINER_SL_FOREACH_END( trackers_container );
-
-    return result;
-}
-
-int tracker_find_intersection(tracker_queue_t* queue, sector_t b1, sector_t e1, tracker_t** ptracker)
-{
-    int result = -ENODATA;
-
-    content_sl_t* content = NULL;
-    tracker_t* tracker = NULL;
-    CONTAINER_SL_FOREACH_BEGIN(trackers_container, content)
-    {
-        tracker = (tracker_t*)content;
-
-        if (queue == tracker->tracker_queue)
-        {
-            bool have_intersection = false;
-            sector_t b2 = blk_dev_get_start_sect(tracker->target_dev);
-            sector_t e2 = blk_dev_get_start_sect(tracker->target_dev) + blk_dev_get_capacity(tracker->target_dev);
-
-            if ((b1 >= b2) && (e1 <= e2))
-                have_intersection = true;
-            if ((b1 <= b2) && (e1 >= e2))
-                have_intersection = true;
-            if ((b1 <= b2) && (e1 > b2))
-                have_intersection = true;
-            if ((b1 < e2) && (e1 >= e2))
-                have_intersection = true;
-
-            if (have_intersection){
-                if (ptracker != NULL)
-                    *ptracker = tracker;
-
-                result = SUCCESS;
-                break;
-            }
-        }
-    }
-    CONTAINER_SL_FOREACH_END(trackers_container);
-
-    return result;
-}
-#endif //CONFIG_BLK_FILTER
-
 int tracker_find_by_dev_id( dev_t dev_id, tracker_t** ptracker )
 {
     int result = -ENODATA;
@@ -138,28 +72,6 @@ int tracker_find_by_dev_id( dev_t dev_id, tracker_t** ptracker )
 
     return result;
 }
-
-/*
-int tracker_find_by_sb(struct super_block* sb, tracker_t** ptracker)
-{
-    int result = -ENODATA;
-
-    content_sl_t* content = NULL;
-    tracker_t* tracker = NULL;
-    CONTAINER_SL_FOREACH_BEGIN(trackers_container, content)
-    {
-        tracker = (tracker_t*)content;
-        if (tracker->sb == sb){
-            *ptracker = tracker;
-            result = SUCCESS;    //found!
-            break;
-        }
-    }
-    CONTAINER_SL_FOREACH_END(trackers_container);
-
-    return result;
-}
-*/
 
 int tracker_enum_cbt_info( int max_count, struct cbt_info_s* p_cbt_info, int* p_count )
 {
