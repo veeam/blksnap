@@ -11,6 +11,7 @@ extern "C" {
 
 struct snap_ctx;
 struct snap_store_ctx;
+struct snap_snapshot_ctx; //@todo: need different names for snap_ctx and snapshot_ctx
 
 //@todo: [TBD] little documentation
 //return 0 - success
@@ -18,6 +19,7 @@ int snap_ctx_create(struct snap_ctx** ctx);
 int snap_ctx_destroy(struct snap_ctx* ctx);
 
 int snap_store_ctx_free(struct snap_store_ctx* ctx);
+int snap_snapshot_ctx_free(struct snap_snapshot_ctx* ctx);
 
 //@todo: [TBD] little documentation
 int snap_add_to_tracking(struct snap_ctx* ctx, dev_t dev);
@@ -28,6 +30,13 @@ int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int leng
 struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
                                                   struct ioctl_dev_id_s store_dev,
                                                   struct ioctl_dev_id_s snap_dev);
+
+int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
+                                        struct snap_store_ctx* store_ctx,
+                                        unsigned long long length);
+
+struct snap_snapshot_ctx* snap_create_snapshot(struct snap_ctx* ctx,
+                                               struct ioctl_dev_id_s devId);
 
 #ifdef  __cplusplus
 }
