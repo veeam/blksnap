@@ -42,8 +42,4 @@
 #define VEEAMIMAGE_THROTTLE_TIMEOUT ( 1*HZ )    //delay 1 sec
 //#define VEEAMIMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )    //delay 10 ms
 
-
-
-#define PERSISTENT_CBT
-
 #endif /* STDAFX_H_ */

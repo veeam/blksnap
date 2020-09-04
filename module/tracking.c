@@ -7,7 +7,6 @@
 #include "blk_util.h"
 #include "blk_direct.h"
 #include "defer_io.h"
-#include "cbt_persistent.h"
 
 #define SECTION "tracking  "
 #include "log_format.h"
@@ -97,9 +96,6 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
             }
             else{
                 tracker_cbt_start(tracker, snapshot_id, cbt_map);
-#ifdef PERSISTENT_CBT
-                cbt_persistent_register(tracker->original_dev_id, tracker->cbt_map);                
-#endif
                 result = -EALREADY;
             }
         }
@@ -205,10 +201,6 @@ int tracking_remove( dev_t dev_id )
     else
         log_err_format( "Unable to remove device [%d:%d] from tracking: invalid trackers container. errno=",
             MAJOR( dev_id ), MINOR( dev_id ), result );
-
-#ifdef PERSISTENT_CBT
-    cbt_persistent_unregister(dev_id);
-#endif
 
     return result;
 }

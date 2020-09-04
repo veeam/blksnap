@@ -219,16 +219,6 @@ struct ioctl_collect_snapshotdata_location_complete_s{
 #define  IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_COMPLETE _IOR(VEEAM_SNAP, 0x42, struct ioctl_collect_snapshotdata_location_complete_s )
 
 //////////////////////////////////////////////////////////////////////////
-// persistent CBT data parameter
-
-struct ioctl_persistentcbt_data_s
-{
-    unsigned int size;
-    const char* parameter;
-};
-#define  IOCTL_PERSISTENTCBT_DATA _IOR(VEEAM_SNAP, 0x48, struct ioctl_persistentcbt_data_s )
-
-//////////////////////////////////////////////////////////////////////////
 // debug and support
 #define IOCTL_PRINTSTATE _IO(VEEAM_SNAP, 0x80)
 

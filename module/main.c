@@ -23,11 +23,7 @@
 #define SECTION "main      "
 #include "log_format.h"
 
-#ifdef PERSISTENT_CBT
 #include <linux/notifier.h>
-#include "cbt_persistent.h"
-#endif
-
 #include <linux/blk-filter.h>
 #define VEEAMSNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
 
@@ -35,19 +31,13 @@
 //#include <linux/syscore_ops.h>    //more modern method
 
 
-#ifndef PERSISTENT_CBT
-#pragma message "Persistent CBT is not supported for this system"
-#endif
-
 static int g_param_zerosnapdata = 0;        /*rudiment */
 static int g_param_debuglogging = 0;        /*rudiment */
 static unsigned int g_param_fixflags = 0;   /*rudiment */
 
 static char* g_logdir = NULL; 
 static unsigned long g_param_logmaxsize = 15*1024*1024;
-#ifdef PERSISTENT_CBT
-static char* g_cbtdata = NULL;
-#endif
+
 static int g_param_snapstore_block_size_pow = 14;
 static int g_param_change_tracking_block_size_pow = 18;
 
@@ -166,25 +156,9 @@ static void _cbt_syscore_shutdown(void)
         if (result != SUCCESS)
             log_err("Failed to remove all tracking devices from tracking");
     }
-#ifdef PERSISTENT_CBT
-    //store cbt maps - it`s shared resource.
-    cbt_persistent_store();
-#endif
 }
 
 #ifdef _LINUX_SYSCORE_OPS_H
-/*
-static int _cbt_syscore_suspend(void)
-{
-    //cbt_persistent_suspend();
-    return 0;
-}
-
-static void _cbt_syscore_resume(void)
-{
-    // ??? really necessary ?
-    return;
-}*/
 
 
 struct syscore_ops _cbt_syscore_ops = {
@@ -238,9 +212,6 @@ int __init veeamsnap_init(void)
     log_tr_d("change_tracking_block_size_pow: ", g_param_change_tracking_block_size_pow);
     log_tr_s("logdir: ", g_logdir);
     log_tr_ld("logmaxsize: ", g_param_logmaxsize);
-#ifdef PERSISTENT_CBT
-    log_tr_s("cbtdata: ", g_cbtdata);
-#endif
 
     if (g_param_snapstore_block_size_pow > 23){
         g_param_snapstore_block_size_pow = 23;
@@ -321,23 +292,6 @@ int __init veeamsnap_init(void)
         if ((result = snapimage_init( )) != SUCCESS)
             break;
 
-
-#ifdef PERSISTENT_CBT
-        {
-            int cbt_persistent_result = cbt_persistent_init(g_cbtdata);
-            if (cbt_persistent_result == SUCCESS) {
-                cbt_persistent_load();
-            }
-            else if (cbt_persistent_result == ENODATA) {
-                //do nothing
-            }
-            else {
-                log_err("Failed to initialize persistent CBT");
-            }
-            //cbt_persistent_start_trackers();
-        }
-#endif
-
         if ((result = ctrl_sysfs_init(&veeamsnap_device)) != SUCCESS){
 			log_err("Failed to initialize sysfs attributes");
             break;
@@ -353,14 +307,6 @@ int __init veeamsnap_init(void)
         }
 
     }while(false);
-/*
-
-    conteiner_cnt = container_alloc_counter( );
-    log_tr_d( "container_alloc_counter=", conteiner_cnt );
-
-    conteiner_cnt = container_sl_alloc_counter( );
-    log_tr_d( "container_sl_alloc_counter=", conteiner_cnt );
-*/
 
     return result;
 }
@@ -396,9 +342,6 @@ void __exit veeamsnap_exit(void)
             result = tracker_queue_done( );
             if (SUCCESS == result)
                 result = blk_filter_unregister(&g_filter);
-#ifdef PERSISTENT_CBT
-            cbt_persistent_done();
-#endif
         }
 
         snapimage_done( );
@@ -447,11 +390,6 @@ MODULE_PARM_DESC( logdir, "Directory for module logs." );
 
 module_param_named( logmaxsize, g_param_logmaxsize, ulong, 0644 );
 MODULE_PARM_DESC( logmaxsize, "Maximum log file size." );
-
-#ifdef PERSISTENT_CBT
-module_param_named(cbtdata, g_cbtdata, charp, 0644);
-MODULE_PARM_DESC(cbtdata, "Parameters for persistent CBT.");
-#endif
 
 module_param_named(snapstore_block_size_pow, g_param_snapstore_block_size_pow, int, 0644);
 MODULE_PARM_DESC(snapstore_block_size_pow, "Snapstore block size binary pow. 20 for 1MiB block size");

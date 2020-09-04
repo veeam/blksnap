@@ -18,7 +18,6 @@
 
 #define SECTION "ctrl_fops "
 #include "log_format.h"
-#include "cbt_persistent.h"
 
 int get_change_tracking_block_size_pow(void);
 
@@ -685,46 +684,6 @@ int ioctl_collect_snapimages( unsigned long arg )
     return status;
 }
 
-int ioctl_persistentcbt_data(unsigned long arg)
-{
-    int status = SUCCESS;
-    struct ioctl_persistentcbt_data_s param;
-    char* cbtdata = NULL;
-
-    if (0 != copy_from_user(&param, (void*)arg, sizeof(struct ioctl_persistentcbt_data_s))) {
-        log_err("[TBD]Unable to receive persistent cbt data. Invalid input parameters.");
-        return -ENODATA;
-    }
-
-    if ( (param.size == 0) || (param.size == 1) || (param.parameter == NULL) )
-    {
-        log_tr("[TBD]Cleanup persistent CBT data parameter");
-        cbt_persistent_cbtdata_free();
-    }
-    else 
-    {
-        cbtdata = kzalloc(param.size + 1, GFP_KERNEL);
-        if (cbtdata == NULL) {
-            log_err("[TBD]Unable to receive persistent cbt data. Not enough memory.");
-            return -ENOMEM;
-        }
-
-        do
-        {
-            if (0 != copy_from_user((void*)cbtdata, (void*)param.parameter, param.size)) {
-                log_err("[TBD]Unable to receive persistent cbt data. Invalid input parameters.");
-                status = -ENODATA;
-                break;
-            }
-
-            log_tr_s("[TBD]Setup persistent CBT data parameter: ", cbtdata);
-            status = cbt_persistent_cbtdata_new(cbtdata);
-
-        } while (false);
-        kfree(cbtdata);
-    }
-    return status;
-}
 
 int ioctl_printstate( unsigned long arg )
 {
@@ -777,7 +736,6 @@ static veeam_ioctl_table_t veeam_ioctl_table[] =
     { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_GET), ioctl_collect_snapshotdata_location_get },
     { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_COMPLETE), ioctl_collect_snapshotdata_location_complete },
     { (IOCTL_COLLECT_SNAPSHOT_IMAGES), ioctl_collect_snapimages },
-    { (IOCTL_PERSISTENTCBT_DATA), ioctl_persistentcbt_data },
     { (IOCTL_PRINTSTATE), ioctl_printstate },
     { 0, NULL }
 };

@@ -1,8 +1,5 @@
 #include "stdafx.h"
 #include "tracker.h"
-#ifdef PERSISTENT_CBT
-#include "cbt_persistent.h"
-#endif
 #include "blk_util.h"
 #define SECTION "tracker   "
 #include "log_format.h"
@@ -159,9 +156,6 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
                 break;
             }
             tracker_cbt_start(tracker, snapshot_id, cbt_map);
-#ifdef PERSISTENT_CBT
-            cbt_persistent_register(tracker->original_dev_id, tracker->cbt_map);
-#endif
         }
         else
             tracker_cbt_start(tracker, snapshot_id, cbt_map);
