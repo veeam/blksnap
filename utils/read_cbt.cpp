@@ -74,7 +74,6 @@ int main(int argc, char *argv[])
     {
         int portion_length = std::min((size_t)cbtInfo.cbt_map_size - offset, sizeof(CBT_MAP));
         int result = snap_read_cbt(snapCtx, dev_stat.st_rdev, offset, portion_length, CBT_MAP);
-        std::cout << result << std::endl;
         if (result < 0)
             throw std::system_error(errno, std::generic_category(), "Failed to read cbt");
         offset += result;

@@ -27,6 +27,11 @@ struct snap_store_ctx
     unsigned char id[16];
 };
 
+struct snap_snapshot_ctx
+{
+    unsigned long long id;
+};
+
 
 int snap_ctx_create(struct snap_ctx** ctx)
 {
@@ -66,6 +71,12 @@ int snap_ctx_destroy(struct snap_ctx* ctx)
 }
 
 int snap_store_ctx_free(struct snap_store_ctx* ctx)
+{
+    free(ctx);
+    return 0;
+}
+
+int snap_snapshot_ctx_free(struct snap_snapshot_ctx* ctx)
 {
     free(ctx);
     return 0;
@@ -155,4 +166,26 @@ int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
     param.size = length;
 
     return ioctl(ctx->fd, IOCTL_SNAPSTORE_MEMORY, &param);
+}
+
+struct snap_snapshot_ctx* snap_create_snapshot(struct snap_ctx* ctx,
+                                               struct ioctl_dev_id_s devId)
+{
+    struct snap_snapshot_ctx* snapshot_ctx = malloc(sizeof(struct snap_snapshot_ctx));
+    if (snapshot_ctx == NULL)
+        return NULL;
+
+    struct ioctl_snapshot_create_s create_snapshot = { 0 };
+    create_snapshot.snapshot_id = 0;
+    create_snapshot.count = 1;
+    create_snapshot.p_dev_id = &devId;
+
+    if (ioctl(ctx->fd, IOCTL_SNAPSHOT_CREATE, &create_snapshot) != 0)
+    {
+        snap_snapshot_ctx_free(snapshot_ctx);
+        return NULL;
+    }
+
+    snapshot_ctx->id = create_snapshot.snapshot_id;
+    return snapshot_ctx;
 }
