@@ -437,7 +437,6 @@ int __init veeamsnap_init(void)
         }
 
 #ifdef CONFIG_BLK_FILTER
-        
         if ((result = blk_filter_register(&g_filter)) != SUCCESS) {
             const char* exist_filter = blk_filter_check_altitude(g_filter.altitude);
             if (exist_filter)
@@ -490,6 +489,10 @@ void __exit veeamsnap_exit(void)
         result = tracker_done( );
         if (SUCCESS == result){
             result = tracker_queue_done( );
+#ifdef CONFIG_BLK_FILTER            
+            if (SUCCESS == result)
+                result = blk_filter_unregister(&g_filter);
+#endif
 #ifdef PERSISTENT_CBT
             cbt_persistent_done();
 #endif
