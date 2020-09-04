@@ -35,19 +35,19 @@ typedef struct sparse_block_s{
 }sparse_block_t;
 
 typedef struct sparse_bitmap_s{
-    stream_size_t    start_index;
-    stream_size_t    length;
+    u64    start_index;
+    u64    length;
     sparse_block_t    sparse_block;
 }sparse_bitmap_t;
 
 int  sparsebitmap_init( void );
 void sparsebitmap_done( void );
 
-void sparsebitmap_create( sparse_bitmap_t* bitmap, stream_size_t min_index, stream_size_t length );
+void sparsebitmap_create( sparse_bitmap_t* bitmap, u64 min_index, u64 length );
 void sparsebitmap_destroy( sparse_bitmap_t* bitmap );
 
-int sparsebitmap_Set( sparse_bitmap_t* bitmap, stream_size_t index, bool state );
-int sparsebitmap_Get( sparse_bitmap_t* bitmap, stream_size_t index, bool* p_state );
+int sparsebitmap_Set( sparse_bitmap_t* bitmap, u64 index, bool state );
+int sparsebitmap_Get( sparse_bitmap_t* bitmap, u64 index, bool* p_state );
 
 void sparsebitmap_Clean( sparse_bitmap_t* bitmap );
 

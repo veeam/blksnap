@@ -63,27 +63,8 @@ int _collector_init( snapdata_collector_t* collector, dev_t dev_id, void* MagicU
         log_err( "Unable to initialize snapstore collector: invalid user buffer" );
         return -ENODATA;
     }
-#ifdef SNAPDATA_SPARSE_CHANGES
+
     sparsebitmap_create( &collector->changes_sparse, 0, blk_dev_get_capacity( collector->device ) );
-#else
-    {
-        stream_size_t bitmap_size = blk_dev_get_capacity( collector->device ) / BITS_PER_BYTE;
-        size_t page_count = (size_t)(bitmap_size >> PAGE_SHIFT);
-        if ((bitmap_size & (PAGE_SIZE - 1)) != 0)
-            ++page_count;
-
-        log_tr_lld( "Create bitmap for snapstore collector. Size ", bitmap_size );
-
-        collector->start_index = 0;
-        collector->length = blk_dev_get_capacity( collector->device );
-
-        collector->changes = page_array_alloc( page_count, GFP_KERNEL );
-        if (collector->changes == NULL){
-            return -ENOMEM;
-        }
-        page_array_memset( collector->changes, 0 );
-    }
-#endif
 
     mutex_init(&collector->locker);
 
@@ -115,12 +96,9 @@ void _collector_stop( snapdata_collector_t* collector )
 void _collector_free( snapdata_collector_t* collector )
 {
     _collector_stop( collector );
-#ifdef SNAPDATA_SPARSE_CHANGES
+
     sparsebitmap_destroy( &collector->changes_sparse );
-#else
-    if (collector->changes != NULL)
-        page_array_free( collector->changes );
-#endif
+
     if (collector->magic_buff != NULL){
         kfree( collector->magic_buff );
         collector->magic_buff = NULL;
@@ -179,8 +157,7 @@ void rangelist_calculate(rangelist_t* rangelist, sector_t *ranges_length, size_t
     }
 }
 
-#ifndef SNAPDATA_SPARSE_CHANGES
-int page_array_convert2rangelist(page_array_t* changes, rangelist_t* rangelist, stream_size_t start_index, stream_size_t length)
+int page_array_convert2rangelist(page_array_t* changes, rangelist_t* rangelist, u64 start_index, u64 length)
 {
     int res = SUCCESS;
     range_t rg = { 0 };
@@ -215,7 +192,6 @@ int page_array_convert2rangelist(page_array_t* changes, rangelist_t* rangelist, 
     }        
     return res;
 }
-#endif
 
 int snapdata_collect_LocationGet( dev_t dev_id, rangelist_t* rangelist, size_t* ranges_count )
 {
@@ -237,11 +213,8 @@ int snapdata_collect_LocationGet( dev_t dev_id, rangelist_t* rangelist, size_t* 
         log_err_d( "Unable to get snapstore data location: collecting failed with errno=", 0-collector->fail_code );
         return collector->fail_code;
     }
-#ifdef SNAPDATA_SPARSE_CHANGES
+
     res = sparsebitmap_convert2rangelist(&collector->changes_sparse, rangelist, collector->changes_sparse.start_index);
-#else
-    res = page_array_convert2rangelist(collector->changes, rangelist, collector->start_index, collector->length);
-#endif
     if (res == SUCCESS){
         rangelist_calculate(rangelist, &ranges_length, &count, false);
         log_tr_llx("Collection size: ", collector->collected_size);
@@ -315,11 +288,11 @@ int _snapdata_collect_bvec( snapdata_collector_t* collector, sector_t ofs, struc
     unsigned int bv_offset;
     sector_t buff_ofs;
     void* mem;
-    stream_size_t sectors_map = 0;
+    u64 sectors_map = 0;
     bv_len = bvec->bv_len;
     bv_offset = bvec->bv_offset;
 
-    if ((bv_len >> SECTOR_SHIFT) > (sizeof( stream_size_t ) * 8)){ //because sectors_map have only 64 bits.
+    if ((bv_len >> SECTOR_SHIFT) > (sizeof( u64 ) * 8)){ //because sectors_map have only 64 bits.
         log_err_format( "Unable to collect snapstore data location: large PAGE_SIZE [%ld] is not supported yet. bv_len=%d", PAGE_SIZE, bv_len );
         return -EINVAL;
     }
@@ -329,7 +302,7 @@ int _snapdata_collect_bvec( snapdata_collector_t* collector, sector_t ofs, struc
         size_t compare_len = min( (size_t)SECTOR_SIZE, collector->magic_size );
 
         if (0 == memcmp( mem + buff_ofs, collector->magic_buff, compare_len ))
-            sectors_map |= (stream_size_t)1 << (stream_size_t)(buff_ofs >> SECTOR_SHIFT);
+            sectors_map |= (u64)1 << (u64)(buff_ofs >> SECTOR_SHIFT);
     }
     kunmap_atomic( mem );
 
@@ -339,39 +312,14 @@ int _snapdata_collect_bvec( snapdata_collector_t* collector, sector_t ofs, struc
         if ((1ull << buff_ofs_sect) & sectors_map)
         {
             sector_t index = ofs + buff_ofs_sect;
-#ifdef SNAPDATA_SPARSE_CHANGES
+
             res = sparsebitmap_Set(&collector->changes_sparse, index, true);
-#else
-            res = page_array_bit_set(collector->changes, (index - collector->start_index), true);
-#endif
-            if (res == SUCCESS){
+            if (res == SUCCESS)
                 collector->collected_size += SECTOR_SIZE;
-/*
-                if (index == collector->collected_end + 1)
-                    collector->collected_end++;
-                else {
-                    log_tr_sect("Collected index from: ", collector->collected_begin);
-                    log_tr_sect("Collected index to  : ", collector->collected_end);
-
-                    collector->collected_begin = index;
-                    collector->collected_end = index;
-                }
-*/
-            }else{
-                if (res == -EALREADY){
+            else {
+                if (res == -EALREADY)
                     collector->already_set_size += SECTOR_SIZE;
-/*
-                    if (index == collector->already_set_end + 1)
-                        collector->already_set_end++;
-                    else {
-                        log_tr_sect("Already set index from: ", collector->already_set_begin);
-                        log_tr_sect("Already set index to  : ", collector->already_set_end);
-
-                        collector->already_set_begin = index;
-                        collector->already_set_end = index;
-                    }
-*/
-                }else{
+                else{
                     log_err_format("Failed to collect snapstore data location. Sector=%lld, errno=%d", index, res);
                     break;
                 }

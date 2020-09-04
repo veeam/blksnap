@@ -39,8 +39,10 @@
 #pragma message "Persistent CBT is not supported for this system"
 #endif
 
-static int g_param_zerosnapdata = 0;
-static int g_param_debuglogging = 0;
+static int g_param_zerosnapdata = 0;        /*rudiment */
+static int g_param_debuglogging = 0;        /*rudiment */
+static unsigned int g_param_fixflags = 0;   /*rudiment */
+
 static char* g_logdir = NULL; 
 static unsigned long g_param_logmaxsize = 15*1024*1024;
 #ifdef PERSISTENT_CBT
@@ -48,16 +50,14 @@ static char* g_cbtdata = NULL;
 #endif
 static int g_param_snapstore_block_size_pow = 14;
 static int g_param_change_tracking_block_size_pow = 18;
-static unsigned int g_param_fixflags = 0;
+
 
 int get_debuglogging( void )
 {
     return g_param_debuglogging;
 }
-int get_zerosnapdata( void )
-{
-    return g_param_zerosnapdata;
-}
+
+
 int get_snapstore_block_size_pow(void)
 {
     return g_param_snapstore_block_size_pow;
@@ -75,87 +75,12 @@ int get_change_tracking_block_size_pow(void)
     return g_param_change_tracking_block_size_pow;
 }
 
-unsigned int get_fixflags(void)
-{
-    return g_param_fixflags;
-}
-
 static int veeamsnap_major = 0;
 
 int get_veeamsnap_major(void)
 {
     return veeamsnap_major;
 }
-
-#ifdef VEEAMSNAP_SYSFS_PARAMS
-int set_params(char* param_name, char* param_value)
-{
-    int res = -EINVAL;
-
-    if (0 == strcmp(param_name, "logdir")){
-        char* old_value = g_logdir;
-        char* new_value = NULL;
-        size_t len = strlen(param_value);
-
-        new_value = kzalloc(len, GFP_KERNEL);
-        if (new_value){
-            strcpy(new_value, param_value);
-            g_logdir = new_value;
-            kfree(old_value);
-        }else
-            res = -ENOMEM;
-    }
-    else if (0 == strcmp(param_name, "logmaxsize")) {
-        res = kstrtoul(param_value, 10, &g_param_logmaxsize);
-        if (SUCCESS != res) {
-            log_err_s("Failed to parse: ", param_value);
-            return res;
-        }
-
-#ifdef PERSISTENT_CBT
-    else if (0 == strcmp(param_name, "cbtdata")){
-        char* old_value = g_cbtdata;
-        char* new_value = NULL;
-        size_t len = strlen(param_value);
-
-        new_value = kzalloc(len, GFP_KERNEL);
-        if (new_value){
-            strcpy(new_value, param_value);
-            g_cbtdata = new_value;
-            kfree(old_value);
-        }else
-            res = -ENOMEM;
-    }
-#endif
-    else if (0 == strcmp(param_name, "snapstore_block_size_pow")){
-        res = kstrtoint(param_value, 10, &g_param_snapstore_block_size_pow);
-        if (SUCCESS != res){
-            log_err_s("Failed to parse: ", param_value);
-            return res;
-        }
-    }
-    else if (0 == strcmp(param_name, "change_tracking_block_size_pow")) {
-        res = kstrtoint(param_value, 10, &g_param_change_tracking_block_size_pow);
-        if (SUCCESS != res){
-            log_err_s("Failed to parse: ", param_value);
-            return res;
-        }
-    }
-    else
-        res = -EINVAL;
-    
-    return res;
-}
-
-int get_params(char* buf)
-{
-    int res = SUCCESS;
-
-
-
-    return res;
-}
-#endif //VEEAMSNAP_SYSFS_PARAMS
 
 
 blk_qc_t filter_submit_original_bio(struct bio *bio);
@@ -309,8 +234,6 @@ int __init veeamsnap_init(void)
     log_tr( "Loading" );
     log_tr_s( "Version: ", FILEVER_STR );
 
-    log_tr_d("zerosnapdata: ", g_param_zerosnapdata);
-    log_tr_d("debuglogging: ", g_param_debuglogging);
     log_tr_d("snapstore_block_size_pow: ", g_param_snapstore_block_size_pow);
     log_tr_d("change_tracking_block_size_pow: ", g_param_change_tracking_block_size_pow);
     log_tr_s("logdir: ", g_logdir);
@@ -318,7 +241,6 @@ int __init veeamsnap_init(void)
 #ifdef PERSISTENT_CBT
     log_tr_s("cbtdata: ", g_cbtdata);
 #endif
-    log_tr_x("fixflags: ", g_param_fixflags);
 
     if (g_param_snapstore_block_size_pow > 23){
         g_param_snapstore_block_size_pow = 23;
@@ -338,12 +260,6 @@ int __init veeamsnap_init(void)
         log_tr_d("Limited change_tracking_block_size_pow: ", g_param_change_tracking_block_size_pow);
     }
 
-
-#ifdef SNAPIMAGE_TRACER
-    log_tr("Snapshot image tracing is available");
-#endif
-
-    //btreefs_enum( );
 
     page_arrays_init( );
 
@@ -546,7 +462,7 @@ MODULE_PARM_DESC(change_tracking_block_size_pow, "Change-tracking block size bin
 module_param_named(fixflags, g_param_fixflags, uint, 0644);
 MODULE_PARM_DESC(fixflags, "Flags for known issues");
 
-MODULE_DESCRIPTION( DESCRIPTION_STR );
+MODULE_DESCRIPTION("Veeam Snapshot Kernel Module");
 MODULE_VERSION(FILEVER_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");

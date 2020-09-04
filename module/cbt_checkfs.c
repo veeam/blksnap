@@ -16,14 +16,6 @@
 static int _check_offline_changes(struct block_device* blk_dev, uint32_t check_parameters_sz, void* check_parameters)
 {
 
-#ifdef DEBUG_CBT_LOAD
-    uint32_t previous_sb_crc = le32_to_cpu(*(__le32*)(check_parameters + 0));
-    if (previous_sb_crc == DEBUG_CBT_LOAD)
-        return SUCCESS;
-    else{
-        log_err_format("DEBUG! Invalid crc. previous_sb_crc = %x, must be %x", previous_sb_crc, DEBUG_CBT_LOAD);
-    }
-#else
     // check EXT4 fs
     if (check_parameters_sz >= CHECK_PARAMETERS_SIZE_EXT4){
         uint32_t previous_sb_crc = le32_to_cpu(*(__le32*)(check_parameters + 0));
@@ -34,10 +26,9 @@ static int _check_offline_changes(struct block_device* blk_dev, uint32_t check_p
 
     // check XFS fs
     // to do
-    if (check_parameters_sz >= CHECK_PARAMETERS_SIZE_XFS){
-
-    }
-#endif
+    //if (check_parameters_sz >= CHECK_PARAMETERS_SIZE_XFS){
+    //
+    //}
     return -ENOENT;
 }
 
@@ -47,12 +38,7 @@ static int _check_unmount_status(struct block_device* blk_dev, uint32_t* p_check
     int res;
 
     // check EXT4 fs
-#ifdef DEBUG_CBT_LOAD 
-    sb_crc = DEBUG_CBT_LOAD;
-    res = SUCCESS;
-#else
     res = ext4_check_unmount_status(blk_dev, &sb_crc);
-#endif
 
     if (res == SUCCESS){
         void* check_parameters = kmalloc(CHECK_PARAMETERS_SIZE_EXT4, GFP_KERNEL);
@@ -131,9 +117,7 @@ int cbt_checkfs_start_tracker_available(dev_t dev_id, uint32_t check_parameters_
     }
     do {
         bool is_mounted = false;
-#ifdef DEBUG_CBT_LOAD
-        is_mounted = false;
-#else
+
         log_tr("Check if the device is mounted");
         res = _check_is_mounted(blk_dev, &is_mounted);
         if (res == SUCCESS){
@@ -149,7 +133,7 @@ int cbt_checkfs_start_tracker_available(dev_t dev_id, uint32_t check_parameters_
             log_err_d("Failed to get fs mount state", res);
             break;
         }
-#endif
+
         log_tr("Check the device for offline changes");
         res = _check_offline_changes(blk_dev, check_parameters_sz, check_parameters);
         if (res == SUCCESS){
@@ -182,9 +166,7 @@ int cbt_checkfs_store_available(dev_t dev_id, uint32_t* p_check_parameters_sz, v
     }
     do {
         bool is_mounted = false;
-#ifdef DEBUG_CBT_LOAD
-        is_mounted = false;
-#else
+
         log_tr("Checking if the device is unmounted");
         res = _check_is_mounted(blk_dev, &is_mounted);
         if (res == SUCCESS){
@@ -200,7 +182,7 @@ int cbt_checkfs_store_available(dev_t dev_id, uint32_t* p_check_parameters_sz, v
             log_err_d("Failed to get fs mount state", res);
             break;
         }
-#endif
+
         log_tr("Unmount operation result check");
         res = _check_unmount_status(blk_dev, p_check_parameters_sz, p_check_parameters);
         if (res == SUCCESS){

@@ -197,7 +197,7 @@ int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id
 #endif
 
 
-int snapstore_cleanup( veeam_uuid_t* id, stream_size_t* filled_bytes )
+int snapstore_cleanup( veeam_uuid_t* id, u64* filled_bytes )
 {
     int res;
     sector_t filled;
@@ -303,14 +303,12 @@ int snapstore_add_memory( veeam_uuid_t* id, unsigned long long sz )
     return res;
 }
 
-#ifdef SNAPDATA_ZEROED
-
 int zerosectors_add_ranges( rangevector_t* zero_sectors, page_array_t* ranges, size_t ranges_cnt )
 {
     if ((ranges == NULL) || (ranges_cnt == 0))
         return -EINVAL;
 
-    if (get_zerosnapdata( )){
+    {
         unsigned int inx = 0;
 
         for (inx = 0; inx < ranges_cnt; ++inx){
@@ -325,15 +323,13 @@ int zerosectors_add_ranges( rangevector_t* zero_sectors, page_array_t* ranges, s
             res = rangevector_add( zero_sectors, &range );
             if (res != SUCCESS){
                 log_err( "Failed to add range to zero sectors" );
-    return res;
-}
+                return res;
+            }
         }
         rangevector_sort( zero_sectors );
     }
     return SUCCESS;
 }
-
-#endif //SNAPDATA_ZEROED
 
 int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 {
@@ -414,7 +410,6 @@ int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cn
     if ((res == SUCCESS) && (current_blk_size != 0))
         log_warn( "Snapstore portion was not ordered by Copy-on-Write block size" );
     
-#ifdef SNAPDATA_ZEROED
     if ((res == SUCCESS) && (snapstore->file != NULL)){
         snapstore_device_t* snapstore_device = snapstore_device_find_by_dev_id( snapstore->file->blk_dev_id );
         if (snapstore_device != NULL){
@@ -424,7 +419,6 @@ int snapstore_add_file( veeam_uuid_t* id, page_array_t* ranges, size_t ranges_cn
             }
         }
     }
-#endif
 
     return res;
 }
@@ -514,20 +508,6 @@ int snapstore_add_multidev(veeam_uuid_t* id, dev_t dev_id, page_array_t* ranges,
     }
     if ((res == SUCCESS) && (current_blk_size != 0))
         log_warn( "Snapstore portion was not ordered by Copy-on-Write block size" );
-
-#ifdef SNAPDATA_ZEROED
-//  zeroing algorithm is not supported for multidevice snapstore
-//
-//     if ((res == SUCCESS) && (snapstore->multidev != NULL)){
-//         snapstore_device_t* snapstore_device = snapstore_device_find_by_dev_id( snapstore->multidev->blk_dev_id );
-//         if (snapstore_device != NULL){
-//             res = zerosectors_add_ranges( &snapstore_device->zero_sectors, ranges, ranges_cnt );
-//             if (res != SUCCESS){
-//                 log_err( "Failed to add file ranges to zeroed sectors set" );
-//             }
-//         }
-//     }
-#endif
 
     return res;
 }

@@ -13,35 +13,25 @@ struct kmem_cache* g_sparse_block_cache = NULL;
 
 int sparsebitmap_init( void )
 {
-#ifdef SPARSE_BLOCK_CACHEABLE
     g_sparse_block_cache = kmem_cache_create( "veeamsnap_sparse_bitmap", sizeof( blocks_array_t ), 0, 0, NULL );
     if (g_sparse_block_cache == NULL){
         log_tr( "Unable create kmem_cache" );
         return -ENOMEM;
     }
-#endif
     return SUCCESS;
 }
 
 void  sparsebitmap_done( void )
 {
-#ifdef SPARSE_BLOCK_CACHEABLE
     if (g_sparse_block_cache != NULL){
         kmem_cache_destroy( g_sparse_block_cache );
         g_sparse_block_cache = NULL;
     }
-#endif
 }
 
 static inline blocks_array_t* _sparse_block_array_new( int init_value )
 {
-    blocks_array_t* blocks_array = NULL;
-#ifdef SPARSE_BLOCK_CACHEABLE
-    blocks_array = kmem_cache_alloc( g_sparse_block_cache, GFP_NOIO );
-#else
-    blocks_array = kmalloc( sizeof( blocks_array_t ), GFP_NOIO );
-#endif
-
+    blocks_array_t *blocks_array = kmem_cache_alloc( g_sparse_block_cache, GFP_NOIO );
     if (blocks_array == NULL)
         return NULL;
 
@@ -51,13 +41,8 @@ static inline blocks_array_t* _sparse_block_array_new( int init_value )
 
 static inline void _sparse_block_array_free( blocks_array_t* blocks_array )
 {
-    if (blocks_array != NULL){
-#ifdef SPARSE_BLOCK_CACHEABLE
+    if (blocks_array != NULL)
         kmem_cache_free( g_sparse_block_cache, blocks_array );
-#else
-        kfree( blocks_array );
-#endif
-    }
 }
 
 
@@ -121,9 +106,9 @@ void _sparse_block_free( sparse_block_t* block )
     }
 }
 
-int _sparse_block_clear(sparse_block_t* block, stream_size_t index, char* p_blk_st);
+int _sparse_block_clear(sparse_block_t* block, u64 index, char* p_blk_st);
 
-int _sparse_block_clear_leaf(sparse_block_t* block, stream_size_t index, char* p_blk_st)
+int _sparse_block_clear_leaf(sparse_block_t* block, u64 index, char* p_blk_st)
 {
     char blk_st = BLK_ST_USE;
     int res = SUCCESS;
@@ -145,7 +130,7 @@ int _sparse_block_clear_leaf(sparse_block_t* block, stream_size_t index, char* p
     return res;
 }
 
-int _sparse_block_clear_branch(sparse_block_t* block, stream_size_t index, char* p_blk_st)
+int _sparse_block_clear_branch(sparse_block_t* block, u64 index, char* p_blk_st)
 {
     char blk_st = BLK_ST_USE;
     int res = SUCCESS;
@@ -207,7 +192,7 @@ int _sparse_block_clear_branch(sparse_block_t* block, stream_size_t index, char*
     return res;
 }
 
-int _sparse_block_clear( sparse_block_t* block, stream_size_t index, char* p_blk_st )
+int _sparse_block_clear( sparse_block_t* block, u64 index, char* p_blk_st )
 {
     if (block->level == 0)
         return _sparse_block_clear_leaf(block, index, p_blk_st);
@@ -215,9 +200,9 @@ int _sparse_block_clear( sparse_block_t* block, stream_size_t index, char* p_blk
         return _sparse_block_clear_branch(block, index, p_blk_st);
 }
 
-int _sparse_block_set(sparse_block_t* block, stream_size_t index, char* p_blk_st);
+int _sparse_block_set(sparse_block_t* block, u64 index, char* p_blk_st);
 
-int _sparse_block_set_leaf(sparse_block_t* block, stream_size_t index, char* p_blk_st)
+int _sparse_block_set_leaf(sparse_block_t* block, u64 index, char* p_blk_st)
 {
     char blk_st = BLK_ST_USE;
     int res = SUCCESS;
@@ -240,13 +225,13 @@ int _sparse_block_set_leaf(sparse_block_t* block, stream_size_t index, char* p_b
     return res;
 }
 
-int _sparse_block_set_branch(sparse_block_t* block, stream_size_t index, char* p_blk_st)
+int _sparse_block_set_branch(sparse_block_t* block, u64 index, char* p_blk_st)
 {
     char blk_st = BLK_ST_USE;
     int res = SUCCESS;
 
     do{
-        size_t inx = (size_t)(index >> (stream_size_t)(SPARSE_BITMAP_BLOCK_SIZE_DEGREE * block->level)) & SPARSE_BITMAP_BLOCK_SIZE_MASK;
+        size_t inx = (size_t)(index >> (u64)(SPARSE_BITMAP_BLOCK_SIZE_DEGREE * block->level)) & SPARSE_BITMAP_BLOCK_SIZE_MASK;
 
         if (block->blocks_array == BLOCK_FULL){
             res = -EALREADY;
@@ -307,7 +292,7 @@ int _sparse_block_set_branch(sparse_block_t* block, stream_size_t index, char* p
     return res;
 }
 
-int _sparse_block_set( sparse_block_t* block, stream_size_t index, char* p_blk_st )
+int _sparse_block_set( sparse_block_t* block, u64 index, char* p_blk_st )
 {
     if (block->level == 0)
         return _sparse_block_set_leaf(block, index, p_blk_st);
@@ -315,7 +300,7 @@ int _sparse_block_set( sparse_block_t* block, stream_size_t index, char* p_blk_s
         return _sparse_block_set_branch(block, index, p_blk_st);
 }
 
-bool _sparse_block_get( sparse_block_t* block, stream_size_t index )
+bool _sparse_block_get( sparse_block_t* block, u64 index )
 {
     size_t inx;
 
@@ -342,7 +327,7 @@ bool _sparse_block_get( sparse_block_t* block, stream_size_t index )
     return _sparse_block_get( block->blocks_array->blk[inx], index );
     }
 
-char _calc_level( stream_size_t ull )
+char _calc_level( u64 ull )
 {
     char level = 0;
     while (ull > SPARSE_BITMAP_BLOCK_SIZE){
@@ -353,7 +338,7 @@ char _calc_level( stream_size_t ull )
 }
 
 
-void sparsebitmap_create( sparse_bitmap_t* bitmap, stream_size_t min_index, stream_size_t length )
+void sparsebitmap_create( sparse_bitmap_t* bitmap, u64 min_index, u64 length )
 {
     char level = _calc_level( length );
     bitmap->start_index = min_index;
@@ -370,7 +355,7 @@ void sparsebitmap_destroy( sparse_bitmap_t* bitmap )
 }
 
 
-int sparsebitmap_Set( sparse_bitmap_t* bitmap, stream_size_t index, bool state )
+int sparsebitmap_Set( sparse_bitmap_t* bitmap, u64 index, bool state )
 {
     char blk_st;
 
@@ -386,7 +371,7 @@ int sparsebitmap_Set( sparse_bitmap_t* bitmap, stream_size_t index, bool state )
         return _sparse_block_clear( &bitmap->sparse_block, index, &blk_st );
 }
 
-int sparsebitmap_Get( sparse_bitmap_t* bitmap, stream_size_t index, bool* p_state )
+int sparsebitmap_Get( sparse_bitmap_t* bitmap, u64 index, bool* p_state )
 {
     if ((index < bitmap->start_index) || (index >= (bitmap->start_index + bitmap->length)))
         return -EINVAL;

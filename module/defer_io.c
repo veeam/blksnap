@@ -190,8 +190,8 @@ void _defer_io_destroy( void* this_resource )
     if (NULL == defer_io)
         return;
     {
-        stream_size_t processed;
-        stream_size_t copyed;
+        u64 processed;
+        u64 copyed;
 
         processed = atomic64_read( &defer_io->state_sectors_processed );
         copyed = atomic64_read( &defer_io->state_sectors_copy_read );

@@ -95,9 +95,8 @@ void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
     if (snapstore_device->orig_blk_dev != NULL)
         blk_dev_close( snapstore_device->orig_blk_dev );
 
-#ifdef SNAPDATA_ZEROED
     rangevector_done( &snapstore_device->zero_sectors );
-#endif
+
     if (snapstore_device->snapstore){
         log_tr_uuid("Snapstore uuid ", (&snapstore_device->snapstore->id));
 
@@ -154,9 +153,7 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
     //init_rwsem( &snapstore_device->store_block_map_locker );
     mutex_init(&snapstore_device->store_block_map_locker);
 
-#ifdef SNAPDATA_ZEROED
     rangevector_init(&snapstore_device->zero_sectors, true);
-#endif
 
     while (1){ //failover with snapstore block size increment
         blk_descr_array_index_t blocks_count;
@@ -313,12 +310,8 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
     sector_t blk_ofs_count = 0;         //device range length
 
     range_t rq_range;
-
-#ifdef SNAPDATA_ZEROED
     rangevector_t* zero_sectors = NULL;
-    if (get_zerosnapdata( ))
-        zero_sectors = &snapstore_device->zero_sectors;
-#endif //SNAPDATA_ZEROED
+    zero_sectors = &snapstore_device->zero_sectors;
 
     if (snapstore_device_is_corrupted( snapstore_device ))
         return -ENODATA;
@@ -365,13 +358,11 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
         }
         else{
 
-#ifdef SNAPDATA_ZEROED
             //device read with zeroing
             if (zero_sectors)
                 res = blk_dev_redirect_read_zeroed( rq_endio, snapstore_device->orig_blk_dev, rq_range.ofs, blk_ofs_start, blk_ofs_count, zero_sectors );
             else
-#endif
-            res = blk_dev_redirect_part( rq_endio, READ, snapstore_device->orig_blk_dev, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
+                res = blk_dev_redirect_part( rq_endio, READ, snapstore_device->orig_blk_dev, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 
             if (res != SUCCESS){
                 log_err_dev_t( "Failed to redirect read request to the original device ", snapstore_device->dev_id );

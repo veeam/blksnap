@@ -212,7 +212,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
     }
 
     do{
-        stream_size_t stretch_empty_limit;
+        u64 stretch_empty_limit;
         unsigned int dev_id_list_length;
         veeam_uuid_t* unique_id;
         struct ioctl_dev_id_s* snapstore_dev_id;
@@ -229,12 +229,12 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
 
 
         //get snapstore empty limit
-        if ((length - processed) < sizeof( stream_size_t )){
+        if ((length - processed) < sizeof( u64 )){
             log_err_sz( "Unable to get stretch snapstore limit: invalid ctrl pipe initiate command. length=", length );
             break;
         }
-        stretch_empty_limit = *(stream_size_t*)(kernel_buffer + processed);
-        processed += sizeof( stream_size_t );
+        stretch_empty_limit = *(u64*)(kernel_buffer + processed);
+        processed += sizeof( u64 );
         //log_tr_lld( "stretch_empty_limit=", stretch_empty_limit );
 
 

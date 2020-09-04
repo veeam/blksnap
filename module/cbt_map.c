@@ -151,7 +151,7 @@ void cbt_map_switch( cbt_map_t* cbt_map )
     _cbt_map_unlock( cbt_map );
 }
 
-int _cbt_map_set( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector_cnt, byte_t snap_number, page_array_t* map )
+int _cbt_map_set( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector_cnt, u8 snap_number, page_array_t* map )
 {
     int res = SUCCESS;
     size_t cbt_block;
@@ -160,7 +160,7 @@ int _cbt_map_set( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector_cnt
 
     for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last; ++cbt_block){
         if (cbt_block < cbt_map->map_size){
-            byte_t num;
+            u8 num;
             res = page_array_byte_get( map, cbt_block, &num );
             if (SUCCESS == res){
                 if (num < snap_number){
@@ -184,7 +184,7 @@ int cbt_map_set( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector_cnt 
     int res = SUCCESS;
     _cbt_map_lock( cbt_map );
     {
-        byte_t snap_number = (byte_t)cbt_map->snap_number_active;
+        u8 snap_number = (u8)cbt_map->snap_number_active;
 
         res = _cbt_map_set( cbt_map, sector_start, sector_cnt, snap_number, _get_writable( cbt_map ) );
 
@@ -199,9 +199,9 @@ int cbt_map_set_both( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector
     int res = SUCCESS;
     _cbt_map_lock( cbt_map );
     {
-        res = _cbt_map_set(cbt_map, sector_start, sector_cnt, (byte_t)cbt_map->snap_number_active, _get_writable(cbt_map));
+        res = _cbt_map_set(cbt_map, sector_start, sector_cnt, (u8)cbt_map->snap_number_active, _get_writable(cbt_map));
         if (res == SUCCESS)
-            res = _cbt_map_set(cbt_map, sector_start, sector_cnt, (byte_t)cbt_map->snap_number_previous, _get_readable(cbt_map));
+            res = _cbt_map_set(cbt_map, sector_start, sector_cnt, (u8)cbt_map->snap_number_previous, _get_readable(cbt_map));
 
         cbt_map->state_dirty_sectors += sector_cnt;
     }

@@ -16,21 +16,11 @@ typedef struct snapdata_collector_s
 
     void* magic_buff;
     size_t magic_size;
-#ifdef SNAPDATA_SPARSE_CHANGES
+
     sparse_bitmap_t changes_sparse;
-#else
-    page_array_t* changes;
-    sector_t start_index;
-    sector_t length;
-#endif
-    stream_size_t collected_size;
-    stream_size_t already_set_size;
-    /*
-    sector_t collected_begin;
-    sector_t collected_end;
-    sector_t already_set_begin;
-    sector_t already_set_end;
-    */
+    u64 collected_size;
+    u64 already_set_size;
+
     int fail_code;
 
     struct mutex locker;

@@ -742,48 +742,11 @@ int ioctl_printstate( unsigned long arg )
 
 
 typedef int (veeam_ioctl_t)(unsigned long arg);
-typedef struct veeam_ioctl_table_s{
+typedef struct veeam_ioctl_table_s {
     unsigned int cmd;
     veeam_ioctl_t* fn;
-#ifdef VEEAM_IOCTL_LOGGING
-    char* name;
-#endif
-}veeam_ioctl_table_t;
+} veeam_ioctl_table_t;
 
-#ifdef VEEAM_IOCTL_LOGGING
-static veeam_ioctl_table_t veeam_ioctl_table[] =
-{
-    { (IOCTL_COMPATIBILITY_FLAGS), ioctl_compatibility_flags, "IOCTL_COMPATIBILITY_FLAGS" },
-    { (IOCTL_GETVERSION), ioctl_get_version, "IOCTL_GETVERSION" },
-
-    { (IOCTL_TRACKING_ADD), ioctl_tracking_add, "IOCTL_TRACKING_ADD" },
-    { (IOCTL_TRACKING_REMOVE), ioctl_tracking_remove, "IOCTL_TRACKING_REMOVE" },
-    { (IOCTL_TRACKING_COLLECT), ioctl_tracking_collect, "IOCTL_TRACKING_COLLECT" },
-    { (IOCTL_TRACKING_BLOCK_SIZE), ioctl_tracking_block_size, "IOCTL_TRACKING_BLOCK_SIZE" },
-    { (IOCTL_TRACKING_READ_CBT_BITMAP), ioctl_tracking_read_cbt_map, "IOCTL_TRACKING_READ_CBT_BITMAP" },
-    { (IOCTL_TRACKING_MARK_DIRTY_BLOCKS), ioctl_tracking_mark_dirty_blocks, "IOCTL_TRACKING_MARK_DIRTY_BLOCKS" },
-
-    { (IOCTL_SNAPSHOT_CREATE), ioctl_snapshot_create, "IOCTL_SNAPSHOT_CREATE" },
-    { (IOCTL_SNAPSHOT_DESTROY), ioctl_snapshot_destroy, "IOCTL_SNAPSHOT_DESTROY" },
-    { (IOCTL_SNAPSHOT_ERRNO), ioctl_snapshot_errno, "IOCTL_SNAPSHOT_ERRNO" },
-
-    { (IOCTL_SNAPSTORE_CREATE), ioctl_snapstore_create, "IOCTL_SNAPSTORE_CREATE" },
-    { (IOCTL_SNAPSTORE_FILE), ioctl_snapstore_file, "IOCTL_SNAPSTORE_FILE" },
-    { (IOCTL_SNAPSTORE_MEMORY), ioctl_snapstore_memory, "IOCTL_SNAPSTORE_MEMORY" },
-    { (IOCTL_SNAPSTORE_CLEANUP), ioctl_snapstore_cleanup, "IOCTL_SNAPSTORE_CLEANUP" },
-#ifdef SNAPSTORE_MULTIDEV
-    { (IOCTL_SNAPSTORE_FILE_MULTIDEV), ioctl_snapstore_file_multidev, "IOCTL_SNAPSTORE_FILE_MULTIDEV" },
-#endif
-    { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_START), ioctl_collect_snapshotdata_location_start, "IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_START" },
-    { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_GET), ioctl_collect_snapshotdata_location_get, "IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_GET" },
-    { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_COMPLETE), ioctl_collect_snapshotdata_location_complete, "IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_COMPLETE" },
-    { (IOCTL_COLLECT_SNAPSHOT_IMAGES), ioctl_collect_snapimages, "IOCTL_COLLECT_SNAPSHOT_IMAGES" },
-    { (IOCTL_PERSISTENTCBT_DATA), ioctl_persistentcbt_data, "IOCTL_PERSISTENTCBT_DATA" },
-
-    { (IOCTL_PRINTSTATE), ioctl_printstate, "IOCTL_PRINTSTATE" },
-    { 0, NULL, NULL}
-};
-#else
 static veeam_ioctl_table_t veeam_ioctl_table[] =
 {
     { (IOCTL_COMPATIBILITY_FLAGS), ioctl_compatibility_flags },
@@ -816,7 +779,6 @@ static veeam_ioctl_table_t veeam_ioctl_table[] =
     { (IOCTL_PRINTSTATE), ioctl_printstate },
     { 0, NULL }
 };
-#endif
 
 long ctrl_unlocked_ioctl( struct file *filp, unsigned int cmd, unsigned long arg )
 {
@@ -825,11 +787,6 @@ long ctrl_unlocked_ioctl( struct file *filp, unsigned int cmd, unsigned long arg
 
     while (veeam_ioctl_table[inx].cmd != 0){
         if (veeam_ioctl_table[inx].cmd == cmd){
-#ifdef VEEAM_IOCTL_LOGGING
-            if (veeam_ioctl_table[inx].name != NULL){
-                log_warn( veeam_ioctl_table[inx].name );
-            }
-#endif
             status = veeam_ioctl_table[inx].fn( arg );
             break;
         }

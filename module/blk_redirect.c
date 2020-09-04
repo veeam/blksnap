@@ -356,9 +356,6 @@ int blk_dev_redirect_zeroed_part( blk_redirect_bio_endio_t* rq_endio, sector_t r
     return SUCCESS;
 }
 
-
-#ifdef SNAPDATA_ZEROED
-
 int blk_dev_redirect_read_zeroed( blk_redirect_bio_endio_t* rq_endio, struct block_device*  blk_dev, sector_t rq_pos, sector_t blk_ofs_start, sector_t blk_ofs_count, rangevector_t* zero_sectors )
 {
     int res = SUCCESS;
@@ -436,5 +433,3 @@ void blk_redirect_complete( blk_redirect_bio_endio_t* rq_endio, int res )
     rq_endio->complete_cb( rq_endio->complete_param, rq_endio->bio, res );
     queue_content_sl_free( &rq_endio->content );
 }
-
-#endif //SNAPDATA_ZEROED

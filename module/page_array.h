@@ -40,8 +40,8 @@ int page_array_ptr_get(page_array_t* arr, size_t inx, void** value);
 int page_array_ptr_set(page_array_t* arr, size_t inx, void* value);
 
 //byte access
-int page_array_byte_get( page_array_t* arr, size_t inx, byte_t* value );
-int page_array_byte_set( page_array_t* arr, size_t inx, byte_t value );
+int page_array_byte_get( page_array_t* arr, size_t inx, u8* value );
+int page_array_byte_set( page_array_t* arr, size_t inx, u8 value );
 
 // bit access
 int page_array_bit_get( page_array_t* arr, size_t inx, bool* value );

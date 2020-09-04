@@ -25,18 +25,10 @@ typedef struct snapstore_device_s
 
     struct block_device* orig_blk_dev;
 
-
     blk_descr_array_t store_block_map; // map block index to read block offset
-    //struct rw_semaphore store_block_map_locker;
     struct mutex store_block_map_locker;
 
-#ifdef SNAPDATA_ZEROED
     rangevector_t zero_sectors;
-#endif
-
-    // transaction processing
-    //rangevector_t copy_ranges;
-    //container_sl_t copy_requests;
 
     atomic_t req_failed_cnt;
     volatile int err_code;

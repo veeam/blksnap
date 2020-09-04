@@ -34,8 +34,6 @@ void blk_dev_redirect_submit( blk_redirect_bio_endio_t* rq_endio );
 int blk_dev_redirect_memcpy_part( blk_redirect_bio_endio_t* rq_endio, int direction, void* src_buff, sector_t rq_ofs, sector_t rq_count );
 int blk_dev_redirect_zeroed_part( blk_redirect_bio_endio_t* rq_endio, sector_t rq_ofs, sector_t rq_count );
 
-#ifdef SNAPDATA_ZEROED
 int blk_dev_redirect_read_zeroed( blk_redirect_bio_endio_t* rq_endio, struct block_device* blk_dev, sector_t rq_pos, sector_t blk_ofs_start, sector_t blk_ofs_count, rangevector_t* zero_sectors );
-#endif
 
 void blk_redirect_complete( blk_redirect_bio_endio_t* rq_endio, int res );

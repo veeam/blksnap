@@ -11,11 +11,6 @@
 
 #include <linux/sysfs.h>
 
-#ifdef VEEAMSNAP_SYSFS_PARAMS
-int set_params(char* param_name, char* param_value);
-int get_params(char* buf);
-#endif
-
 #ifdef PERSISTENT_CBT
 uint64_t _notify_counter = 0;
 
@@ -135,100 +130,9 @@ static ssize_t blkdev_notify_store(struct class *class, struct class_attribute *
 }
 #endif //PERSISTENT_CBT
 
-#ifdef VEEAMSNAP_SYSFS_PARAMS
-// params
-static ssize_t params_show(struct class *class, struct class_attribute *attr, char *buf)
-{
-    int res = get_params(buf);
-    if (res == SUCCESS)
-        return strlen(buf);
-
-    log_err("Failed to read parameters");
-    return 0;
-}
-
-static ssize_t params_store(struct class *class, struct class_attribute *attr, const char *buf, size_t count)
-{
-    int res = -EINVAL;
-    size_t ofs = 0;
-
-    char* param_name = NULL;
-    char* param_value = NULL;
-
-    //log_tr_s("DEBUG! buffer: ", buf);
-
-    // to do string parsing
-    while (ofs < count)
-    {
-        if (buf[ofs] == '='){ //separator found
-            size_t len = ofs;
-            param_name = kzalloc(len + 1, GFP_KERNEL);
-            if (param_name == NULL){
-                res = -ENOMEM;
-                break;
-            }
-            memcpy(param_name, buf, len);
-            param_name[len] = '\0';
-
-            ofs += 1;//skip separator
-            len = count - ofs;
-            param_value = kzalloc(len + 1, GFP_KERNEL);
-            if (param_value == NULL){
-                res = -ENOMEM;
-                break;
-            }
-            memcpy(param_value, buf+ofs, len);
-            param_value[len] = '\0';
-
-            res = SUCCESS;
-            break;
-        }
-
-        ++ofs;
-    }
-
-    //call block device notifier
-    res = set_params(param_name, param_value);
-    if (SUCCESS != res)
-        log_err_s("Failed to set parameter ", param_name);
-
-    if (param_name != NULL)
-        kfree(param_name);
-    if (param_value != NULL)
-        kfree(param_value);
-
-
-    return count;
-}
-#endif
-/*
-#ifndef __ATTR_RW
-#define __ATTR_RW(_name) __ATTR(_name, 0644, _name##_show, _name##_store)
-#endif
-
-#ifndef __ATTR_RO
-#define __ATTR_RO(_name) {						\
-	.attr	= { .name = __stringify(_name), .mode = 0444 },		\
-	.show	= _name##_show,						\
-}
-#endif
-
-#ifndef CLASS_ATTR_RW
-#define CLASS_ATTR_RW(_name) \
-struct class_attribute class_attr_##_name = __ATTR_RW(_name)
-#endif
-#ifndef CLASS_ATTR_RO
-#define CLASS_ATTR_RO(_name) \
-struct class_attribute class_attr_##_name = __ATTR_RO(_name)
-#endif
-*/
 #ifdef PERSISTENT_CBT
 CLASS_ATTR_RW(blkdev_notify);
 CLASS_ATTR_RO(major);
-#endif
-
-#ifdef VEEAMSNAP_SYSFS_PARAMS
-CLASS_ATTR_RW(params);
 #endif
 
 static struct class *veeamsnap_class = NULL;
@@ -259,14 +163,7 @@ int ctrl_sysfs_init(struct device **p_device)
             break;
         }
 #endif
-#ifdef VEEAMSNAP_SYSFS_PARAMS
-        log_tr("Create 'params' sysfs attribute");
-        res = class_create_file(veeamsnap_class, &class_attr_params);
-        if (res != SUCCESS){
-            log_err("Failed to create 'params' sysfs file");
-            break;
-        }
-#endif
+
         {
             struct device *dev = device_create(veeamsnap_class, NULL, MKDEV(get_veeamsnap_major(), 0), NULL, MODULE_NAME);
             if (IS_ERR(dev)){
@@ -294,9 +191,7 @@ void ctrl_sysfs_done(struct device **p_device)
     }
 
     if (veeamsnap_class != NULL){
-#ifdef VEEAMSNAP_SYSFS_PARAMS
-		class_remove_file(veeamsnap_class, &class_attr_params);
-#endif
+
 #ifdef PERSISTENT_CBT
         class_remove_file(veeamsnap_class, &class_attr_blkdev_notify);
 		class_remove_file(veeamsnap_class, &class_attr_major);

@@ -39,7 +39,7 @@ int snapstore_create(veeam_uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set
 #ifdef SNAPSTORE_MULTIDEV
 int snapstore_create_multidev(veeam_uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_length);
 #endif
-int snapstore_cleanup(veeam_uuid_t* id, stream_size_t* filled_bytes);
+int snapstore_cleanup(veeam_uuid_t* id, u64* filled_bytes);
 
 static inline snapstore_t* snapstore_get( snapstore_t* snapstore )
 {

@@ -301,27 +301,27 @@ int page_array_ptr_set(page_array_t* arr, size_t inx, void* value)
     return SUCCESS;
 }
 
-int page_array_byte_get( page_array_t* arr, size_t inx, byte_t* value )
+int page_array_byte_get( page_array_t* arr, size_t inx, u8* value )
 {
     size_t page_inx = inx >> PAGE_SHIFT;
     _PAGE_INX_CHECK( arr, inx, page_inx );
 
     {
         size_t byte_pos = inx & (PAGE_SIZE - 1);
-        byte_t* ptr = arr->pg[page_inx].addr;
+        u8* ptr = arr->pg[page_inx].addr;
         *value = ptr[byte_pos];
     }
     return SUCCESS;
 }
 
-int page_array_byte_set( page_array_t* arr, size_t inx, byte_t value )
+int page_array_byte_set( page_array_t* arr, size_t inx, u8 value )
 {
     size_t page_inx = inx >> PAGE_SHIFT;
     _PAGE_INX_CHECK( arr, inx, page_inx );
 
     {
         size_t byte_pos = inx & (PAGE_SIZE - 1);
-        byte_t* ptr = arr->pg[page_inx].addr;
+        u8* ptr = arr->pg[page_inx].addr;
         ptr[byte_pos] = value;
     }
     return SUCCESS;
@@ -329,7 +329,7 @@ int page_array_byte_set( page_array_t* arr, size_t inx, byte_t value )
 
 int page_array_bit_get( page_array_t* arr, size_t inx, bool* value )
 {
-    byte_t v;
+    u8 v;
     size_t byte_inx = (inx / BITS_PER_BYTE);
     int res = page_array_byte_get( arr, byte_inx, &v );
     if (SUCCESS != res)
@@ -349,11 +349,11 @@ int page_array_bit_set( page_array_t* arr, size_t inx, bool value )
     _PAGE_INX_CHECK( arr, inx, page_inx );
 
     {
-        byte_t v;
+        u8 v;
         size_t bit_inx = (inx & (BITS_PER_BYTE - 1));
 
         size_t byte_pos = byte_inx & (PAGE_SIZE - 1);
-        byte_t* ptr = arr->pg[page_inx].addr;
+        u8* ptr = arr->pg[page_inx].addr;
 
         v = ptr[byte_pos];
         if (value){

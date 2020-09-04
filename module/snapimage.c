@@ -29,20 +29,6 @@ static DEFINE_SPINLOCK(g_snapimage_minors_lock);
 static container_t SnapImages;
 struct rw_semaphore snap_image_destroy_lock;
 
-#ifdef SNAPIMAGE_TRACER
-
-typedef struct trace_page_s
-{
-    struct list_head link;
-    struct page* pg;
-    unsigned int load_inx;
-    unsigned int store_inx;
-    trace_record_t records[0];
-}trace_page_t;
-
-#define TRACE_RECORDS_PER_PAGE ((PAGE_SIZE - offsetof(trace_page_t, records)) / sizeof(trace_record_t))
-#endif
-
 typedef struct snapimage_s{
     content_t content;
 
@@ -80,161 +66,7 @@ typedef struct snapimage_s{
     struct mutex open_locker;
     struct block_device* open_bdev;
     volatile size_t open_cnt;
-#ifdef SNAPIMAGE_TRACER
-    struct list_head trace_list;
-    spinlock_t trace_lock;
-#endif
 }snapimage_t;
-
-#ifdef SNAPIMAGE_TRACER
-//////////////////////////////////////////////////////////////////////////
-#ifndef list_last_entry
-#define list_last_entry(ptr, type, member) \
-	list_entry((ptr)->prev, type, member)
-#endif
-#ifndef list_first_entry
-#define list_first_entry(ptr, type, member) \
-	list_entry((ptr)->next, type, member)
-#endif
-
-void image_trace_init(snapimage_t* image)
-{
-    INIT_LIST_HEAD(&image->trace_list);
-    spin_lock_init(&image->trace_lock);
-}
-
-trace_page_t* image_trace_new_page(snapimage_t* image)
-{
-    trace_page_t* trace_page = NULL;
-    struct page* pg = alloc_page(GFP_NOIO);
-    if (!pg)
-        return NULL;
-
-    trace_page = (trace_page_t*)page_address(pg);
-    trace_page->pg = pg;
-    trace_page->store_inx = 0;
-    trace_page->load_inx = 0;
-
-    INIT_LIST_HEAD(&trace_page->link);
-    
-    spin_lock(&image->trace_lock);
-    list_add_tail(&trace_page->link, &image->trace_list);
-    spin_unlock(&image->trace_lock);
-
-    return trace_page;
-}
-
-void __image_trace_free_page(trace_page_t* trace_page)
-{
-    list_del(&trace_page->link);
-    __free_page(trace_page->pg);
-}
-
-void image_trace_add(snapimage_t* image, sector_t ofs, unsigned int size, int direction)
-{
-    trace_page_t* trace_page = NULL;
-
-    spin_lock(&image->trace_lock);
-    if (!list_empty(&image->trace_list)){
-        trace_page = list_last_entry(&image->trace_list, trace_page_t, link);
-        if (trace_page->store_inx == TRACE_RECORDS_PER_PAGE) //end of page achieved
-            trace_page = NULL;
-    }
-    spin_unlock(&image->trace_lock);
-
-    if (!trace_page)
-        trace_page = image_trace_new_page(image);
-
-    if (trace_page){
-        trace_page->records[trace_page->store_inx].time = get_jiffies_64();
-        trace_page->records[trace_page->store_inx].sector_ofs = ofs;
-        trace_page->records[trace_page->store_inx].size = size;
-        trace_page->records[trace_page->store_inx].direction = direction;
-
-        trace_page->store_inx++;
-    }
-}
-/*
-
-void __image_trace_log(snapimage_t* image)
-{
-    trace_page_t* trace_page = NULL;
-    if (list_empty(&image->trace_list)){
-        log_tr("snapshot image trace log is empty");
-        return;
-    }
-
-    list_for_each_entry(trace_page, &image->trace_list, link){
-        int inx = 0;
-        for (inx = 0; inx < trace_page->store_inx; ++inx){
-            log_tr_format("%s %lld : %x",
-                trace_page->records[inx].direction == READ ? "  " : "WR",
-                trace_page->records[inx].sector_ofs,
-                trace_page->records[inx].size
-                );
-        }
-    }
-}
-*/
-
-int image_trace_read(snapimage_t* image, unsigned int capacity, unsigned int* p_processed_count, trace_record_t __user* records)
-{
-    unsigned int processed_count = 0;
-
-    do{
-        unsigned int can_load = 0;
-        trace_page_t* trace_page = NULL;
-        bool end_of_list_achived = false;
-
-        spin_lock(&image->trace_lock);
-        end_of_list_achived = list_empty(&image->trace_list);
-        spin_unlock(&image->trace_lock);
-
-        if (end_of_list_achived)
-            break;
-
-        spin_lock(&image->trace_lock);
-        trace_page = list_first_entry(&image->trace_list, trace_page_t, link);
-        if (trace_page->load_inx == TRACE_RECORDS_PER_PAGE) //end of page achieved
-            list_del(&trace_page->link);
-        spin_unlock(&image->trace_lock);
-
-        if (trace_page->load_inx == TRACE_RECORDS_PER_PAGE){ //end of page achieved
-            __free_page(trace_page->pg);
-            trace_page = NULL;
-            continue;
-        }
-
-        can_load = min((trace_page->store_inx - trace_page->load_inx), (capacity - processed_count));
-        if (can_load == 0) //end of data achieved
-            break;
-
-        if (0 != copy_to_user(records + processed_count, trace_page->records + trace_page->load_inx, can_load * sizeof(trace_record_t))){
-            log_err("Unable to write trace info: invalid user buffer");
-            return -EINVAL;
-        }
-
-        trace_page->load_inx += can_load;
-        processed_count += can_load;
-
-    } while (processed_count < capacity);
-    //log_tr_d("DEBUG! processed_count=", processed_count);
-
-    *p_processed_count = processed_count;
-    return SUCCESS;
-}
-
-void image_trace_done(snapimage_t* image)
-{
-    spin_lock(&image->trace_lock);
-    while (!list_empty(&image->trace_list)){
-        trace_page_t* trace_page = list_entry(image->trace_list.next, trace_page_t, link);
-        __image_trace_free_page(trace_page);
-    } while (false);
-    spin_unlock(&image->trace_lock);
-}
-//////////////////////////////////////////////////////////////////////////
-#endif
 
 int _snapimage_destroy( snapimage_t* image );
 
@@ -376,30 +208,7 @@ int _snapimage_ioctl( struct block_device *bdev, fmode_t mode, unsigned cmd, uns
                 res = -EINVAL;
         }
         break;
-#ifdef SNAPIMAGE_TRACER
-        case IOCTL_IMAGE_TRACE_READ:
-        {
-            struct ioctl_image_trace_read_s param;
-            //log_tr("DEBUG! IOCTL_IMAGE_TRACE_READ received");
-            if (0 == copy_from_user(&param, (void*)arg, sizeof(struct ioctl_image_trace_read_s))){
-                res = image_trace_read(image, param.capacity, &param.count, param.records );
-                if (res == SUCCESS){
-                    if (0 != copy_to_user((void*)arg, &param, sizeof(struct ioctl_image_trace_read_s))){
-                        log_err("Unable to read trace info: invalid user buffer");
-                        res = -ENODATA;
-                    }
-                }
-                //else
-                //    log_err_d("[TBD] Unable to read trace info, errno=", 0-res);
-            }
-            else{
-                //log_err("[TBD] Unable to read trace info: invalid user buffer");
-                res = -EINVAL;
-            }
-            //log_tr("DEBUG! IOCTL_IMAGE_TRACE_READ complete");
-        }
-        break;
-#endif
+
         default:
             log_tr_format( "Snapshot image ioctl receive unsupported command. Device [%d:%d], command 0x%x, arg 0x%lx",
                 MAJOR( image->image_dev ), MINOR( image->image_dev ), cmd, arg );
@@ -502,10 +311,6 @@ void _snapimage_processing( snapimage_t * image )
 
     atomic64_inc( &image->state_inprocess );
     rq_endio = (blk_redirect_bio_endio_t*)queue_sl_get_first( &image->rq_proc_queue );
-
-#ifdef SNAPIMAGE_TRACER
-    image_trace_add(image, bio_bi_sector(rq_endio->bio), bio_bi_size(rq_endio->bio), bio_data_dir(rq_endio->bio));
-#endif
 
     if (bio_data_dir( rq_endio->bio ) == READ){
         image->last_read_sector = bio_bi_sector( rq_endio->bio );
@@ -765,9 +570,6 @@ int snapimage_create( dev_t original_dev )
         // queue with per request processing
         spin_lock_init( &image->queue_lock );
 
-#ifdef SNAPIMAGE_TRACER
-        image_trace_init(image);
-#endif
         mutex_init( &image->open_locker );
         image->open_bdev = NULL;
         image->open_cnt = 0;
@@ -919,10 +721,6 @@ int _snapimage_destroy( snapimage_t* image )
     spin_lock( &g_snapimage_minors_lock );
     bitmap_clear( g_snapimage_minors, MINOR(image->image_dev), (int)1 );
     spin_unlock( &g_snapimage_minors_lock );
-
-#ifdef SNAPIMAGE_TRACER
-    image_trace_done(image);
-#endif
 
     return SUCCESS;
 }
@@ -1219,9 +1017,6 @@ void snapimage_print_state( void )
         log_tr_format( "last write: sector %lld, count %lld",
             (long long int)image->last_write_sector, (long long int)image->last_write_size );
 
-#ifdef SNAPIMAGE_TRACER
-        //__image_trace_log(image);
-#endif
     }CONTAINER_FOREACH_END( SnapImages );
     up_read(&snap_image_destroy_lock);
 }

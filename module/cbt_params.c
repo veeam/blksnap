@@ -85,7 +85,7 @@ static int _cbt_prst_parse_part_uuid(char* str, veeam_uuid_t* p_part_uuid)
     return SUCCESS;
 }
 
-static int _cbt_prst_parse_range(char* str, stream_size_t* p_ofs, stream_size_t* p_len)
+static int _cbt_prst_parse_range(char* str, u64* p_ofs, u64* p_len)
 {
     char* separator = NULL;
 
@@ -124,8 +124,8 @@ static int _cbt_prst_parse_range(char* str, stream_size_t* p_ofs, stream_size_t*
 static int _cbt_prst_parse_rangevector(char* str, rangevector_t* rangevector)
 {
     int res = SUCCESS;
-    stream_size_t ofs = 0;
-    stream_size_t len = 0;
+    u64 ofs = 0;
+    u64 len = 0;
     range_t rg = {0};
     char* separator = NULL;
 

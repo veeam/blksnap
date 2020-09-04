@@ -55,6 +55,9 @@ typedef struct _logging_t
 
 static logging_t g_logging;
 
+#define VEEAM_LL_LO         2    /* minimal logging */
+#define VEEAM_LL_HI         7    /* debug logging */
+int get_debuglogging( void );
 
 static void _log_kernel( const char* section, char* level_string, const char* s )
 {
