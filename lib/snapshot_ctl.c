@@ -24,7 +24,7 @@ struct snap_ctx
 
 struct snap_store_ctx
 {
-    unsigned char id[16];
+    unsigned char id[ID_LENGTH];
 };
 
 int snap_ctx_create(struct snap_ctx** ctx)
