@@ -13,10 +13,9 @@
 //////////////////////////////////////////////////////////////////////////
 // version
 
-#define VEEAMSNAP_COMPATIBILITY_SNAPSTORE 0x0000000000000001ull
+#define VEEAMSNAP_COMPATIBILITY_SNAPSTORE 0x0000000000000001ull /* rudiment */
 //#define VEEAMSNAP_COMPATIBILITY_BTRFS     0x0000000000000002ull /* rudiment */
 #define VEEAMSNAP_COMPATIBILITY_MULTIDEV  0x0000000000000004ull
-//multidev
 
 struct ioctl_compatibility_flags_s {
     unsigned long long flags;

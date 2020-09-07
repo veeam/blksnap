@@ -37,19 +37,6 @@ static __inline sector_t blk_dev_get_start_sect( struct block_device* blk_dev )
     return blk_dev->bd_part->start_sect;
 };
 
-static __inline size_t blk_dev_get_block_size( struct block_device* blk_dev ){
-    return (size_t)block_size( blk_dev );
-}
-
-static __inline void blk_bio_end( struct bio *bio, int err )
-{
-    if (err == SUCCESS)
-        bio->bi_status = BLK_STS_OK;
-    else
-        bio->bi_status = BLK_STS_IOERR;
-
-    bio_endio( bio );
-}
 
 #define bio_vec_page(bv)    bv.bv_page
 #define bio_vec_offset(bv)  bv.bv_offset

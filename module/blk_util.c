@@ -59,7 +59,7 @@ int _blk_dev_get_info( struct block_device* blk_dev, blk_dev_info_t* pdev_info )
     pdev_info->io_min = blk_dev->bd_queue->limits.io_min;
 #endif
 
-    pdev_info->blk_size = blk_dev_get_block_size( blk_dev );
+    pdev_info->blk_size = block_size( blk_dev );
     pdev_info->start_sect = SectorStart;
     pdev_info->count_sect = SectorsCapacity;
     return SUCCESS;

@@ -1,3 +1,6 @@
+#include <linux/init.h>
+#include <linux/module.h>
+
 #include "stdafx.h"
 #include "version.h"
 #include "blk-snap-ctl.h"

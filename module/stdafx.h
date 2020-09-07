@@ -1,9 +1,7 @@
 #ifndef STDAFX_H_
 #define STDAFX_H_
 
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/version.h>
+#include <linux/version.h> /*rudiment - needed for using KERNEL_VERSION */
 
 #include <linux/fs.h>
 #include <linux/types.h>

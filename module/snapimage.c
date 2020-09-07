@@ -395,9 +395,12 @@ int snapimage_processor_thread( void *data )
 
 static inline void _snapimage_bio_complete( struct bio* bio, int err )
 {
-    blk_bio_end( bio, err );
+    if (err == SUCCESS)
+        bio->bi_status = BLK_STS_OK;
+    else
+        bio->bi_status = BLK_STS_IOERR;
 
-    //bio_put( bio );
+    bio_endio( bio );
 }
 
 void _snapimage_bio_complete_cb( void* complete_param, struct bio* bio, int err )

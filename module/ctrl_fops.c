@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 #include <linux/sysfs.h>
@@ -82,7 +83,8 @@ int ctrl_open(struct inode *inode, struct file *fl)
 {
     fl->f_pos = 0;
 
-    try_module_get( THIS_MODULE );
+    if(false == try_module_get( THIS_MODULE ))
+        return -EINVAL;
 
     fl->private_data = (void*)ctrl_pipe_get_resource( ctrl_pipe_new( ) );
     if (fl->private_data == NULL){
@@ -122,8 +124,6 @@ int ioctl_compatibility_flags( unsigned long arg )
     struct ioctl_compatibility_flags_s param;
 
     logging_renew_check( );
-
-    //log_tr( "Get compatibility flags" );
 
     param.flags = 0;
     param.flags |= VEEAMSNAP_COMPATIBILITY_SNAPSTORE;
