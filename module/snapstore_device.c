@@ -536,10 +536,10 @@ bool snapstore_device_is_corrupted( snapstore_device_t* snapstore_device )
 
 void snapstore_device_set_corrupted( snapstore_device_t* snapstore_device, int err_code )
 {
-    if (!snapstore_device->corrupted){
+    if (!snapstore_device->corrupted) {
         atomic_set( &snapstore_device->req_failed_cnt, 0 );
         snapstore_device->corrupted = true;
-        snapstore_device->err_code = err_code;
+        snapstore_device->err_code = abs(err_code);
 
         log_err_dev_t( "Set snapshot device is corrupted for ", snapstore_device->dev_id );
     }
