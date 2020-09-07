@@ -15,3 +15,6 @@ target_link_libraries(create_snapstore BlkSnapLib)
 
 add_executable(create_inmemory_snapstore create_inmemory_snapstore.cpp)
 target_link_libraries(create_inmemory_snapstore BlkSnapLib)
+
+add_executable(get_tracking_block_size get_tracking_block_size.cpp)
+target_link_libraries(get_tracking_block_size BlkSnapLib)

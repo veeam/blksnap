@@ -23,6 +23,7 @@ int snap_store_ctx_free(struct snap_store_ctx* ctx);
 int snap_add_to_tracking(struct snap_ctx* ctx, dev_t dev);
 int snap_remove_from_tracking(struct snap_ctx* ctx, dev_t dev);
 int snap_get_tracking(struct snap_ctx* ctx, struct cbt_info_s* cbtInfos, unsigned int* count);
+unsigned int snap_get_tracking_block_size(struct snap_ctx* ctx);
 int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int length, unsigned char* buffer);
 
 struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,

@@ -34,8 +34,8 @@ int snap_ctx_create(struct snap_ctx** ctx)
     if (*ctx == NULL)
         return -1;
 
-    (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
-//    (*ctx)->fd = open( "/dev/veeamsnap", O_RDWR );
+//    (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
+    (*ctx)->fd = open( "/dev/veeamsnap", O_RDWR );
     if ((*ctx)->fd == -1)
     {
         error = errno;
@@ -99,6 +99,16 @@ int snap_get_tracking(struct snap_ctx* ctx, struct cbt_info_s* cbtInfos, unsigne
 
     *count = get.count;
     return 0;
+}
+
+unsigned int snap_get_tracking_block_size(struct snap_ctx* ctx)
+{
+    unsigned int block_size = 0;
+
+    if (ioctl(ctx->fd, IOCTL_TRACKING_BLOCK_SIZE, &block_size ))
+        return 0;
+
+    return block_size;
 }
 
 int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int length, unsigned char* buffer)
