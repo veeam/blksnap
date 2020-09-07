@@ -21,3 +21,6 @@ target_link_libraries(get_tracking_block_size BlkSnapLib)
 
 add_executable(destroy_snapshot destroy_snapshot.cpp)
 target_link_libraries(destroy_snapshot BlkSnapLib)
+
+add_executable(snapshot_get_errno snapshot_get_errno.cpp)
+target_link_libraries(snapshot_get_errno BlkSnapLib)

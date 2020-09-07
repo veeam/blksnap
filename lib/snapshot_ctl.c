@@ -184,3 +184,16 @@ int snap_destroy_snapshot(struct snap_ctx* ctx, unsigned long long snapshot_id)
 {
     return ioctl(ctx->fd, IOCTL_SNAPSHOT_DESTROY, &snapshot_id );
 }
+
+int snap_snapshot_get_errno(struct snap_ctx* ctx, struct ioctl_dev_id_s devId)
+{
+    struct ioctl_snapshot_errno_s param;
+    param.dev_id.major = devId.major;
+    param.dev_id.minor = devId.minor;
+    param.err_code = 0;
+
+    if (ioctl(ctx->fd, IOCTL_SNAPSHOT_ERRNO, &param))
+        return -1;
+
+    return param.err_code;
+}

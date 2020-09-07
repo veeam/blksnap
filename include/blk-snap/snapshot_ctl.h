@@ -40,6 +40,8 @@ unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
 int snap_destroy_snapshot(struct snap_ctx* ctx,
                           unsigned long long snapshot_id);
 
+int snap_snapshot_get_errno(struct snap_ctx* ctx, struct ioctl_dev_id_s devId);
+
 #ifdef  __cplusplus
 }
 #endif
