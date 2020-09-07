@@ -6,6 +6,8 @@
 #define SECTION "blk       "
 #include "log_format.h"
 
+#define bio_vec_sectors(bv) (bv.bv_len >> SECTOR_SHIFT)
+
 struct bio_set g_BlkRedirectBioset = { 0 };
 
 int blk_redirect_bioset_create( void )
@@ -30,7 +32,6 @@ void blk_redirect_bio_endio( struct bio *bb )
 
         if (err != SUCCESS){
             log_err_d( "Failed to process redirect IO request. errno=", 0 - err );
-            //log_err_sect( "offset=", bio_bi_sector( bb ) );
 
             if (rq_endio->err == SUCCESS)
                 rq_endio->err = err;
@@ -136,11 +137,6 @@ int _blk_dev_redirect_part_fast( blk_redirect_bio_endio_t* rq_endio, int directi
             bvec_sectors = rq_count - processed_sectors;
 
         if (bvec_sectors == 0){
-            //log_tr( "bvec_sectors ZERO!" );
-            //log_tr_sect( "bio_vec_sectors=", bio_vec_sectors( bvec ) );
-            //log_tr_sect( "bvec_ofs=", bvec_ofs );
-            //log_tr_sect( "rq_count=", rq_count );
-            //log_tr_sect( "processed_sectors=", processed_sectors );
             res = -EIO;
             goto __fail_out;
         }
@@ -161,11 +157,11 @@ __reprocess_bv:
             if (direction == WRITE)
                 bio_set_op_attrs( new_bio, REQ_OP_WRITE, 0 );
 
-            bio_bi_sector( new_bio ) = target_pos + processed_sectors;// +bvec_ofs;
+            new_bio->bi_iter.bi_sector = target_pos + processed_sectors;
         }
 
-        if (0 == bio_add_page( new_bio, bio_vec_page( bvec ), sector_to_uint( bvec_sectors ), bio_vec_offset( bvec ) + sector_to_uint( bvec_ofs ) )){
-            if (bio_bi_size( new_bio ) == 0){
+        if (0 == bio_add_page( new_bio, bvec.bv_page, sector_to_uint( bvec_sectors ), bvec.bv_offset + sector_to_uint( bvec_ofs ) )){
+            if (bio_sectors( new_bio ) == 0){
                 res = -EIO;
                 goto __fail_out;
             }
@@ -278,17 +274,17 @@ int blk_dev_redirect_memcpy_part( blk_redirect_bio_endio_t* rq_endio, int direct
             bvec_sectors = rq_count - processed_sectors;
 
         {
-            void* mem = kmap_atomic( bio_vec_page( bvec ) );
+            void* mem = kmap_atomic( bvec.bv_page );
             if (direction == READ){
                 memcpy(
-                    mem + bio_vec_offset( bvec ) + sector_to_uint( bvec_ofs ),
+                    mem + bvec.bv_offset + sector_to_uint( bvec_ofs ),
                     buff + sector_to_uint( processed_sectors ),
                     sector_to_uint( bvec_sectors ) );
             }
             else{
                 memcpy(
                     buff + sector_to_uint( processed_sectors ),
-                    mem + bio_vec_offset( bvec ) + sector_to_uint( bvec_ofs ),
+                    mem + bvec.bv_offset + sector_to_uint( bvec_ofs ),
                     sector_to_uint( bvec_sectors ) );
             }
             kunmap_atomic( mem );
@@ -332,9 +328,9 @@ int blk_dev_redirect_zeroed_part( blk_redirect_bio_endio_t* rq_endio, sector_t r
             bvec_sectors = rq_count - processed_sectors;
 
         {
-            void* mem = kmap_atomic( bio_vec_page( bvec ) );
+            void* mem = kmap_atomic( bvec.bv_page );
 
-            memset( mem + bio_vec_offset( bvec ) + sector_to_uint( bvec_ofs ), 0, sector_to_uint( bvec_sectors ) );
+            memset( mem + bvec.bv_offset + sector_to_uint( bvec_ofs ), 0, sector_to_uint( bvec_sectors ) );
 
             kunmap_atomic( mem );
         }

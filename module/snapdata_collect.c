@@ -342,7 +342,7 @@ void snapdata_collect_Process( snapdata_collector_t* collector, struct bio *bio 
     if (unlikely(collector->fail_code != SUCCESS))
         return;
 
-    ofs = bio_bi_sector( bio ) - blk_dev_get_start_sect( collector->device );
+    ofs = bio->bi_iter.bi_sector;
     size = bio_sectors( bio );
 
     {

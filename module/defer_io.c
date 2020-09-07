@@ -41,8 +41,8 @@ void _defer_io_finish( defer_io_t* defer_io, queue_sl_t* queue_in_progress )
             cbt_locked = tracker_cbt_bitmap_lock( tracker );
             if (cbt_locked)
             {
-                sectCount = sector_from_size(bio_bi_size(orig_req->bio));
-                tracker_cbt_bitmap_set(tracker, bio_bi_sector(orig_req->bio), sectCount);
+                sectCount = bio_sectors(orig_req->bio);
+                tracker_cbt_bitmap_set(tracker, orig_req->bio->bi_iter.bi_sector, sectCount);
             }
         }
 
@@ -81,8 +81,8 @@ int _defer_io_copy_prepare( defer_io_t* defer_io, queue_sl_t* queue_in_process, 
             if (bio_data_dir( dio_orig_req->bio ) && bio_has_data( dio_orig_req->bio )) {
                 range_t copy_range;
 
-                copy_range.ofs = bio_bi_sector(dio_orig_req->bio);
-                copy_range.cnt = sector_from_size(bio_bi_size(dio_orig_req->bio));
+                copy_range.ofs = dio_orig_req->bio->bi_iter.bi_sector;
+                copy_range.cnt = bio_sectors(dio_orig_req->bio);
                 res = snapstore_device_prepare_requests(defer_io->snapstore_device, &copy_range, dio_copy_req);
                 if (res != SUCCESS){
                     log_err_d( "Unable to execute Copy On Write algorithm: failed to add ranges to copy to snapstore request. errno=", res );
@@ -319,7 +319,7 @@ int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
     if (dio_orig_req == NULL)
         return -ENOMEM;
    
-    sectCount = sector_from_size(bio_bi_size(bio));
+    sectCount = bio_sectors(bio);
 
     bio_get(dio_orig_req->bio = bio);
 

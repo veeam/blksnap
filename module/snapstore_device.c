@@ -319,8 +319,8 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
     if (snapstore_device_is_corrupted( snapstore_device ))
         return -ENODATA;
 
-    rq_range.cnt = sector_from_size( bio_bi_size( rq_endio->bio ) );
-    rq_range.ofs = bio_bi_sector( rq_endio->bio );
+    rq_range.cnt = bio_sectors(rq_endio->bio);
+    rq_range.ofs = rq_endio->bio->bi_iter.bi_sector;
 
     if (!bio_has_data( rq_endio->bio )){
         log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_endio->bio->bi_flags );
@@ -451,8 +451,8 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
     if (snapstore_device_is_corrupted( snapstore_device ))
         return -ENODATA;
 
-    rq_range.cnt = sector_from_size( bio_bi_size( rq_endio->bio ) );
-    rq_range.ofs = bio_bi_sector( rq_endio->bio );
+    rq_range.cnt = bio_sectors(rq_endio->bio);
+    rq_range.ofs = rq_endio->bio->bi_iter.bi_sector;
 
     if (!bio_has_data( rq_endio->bio )){
         log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_endio->bio->bi_flags );

@@ -287,8 +287,8 @@ int _snapimage_request_write( snapimage_t * image, blk_redirect_bio_endio_t* rq_
 
 
     if (cbt_map != NULL){
-        sector_t ofs = bio_bi_sector( rq_endio->bio );
-        sector_t cnt = sector_from_size( bio_bi_size( rq_endio->bio ) );
+        sector_t ofs = rq_endio->bio->bi_iter.bi_sector;
+        sector_t cnt = bio_sectors(rq_endio->bio);
 
         res = cbt_map_set_both( cbt_map, ofs, cnt );
         if (res != SUCCESS){
@@ -315,8 +315,8 @@ void _snapimage_processing( snapimage_t * image )
     rq_endio = (blk_redirect_bio_endio_t*)queue_sl_get_first( &image->rq_proc_queue );
 
     if (bio_data_dir( rq_endio->bio ) == READ){
-        image->last_read_sector = bio_bi_sector( rq_endio->bio );
-        image->last_read_size =  sector_from_uint( bio_bi_size( rq_endio->bio ) );
+        image->last_read_sector = rq_endio->bio->bi_iter.bi_sector;
+        image->last_read_size =  bio_sectors(rq_endio->bio);
 
         res = _snapimage_request_read( image->defer_io, rq_endio );
         if (res != SUCCESS){
@@ -324,8 +324,8 @@ void _snapimage_processing( snapimage_t * image )
         }
     }
     else{
-        image->last_write_sector = bio_bi_sector( rq_endio->bio );
-        image->last_write_size = sector_from_uint( bio_bi_size( rq_endio->bio ) );
+        image->last_write_sector = rq_endio->bio->bi_iter.bi_sector;
+        image->last_write_size = bio_sectors(rq_endio->bio);
 
         res = _snapimage_request_write( image, rq_endio );
         if (res != SUCCESS){

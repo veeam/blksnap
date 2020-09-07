@@ -212,7 +212,7 @@ sector_t _blk_deferred_submit_pages(
     else
         bio_set_op_attrs( bio, REQ_OP_WRITE, 0 );
 
-    bio_bi_sector( bio ) = ofs_sector;
+    bio->bi_iter.bi_sector = ofs_sector;
 
     {//add first
         struct page* page;
@@ -222,7 +222,6 @@ sector_t _blk_deferred_submit_pages(
         BUG_ON( (page_inx > arr->pg_cnt) );
         page = arr->pg[page_inx].page;
         if (0 == bio_add_page( bio, page, sector_to_uint( bvec_len_sect ), sector_to_uint( unordered ) )){
-            //log_err_d( "bvec full! bi_size=", bio_bi_size( bio ) );
             bio_put( bio );
             return 0;
         }

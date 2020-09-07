@@ -94,16 +94,15 @@ int _dev_direct_submit_pages(
     else
         bio_set_op_attrs( bb, REQ_OP_WRITE, 0 );
 
-    bio_bi_sector( bb ) = ofs_sector;
+    bb->bi_iter.bi_sector = ofs_sector;
 
     {
         sector_t unordered = arr_ofs & ((PAGE_SIZE / SECTOR_SIZE) - 1);
         sector_t bvec_len_sect = min_t( sector_t, ((PAGE_SIZE / SECTOR_SIZE) - unordered), size_sector );
 
-        if (0 == bio_add_page( bb, arr->pg[page_inx].page, sector_to_uint( bvec_len_sect ), sector_to_uint( unordered ) )){
-            //log_err_d( "bvec full! bi_size=", bio_bi_size( bb ) );
+        if (0 == bio_add_page( bb, arr->pg[page_inx].page, sector_to_uint( bvec_len_sect ), sector_to_uint( unordered ) ))
             goto blk_dev_direct_submit_pages_label_failed;
-        }
+
         ++page_inx;
         process_sect += bvec_len_sect;
     }
@@ -186,7 +185,7 @@ int blk_direct_submit_page( struct block_device* blkdev, int direction, sector_t
         return -EINVAL;
     }
 
-    bio_bi_sector( bb ) = ofs_sect;
+    bb->bi_iter.bi_sector = ofs_sect;
 
     BUG_ON(pg == NULL);
     if (0 != bio_add_page( bb, pg, PAGE_SIZE, 0 )){

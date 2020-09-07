@@ -143,9 +143,8 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
     do{
         struct super_block* superblock = NULL;
 
-        log_tr_format( "Create tracker for device [%d:%d]. Start 0x%llx sector, capacity 0x%llx sectors",
-            MAJOR( tracker->original_dev_id ), MINOR( tracker->original_dev_id ), 
-            (unsigned long long)blk_dev_get_start_sect( tracker->target_dev ),
+        log_tr_format( "Create tracker for device [%d:%d]. Capacity 0x%llx sectors",
+            MAJOR( tracker->original_dev_id ), MINOR( tracker->original_dev_id ),
             (unsigned long long)blk_dev_get_capacity(tracker->target_dev));
 
 

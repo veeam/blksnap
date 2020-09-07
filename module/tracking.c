@@ -59,8 +59,8 @@ bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
                     cbt_locked = tracker_cbt_bitmap_lock(tracker);
                     if (cbt_locked)
                     {
-                        sector_t sectStart = bio_bi_sector(bio);
-                        sector_t sectCount = sector_from_size(bio_bi_size(bio));
+                        sector_t sectStart = bio->bi_iter.bi_sector;
+                        sector_t sectCount = bio_sectors(bio);
                         tracker_cbt_bitmap_set(tracker, sectStart, sectCount);
                     }
                 }
