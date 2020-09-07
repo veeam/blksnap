@@ -27,8 +27,8 @@
 #include <linux/blk-filter.h>
 #define VEEAMSNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
 
-#include <linux/reboot.h>       //use old methon
-//#include <linux/syscore_ops.h>    //more modern method
+//#include <linux/reboot.h>       //use old methon
+#include <linux/syscore_ops.h>    //more modern method
 
 
 static int g_param_zerosnapdata = 0;        /*rudiment */
@@ -127,26 +127,8 @@ static struct file_operations ctrl_fops = {
     .unlocked_ioctl = ctrl_unlocked_ioctl
 };
 
-static inline void show_distrib(const char* distrib_name)
-{
-    log_tr_format("Compile for distributive: %s", distrib_name);
-}
 
-static inline void show_distrib_version(const char* distrib_name)
-{
-#if defined(DISTRIB_VERSION_1) && defined(DISTRIB_VERSION_2)
-    log_tr_format("Compile for distributive: %s %d.%d", distrib_name, DISTRIB_VERSION_1, DISTRIB_VERSION_2);
-#else
-#if defined(DISTRIB_VERSION_1)
-    log_tr_format("Compile for distributive: %s %d", distrib_name, DISTRIB_VERSION_1);
-#else
-    show_distrib(distrib_name);
-#endif
-#endif
-}
-
-
-static void _cbt_syscore_shutdown(void)
+static void blk_snap_syscore_shutdown(void)
 {
     //stop logging thread. In this time it is not needed
     logging_done();
@@ -158,49 +140,16 @@ static void _cbt_syscore_shutdown(void)
     }
 }
 
-#ifdef _LINUX_SYSCORE_OPS_H
-
-
-struct syscore_ops _cbt_syscore_ops = {
-    .suspend = NULL/*_cbt_syscore_suspend*/,
-    .resume = NULL/*_cbt_syscore_resume*/,
-    .shutdown = _cbt_syscore_shutdown,
+struct syscore_ops blk_snap_syscore_ops = {
+    .node = {0},
+    .suspend = NULL,
+    .resume = NULL,
+    .shutdown = blk_snap_syscore_shutdown,
 };
-#endif
-
-#ifdef _LINUX_REBOOT_H
-static int veeamsnap_shutdown_notify(struct notifier_block *nb, unsigned long type, void *p)
-{
-    logging_mode_sys(); //switch logger to system log
-
-    switch (type) {
-    case SYS_HALT:
-        log_tr("system halt");
-        break;
-    case SYS_POWER_OFF:
-        log_tr("system power off");
-        break;
-    case SYS_DOWN:
-    default:
-        log_tr("system down");
-        break;
-    }
-    logging_flush();
-
-    _cbt_syscore_shutdown();
-
-    return NOTIFY_DONE;
-}
-
-static struct notifier_block _veeamsnap_shutdown_nb = {
-    .notifier_call = veeamsnap_shutdown_notify,
-};
-#endif
 
 
 int __init veeamsnap_init(void)
 {
-    //int conteiner_cnt = 0;
     int result = SUCCESS;
 
     logging_init( g_logdir, g_param_logmaxsize );
@@ -239,17 +188,7 @@ int __init veeamsnap_init(void)
     do{
         log_tr("Registering reboot notification");
 
-#ifdef _LINUX_REBOOT_H
-        result = register_reboot_notifier(&_veeamsnap_shutdown_nb); //always return SUCCESS
-        if (result != SUCCESS){
-            log_err_d("Failed to register reboot notification. Error code ", result);
-            break;
-        }
-#endif
-#ifdef _LINUX_SYSCORE_OPS_H
-        register_syscore_ops(&_cbt_syscore_ops);
-#endif
-
+        register_syscore_ops(&blk_snap_syscore_ops);
 
         veeamsnap_major = register_chrdev(0, MODULE_NAME, &ctrl_fops);
         if (veeamsnap_major < 0) {
@@ -319,13 +258,8 @@ void __exit veeamsnap_exit(void)
 
 
     log_tr("Unregistering reboot notification");
-#ifdef _LINUX_SYSCORE_OPS_H
-    unregister_syscore_ops(&_cbt_syscore_ops);
-#endif
 
-#ifdef _LINUX_REBOOT_H
-    unregister_reboot_notifier(&_veeamsnap_shutdown_nb);
-#endif
+    unregister_syscore_ops(&blk_snap_syscore_ops);
 
     ctrl_sysfs_done(&veeamsnap_device);
 

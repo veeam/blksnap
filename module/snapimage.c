@@ -22,6 +22,8 @@ static inline unsigned long int do_div_inline( unsigned long long int division, 
 #define SECTION "snapimage "
 #include "log_format.h"
 
+#define SNAPIMAGE_MAX_DEVICES 2048
+
 static int g_snapimage_major = 0;
 static unsigned long* g_snapimage_minors;
 static DEFINE_SPINLOCK(g_snapimage_minors_lock);
@@ -416,7 +418,6 @@ void _snapimage_bio_complete_cb( void* complete_param, struct bio* bio, int err 
 
 int _snapimage_throttling( defer_io_t* defer_io )
 {
-    //wait_event_interruptible_timeout( defer_io->queue_throttle_waiter, (0 == atomic_read( &defer_io->queue_filling_count )), VEEAMIMAGE_THROTTLE_TIMEOUT );
     return wait_event_interruptible( defer_io->queue_throttle_waiter, queue_sl_empty( defer_io->dio_queue ) );
 }
 

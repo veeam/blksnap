@@ -219,9 +219,9 @@ size_t page_count_calc( size_t buffer_size )
 
 size_t page_count_calc_sectors( sector_t range_start_sect, sector_t range_cnt_sect )
 {
-    size_t page_count = range_cnt_sect / SECTORS_IN_PAGE;
+    size_t page_count = range_cnt_sect / (PAGE_SIZE / SECTOR_SIZE);
 
-    if (unlikely( range_cnt_sect & (SECTORS_IN_PAGE - 1) ))
+    if (unlikely( range_cnt_sect & ((PAGE_SIZE / SECTOR_SIZE) - 1) ))
         page_count += 1;
     return page_count;
 }

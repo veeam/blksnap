@@ -7,16 +7,15 @@
 #include "log_format.h"
 
 struct bio_set g_BlkRedirectBioset = { 0 };
-#define BlkRedirectBioset &g_BlkRedirectBioset
 
 int blk_redirect_bioset_create( void )
 {
-    return bioset_init(BlkRedirectBioset, 64, 0, BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
+    return bioset_init(&g_BlkRedirectBioset, 64, 0, BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
 }
 
 void blk_redirect_bioset_free( void )
 {
-    bioset_exit(BlkRedirectBioset);
+    bioset_exit(&g_BlkRedirectBioset);
 }
 
 void blk_redirect_bio_endio( struct bio *bb )
@@ -46,7 +45,7 @@ void blk_redirect_bio_endio( struct bio *bb )
 
 struct bio* _blk_dev_redirect_bio_alloc( int nr_iovecs, void* bi_private )
 {
-    struct bio* new_bio = bio_alloc_bioset( GFP_NOIO, nr_iovecs, BlkRedirectBioset );
+    struct bio* new_bio = bio_alloc_bioset( GFP_NOIO, nr_iovecs, &g_BlkRedirectBioset );
     if (new_bio){
         new_bio->bi_end_io = blk_redirect_bio_endio;
         new_bio->bi_private = bi_private;
@@ -112,12 +111,7 @@ int _blk_dev_redirect_part_fast( blk_redirect_bio_endio_t* rq_endio, int directi
 
     {
         struct request_queue *q = bdev_get_queue( blk_dev );
-#ifdef BIO_MAX_SECTORS
-        max_sect = BIO_MAX_SECTORS;
-#else
-        max_sect = BIO_MAX_PAGES << (PAGE_SHIFT - SECTOR_SHIFT);
-#endif
-        max_sect = min( max_sect, q->limits.max_sectors );
+        max_sect = min( (unsigned int)(BIO_MAX_PAGES << (PAGE_SHIFT - SECTOR_SHIFT)), q->limits.max_sectors );
     }
 
     nr_iovecs = max_sect >> (PAGE_SHIFT - SECTOR_SHIFT);
@@ -158,11 +152,8 @@ __reprocess_bv:
                 res = -ENOMEM;
                 goto __fail_out;
             }
-#ifdef bio_set_dev
+
             bio_set_dev(new_bio, blk_dev);
-#else
-            new_bio->bi_bdev = blk_dev;
-#endif
 
             if (direction == READ)
                 bio_set_op_attrs( new_bio, REQ_OP_READ, 0 );

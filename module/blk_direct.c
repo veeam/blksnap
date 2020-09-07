@@ -65,19 +65,14 @@ int _dev_direct_submit_pages(
     blk_direct_bio_complete_t* bio_compl = NULL;
     struct bio *bb = NULL;
     int nr_iovecs;
-    int page_inx = arr_ofs / SECTORS_IN_PAGE;
+    int page_inx = arr_ofs / (PAGE_SIZE / SECTOR_SIZE);
     sector_t process_sect = 0;
 
     {
         struct request_queue *q = bdev_get_queue( blkdev );
         size_sector = min_t( sector_t, size_sector, q->limits.max_sectors );
 
-#ifdef BIO_MAX_SECTORS
-        size_sector = min_t( sector_t, size_sector, BIO_MAX_SECTORS );
-#else
         size_sector = min_t( sector_t, size_sector, (BIO_MAX_PAGES << (PAGE_SHIFT - SECTOR_SHIFT)) );
-#endif
-
     }
 
     nr_iovecs = page_count_calc_sectors( ofs_sector, size_sector );
@@ -92,11 +87,7 @@ int _dev_direct_submit_pages(
     }
     bio_compl = (blk_direct_bio_complete_t*)bb->bi_private;
 
-#ifdef bio_set_dev
     bio_set_dev(bb, blkdev);
-#else
-    bb->bi_bdev = blkdev;
-#endif
 
     if (direction == READ)
         bio_set_op_attrs( bb, REQ_OP_READ, 0 );
@@ -106,8 +97,8 @@ int _dev_direct_submit_pages(
     bio_bi_sector( bb ) = ofs_sector;
 
     {
-        sector_t unordered = arr_ofs & (SECTORS_IN_PAGE - 1);
-        sector_t bvec_len_sect = min_t( sector_t, (SECTORS_IN_PAGE - unordered), size_sector );
+        sector_t unordered = arr_ofs & ((PAGE_SIZE / SECTOR_SIZE) - 1);
+        sector_t bvec_len_sect = min_t( sector_t, ((PAGE_SIZE / SECTOR_SIZE) - unordered), size_sector );
 
         if (0 == bio_add_page( bb, arr->pg[page_inx].page, sector_to_uint( bvec_len_sect ), sector_to_uint( unordered ) )){
             //log_err_d( "bvec full! bi_size=", bio_bi_size( bb ) );
@@ -118,7 +109,7 @@ int _dev_direct_submit_pages(
     }
     while ((process_sect < size_sector) && (page_inx < arr->pg_cnt))
     {
-        sector_t bvec_len_sect = min_t( sector_t, SECTORS_IN_PAGE, (size_sector - process_sect) );
+        sector_t bvec_len_sect = min_t( sector_t, (PAGE_SIZE / SECTOR_SIZE), (size_sector - process_sect) );
 
         if (0 == bio_add_page( bb, arr->pg[page_inx].page, sector_to_uint( bvec_len_sect ), 0 )){
             break;
@@ -179,11 +170,8 @@ int blk_direct_submit_page( struct block_device* blkdev, int direction, sector_t
     bio_compl = (blk_direct_bio_complete_t*)bb->bi_private;
 
     BUG_ON(blkdev == NULL);
-#ifdef bio_set_dev
+
     bio_set_dev(bb, blkdev);
-#else
-    bb->bi_bdev = blkdev;
-#endif
 
     if (direction == READ)
         bio_set_op_attrs( bb, REQ_OP_READ, 0 );

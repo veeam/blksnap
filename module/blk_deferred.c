@@ -91,9 +91,7 @@ blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_des
     if (dio == NULL)
         return NULL;
 
-#ifdef BLK_DEFER_LIST
     INIT_LIST_HEAD( &dio->link );
-#endif
 
     dio->blk_descr = blk_descr;
     dio->blk_index = block_index;
@@ -102,7 +100,7 @@ blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_des
     dio->sect.cnt = snapstore_block_size();
 
     do{
-        int page_count = snapstore_block_size() / SECTORS_IN_PAGE;
+        int page_count = snapstore_block_size() / (PAGE_SIZE / SECTOR_SIZE);
 
         dio->buff = page_array_alloc( page_count, GFP_NOIO );
         if (dio->buff == NULL)
@@ -200,19 +198,14 @@ sector_t _blk_deferred_submit_pages(
     while (NULL == (bio = _blk_deferred_bio_alloc( nr_iovecs ))){
         //log_tr_d( "Failed to allocate bio for defer IO. nr_iovecs=", nr_iovecs );
 
-        size_sector = (size_sector >> 1) & ~(SECTORS_IN_PAGE - 1);
+        size_sector = (size_sector >> 1) & ~((PAGE_SIZE / SECTOR_SIZE) - 1);
         if (size_sector == 0){
             return 0;
         }
         nr_iovecs = page_count_calc_sectors( ofs_sector, size_sector );
     }
 
-#ifdef bio_set_dev
     bio_set_dev(bio, blk_dev);
-#else
-    bio->bi_bdev = blk_dev;
-#endif
-
 
     if (direction == READ)
         bio_set_op_attrs( bio, REQ_OP_READ, 0 );
@@ -223,8 +216,8 @@ sector_t _blk_deferred_submit_pages(
 
     {//add first
         struct page* page;
-        sector_t unordered = arr_ofs & (SECTORS_IN_PAGE - 1);
-        sector_t bvec_len_sect = min_t( sector_t, (SECTORS_IN_PAGE - unordered), size_sector );
+        sector_t unordered = arr_ofs & ((PAGE_SIZE / SECTOR_SIZE) - 1);
+        sector_t bvec_len_sect = min_t( sector_t, ((PAGE_SIZE / SECTOR_SIZE) - unordered), size_sector );
 
         BUG_ON( (page_inx > arr->pg_cnt) );
         page = arr->pg[page_inx].page;
@@ -240,7 +233,7 @@ sector_t _blk_deferred_submit_pages(
     while ((process_sect < size_sector) && (page_inx < arr->pg_cnt))
     {
         struct page* page;
-        sector_t bvec_len_sect = min_t( sector_t, SECTORS_IN_PAGE, (size_sector - process_sect) );
+        sector_t bvec_len_sect = min_t( sector_t, (PAGE_SIZE / SECTOR_SIZE), (size_sector - process_sect) );
 
         BUG_ON( (page_inx > arr->pg_cnt));
         page = arr->pg[page_inx].page;
@@ -302,11 +295,7 @@ blk_deferred_request_t* blk_deferred_request_new( void )
     if (dio_req == NULL)
         return NULL;
 
-#ifdef BLK_DEFER_LIST
     INIT_LIST_HEAD( &dio_req->dios );
-#else
-    dio_req->dios_cnt = 0;
-#endif
 
     dio_req->result = SUCCESS;
     atomic64_set( &dio_req->sect_processed, 0 );
@@ -316,7 +305,6 @@ blk_deferred_request_t* blk_deferred_request_new( void )
     return dio_req;
 }
 
-#ifdef BLK_DEFER_LIST
 bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, blk_descr_array_index_t block_index )
 {
     bool result = false;
@@ -333,23 +321,7 @@ bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, blk_de
     }
     return result;
 }
-#else //BLK_DEFER_LIST
-bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, blk_descr_array_index_t block_index )
-{
-    int dios_index;
-    for (dios_index = 0; dios_index < dio_req->dios_cnt; ++dios_index){
-        blk_deferred_t* dio = dio_req->dios[dios_index];
 
-        if (dio->blk_index == block_index){
-            return true;
-        }
-    }
-    return false;
-}
-#endif//BLK_DEFER_LIST
-
-
-#ifdef BLK_DEFER_LIST
 int blk_deferred_request_add( blk_deferred_request_t* dio_req, blk_deferred_t* dio )
 {
     list_add_tail( &dio->link, &dio_req->dios );
@@ -357,22 +329,7 @@ int blk_deferred_request_add( blk_deferred_request_t* dio_req, blk_deferred_t* d
 
     return SUCCESS;
 }
-#else //BLK_DEFER_LIST
-int blk_deferred_request_add( blk_deferred_request_t* dio_req, blk_deferred_t* dio )
-{
-    if (dio_req->dios_cnt < DEFER_IO_DIO_REQUEST_LENGTH){
-        dio_req->dios[dio_req->dios_cnt] = dio;
-        ++dio_req->dios_cnt;
 
-        dio_req->sect_len += dio->sect.cnt;
-        return SUCCESS;
-    }
-    return -ENODATA;
-}
-#endif //BLK_DEFER_LIST
-
-
-#ifdef BLK_DEFER_LIST
 void blk_deferred_request_free( blk_deferred_request_t* dio_req )
 {
     if (dio_req != NULL){
@@ -386,22 +343,6 @@ void blk_deferred_request_free( blk_deferred_request_t* dio_req )
         kfree( dio_req );
     }
 }
-#else //BLK_DEFER_LIST
-void blk_deferred_request_free( blk_deferred_request_t* dio_req )
-{
-    if (dio_req != NULL){
-        int inx = 0;
-
-        for (inx = 0; inx < dio_req->dios_cnt; ++inx){
-            if (dio_req->dios[inx]){
-                blk_deferred_free( dio_req->dios[inx] );
-                dio_req->dios[inx] = NULL;
-            }
-        }
-        kfree( dio_req );
-    }
-}
-#endif //BLK_DEFER_LIST
 
 void blk_deferred_request_waiting_skip( blk_deferred_request_t* dio_req )
 {
@@ -437,22 +378,13 @@ int blk_deferred_request_wait( blk_deferred_request_t* dio_req )
 int blk_deferred_request_read_original( struct block_device* original_blk_dev, blk_deferred_request_t* dio_copy_req )
 {
     int res = -ENODATA;
-#ifndef BLK_DEFER_LIST
-    int dio_inx = 0;
-#endif
 
     blk_deferred_request_waiting_skip( dio_copy_req );
 
-#ifdef BLK_DEFER_LIST
     if (!list_empty( &dio_copy_req->dios )){
         struct list_head* _list_head;
         list_for_each( _list_head, &dio_copy_req->dios ){
             blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
-#else
-    for (dio_inx = 0; dio_inx < dio_copy_req->dios_cnt; ++dio_inx){
-        blk_deferred_t* dio = dio_copy_req->dios[dio_inx];
-        {
-#endif
 
             sector_t page_array_ofs = 0;
             sector_t ofs = dio->sect.ofs;
@@ -479,23 +411,13 @@ int blk_deferred_request_read_original( struct block_device* original_blk_dev, b
 int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_request_t* dio_copy_req )
 {
     int res = SUCCESS;
-#ifndef BLK_DEFER_LIST
-    int dio_inx = 0;
-#endif
 
     blk_deferred_request_waiting_skip( dio_copy_req );
 
-#ifdef BLK_DEFER_LIST
     if (!list_empty( &dio_copy_req->dios )){
         struct list_head* _list_head;
         list_for_each( _list_head, &dio_copy_req->dios ){
             blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
-#else
-    for (dio_inx = 0; dio_inx < dio_copy_req->dios_cnt; ++dio_inx)
-    {
-        blk_deferred_t* dio = dio_copy_req->dios[dio_inx];
-        {
-#endif
 
             range_t* rg;
             sector_t page_array_ofs = 0;
@@ -539,23 +461,13 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 {
     int res = SUCCESS;
-#ifndef BLK_DEFER_LIST
-    int dio_inx = 0;
-#endif
 
     blk_deferred_request_waiting_skip( dio_copy_req );
 
-#ifdef BLK_DEFER_LIST
     if (!list_empty( &dio_copy_req->dios )){
         struct list_head* _list_head;
         list_for_each( _list_head, &dio_copy_req->dios ){
             blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
-#else
-    for (dio_inx = 0; dio_inx < dio_copy_req->dios_cnt; ++dio_inx)
-    {
-        blk_deferred_t* dio = dio_copy_req->dios[dio_inx];
-        {
-#endif
             range_t* rg;
             void** p_extension;
             sector_t page_array_ofs = 0;
@@ -601,22 +513,12 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 int blk_deffered_request_store_mem( blk_deferred_request_t* dio_copy_req )
 {
     int res = SUCCESS;
-#ifndef BLK_DEFER_LIST
-    int dio_inx = 0;
-#endif
     sector_t processed = 0;
 
-#ifdef BLK_DEFER_LIST
     if (!list_empty( &dio_copy_req->dios )){
         struct list_head* _list_head;
         list_for_each( _list_head, &dio_copy_req->dios ){
             blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
-#else
-    for (dio_inx = 0; dio_inx < dio_copy_req->dios_cnt; ++dio_inx)
-    {
-        blk_deferred_t* dio = dio_copy_req->dios[dio_inx];
-        {
-#endif
             blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)dio->blk_descr;
 
             size_t portion = page_array_pages2mem( blk_descr->buff, 0, dio->buff, (snapstore_block_size() * SECTOR_SIZE) );

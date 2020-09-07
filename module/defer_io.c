@@ -8,6 +8,9 @@
 #define SECTION "defer_io  "
 #include "log_format.h"
 
+#define VEEAMIMAGE_THROTTLE_TIMEOUT ( 1*HZ )    //delay 1 sec
+//#define VEEAMIMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )    //delay 10 ms
+
 blk_qc_t filter_submit_original_bio(struct bio *bio);
 
 typedef struct defer_io_original_request_s{

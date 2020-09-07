@@ -7,14 +7,12 @@
 #include "blk_descr_multidev.h"
 #include "blk_descr_array.h"
 
-
-#define BLK_DEFER_LIST
+#define DEFER_IO_DIO_REQUEST_LENGTH 250
+#define DEFER_IO_DIO_REQUEST_SECTORS_COUNT (10*1024*1024/SECTOR_SIZE)
 
 typedef struct blk_deferred_s
 {
-#ifdef BLK_DEFER_LIST
     struct list_head link;
-#endif
 
     blk_descr_array_index_t blk_index; //for writing to snapstore
     blk_descr_unify_t* blk_descr;    //for writing to snapstore - blk_descr_file_t or blk_descr_mem_t
@@ -31,13 +29,7 @@ typedef struct blk_deferred_request_s
     atomic64_t sect_processed;
     int result;
 
-#ifdef BLK_DEFER_LIST
     struct list_head dios;
-#else
-    int dios_cnt;
-    blk_deferred_t* dios[DEFER_IO_DIO_REQUEST_LENGTH];
-#endif
-
 }blk_deferred_request_t;
 
 
