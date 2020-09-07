@@ -155,6 +155,15 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
     return snap_store_ctx;
 }
 
+
+int snap_snapshot_store_cleanup(struct snap_ctx* ctx, struct snap_store_ctx* store_ctx)
+{
+    struct ioctl_snapstore_cleanup_s param = { 0 };
+    memcpy(param.id, store_ctx->id, ID_LENGTH);
+
+    return ioctl(ctx->fd, IOCTL_SNAPSTORE_CLEANUP, &param);
+}
+
 int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
                                         struct snap_store_ctx* store_ctx,
                                         unsigned long long length)

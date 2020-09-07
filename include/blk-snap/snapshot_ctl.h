@@ -30,12 +30,15 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
                                                   struct ioctl_dev_id_s store_dev,
                                                   struct ioctl_dev_id_s snap_dev);
 
+int snap_snapshot_store_cleanup(struct snap_ctx* ctx,
+                                struct snap_store_ctx* store_ctx);
+
 int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
                                         struct snap_store_ctx* store_ctx,
                                         unsigned long long length);
 
 unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
-                                               struct ioctl_dev_id_s devId);
+                                        struct ioctl_dev_id_s devId);
 
 int snap_destroy_snapshot(struct snap_ctx* ctx,
                           unsigned long long snapshot_id);
