@@ -11,20 +11,12 @@
 #include <string.h>
 #include "utils.h"
 
-//@todo: move declaration of id to common space
-#define ID_LENGTH 16
-
 struct snap_ctx
 {
     int fd;
     // ?
     //error num
     //error string
-};
-
-struct snap_store_ctx
-{
-    unsigned char id[ID_LENGTH];
 };
 
 int snap_ctx_create(struct snap_ctx** ctx)
@@ -64,7 +56,7 @@ int snap_ctx_destroy(struct snap_ctx* ctx)
     return -1;
 }
 
-int snap_store_ctx_free(struct snap_store_ctx* ctx)
+int snap_store_ctx_free(struct snap_store* ctx)
 {
     free(ctx);
     return 0;
@@ -126,12 +118,12 @@ int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int leng
 }
 
 
-struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
-                                                  struct ioctl_dev_id_s store_dev,
-                                                  struct ioctl_dev_id_s snap_dev)
+struct snap_store* snap_create_snapshot_store(struct snap_ctx* ctx,
+                                              struct ioctl_dev_id_s store_dev,
+                                              struct ioctl_dev_id_s snap_dev)
 {
     struct ioctl_snapstore_create_s param;
-    if (generate_random(param.id, ID_LENGTH) != ID_LENGTH)
+    if (generate_random(param.id, SNAP_ID_LENGTH) != SNAP_ID_LENGTH)
         return NULL;
 
     param.count =1;
@@ -140,7 +132,7 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
 
     param.p_dev_id = &snap_dev;
 
-    struct snap_store_ctx* snap_store_ctx = malloc(sizeof(struct snap_store_ctx));
+    struct snap_store* snap_store_ctx = malloc(sizeof(struct snap_store));
     if (snap_store_ctx == NULL)
         return NULL;
 
@@ -151,25 +143,25 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
         return NULL;
     }
 
-    memcpy(snap_store_ctx->id, param.id, ID_LENGTH);
+    memcpy(snap_store_ctx->id, param.id, SNAP_ID_LENGTH);
     return snap_store_ctx;
 }
 
 
-int snap_snapshot_store_cleanup(struct snap_ctx* ctx, struct snap_store_ctx* store_ctx)
+int snap_snapshot_store_cleanup(struct snap_ctx* ctx, struct snap_store* store_ctx)
 {
     struct ioctl_snapstore_cleanup_s param = { 0 };
-    memcpy(param.id, store_ctx->id, ID_LENGTH);
+    memcpy(param.id, store_ctx->id, SNAP_ID_LENGTH);
 
     return ioctl(ctx->fd, IOCTL_SNAPSTORE_CLEANUP, &param);
 }
 
 int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
-                                        struct snap_store_ctx* store_ctx,
+                                        struct snap_store* store_ctx,
                                         unsigned long long length)
 {
     struct ioctl_snapstore_memory_limit_s param;
-    memcpy(param.id, store_ctx->id, ID_LENGTH);
+    memcpy(param.id, store_ctx->id, SNAP_ID_LENGTH);
     param.size = length;
 
     return ioctl(ctx->fd, IOCTL_SNAPSTORE_MEMORY, &param);

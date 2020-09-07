@@ -1,3 +1,5 @@
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -no-pie -static-libstdc++ -static-libgcc")
+
 add_executable(add_to_tracking add_to_tracking.cpp)
 target_link_libraries(add_to_tracking BlkSnapLib)
 

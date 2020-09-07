@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     size_t size = std::stoll(argv[2]);
 
     struct ioctl_dev_id_s snapStoreDevId = {0,0};
-    struct snap_store_ctx* snapStoreCtx = snap_create_snapshot_store(snapCtx, snapStoreDevId, snapDevId);
+    struct snap_store* snapStoreCtx = snap_create_snapshot_store(snapCtx, snapStoreDevId, snapDevId);
 
     if (snapStoreCtx == nullptr)
         throw std::system_error(errno, std::generic_category(), "Failed to create snapshot store");
