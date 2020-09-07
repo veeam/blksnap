@@ -1,3 +1,5 @@
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -no-pie -static-libstdc++ -static-libgcc")
+
 add_executable(add_to_tracking add_to_tracking.cpp)
 target_link_libraries(add_to_tracking BlkSnapLib)
 
@@ -15,3 +17,12 @@ target_link_libraries(create_snapstore BlkSnapLib)
 
 add_executable(create_inmemory_snapstore create_inmemory_snapstore.cpp)
 target_link_libraries(create_inmemory_snapstore BlkSnapLib)
+
+add_executable(get_tracking_block_size get_tracking_block_size.cpp)
+target_link_libraries(get_tracking_block_size BlkSnapLib)
+
+add_executable(destroy_snapshot destroy_snapshot.cpp)
+target_link_libraries(destroy_snapshot BlkSnapLib)
+
+add_executable(snapshot_get_errno snapshot_get_errno.cpp)
+target_link_libraries(snapshot_get_errno BlkSnapLib)

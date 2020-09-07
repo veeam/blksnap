@@ -11,9 +11,6 @@
 #include <string.h>
 #include "utils.h"
 
-//@todo: move declaration of id to common space
-#define ID_LENGTH 16
-
 struct snap_ctx
 {
     int fd;
@@ -21,17 +18,6 @@ struct snap_ctx
     //error num
     //error string
 };
-
-struct snap_store_ctx
-{
-    unsigned char id[16];
-};
-
-struct snap_snapshot_ctx
-{
-    unsigned long long id;
-};
-
 
 int snap_ctx_create(struct snap_ctx** ctx)
 {
@@ -70,13 +56,7 @@ int snap_ctx_destroy(struct snap_ctx* ctx)
     return -1;
 }
 
-int snap_store_ctx_free(struct snap_store_ctx* ctx)
-{
-    free(ctx);
-    return 0;
-}
-
-int snap_snapshot_ctx_free(struct snap_snapshot_ctx* ctx)
+int snap_store_ctx_free(struct snap_store* ctx)
 {
     free(ctx);
     return 0;
@@ -113,6 +93,16 @@ int snap_get_tracking(struct snap_ctx* ctx, struct cbt_info_s* cbtInfos, unsigne
     return 0;
 }
 
+unsigned int snap_get_tracking_block_size(struct snap_ctx* ctx)
+{
+    unsigned int block_size = 0;
+
+    if (ioctl(ctx->fd, IOCTL_TRACKING_BLOCK_SIZE, &block_size ))
+        return 0;
+
+    return block_size;
+}
+
 int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int length, unsigned char* buffer)
 {
     struct ioctl_tracking_read_cbt_bitmap_s bitmap;
@@ -128,12 +118,12 @@ int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int leng
 }
 
 
-struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
-                                                  struct ioctl_dev_id_s store_dev,
-                                                  struct ioctl_dev_id_s snap_dev)
+struct snap_store* snap_create_snapshot_store(struct snap_ctx* ctx,
+                                              struct ioctl_dev_id_s store_dev,
+                                              struct ioctl_dev_id_s snap_dev)
 {
     struct ioctl_snapstore_create_s param;
-    if (generate_random(param.id, ID_LENGTH) != ID_LENGTH)
+    if (generate_random(param.id, SNAP_ID_LENGTH) != SNAP_ID_LENGTH)
         return NULL;
 
     param.count =1;
@@ -142,7 +132,7 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
 
     param.p_dev_id = &snap_dev;
 
-    struct snap_store_ctx* snap_store_ctx = malloc(sizeof(struct snap_store_ctx));
+    struct snap_store* snap_store_ctx = malloc(sizeof(struct snap_store));
     if (snap_store_ctx == NULL)
         return NULL;
 
@@ -153,39 +143,58 @@ struct snap_store_ctx* snap_create_snapshot_store(struct snap_ctx* ctx,
         return NULL;
     }
 
-    memcpy(snap_store_ctx->id, param.id, ID_LENGTH);
+    memcpy(snap_store_ctx->id, param.id, SNAP_ID_LENGTH);
     return snap_store_ctx;
 }
 
+
+int snap_snapshot_store_cleanup(struct snap_ctx* ctx, struct snap_store* store_ctx)
+{
+    struct ioctl_snapstore_cleanup_s param = { 0 };
+    memcpy(param.id, store_ctx->id, SNAP_ID_LENGTH);
+
+    return ioctl(ctx->fd, IOCTL_SNAPSTORE_CLEANUP, &param);
+}
+
 int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
-                                        struct snap_store_ctx* store_ctx,
+                                        struct snap_store* store_ctx,
                                         unsigned long long length)
 {
     struct ioctl_snapstore_memory_limit_s param;
-    memcpy(param.id, store_ctx->id, ID_LENGTH);
+    memcpy(param.id, store_ctx->id, SNAP_ID_LENGTH);
     param.size = length;
 
     return ioctl(ctx->fd, IOCTL_SNAPSTORE_MEMORY, &param);
 }
 
-struct snap_snapshot_ctx* snap_create_snapshot(struct snap_ctx* ctx,
-                                               struct ioctl_dev_id_s devId)
+unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
+                                        struct ioctl_dev_id_s devId)
 {
-    struct snap_snapshot_ctx* snapshot_ctx = malloc(sizeof(struct snap_snapshot_ctx));
-    if (snapshot_ctx == NULL)
-        return NULL;
-
     struct ioctl_snapshot_create_s create_snapshot = { 0 };
     create_snapshot.snapshot_id = 0;
     create_snapshot.count = 1;
     create_snapshot.p_dev_id = &devId;
 
     if (ioctl(ctx->fd, IOCTL_SNAPSHOT_CREATE, &create_snapshot) != 0)
-    {
-        snap_snapshot_ctx_free(snapshot_ctx);
-        return NULL;
-    }
+        return 0;
 
-    snapshot_ctx->id = create_snapshot.snapshot_id;
-    return snapshot_ctx;
+    return create_snapshot.snapshot_id;
+}
+
+int snap_destroy_snapshot(struct snap_ctx* ctx, unsigned long long snapshot_id)
+{
+    return ioctl(ctx->fd, IOCTL_SNAPSHOT_DESTROY, &snapshot_id );
+}
+
+int snap_snapshot_get_errno(struct snap_ctx* ctx, struct ioctl_dev_id_s devId)
+{
+    struct ioctl_snapshot_errno_s param;
+    param.dev_id.major = devId.major;
+    param.dev_id.minor = devId.minor;
+    param.err_code = 0;
+
+    if (ioctl(ctx->fd, IOCTL_SNAPSHOT_ERRNO, &param))
+        return -1;
+
+    return param.err_code;
 }

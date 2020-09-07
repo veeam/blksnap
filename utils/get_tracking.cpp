@@ -2,7 +2,7 @@
 #include <system_error>
 #include <blk-snap/snapshot_ctl.h>
 #include <sys/stat.h>
-#include <iomanip>
+#include "helper.h"
 
 int main(int argc, char *argv[])
 {
@@ -31,14 +31,7 @@ int main(int argc, char *argv[])
         std::cout << "dev number (major:minor): " << cbtInfos[i].dev_id.major << ":" << cbtInfos[i].dev_id.minor << std::endl;
         std::cout << "snapNumber: " << (int)cbtInfos[i].snap_number << std::endl;
         std::cout << "cbt_map_size: " << cbtInfos[i].cbt_map_size << std::endl;
-
-        std::cout << "GenerationId: ";
-        std::ios_base::fmtflags f( std::cout.flags() );
-        for (unsigned int j = 0; j < sizeof(cbt_info_s::generationId); ++j)
-            std::cout << std::hex << std::setfill('0') << std::setw(2) << (int)cbtInfos[i].generationId[j];
-        std::cout.flags( f );
-
-        std::cout << std::endl;
+        std::cout << "GenerationId: " << snap_id_to_str(cbtInfos[i].generationId) << std::endl;
         std::cout << std::endl;
     }
 
