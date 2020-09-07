@@ -34,8 +34,8 @@ int snap_ctx_create(struct snap_ctx** ctx)
     if (*ctx == NULL)
         return -1;
 
-//    (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
-    (*ctx)->fd = open( "/dev/veeamsnap", O_RDWR );
+    (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
+//    (*ctx)->fd = open( "/dev/veeamsnap", O_RDWR );
     if ((*ctx)->fd == -1)
     {
         error = errno;
@@ -178,4 +178,9 @@ unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
         return 0;
 
     return create_snapshot.snapshot_id;
+}
+
+int snap_destroy_snapshot(struct snap_ctx* ctx, unsigned long long snapshot_id)
+{
+    return ioctl(ctx->fd, IOCTL_SNAPSHOT_DESTROY, &snapshot_id );
 }

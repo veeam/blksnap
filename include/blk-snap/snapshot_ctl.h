@@ -37,6 +37,9 @@ int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
 unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
                                                struct ioctl_dev_id_s devId);
 
+int snap_destroy_snapshot(struct snap_ctx* ctx,
+                          unsigned long long snapshot_id);
+
 #ifdef  __cplusplus
 }
 #endif
