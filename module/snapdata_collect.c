@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "snapdata_collect.h"
 #include "blk_util.h"
 

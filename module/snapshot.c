@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "snapshot.h"
 #include "tracker.h"
 #include "snapimage.h"

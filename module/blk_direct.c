@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "blk_direct.h"
 
 #define SECTION "blk       "

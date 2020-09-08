@@ -1,7 +1,6 @@
 #pragma once
 #include "blk_descr_unify.h"
 
-
 typedef size_t blk_descr_array_index_t;
 typedef blk_descr_unify_t* blk_descr_array_el_t;
 

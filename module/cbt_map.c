@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "cbt_map.h"
 
 #define SECTION "cbt_map   "

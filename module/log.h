@@ -1,5 +1,6 @@
 #pragma once
 #include <linux/uuid.h>
+#include <linux/time64.h>
 #include "range.h"
 
 int logging_init( const char* logdir, unsigned long logmaxsize );

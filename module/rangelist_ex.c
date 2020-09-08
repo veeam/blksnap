@@ -1,6 +1,6 @@
-#include "stdafx.h"
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
+#include "common.h"
 #include "rangelist_ex.h"
 
 #define SECTION "ranges_ex "

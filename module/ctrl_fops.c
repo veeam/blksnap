@@ -1,21 +1,20 @@
-#include "stdafx.h"
-#include <linux/module.h>
-#include <linux/poll.h>
-#include <linux/uaccess.h>
-#include <linux/sysfs.h>
-
+#include "common.h"
 #include "blk-snap-ctl.h"
+#include "ctrl_fops.h"
 #include "version.h"
-#include "ctrl_pipe.h"
 #include "tracking.h"
 #include "snapshot.h"
-
 #include "snapstore.h"
 #include "snapdata_collect.h"
 #include "snapimage.h"
 #include "tracker.h"
 #include "page_array.h"
 #include "blk_deferred.h"
+
+#include <linux/module.h>
+#include <linux/poll.h>
+#include <linux/uaccess.h>
+
 
 #define SECTION "ctrl_fops "
 #include "log_format.h"

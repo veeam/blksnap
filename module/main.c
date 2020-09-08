@@ -1,11 +1,9 @@
-#include <linux/init.h>
-#include <linux/module.h>
-
-#include "stdafx.h"
+#include "common.h"
 #include "version.h"
 #include "blk-snap-ctl.h"
 #include "ctrl_fops.h"
 #include "ctrl_pipe.h"
+#include "ctrl_sysfs.h"
 
 #include "blk_direct.h"
 #include "blk_redirect.h"
@@ -21,7 +19,10 @@
 #include "tracker.h"
 #include "tracking.h"
 #include "sparse_bitmap.h"
-#include "ctrl_sysfs.h"
+
+#include <linux/init.h>
+#include <linux/module.h>
+
 
 #define SECTION "main      "
 #include "log_format.h"

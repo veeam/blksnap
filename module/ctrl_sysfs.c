@@ -1,12 +1,12 @@
-#include "stdafx.h"
+#include "common.h"
 #include "ctrl_sysfs.h"
 #include "blk-snap-ctl.h"
 
+#include <linux/blkdev.h>
+#include <linux/sysfs.h>
 
 #define SECTION "ctrl_sysfs"
 #include "log_format.h"
-
-#include <linux/sysfs.h>
 
 int get_veeamsnap_major(void);
 

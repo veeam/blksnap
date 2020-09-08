@@ -7,7 +7,6 @@
 #include "blk_redirect.h"
 #include "snapstore.h"
 
-
 typedef struct snapstore_copy_block_request_s
 {
     content_sl_t content;

@@ -1,4 +1,5 @@
 #pragma once
+#include <linux/fs.h>
 
 void ctrl_init( void );
 void ctrl_done( void );

@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "snapstore_device.h"
 #include "snapstore.h"
 #include "snapstore_blk.h"

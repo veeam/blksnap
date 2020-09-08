@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "blk_util.h"
 #include "blk_redirect.h"
 #include "blk_direct.h"

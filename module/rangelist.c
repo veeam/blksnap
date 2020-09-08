@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "rangelist.h"
 
 #define SECTION "ranges    "

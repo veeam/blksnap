@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "rangevector.h"
 #include "container_spinlocking.h"
 

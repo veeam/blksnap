@@ -1,9 +1,11 @@
-#include "stdafx.h"
+#include "common.h"
 #include "defer_io.h"
 #include "queue_spinlocking.h"
 #include "blk_deferred.h"
 #include "tracker.h"
 #include "blk_util.h"
+
+#include <linux/kthread.h>
 
 #define SECTION "defer_io  "
 #include "log_format.h"

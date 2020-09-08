@@ -1,16 +1,4 @@
-#include "stdafx.h"
-#include <asm/div64.h>
-#include <linux/cdrom.h>
-#include <linux/blk-mq.h>
-
-static inline unsigned long int do_div_inline( unsigned long long int division, unsigned long int divisor )
-{
-    unsigned long int result;
-
-    result = do_div( division, divisor );
-
-    return result;
-}
+#include "common.h"
 
 #include "snapimage.h"
 #include "blk_util.h"
@@ -18,6 +6,12 @@ static inline unsigned long int do_div_inline( unsigned long long int division, 
 #include "queue_spinlocking.h"
 #include "cbt_map.h"
 #include "tracker.h"
+
+#include <asm/div64.h>
+#include <linux/cdrom.h>
+#include <linux/blk-mq.h>
+#include <linux/hdreg.h> 
+#include <linux/kthread.h>
 
 #define SECTION "snapimage "
 #include "log_format.h"
@@ -105,6 +99,11 @@ int _snapimage_open( struct block_device *bdev, fmode_t mode )
     return res;
 }
 
+static inline uint64_t do_div_inline(uint64_t division, uint32_t divisor)
+{
+    do_div(division, divisor);
+    return division;
+}
 
 int _snapimage_getgeo( struct block_device* bdev, struct hd_geometry * geo )
 {

@@ -1,8 +1,8 @@
-#include "stdafx.h"
+#include "common.h"
 #include "page_array.h"
 
+
 #define SECTION "page_array"
-//#include "log_format.h"
 
 atomic64_t page_alloc_count;
 atomic64_t page_free_count;

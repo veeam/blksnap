@@ -1,5 +1,4 @@
-#include "stdafx.h"
-
+#include "common.h"
 #include "sparse_bitmap.h"
 
 #define SECTION "sparse_array"

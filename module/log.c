@@ -1,8 +1,11 @@
-#include "stdafx.h"
+#include "common.h"
 #include "log.h"
 #include "queue_spinlocking.h"
 #include "blk-snap-ctl.h"
-#include <linux/time.h>
+
+#include <linux/fs.h>
+#include <linux/kthread.h>
+#include <linux/wait.h>
 
 #define SECTION "logging   "
 #define LOGFILE

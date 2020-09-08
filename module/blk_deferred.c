@@ -1,12 +1,10 @@
-#include "stdafx.h"
+#include "common.h"
 #include "blk_deferred.h"
 #include "blk_util.h"
-#include "queue_spinlocking.h"
 #include "container_spinlocking.h"
-#include "page_array.h"
-#include "range.h"
 #include "snapstore.h"
 #include "snapstore_blk.h"
+
 
 #define SECTION "blk       "
 #include "log_format.h"

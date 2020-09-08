@@ -1,4 +1,5 @@
 #pragma once
+#include <linux/blkdev.h>
 
 static inline unsigned int sector_to_uint( sector_t sect )
 {

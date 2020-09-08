@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "queue_spinlocking.h"
 
 #define SECTION "queue     "

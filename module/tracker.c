@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "tracker.h"
 #include "blk_util.h"
 #define SECTION "tracker   "

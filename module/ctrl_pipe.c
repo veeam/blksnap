@@ -1,10 +1,11 @@
-#include "stdafx.h"
-#include <linux/poll.h>
+#include "common.h"
 #include "ctrl_pipe.h"
 #include "version.h"
 #include "blk-snap-ctl.h"
-#include <linux/uuid.h>
 #include "snapstore.h"
+
+#include <linux/poll.h>
+#include <linux/uuid.h>
 
 #define SECTION "ctrl_pipe "
 #include "log_format.h"

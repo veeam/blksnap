@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+#include "sector.h"
 
 int get_snapstore_block_size_pow(void);
 

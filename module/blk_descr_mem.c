@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "common.h"
 #include "blk_descr_mem.h"
 
 #define SECTION "blk_descr "

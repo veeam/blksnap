@@ -4,7 +4,6 @@
 #include "shared_resource.h"
 #include <linux/uuid.h>
 
-
 typedef struct cbt_map_s
 {
     shared_resource_t sharing_header;

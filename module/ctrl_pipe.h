@@ -1,6 +1,7 @@
 #pragma once
 #include "container.h"
 #include "shared_resource.h"
+#include <linux/wait.h>
 
 typedef struct ctrl_pipe_s
 {
