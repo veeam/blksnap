@@ -189,35 +189,6 @@ struct ioctl_collect_shapshot_images_s{
 #define IOCTL_COLLECT_SNAPSHOT_IMAGES _IOW(VEEAM_SNAP, 0x30, struct ioctl_collect_shapshot_images_s)
 
 //////////////////////////////////////////////////////////////////////////
-// collect snapshot data location
-struct ioctl_collect_snapshotdata_location_start_s{
-    struct ioctl_dev_id_s dev_id;
-    unsigned int magic_length;
-    union{
-        void* magic_buff;
-        unsigned long long ull_buff;
-    };
-};
-#define  IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_START _IOW(VEEAM_SNAP, 0x40, struct ioctl_collect_snapshotdata_location_start_s )
-
-
-struct ioctl_collect_snapshotdata_location_get_s{
-    struct ioctl_dev_id_s dev_id;
-    unsigned int range_count;
-    union{
-        struct ioctl_range_s* ranges;
-        unsigned long long ull_ranges;
-    };
-};
-#define IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_GET        _IOW(VEEAM_SNAP, 0x41, struct ioctl_collect_snapshotdata_location_get_s)
-
-
-struct ioctl_collect_snapshotdata_location_complete_s{
-    struct ioctl_dev_id_s dev_id;
-};
-#define  IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_COMPLETE _IOR(VEEAM_SNAP, 0x42, struct ioctl_collect_snapshotdata_location_complete_s )
-
-//////////////////////////////////////////////////////////////////////////
 // debug and support
 #define IOCTL_PRINTSTATE _IO(VEEAM_SNAP, 0x80)
 

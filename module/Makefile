@@ -22,7 +22,6 @@ blk-snap-y += queue_spinlocking.o
 blk-snap-y += rangelist.o
 blk-snap-$(CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV) += rangelist_ex.o
 blk-snap-y += rangevector.o
-blk-snap-y += snapdata_collect.o
 blk-snap-y += snapimage.o
 blk-snap-y += snapshot.o
 blk-snap-y += snapstore.o

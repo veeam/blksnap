@@ -229,9 +229,6 @@ int __init veeamsnap_init(void)
         if ((result = snapstore_init( )) != SUCCESS)
             break;
 
-        if ((result = snapdata_collect_Init( )) != SUCCESS)
-            break;
-
         if ((result = snapimage_init( )) != SUCCESS)
             break;
 
@@ -269,8 +266,6 @@ void __exit veeamsnap_exit(void)
 
     result = snapshot_Done( );
     if (SUCCESS == result){
-
-        snapdata_collect_Done( );
 
         snapstore_device_done( );
         snapstore_done( );

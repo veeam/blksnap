@@ -3,7 +3,6 @@
 
 #include "tracker.h"
 #include "tracker_queue.h"
-#include "snapdata_collect.h"
 #include "blk_util.h"
 #include "blk_direct.h"
 #include "defer_io.h"
@@ -19,18 +18,12 @@ bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
     bool was_catched = false;
 
     tracker_queue_t* tracker_queue = NULL;
-    snapdata_collector_t* collector = NULL;
     tracker_t* tracker = NULL;
 
     bio_get(bio);
 
     if (SUCCESS == tracker_queue_find(bio->bi_disk, bio->bi_partno, &tracker_queue)) {
         if (SUCCESS == tracker_find_by_queue(tracker_queue, &tracker)) {
-            //find tracker by queue
-            if (op_is_write(bio_op(bio))) {// only write request processed
-                if (SUCCESS == snapdata_collect_Find(bio, &collector))
-                    snapdata_collect_Process(collector, bio);
-            }
 
             if ((bio->bi_end_io != blk_direct_bio_endio) &&
                 (bio->bi_end_io != blk_redirect_bio_endio) &&

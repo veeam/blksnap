@@ -5,7 +5,6 @@
 #include "tracking.h"
 #include "snapshot.h"
 #include "snapstore.h"
-#include "snapdata_collect.h"
 #include "snapimage.h"
 #include "tracker.h"
 #include "page_array.h"
@@ -566,103 +565,6 @@ int ioctl_snapshot_errno( unsigned long arg )
     return SUCCESS;
 }
 
-int ioctl_collect_snapshotdata_location_start( unsigned long arg )
-{
-    struct ioctl_collect_snapshotdata_location_start_s param;
-
-    //log_tr( "Collect snapshot data location start" );
-
-    if (0 != copy_from_user( &param, (void*)arg, sizeof( struct ioctl_collect_snapshotdata_location_start_s ) )){
-		log_err("Unable to collect location of snapstore file: invalid user buffer");
-        return -EINVAL;
-    }
-
-    return snapdata_collect_LocationStart(
-        MKDEV( param.dev_id.major, param.dev_id.minor ),
-        param.magic_buff,
-        param.magic_length
-        );
-}
-
-int ioctl_collect_snapshotdata_location_get( unsigned long arg )
-{
-    int res;
-    struct ioctl_collect_snapshotdata_location_get_s param;
-    rangelist_t ranges;
-    size_t ranges_count = 0;
-
-    //log_tr( "Collect snapshot data location get" );
-
-    if (0 != copy_from_user( &param, (void*)arg, sizeof( struct ioctl_collect_snapshotdata_location_get_s ) )){
-        log_err( "Unable to get location of snapstore file: invalid input buffer" );
-        return -EINVAL;
-    }
-
-    rangelist_init( &ranges );
-    do{
-        res = snapdata_collect_LocationGet( MKDEV( param.dev_id.major, param.dev_id.minor ), &ranges, &ranges_count );
-        if (res != SUCCESS){
-            log_err_d( "Failed to get location of snapstore file. errno=", res );
-            break;
-        }
-
-        if (param.ranges == NULL ){//It`s normal. It is range count getting
-            res = SUCCESS;
-            break;
-        }
-
-        if (param.range_count < ranges_count){
-            log_err( "Unable to get location of snapstore file: invalid range array count" );
-            log_err_d( "Buffer ranges available: ", param.range_count );
-            log_err_sz( "Ranges needed: ", ranges_count );
-            res = -EINVAL;
-            break;
-        }
-
-        {
-            size_t inx = 0;
-            range_t  rg;
-            struct ioctl_range_s rg_ctl;
-
-            for (inx = 0; (SUCCESS == rangelist_get( &ranges, &rg )) && (inx < ranges_count); ++inx){
-                rg_ctl.left = sector_to_streamsize( rg.ofs );
-                rg_ctl.right = rg_ctl.left + sector_to_streamsize( rg.cnt );
-
-                if (0 != copy_to_user( param.ranges + inx, &rg_ctl, sizeof( struct ioctl_range_s ) )){
-                    log_err( "Unable to get location of snapstore file: invalid range array buffer" );
-                    res = -EINVAL;
-                    break;
-                };
-            }
-        }
-    } while (false);
-    rangelist_done( &ranges );
-
-    if (res == SUCCESS){
-        param.range_count = ranges_count;
-        if (0 != copy_to_user( (void*)arg, &param, sizeof( struct ioctl_collect_snapshotdata_location_get_s ) )){
-            log_err( "Unable to get location of snapstore file: invalid output buffer" );
-            res = -EINVAL;
-        }
-    }
-
-    return res;
-}
-
-int ioctl_collect_snapshotdata_location_complete( unsigned long arg )
-{
-    struct ioctl_collect_snapshotdata_location_complete_s param;
-
-    //log_tr( "Collect snapshot data location complete" );
-
-    if (0 != copy_from_user( &param, (void*)arg, sizeof( struct ioctl_collect_snapshotdata_location_complete_s ) )){
-        log_err( "Unable to collect location of snapstore file: invalid user buffer" );
-        return -EINVAL;
-    }
-
-    return snapdata_collect_LocationComplete( MKDEV( param.dev_id.major, param.dev_id.minor ) );
-}
-
 int ioctl_collect_snapimages( unsigned long arg )
 {
     int status = SUCCESS;
@@ -731,9 +633,7 @@ static veeam_ioctl_table_t veeam_ioctl_table[] =
     { (IOCTL_SNAPSTORE_FILE_MULTIDEV), ioctl_snapstore_file_multidev },
 #endif
 
-    { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_START), ioctl_collect_snapshotdata_location_start },
-    { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_GET), ioctl_collect_snapshotdata_location_get },
-    { (IOCTL_COLLECT_SNAPSHOTDATA_LOCATION_COMPLETE), ioctl_collect_snapshotdata_location_complete },
+
     { (IOCTL_COLLECT_SNAPSHOT_IMAGES), ioctl_collect_snapimages },
     { (IOCTL_PRINTSTATE), ioctl_printstate },
     { 0, NULL }
