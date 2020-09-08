@@ -24,13 +24,12 @@ int main(int argc, char *argv[])
 
 
     struct snap_store* snapStoreCtx = snap_create_snapshot_store(snapCtx, snapStoreDevId, snapDevId);
-
     if (snapStoreCtx == nullptr)
         throw std::system_error(errno, std::generic_category(), "Failed to create snapshot store");
 
+    std::cout << "Successfully create snapshot store: " << snap_store_to_str(snapStoreCtx) << std::endl;
     snap_store_ctx_free(snapStoreCtx);
     snap_ctx_destroy(snapCtx);
-    std::cout << "Successfully create snapshot store" << std::endl;
 }
 
 

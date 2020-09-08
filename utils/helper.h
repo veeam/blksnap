@@ -21,12 +21,12 @@ std::string snap_id_to_str(const unsigned char* id)
     std::ostringstream ss;
     ss << std::hex << std::setfill('0') << std::setw(2);
     for (size_t i = 0; i < SNAP_ID_LENGTH; ++i )
-        ss << (int)id[i];
+        ss << std::hex << std::setfill('0') << std::setw(2) << (int)id[i];
 
     return ss.str();
 }
 
-void str_to_snap_id(std::string& str, unsigned char* id)
+void str_to_snap_id(const std::string& str, unsigned char* id)
 {
     int val;
     for (size_t i = 0; i < SNAP_ID_LENGTH; ++i)
@@ -37,9 +37,9 @@ void str_to_snap_id(std::string& str, unsigned char* id)
     }
 }
 
-std::string snap_store_to_str(struct snap_store& store)
+std::string snap_store_to_str(struct snap_store* store)
 {
-    return snap_id_to_str(store.id);
+    return snap_id_to_str(store->id);
 }
 
 

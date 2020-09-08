@@ -126,10 +126,10 @@ struct snap_store* snap_create_snapshot_store(struct snap_ctx* ctx,
     if (generate_random(param.id, SNAP_ID_LENGTH) != SNAP_ID_LENGTH)
         return NULL;
 
-    param.count =1;
     param.snapstore_dev_id.minor = store_dev.minor;
     param.snapstore_dev_id.major = store_dev.major;
 
+    param.count =1;
     param.p_dev_id = &snap_dev;
 
     struct snap_store* snap_store_ctx = malloc(sizeof(struct snap_store));
@@ -165,6 +165,19 @@ int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
     param.size = length;
 
     return ioctl(ctx->fd, IOCTL_SNAPSTORE_MEMORY, &param);
+}
+
+int snap_create_file_snapshot_store(struct snap_ctx* ctx,
+                                    struct snap_store* store_ctx,
+                                    struct ioctl_range_s* ranges,
+                                    unsigned int ranges_count)
+{
+    struct ioctl_snapstore_file_add_s param;
+    memcpy(param.id, store_ctx->id, SNAP_ID_LENGTH);
+    param.range_count = ranges_count;
+    param.ranges = ranges;
+
+    return ioctl(ctx->fd, IOCTL_SNAPSTORE_FILE, &param);
 }
 
 unsigned long long snap_create_snapshot(struct snap_ctx* ctx,

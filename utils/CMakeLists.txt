@@ -26,3 +26,9 @@ target_link_libraries(destroy_snapshot BlkSnapLib)
 
 add_executable(snapshot_get_errno snapshot_get_errno.cpp)
 target_link_libraries(snapshot_get_errno BlkSnapLib)
+
+add_executable(snapshot_store_cleanup snapshot_store_cleanup.cpp)
+target_link_libraries(snapshot_store_cleanup BlkSnapLib)
+
+add_executable(create_file_snapstore create_file_snapstore.cpp)
+target_link_libraries(create_file_snapstore BlkSnapLib)

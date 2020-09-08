@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 
     snap_store_ctx_free(snapStoreCtx);
     snap_ctx_destroy(snapCtx);
-    std::cout << "Successfully create in memory snapshot store. id: " << snapshotId << "." << std::endl;
+    std::cout << "Successfully create in memory snapshot id: " << snapshotId << "." << std::endl;
 }
 
 

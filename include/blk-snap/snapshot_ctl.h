@@ -40,6 +40,11 @@ int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
                                         struct snap_store* store_ctx,
                                         unsigned long long length);
 
+int snap_create_file_snapshot_store(struct snap_ctx* ctx,
+                                    struct snap_store* store_ctx,
+                                    struct ioctl_range_s* ranges,
+                                    unsigned int ranges_count);
+
 unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
                                         struct ioctl_dev_id_s devId);
 
