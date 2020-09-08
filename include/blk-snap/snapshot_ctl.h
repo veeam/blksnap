@@ -53,6 +53,11 @@ int snap_destroy_snapshot(struct snap_ctx* ctx,
 
 int snap_snapshot_get_errno(struct snap_ctx* ctx, struct ioctl_dev_id_s devId);
 
+//@todo make with this something
+int snap_poll(struct snap_ctx* ctx, int timeout);
+ssize_t snap_read(struct snap_ctx* ctx, void *buf, size_t length);
+int snap_write(struct snap_ctx* ctx, void *buf, size_t length);
+
 #ifdef  __cplusplus
 }
 #endif
