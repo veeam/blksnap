@@ -32,3 +32,6 @@ target_link_libraries(snapshot_store_cleanup BlkSnapLib)
 
 add_executable(create_file_snapstore create_file_snapstore.cpp)
 target_link_libraries(create_file_snapstore BlkSnapLib)
+
+add_executable(create_stretch_snapshot create_stretch_snapshot.cpp)
+target_link_libraries(create_stretch_snapshot BlkSnapLib)

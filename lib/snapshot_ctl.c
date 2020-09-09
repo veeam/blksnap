@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "utils.h"
+#include <poll.h>
 
 struct snap_ctx
 {
@@ -210,4 +211,40 @@ int snap_snapshot_get_errno(struct snap_ctx* ctx, struct ioctl_dev_id_s devId)
         return -1;
 
     return param.err_code;
+}
+
+int snap_poll(struct snap_ctx* ctx, int timeout)
+{
+    struct pollfd fds;
+
+    fds.fd = ctx->fd;
+    fds.events = POLLIN;
+    fds.revents = 0;
+
+    return poll( &fds, 1, timeout );
+}
+
+ssize_t snap_read(struct snap_ctx* ctx, void *buf, size_t length)
+{
+    return read(ctx->fd, buf, length);
+}
+
+int snap_write(struct snap_ctx* ctx, void *buf, size_t length)
+{
+    return write(ctx->fd, buf, length);
+}
+
+int snap_mark_dirty_blocks(struct snap_ctx* ctx,
+                           struct ioctl_dev_id_s devId,
+                           struct block_range_s* dirty_blocks,
+                           unsigned int count)
+{
+    struct ioctl_tracking_mark_dirty_blocks_s param;
+    param.image_dev_id.major = devId.major;
+    param.image_dev_id.minor = devId.minor;
+
+    param.count = count;
+    param.p_dirty_blocks = dirty_blocks;
+
+    return ioctl(ctx->fd, IOCTL_TRACKING_MARK_DIRTY_BLOCKS, &param);
 }
