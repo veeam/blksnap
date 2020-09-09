@@ -1,7 +1,6 @@
 #pragma once
 #include <linux/fs.h>
 
-void ctrl_init( void );
 void ctrl_done( void );
 
 int ctrl_open( struct inode *inode, struct file *file );

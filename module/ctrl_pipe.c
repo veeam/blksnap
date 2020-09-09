@@ -10,12 +10,7 @@
 #define SECTION "ctrl_pipe "
 #include "log_format.h"
 
-typedef struct cmd_to_user_s
-{
-    content_t content;
-    char* request_buffer;
-    size_t request_size;//in bytes
-}cmd_to_user_t;
+#define CMD_TO_USER_FIFO_SIZE 1024
 
 ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer, size_t length );
 ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *buffer, size_t length );
@@ -27,21 +22,22 @@ void ctrl_pipe_request_acknowledge( ctrl_pipe_t* pipe, unsigned int result );
 void ctrl_pipe_request_invalid( ctrl_pipe_t* pipe );
 
 
-container_t CtrlPipes;
-
-
-void ctrl_pipe_init( void )
-{
-    log_tr( "Ctrl pipes initialization" );
-    container_init( &CtrlPipes, sizeof( ctrl_pipe_t ) );
-}
+LIST_HEAD(ctl_pipes);
+DECLARE_RWSEM(ctl_pipes_lock);
 
 void ctrl_pipe_done( void )
 {
+    bool is_empty;
+
     log_tr( "Ctrl pipes - done" );
-    if (SUCCESS != container_done( &CtrlPipes )){
-        log_err( "Unable to perform ctrl pipes cleanup: container is not empty" );
-    };
+
+    down_write( &ctl_pipes_lock );
+    is_empty = list_empty( &ctl_pipes);
+    up_write( &ctl_pipes_lock );
+
+    //BUG_ON(!is_empty)
+    if(!is_empty)
+        pr_err( "Unable to perform ctrl pipes cleanup: container is not empty\n" );
 }
 
 void ctrl_pipe_release_cb( void* resource )
@@ -49,81 +45,64 @@ void ctrl_pipe_release_cb( void* resource )
     ctrl_pipe_t* pipe = (ctrl_pipe_t*)resource;
 
     //log_tr( "Ctrl pipe release" );
+    down_write( &ctl_pipes_lock );
+    list_del( &pipe->link );
+    up_write( &ctl_pipes_lock );
 
-    while (!container_empty( &pipe->cmd_to_user )){
-        cmd_to_user_t* request = (cmd_to_user_t*)container_get_first( &pipe->cmd_to_user );
-        kfree( request->request_buffer );
+    kfifo_free(&pipe->cmd_to_user);
 
-        content_free( &request->content );
-    }
-
-    if (SUCCESS != container_done( &pipe->cmd_to_user )){
-        log_err( "Unable to perform pipe commands cleanup: container is not empty" );
-    };
-
-    container_free( &pipe->content );
+    kfree( pipe );
 }
 
 ctrl_pipe_t* ctrl_pipe_new( void )
 {
-    ctrl_pipe_t* pipe;
-    //log_tr( "Create new ctrl pipe" );
+    int ret;
+    ctrl_pipe_t* pipe = kmalloc( sizeof(ctrl_pipe_t), GFP_KERNEL);
 
-    if (NULL == (pipe = (ctrl_pipe_t*)container_new( &CtrlPipes ))){
+    if (NULL == pipe){
         log_tr( "Failed to create new ctrl pipe: not enough memory" );
         return NULL;
     }
+    INIT_LIST_HEAD( &pipe->link );
 
-    container_init( &pipe->cmd_to_user, sizeof( cmd_to_user_t ) );
+    
+    ret = kfifo_alloc(&pipe->cmd_to_user, CMD_TO_USER_FIFO_SIZE, GFP_KERNEL);
+    if (ret) {
+        pr_err("Failed to allocate fifo. errno=%d.\n", ret);
+        kfree(pipe);
+        return NULL;
+    }
+    spin_lock_init( &pipe->cmd_to_user_lock );
+
     shared_resource_init( &pipe->sharing_header, pipe, ctrl_pipe_release_cb );
     init_waitqueue_head( &pipe->readq );
+
+    down_write( &ctl_pipes_lock );
+    list_add_tail( &pipe->link, &ctl_pipes );
+    up_write( &ctl_pipes_lock );
 
     return pipe;
 }
 
 ssize_t ctrl_pipe_read( ctrl_pipe_t* pipe, char __user *buffer, size_t length )
 {
-    ssize_t processed = 0;
-    cmd_to_user_t* cmd_to_user = NULL;
+    int ret;
+    unsigned int processed = 0;
 
-    if (container_empty( &pipe->cmd_to_user )){ //nothing to read
-        if (wait_event_interruptible( pipe->readq, !container_empty( &pipe->cmd_to_user ) )){
+    if (kfifo_is_empty_spinlocked( &pipe->cmd_to_user, &pipe->cmd_to_user_lock )) { //nothing to read
+        if (wait_event_interruptible( pipe->readq, !kfifo_is_empty_spinlocked( &pipe->cmd_to_user, &pipe->cmd_to_user_lock) )){
             log_err( "Unable to wait for pipe read queue: interrupt signal was received " );
             return -ERESTARTSYS;
         }
     };
 
-    cmd_to_user = (cmd_to_user_t*)container_get_first( &pipe->cmd_to_user );
-    if (cmd_to_user == NULL){
+    ret = kfifo_to_user(&pipe->cmd_to_user, buffer, length, &processed);
+    if (ret){
         log_err( "Failed to read command from ctrl pipe" );
-        return -ERESTARTSYS;
+        return ret;
     }
 
-    do {
-        if (length < cmd_to_user->request_size){
-            log_err_sz( "Unable to read command from ctrl pipe: user buffer is too small. Length requested =", cmd_to_user->request_size );
-            processed = -ENODATA;
-            break;
-        }
-
-        if (0 != copy_to_user( buffer, cmd_to_user->request_buffer, cmd_to_user->request_size )){
-            log_err( "Unable to read command from ctrl pipe: invalid user buffer" );
-            processed = -EINVAL;
-            break;
-        }
-
-        processed = cmd_to_user->request_size;
-    } while (false);
-
-
-    if (processed > 0){
-        kfree( cmd_to_user->request_buffer );
-        content_free( &cmd_to_user->content );
-    }
-    else
-        container_push_top( &pipe->cmd_to_user, &cmd_to_user->content ); //push to top of queue
-
-    return processed;
+    return (ssize_t)processed;
 }
 
 ssize_t ctrl_pipe_write( ctrl_pipe_t* pipe, const char __user *buffer, size_t length )
@@ -186,14 +165,13 @@ unsigned int ctrl_pipe_poll( ctrl_pipe_t* pipe )
 {
     unsigned int mask = 0;
 
-    if (!container_empty( &pipe->cmd_to_user )){
+    if (!kfifo_is_empty_spinlocked( &pipe->cmd_to_user, &pipe->cmd_to_user_lock )) {
         mask |= (POLLIN | POLLRDNORM);     /* readable */
     }
     mask |= (POLLOUT | POLLWRNORM);   /* writable */
 
     return mask;
 }
-
 
 ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer, size_t length )
 {
@@ -493,119 +471,71 @@ ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char _
     return result;
 }
 #endif
+
 void ctrl_pipe_push_request( ctrl_pipe_t* pipe, unsigned int* cmd, size_t cmd_len )
 {
-    cmd_to_user_t* request = NULL;
-
-    request = (cmd_to_user_t*)content_new( &pipe->cmd_to_user );
-    if (request == NULL){
-        log_err( "Failed to create acknowledge command." );
-        kfree( cmd );
-        return;
-    }
-
-    request->request_size = cmd_len * sizeof( unsigned int );
-    request->request_buffer = (char*)cmd;
-    container_push_back( &pipe->cmd_to_user, &request->content );
+    kfifo_in_spinlocked(&pipe->cmd_to_user, cmd, (cmd_len * sizeof(unsigned int)), &pipe->cmd_to_user_lock);
 
     wake_up( &pipe->readq );
 }
 
 void ctrl_pipe_request_acknowledge( ctrl_pipe_t* pipe, unsigned int result )
 {
-    unsigned int* cmd = NULL;
-    size_t cmd_len = 2;
-
-    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
-    if (NULL == cmd){
-        log_err( "Unable to create acknowledge command data: not enough memory" );
-        return;
-    }
+    unsigned int cmd[2];
 
     cmd[0] = VEEAMSNAP_CHARCMD_ACKNOWLEDGE;
     cmd[1] = result;
 
-    ctrl_pipe_push_request( pipe, cmd, cmd_len );
+    ctrl_pipe_push_request( pipe, cmd, 2 );
 }
 
 void ctrl_pipe_request_halffill( ctrl_pipe_t* pipe, unsigned long long filled_status )
 {
-    unsigned int* cmd = NULL;
-    size_t cmd_len = 3;
+    unsigned int cmd[3];
 
     log_tr( "Snapstore is half-full" );
-
-    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
-    if (NULL == cmd){
-        log_err( "Unable to create acknowledge command data: not enough memory" );
-        return;
-    }
 
     cmd[0] = (unsigned int)VEEAMSNAP_CHARCMD_HALFFILL;
     cmd[1] = (unsigned int)(filled_status & 0xFFFFffff); //lo
     cmd[2] = (unsigned int)(filled_status >> 32);
 
-    ctrl_pipe_push_request( pipe, cmd, cmd_len );
+    ctrl_pipe_push_request( pipe, cmd, 3 );
 }
 
 void ctrl_pipe_request_overflow( ctrl_pipe_t* pipe, unsigned int error_code, unsigned long long filled_status )
 {
-    unsigned int* cmd = NULL;
-    size_t cmd_len = 4;
+    unsigned int cmd[4];
 
     log_tr( "Snapstore overflow" );
-
-    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
-    if (NULL == cmd){
-        log_err( "Unable to create acknowledge command data: not enough memory" );
-        return;
-    }
 
     cmd[0] = (unsigned int)VEEAMSNAP_CHARCMD_OVERFLOW;
     cmd[1] = error_code;
     cmd[2] = (unsigned int)(filled_status & 0xFFFFffff); //lo
     cmd[3] = (unsigned int)(filled_status >> 32);
 
-    ctrl_pipe_push_request( pipe, cmd, cmd_len );
+    ctrl_pipe_push_request( pipe, cmd, 4 );
 }
 
 void ctrl_pipe_request_terminate( ctrl_pipe_t* pipe, unsigned long long filled_status )
 {
-    unsigned int* cmd = NULL;
-    size_t cmd_len = 3;
+    unsigned int cmd[3];
 
     log_tr( "Snapstore termination" );
-
-    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
-    if (NULL == cmd){
-        log_err( "Unable to create acknowledge command data: not enough memory" );
-        return;
-    }
 
     cmd[0] = (unsigned int)VEEAMSNAP_CHARCMD_TERMINATE;
     cmd[1] = (unsigned int)(filled_status & 0xFFFFffff); //lo
     cmd[2] = (unsigned int)(filled_status >> 32);
 
-    ctrl_pipe_push_request( pipe, cmd, cmd_len );
-
+    ctrl_pipe_push_request( pipe, cmd, 3 );
 }
 
 void ctrl_pipe_request_invalid( ctrl_pipe_t* pipe )
 {
-    unsigned int* cmd = NULL;
-    size_t cmd_len = 1;
+    unsigned int cmd[1];
 
     log_tr( "Ctrl pipe received invalid command" );
 
-    cmd = (unsigned int*)kmalloc( cmd_len * sizeof( unsigned int ), GFP_KERNEL );
-    if (NULL == cmd){
-        log_err( "Unable to create acknowledge command data: not enough memory" );
-        return;
-    }
+    cmd[0] = VEEAMSNAP_CHARCMD_INVALID;
 
-    cmd[0] = (unsigned int)VEEAMSNAP_CHARCMD_INVALID;
-
-    ctrl_pipe_push_request( pipe, cmd, cmd_len );
+    ctrl_pipe_push_request( pipe, cmd, 1 );
 }
-
-

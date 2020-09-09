@@ -30,11 +30,6 @@ static struct ioctl_getversion_s version = {
 };
 
 
-void ctrl_init( void )
-{
-    ctrl_pipe_init( );
-}
-
 void ctrl_done( void )
 {
     ctrl_pipe_done( );

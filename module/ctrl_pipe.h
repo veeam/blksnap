@@ -2,15 +2,18 @@
 #include "container.h"
 #include "shared_resource.h"
 #include <linux/wait.h>
+#include <linux/kfifo.h>
 
 typedef struct ctrl_pipe_s
 {
-    content_t content;
+    struct list_head link;
+
     shared_resource_t sharing_header; //resource is alive, while ctrl_pipe_t and accordance snapshotdata_stretch_disk_t is alive
 
     wait_queue_head_t readq;
 
-    container_t cmd_to_user;
+    struct kfifo cmd_to_user;
+    struct spinlock cmd_to_user_lock;
 }ctrl_pipe_t;
 
 static inline ctrl_pipe_t* ctrl_pipe_get_resource( ctrl_pipe_t* resourse )
@@ -23,7 +26,7 @@ static inline void ctrl_pipe_put_resource( ctrl_pipe_t* resourse )
     shared_resource_put( &resourse->sharing_header );
 }
 
-void ctrl_pipe_init( void );
+
 void ctrl_pipe_done( void );
 
 ctrl_pipe_t* ctrl_pipe_new( void );

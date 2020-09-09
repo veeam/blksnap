@@ -5,7 +5,6 @@
 
 #include <linux/types.h>
 #include <linux/errno.h>
-
 #include <linux/mutex.h>
 #include <linux/rwsem.h>
 #include <linux/spinlock.h>
@@ -18,11 +17,5 @@
 #ifndef SUCCESS
 #define SUCCESS 0
 #endif
-
-
-
-
-
-
 
 #endif /* STDAFX_H_ */

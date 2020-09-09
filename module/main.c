@@ -9,7 +9,6 @@
 #include "blk_redirect.h"
 #include "blk_deferred.h"
 #include "snapimage.h"
-#include "snapdata_collect.h"
 
 #include "snapstore.h"
 #include "snapstore_device.h"
@@ -186,8 +185,6 @@ int __init veeamsnap_init(void)
 
 
     page_arrays_init( );
-
-    ctrl_init();
 
     do{
         log_tr("Registering reboot notification");
