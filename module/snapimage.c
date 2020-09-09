@@ -576,11 +576,11 @@ int snapimage_create( dev_t original_dev )
         mutex_init( &image->open_locker );
         image->open_bdev = NULL;
         image->open_cnt = 0;
-
-#if LINUX_VERSION_CODE == KERNEL_VERSION(5,8,0)
-        image->queue = blk_alloc_queue(_snapimage_make_request, NUMA_NO_NODE);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
+       
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
         image->queue = blk_alloc_queue(NUMA_NO_NODE);
+#else
+        image->queue = blk_alloc_queue(_snapimage_make_request, NUMA_NO_NODE);
 #endif
 
         if (NULL == image->queue){
