@@ -1,0 +1,17 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+[{utils,lib,include}**.{cpp,c,h}]
+indent_style = space
+indent_size=4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+
+[module**.{c,h}]
+indent_style = tab
+
+[Makefile]
+indent_style = tab
