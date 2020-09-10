@@ -11,19 +11,19 @@ typedef blk_descr_unify_t* blk_descr_array_el_t;
 
 typedef struct blk_descr_array_group_s
 {
-    size_t cnt;
-    unsigned char bitmap[BLK_DESCR_GROUP_LENGTH >> 3];
-    blk_descr_array_el_t values[BLK_DESCR_GROUP_LENGTH];
+	size_t cnt;
+	unsigned char bitmap[BLK_DESCR_GROUP_LENGTH >> 3];
+	blk_descr_array_el_t values[BLK_DESCR_GROUP_LENGTH];
 }blk_descr_array_group_t;
 
 typedef struct blk_descr_array_s
 {
-    blk_descr_array_index_t first;
-    blk_descr_array_index_t last;
-    page_array_t* groups;
-    size_t group_count;
+	blk_descr_array_index_t first;
+	blk_descr_array_index_t last;
+	page_array_t* groups;
+	size_t group_count;
 
-    struct rw_semaphore rw_lock;
+	struct rw_semaphore rw_lock;
 }blk_descr_array_t;
 
 int blk_descr_array_init( blk_descr_array_t* header, blk_descr_array_index_t first, blk_descr_array_index_t last );

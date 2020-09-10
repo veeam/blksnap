@@ -14,21 +14,21 @@
 
 typedef struct snapstore_s
 {
-    content_t content;
-    shared_resource_t shared;
-    uuid_t id;
+	content_t content;
+	shared_resource_t shared;
+	uuid_t id;
 
-    snapstore_mem_t* mem;
-    snapstore_file_t* file;
+	snapstore_mem_t* mem;
+	snapstore_file_t* file;
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-    snapstore_multidev_t* multidev;
+	snapstore_multidev_t* multidev;
 #endif
 
-    ctrl_pipe_t* ctrl_pipe;
-    sector_t empty_limit;
+	ctrl_pipe_t* ctrl_pipe;
+	sector_t empty_limit;
 
-    volatile bool halffilled;
-    volatile bool overflowed;
+	volatile bool halffilled;
+	volatile bool overflowed;
 }snapstore_t;
 
 
@@ -43,11 +43,11 @@ int snapstore_cleanup(uuid_t* id, u64* filled_bytes);
 
 static inline snapstore_t* snapstore_get( snapstore_t* snapstore )
 {
-    return (snapstore_t*)shared_resource_get( &snapstore->shared );
+	return (snapstore_t*)shared_resource_get( &snapstore->shared );
 };
 static inline void snapstore_put( snapstore_t* snapstore )
 {
-    shared_resource_put( &snapstore->shared );
+	shared_resource_put( &snapstore->shared );
 };
 
 int snapstore_stretch_initiate( uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe, sector_t empty_limit );

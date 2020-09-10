@@ -34,4 +34,4 @@ blk-snap-y += tracker.o
 blk-snap-y += tracker_queue.o
 blk-snap-y += tracking.o
 
-obj-$(CONFIG_BLK_SNAP)     += blk-snap.o
+obj-$(CONFIG_BLK_SNAP)	 += blk-snap.o

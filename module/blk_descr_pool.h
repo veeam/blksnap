@@ -3,23 +3,23 @@
 
 typedef struct blk_descr_pool_s
 {
-    struct list_head head;
-    struct mutex lock;
+	struct list_head head;
+	struct mutex lock;
 
-    size_t blocks_cnt; //count of _pool_el_t
+	size_t blocks_cnt; //count of _pool_el_t
 
-    volatile size_t total_cnt; ///count of blk_descr_mem_t
-    volatile size_t take_cnt; // take count of blk_descr_mem_t;
+	volatile size_t total_cnt; ///count of blk_descr_mem_t
+	volatile size_t take_cnt; // take count of blk_descr_mem_t;
 }blk_descr_pool_t;
 
 typedef struct  pool_el_s
 {
-    struct list_head link;
+	struct list_head link;
 
-    size_t used_cnt; // used blocks
-    size_t capacity; // blocks array capacity
+	size_t used_cnt; // used blocks
+	size_t capacity; // blocks array capacity
 
-    blk_descr_unify_t blocks[0];
+	blk_descr_unify_t blocks[0];
 }pool_el_t;
 
 void blk_descr_pool_init( blk_descr_pool_t* pool, size_t available_blocks );

@@ -11,24 +11,24 @@
 
 typedef struct blk_deferred_s
 {
-    struct list_head link;
+	struct list_head link;
 
-    blk_descr_array_index_t blk_index; //for writing to snapstore
-    blk_descr_unify_t* blk_descr;    //for writing to snapstore - blk_descr_file_t or blk_descr_mem_t
+	blk_descr_array_index_t blk_index; //for writing to snapstore
+	blk_descr_unify_t* blk_descr;	//for writing to snapstore - blk_descr_file_t or blk_descr_mem_t
 
-    range_t sect;
+	range_t sect;
 
-    page_array_t* buff;
+	page_array_t* buff;
 }blk_deferred_t;
 
 typedef struct blk_deferred_request_s
 {
-    struct completion complete;
-    sector_t sect_len;
-    atomic64_t sect_processed;
-    int result;
+	struct completion complete;
+	sector_t sect_len;
+	atomic64_t sect_processed;
+	int result;
 
-    struct list_head dios;
+	struct list_head dios;
 }blk_deferred_request_t;
 
 

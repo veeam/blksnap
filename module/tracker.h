@@ -8,22 +8,22 @@
 
 typedef struct tracker_s
 {
-    content_sl_t content;
-    dev_t original_dev_id;
+	content_sl_t content;
+	dev_t original_dev_id;
 
-    struct block_device* target_dev;
-    tracker_queue_t* tracker_queue;
+	struct block_device* target_dev;
+	tracker_queue_t* tracker_queue;
 
-    cbt_map_t* cbt_map;
+	cbt_map_t* cbt_map;
 
-    atomic_t is_captured;
+	atomic_t is_captured;
 
-    bool is_unfreezable; // when device have not filesystem and can not be freeze
-    struct rw_semaphore unfreezable_lock; //locking io processing for unfreezable devices
+	bool is_unfreezable; // when device have not filesystem and can not be freeze
+	struct rw_semaphore unfreezable_lock; //locking io processing for unfreezable devices
 
-    defer_io_t* defer_io;
+	defer_io_t* defer_io;
 
-    volatile unsigned long long snapshot_id;          // current snapshot for this device
+	volatile unsigned long long snapshot_id;		  // current snapshot for this device
 }tracker_t;
 
 int tracker_init( void );

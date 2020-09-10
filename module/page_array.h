@@ -3,14 +3,14 @@
 #include "sector.h"
 
 typedef struct page_info_s{
-    struct page* page;
-    void* addr;
+	struct page* page;
+	void* addr;
 }page_info_t;
 
 typedef struct page_array_s
 {
-    size_t pg_cnt;
-    page_info_t pg[0];
+	size_t pg_cnt;
+	page_info_t pg[0];
 }page_array_t;
 
 void page_arrays_init( void );

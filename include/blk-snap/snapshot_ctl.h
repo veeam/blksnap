@@ -12,7 +12,7 @@ extern "C" {
 struct snap_ctx;
 struct snap_store
 {
-    unsigned char id[SNAP_ID_LENGTH];
+	unsigned char id[SNAP_ID_LENGTH];
 };
 
 //@todo: [TBD] little documentation
@@ -30,33 +30,33 @@ unsigned int snap_get_tracking_block_size(struct snap_ctx* ctx);
 int snap_read_cbt(struct snap_ctx* ctx, dev_t dev, unsigned int offset, int length, unsigned char* buffer);
 
 struct snap_store* snap_create_snapshot_store(struct snap_ctx* ctx,
-                                              struct ioctl_dev_id_s store_dev,
-                                              struct ioctl_dev_id_s snap_dev);
+											  struct ioctl_dev_id_s store_dev,
+											  struct ioctl_dev_id_s snap_dev);
 
 int snap_snapshot_store_cleanup(struct snap_ctx* ctx,
-                                struct snap_store* store_ctx);
+								struct snap_store* store_ctx);
 
 int snap_create_inmemory_snapshot_store(struct snap_ctx* ctx,
-                                        struct snap_store* store_ctx,
-                                        unsigned long long length);
+										struct snap_store* store_ctx,
+										unsigned long long length);
 
 int snap_create_file_snapshot_store(struct snap_ctx* ctx,
-                                    struct snap_store* store_ctx,
-                                    struct ioctl_range_s* ranges,
-                                    unsigned int ranges_count);
+									struct snap_store* store_ctx,
+									struct ioctl_range_s* ranges,
+									unsigned int ranges_count);
 
 unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
-                                        struct ioctl_dev_id_s devId);
+										struct ioctl_dev_id_s devId);
 
 int snap_destroy_snapshot(struct snap_ctx* ctx,
-                          unsigned long long snapshot_id);
+						  unsigned long long snapshot_id);
 
 int snap_snapshot_get_errno(struct snap_ctx* ctx, struct ioctl_dev_id_s devId);
 
 int snap_mark_dirty_blocks(struct snap_ctx* ctx,
-                           struct ioctl_dev_id_s devId,
-                           struct block_range_s* dirty_blocks,
-                           unsigned int count);
+						   struct ioctl_dev_id_s devId,
+						   struct block_range_s* dirty_blocks,
+						   unsigned int count);
 
 //@todo make with this something
 int snap_poll(struct snap_ctx* ctx, int timeout);

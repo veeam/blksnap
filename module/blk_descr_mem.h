@@ -4,9 +4,9 @@
 
 typedef struct blk_descr_mem_s
 {
-    blk_descr_unify_t unify;
+	blk_descr_unify_t unify;
 
-    void* buff; //pointer to snapstore block in memory
+	void* buff; //pointer to snapstore block in memory
 }blk_descr_mem_t;
 
 

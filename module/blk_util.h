@@ -4,13 +4,13 @@
 
 typedef struct blk_dev_info_s
 {
-    size_t blk_size;
-    sector_t start_sect;
-    sector_t count_sect;
+	size_t blk_size;
+	sector_t start_sect;
+	sector_t count_sect;
 
-    unsigned int io_min;
-    unsigned int physical_block_size;
-    unsigned short logical_block_size;
+	unsigned int io_min;
+	unsigned int physical_block_size;
+	unsigned short logical_block_size;
 
 }blk_dev_info_t;
 int blk_dev_get_info( dev_t dev_id, blk_dev_info_t* pdev_info );
@@ -25,5 +25,5 @@ struct super_block* blk_thaw_bdev( dev_t dev_id, struct block_device* device, st
 static inline 
 sector_t blk_dev_get_capacity( struct block_device* blk_dev )
 {
-    return blk_dev->bd_part->nr_sects;
+	return blk_dev->bd_part->nr_sects;
 };

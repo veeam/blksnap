@@ -3,10 +3,10 @@
 
 typedef struct _tracker_queue_s
 {
-    content_sl_t content;
-    struct gendisk *disk;
-    u8 partno;
-    atomic_t atomic_ref_count;
+	content_sl_t content;
+	struct gendisk *disk;
+	u8 partno;
+	atomic_t atomic_ref_count;
 
 }tracker_queue_t;
 

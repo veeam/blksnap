@@ -9,9 +9,9 @@
 
 typedef struct blk_descr_multidev_s
 {
-    blk_descr_unify_t unify;
+	blk_descr_unify_t unify;
 
-    rangelist_ex_t rangelist;
+	rangelist_ex_t rangelist;
 }blk_descr_multidev_t;
 
 

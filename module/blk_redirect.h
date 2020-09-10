@@ -9,22 +9,22 @@ void blk_redirect_bioset_free( void );
 void blk_redirect_bio_endio( struct bio *bb );
 
 typedef struct blk_redirect_bio_endio_list_s{
-    struct blk_redirect_bio_endio_list_s* next;
-    struct bio* this;
+	struct blk_redirect_bio_endio_list_s* next;
+	struct bio* this;
 }blk_redirect_bio_endio_list_t;
 
 typedef void (redirect_bio_endio_complete_cb)( void* complete_param, struct bio* rq, int err );
 
 typedef struct redirect_bio_endio_s{
-    queue_content_sl_t content;
+	queue_content_sl_t content;
 
-    struct bio *bio;
-    int err;
-    blk_redirect_bio_endio_list_t* bio_endio_head_rec; //list of created bios
-    atomic64_t bio_endio_count;
+	struct bio *bio;
+	int err;
+	blk_redirect_bio_endio_list_t* bio_endio_head_rec; //list of created bios
+	atomic64_t bio_endio_count;
 
-    void* complete_param;
-    redirect_bio_endio_complete_cb* complete_cb;
+	void* complete_param;
+	redirect_bio_endio_complete_cb* complete_cb;
 }blk_redirect_bio_endio_t;
 
 

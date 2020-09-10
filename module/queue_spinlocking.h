@@ -2,19 +2,19 @@
 
 typedef struct queue_sl_s
 {
-    struct list_head headList;
-    spinlock_t lock;
+	struct list_head headList;
+	spinlock_t lock;
 
-    atomic_t active_state;
-    int content_size;
-    atomic_t in_queue_cnt;
-    atomic_t alloc_cnt;
+	atomic_t active_state;
+	int content_size;
+	atomic_t in_queue_cnt;
+	atomic_t alloc_cnt;
 }queue_sl_t;
 
 typedef struct queue_content_sl_s
 {
-    struct list_head link;
-    queue_sl_t* queue;
+	struct list_head link;
+	queue_sl_t* queue;
 }queue_content_sl_t;
 
 
@@ -31,10 +31,10 @@ queue_content_sl_t* queue_sl_get_first( queue_sl_t* queue );
 bool queue_sl_active( queue_sl_t* queue, bool state );
 
 #define queue_sl_length( queue ) \
-    atomic_read( &(queue).in_queue_cnt )
+	atomic_read( &(queue).in_queue_cnt )
 
 #define queue_sl_empty( queue ) \
-    (atomic_read( &(queue).in_queue_cnt ) == 0)
+	(atomic_read( &(queue).in_queue_cnt ) == 0)
 
 #define queue_sl_unactive( queue ) \
-    ( (atomic_read( &((queue).active_state) ) == false) && (atomic_read( &((queue).alloc_cnt) ) == 0) )
+	( (atomic_read( &((queue).active_state) ) == false) && (atomic_read( &((queue).alloc_cnt) ) == 0) )

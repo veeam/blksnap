@@ -6,9 +6,9 @@
 
 typedef struct blk_descr_file_s
 {
-    blk_descr_unify_t unify;
+	blk_descr_unify_t unify;
 
-    rangelist_t rangelist;
+	rangelist_t rangelist;
 }blk_descr_file_t;
 
 

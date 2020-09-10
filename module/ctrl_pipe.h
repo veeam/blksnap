@@ -6,24 +6,24 @@
 
 typedef struct ctrl_pipe_s
 {
-    struct list_head link;
+	struct list_head link;
 
-    shared_resource_t sharing_header; //resource is alive, while ctrl_pipe_t and accordance snapshotdata_stretch_disk_t is alive
+	shared_resource_t sharing_header; //resource is alive, while ctrl_pipe_t and accordance snapshotdata_stretch_disk_t is alive
 
-    wait_queue_head_t readq;
+	wait_queue_head_t readq;
 
-    struct kfifo cmd_to_user;
-    struct spinlock cmd_to_user_lock;
+	struct kfifo cmd_to_user;
+	struct spinlock cmd_to_user_lock;
 }ctrl_pipe_t;
 
 static inline ctrl_pipe_t* ctrl_pipe_get_resource( ctrl_pipe_t* resourse )
 {
-    return (ctrl_pipe_t*)shared_resource_get( &resourse->sharing_header );
+	return (ctrl_pipe_t*)shared_resource_get( &resourse->sharing_header );
 }
 
 static inline void ctrl_pipe_put_resource( ctrl_pipe_t* resourse )
 {
-    shared_resource_put( &resourse->sharing_header );
+	shared_resource_put( &resourse->sharing_header );
 }
 
 

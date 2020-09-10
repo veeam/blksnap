@@ -9,29 +9,29 @@
 
 typedef struct snapstore_copy_block_request_s
 {
-    content_sl_t content;
-    blk_descr_array_index_t block_index;
-    sector_t dst_ofs;
+	content_sl_t content;
+	blk_descr_array_index_t block_index;
+	sector_t dst_ofs;
 }snapstore_copy_block_request_t;
 
 
 typedef struct snapstore_device_s
 {
-    content_t content;
-    shared_resource_t shared;
-    dev_t dev_id;
-    snapstore_t* snapstore;
+	content_t content;
+	shared_resource_t shared;
+	dev_t dev_id;
+	snapstore_t* snapstore;
 
-    struct block_device* orig_blk_dev;
+	struct block_device* orig_blk_dev;
 
-    blk_descr_array_t store_block_map; // map block index to read block offset
-    struct mutex store_block_map_locker;
+	blk_descr_array_t store_block_map; // map block index to read block offset
+	struct mutex store_block_map_locker;
 
-    rangevector_t zero_sectors;
+	rangevector_t zero_sectors;
 
-    atomic_t req_failed_cnt;
-    volatile int err_code;
-    volatile bool corrupted;
+	atomic_t req_failed_cnt;
+	volatile int err_code;
+	volatile bool corrupted;
 }snapstore_device_t;
 
 int snapstore_device_init( void );
@@ -39,11 +39,11 @@ void snapstore_device_done( void );
 
 static inline snapstore_device_t* snapstore_device_get_resource( snapstore_device_t* snapstore_device )
 {
-    return (snapstore_device_t*)shared_resource_get( &snapstore_device->shared );
+	return (snapstore_device_t*)shared_resource_get( &snapstore_device->shared );
 };
 static inline void snapstore_device_put_resource( snapstore_device_t* snapstore_device )
 {
-    shared_resource_put( &snapstore_device->shared );
+	shared_resource_put( &snapstore_device->shared );
 };
 snapstore_device_t* snapstore_device_find_by_dev_id( dev_t dev_id );
 
@@ -68,11 +68,11 @@ void snapstore_device_print_state( snapstore_device_t* snapstore_device );
 
 static inline void _snapstore_device_descr_read_lock( snapstore_device_t* snapstore_device )
 {
-    //down_read( &snapstore_device->store_block_map_locker );
-    mutex_lock( &snapstore_device->store_block_map_locker );
+	//down_read( &snapstore_device->store_block_map_locker );
+	mutex_lock( &snapstore_device->store_block_map_locker );
 }
 static inline void _snapstore_device_descr_read_unlock( snapstore_device_t* snapstore_device )
 {
-    //up_read( &snapstore_device->store_block_map_locker );
-    mutex_unlock( &snapstore_device->store_block_map_locker );
+	//up_read( &snapstore_device->store_block_map_locker );
+	mutex_unlock( &snapstore_device->store_block_map_locker );
 }

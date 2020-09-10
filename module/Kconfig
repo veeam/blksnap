@@ -13,7 +13,7 @@ config BLK_SNAP
 	  Allow to create snapshots and track block changes for a block devices. 
 
 config BLK_SNAP_SNAPSTORE_MULTIDEV
-    bool "Multi device snapstore configuration support"
-    depends on BLK_SNAP
-    help
+	bool "Multi device snapstore configuration support"
+	depends on BLK_SNAP
+	help
 	  Allow to create snapstore on multiple block devices

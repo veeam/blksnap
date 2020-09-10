@@ -1,61 +1,61 @@
 #include "common.h"
 #include "rangelist.h"
 
-#define SECTION "ranges    "
+#define SECTION "ranges	"
 
 void rangelist_init( rangelist_t* rglist )
 {
-    INIT_LIST_HEAD( &rglist->head );
+	INIT_LIST_HEAD( &rglist->head );
 }
 
 static inline rangelist_el_t* _rangelist_get_first( rangelist_t* rglist )
 {
-    rangelist_el_t* el = NULL;
-    if (!list_empty( &rglist->head )){
-        el = list_entry( rglist->head.next, rangelist_el_t, link );
-        list_del( &el->link );
-    }
-    return el;
+	rangelist_el_t* el = NULL;
+	if (!list_empty( &rglist->head )){
+		el = list_entry( rglist->head.next, rangelist_el_t, link );
+		list_del( &el->link );
+	}
+	return el;
 }
 
 void rangelist_done( rangelist_t* rglist )
 {
-    rangelist_el_t* el;
-    while (NULL != (el = _rangelist_get_first( rglist )))
-        kfree( el );
+	rangelist_el_t* el;
+	while (NULL != (el = _rangelist_get_first( rglist )))
+		kfree( el );
 }
 
 int rangelist_add( rangelist_t* rglist, range_t* rg )
 {
-    rangelist_el_t* el = kzalloc( sizeof( rangelist_el_t ), GFP_KERNEL );
-    if (el == NULL)
-        return -ENOMEM;
+	rangelist_el_t* el = kzalloc( sizeof( rangelist_el_t ), GFP_KERNEL );
+	if (el == NULL)
+		return -ENOMEM;
 
-    INIT_LIST_HEAD( &el->link );
+	INIT_LIST_HEAD( &el->link );
 
-    el->rg.ofs = rg->ofs;
-    el->rg.cnt = rg->cnt;
+	el->rg.ofs = rg->ofs;
+	el->rg.cnt = rg->cnt;
 
-    list_add_tail( &el->link, &rglist->head );
+	list_add_tail( &el->link, &rglist->head );
 
-    return SUCCESS;
+	return SUCCESS;
 }
 
 int rangelist_get( rangelist_t* rglist, range_t* rg )
 {
-    rangelist_el_t* el = _rangelist_get_first( rglist );
-    if (el == NULL)
-        return -ENODATA;
+	rangelist_el_t* el = _rangelist_get_first( rglist );
+	if (el == NULL)
+		return -ENODATA;
 
-    rg->ofs = el->rg.ofs;
-    rg->cnt = el->rg.cnt;
+	rg->ofs = el->rg.ofs;
+	rg->cnt = el->rg.cnt;
 
-    kfree( el );
+	kfree( el );
 
-    return SUCCESS;
+	return SUCCESS;
 }
 
 bool rangelist_empty( rangelist_t* rglist )
 {
-    return list_empty( &rglist->head );
+	return list_empty( &rglist->head );
 }

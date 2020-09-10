@@ -4,11 +4,11 @@
 
 typedef struct snapshot_s
 {
-    content_t content;
-    unsigned long long id;
+	content_t content;
+	unsigned long long id;
 
-    dev_t* dev_id_set;    //array
-    int dev_id_set_size;
+	dev_t* dev_id_set;	//array
+	int dev_id_set_size;
 }snapshot_t;
 
 int snapshot_Init( void );

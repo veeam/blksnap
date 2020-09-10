@@ -6,11 +6,11 @@
 
 typedef struct snapstore_mem_s{
 
-    container_t blocks_list;
-    size_t blocks_limit;
-    size_t blocks_allocated;
+	container_t blocks_list;
+	size_t blocks_limit;
+	size_t blocks_allocated;
 
-    blk_descr_pool_t pool;
+	blk_descr_pool_t pool;
 }snapstore_mem_t;
 
 snapstore_mem_t* snapstore_mem_create( size_t available_blocks );
