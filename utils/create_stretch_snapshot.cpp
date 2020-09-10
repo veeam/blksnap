@@ -1,230 +1,170 @@
 #include <iostream>
 #include <system_error>
 #include <blk-snap/snapshot_ctl.h>
+#include <blk-snap/stretch_snapshot_ctrl.h>
 #include <vector>
 #include <cstring>
 #include "helper.h"
 
-std::string g_dirPath;
-size_t g_currentPortion = 0;
-
-#pragma pack(push,1)
-
-struct initSnapStoreParams
+struct my_client_data
 {
-	uint32_t cmd;
-	unsigned char id[SNAP_ID_LENGTH];
-	uint64_t limits;
-	ioctl_dev_id_s snapStoreDevId;
-	uint32_t DevsSize;
-	ioctl_dev_id_s DevsId[0];
+    std::string dirPath;
+    size_t currentPortion = 0;
 };
 
-struct Range{
-	uint64_t left;
-	uint64_t right;
-};
 
-struct NextPortion
+struct snap_ranges_space* alloc_new_space(my_client_data& clientData)
 {
-	uint32_t cmd;
-	unsigned char id[SNAP_ID_LENGTH];
-	uint32_t rangesSize;
-	Range ranges[0];
-};
 
-struct Response
-{
-	uint32_t cmd;
-	uint8_t buffer[1020];
-};
+        std::string snapStorePath = clientData.dirPath + "/#" + std::to_string(clientData.currentPortion++);
+        std::cout << "Create storage: " << snapStorePath << std::endl;
+        int fd = open(snapStorePath.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+        if (fd == -1)
+            throw std::system_error(errno, std::generic_category(), "Failed to create storage");
 
-struct AcknowledgeResponse
-{
-	uint32_t status;
-};
+        if (fallocate64(fd, 0, 0, 500 * 1024 * 1024))
+            throw std::system_error(errno, std::generic_category(), "Failed to allocate storage space");
 
-struct HalfFillResponse
-{
-	uint64_t FilledStatus;
-};
+        std::vector<struct ioctl_range_s> ranges = EnumRanges(fd);
+        size_t structSize = sizeof(struct snap_ranges_space) + (sizeof(struct ioctl_range_s) * ranges.size());
+        snap_ranges_space* space = (struct snap_ranges_space*)malloc(structSize);
+        space->count = ranges.size();
+        for (size_t i = 0; i < ranges.size(); i++)
+        {
+            space->ranges[i].right = ranges[i].right;
+            space->ranges[i].left = ranges[i].left;
+        }
 
-struct OverflowResponse
-{
-	uint32_t errorCode;
-	uint64_t filledStatus;
-};
-
-struct TerminateResponse
-{
-	uint64_t filledStatus;
-};
-
-#pragma pack(pop)
-
-int read_response(snap_ctx* snapCtx, int timeout = 5000)
-{
-	int pollRes = snap_poll(snapCtx, timeout);
-	if (pollRes == -1)
-		throw std::system_error(errno, std::generic_category(), "Failed to poll");
-	else if (pollRes == 0)
-		return 0;
-
-	Response response;
-	if (snap_read(snapCtx, &response, sizeof(response)) == -1)
-		throw std::system_error(errno, std::generic_category(), "Failed to read response cmd");
-
-	if (response.cmd == VEEAMSNAP_CHARCMD_ACKNOWLEDGE)
-	{
-		AcknowledgeResponse* ack = (AcknowledgeResponse*)response.buffer;
-		if (ack->status != 0)
-			throw std::system_error(ack->status, std::generic_category(), "Bad VEEAMSNAP_CHARCMD_ACKNOWLEDGE status");
-
-		return VEEAMSNAP_CHARCMD_ACKNOWLEDGE;
-	}
-	else if (response.cmd == VEEAMSNAP_CHARCMD_HALFFILL)
-	{
-		HalfFillResponse* halfFill = (HalfFillResponse*)response.buffer;
-		std::cout << "Snapstore already filled " <<  std::to_string( halfFill->FilledStatus >> 20 ) << "MiB" << std::endl;
-		return VEEAMSNAP_CHARCMD_HALFFILL;
-	}
-	else if (response.cmd == VEEAMSNAP_CHARCMD_OVERFLOW)
-	{
-		OverflowResponse* overflow = (OverflowResponse*)response.buffer;
-		std::cout << "Overflow filled " <<  std::to_string( overflow->filledStatus >> 20 ) << "MiB" << std::endl;
-		throw std::system_error(overflow->errorCode, std::generic_category(), "VEEAMSNAP_CHARCMD_OVERFLOW");
-	}
-	else if (response.cmd == VEEAMSNAP_CHARCMD_TERMINATE)
-	{
-		TerminateResponse* terminate = (TerminateResponse*)response.buffer;
-		std::cout << "VEEAMSNAP_CHARCMD_TERMINATE filled " <<  std::to_string( terminate->filledStatus >> 20 ) << "MiB" << std::endl;
-		throw std::runtime_error("VEEAMSNAP_CHARCMD_TERMINATE");
-	}
-	else
-	{
-		std::string error = std::string ("Unknown cmd: ") + std::to_string(response.cmd);
-		throw std::runtime_error(error);
-	}
+        return space;
 }
 
-snap_store* init_snap_store(snap_ctx* snapCtx, uint64_t limit, ioctl_dev_id_s snapStoreId, ioctl_dev_id_s snapDevId)
+struct snap_ranges_space* alloc_new_space_safe(my_client_data &clientData)
 {
-	size_t structSize = sizeof(initSnapStoreParams) + sizeof(ioctl_dev_id_s);
-	initSnapStoreParams* params = (initSnapStoreParams*)malloc(structSize);
-	params->cmd = VEEAMSNAP_CHARCMD_INITIATE;
-
-	generate_random(params->id, SNAP_ID_LENGTH);
-	params->limits = limit;
-	params->snapStoreDevId.major = snapDevId.major;
-	params->snapStoreDevId.minor = snapDevId.minor;
-
-	params->DevsSize = 1;
-	params->DevsId[0].major = snapStoreId.major;
-	params->DevsId[0].minor = snapStoreId.minor;
-
-	int res = snap_write(snapCtx, params, structSize);
-	if (res != structSize)
-		throw std::system_error(errno, std::generic_category(), "Failed to init stretch snapshot");
-
-	snap_store* store = (snap_store*)malloc(sizeof(snap_store));
-	memcpy(store->id, params->id, SNAP_ID_LENGTH);
-
-	free(params);
-	if (read_response(snapCtx) != VEEAMSNAP_CHARCMD_ACKNOWLEDGE)
-	{
-		free(store);
-		throw std::runtime_error("Failed to receive ack");
-	}
-
-	return store;
+    try
+    {
+        return alloc_new_space(clientData);
+    }
+    catch (std::exception &ex)
+    {
+        std::cerr << "Failed to alloc new space" << std::endl;
+        std::cerr << ex.what() << std::endl;
+        return nullptr;
+    }
 }
 
-void add_snap_portion(snap_ctx* snapCtx, snap_store* snapStore)
+
+void print_stretch_error(snap_stretch_store_ctx* stretch_ctx)
 {
-	std::string snapStorePath = g_dirPath + "/#" + std::to_string(g_currentPortion++);
-	std::cout << "Create storage: " << snapStorePath << std::endl;
-	int fd = open(snapStorePath.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR );
-	if (fd == -1)
-		throw std::system_error(errno, std::generic_category(), "Failed to create storage");
+    std::cerr << "Errno: " << stretch_store_ctx_get_errno(stretch_ctx) << std::endl;
 
-	if (fallocate64(fd, 0, 0, 500 * 1024 * 1024))
-		throw std::system_error(errno, std::generic_category(), "Failed to fallocate storage");
-
-	std::vector<struct ioctl_range_s> ranges = EnumRanges(fd);
-	size_t structSize = sizeof(NextPortion) + (sizeof(Range) * ranges.size());
-	NextPortion* params = (NextPortion*)malloc(structSize);
-
-	params->cmd = VEEAMSNAP_CHARCMD_NEXT_PORTION;
-
-	memcpy(params->id, snapStore->id, SNAP_ID_LENGTH);
-
-	params->rangesSize = ranges.size();
-	for (size_t i = 0; i < ranges.size(); i++)
-	{
-		params->ranges[i].right = ranges[i].right;
-		params->ranges[i].left = ranges[i].left;
-	}
-
-	int res = snap_write(snapCtx, params, structSize);
-	if (res != structSize)
-		throw std::system_error(errno, std::generic_category(), "Failed to write VEEAMSNAP_CHARCMD_NEXT_PORTION");
-
-	free(params);
+    const char* error_str = stretch_store_ctx_get_error_str(stretch_ctx);
+    if (error_str)
+        std::cerr << "Failed to init stretch store: " << error_str << std::endl;
+    else
+        std::cerr << "No error string provided" << std::endl;
 
 }
 
-void watch(snap_ctx* snapCtx, snap_store* snapStore)
+snap_stretch_store_ctx* PrepareStretchCtx(my_client_data& clientData, ioctl_dev_id_s snapDevId, ioctl_dev_id_s snapStoreDevId)
 {
-	std::cout << "Start watcher" << std::endl;
+    snap_stretch_store_ctx* stretch_ctx;
+    stretch_store_ctx_create(&stretch_ctx);
+    if (!stretch_ctx)
+        throw std::system_error(errno, std::generic_category(), "Failed to create stretch snap context");
 
-	while (true)
-	{
-		uint32_t cmd = read_response(snapCtx, 5000);
-		if (cmd == VEEAMSNAP_CHARCMD_ACKNOWLEDGE)
-			std::cout << "receive ack??" << std::endl;
-		else if (cmd == VEEAMSNAP_CHARCMD_HALFFILL)
-		{
-			std::cout << "receive VEEAMSNAP_CHARCMD_HALFFILL" << std::endl;
-			add_snap_portion(snapCtx, snapStore);
-		}
-		else if (cmd == 0)
-			std::cout << "timeout" << std::endl;
-		else
-		{
-			std::cout << "break: " << cmd << std::endl;
-			break;
-		}
-	}
+    int res = stretch_store_ctx_init(stretch_ctx, 200 * 1024 * 1024 /*200 Mb*/, &snapStoreDevId, &snapDevId, 1);
+    if (res != 0)
+    {
+        print_stretch_error(stretch_ctx);
+        throw std::system_error(stretch_store_ctx_get_errno(stretch_ctx), std::generic_category(), "Failed to init stretch store");
+    }
+
+    stretch_store_ctx_set_user_data(stretch_ctx, &clientData);
+    std::cout << "Stretch snap store id: " << snap_store_to_str(stretch_store_ctx_get_snap_store(stretch_ctx)) << std::endl;
+    std::cout << "Alloc first space for snap store." << std::endl;
+    snap_ranges_space* space = alloc_new_space(clientData);
+    stretch_store_ctx_add_first_space(stretch_ctx, space);
+    free(space);
+
+    return stretch_ctx;
+};
+
+struct snap_ranges_space* require_snapshot_store_space(struct snap_stretch_store_ctx* stretch_ctx, uint64_t filled)
+{
+    std::cout << "require_snapshot_store_space" << std::endl;
+    std::cout << "filled: " << filled << std::endl;
+    my_client_data* clientData = (my_client_data*)stretch_store_ctx_get_user_data(stretch_ctx);
+    return alloc_new_space_safe(*clientData);
+}
+
+void space_added(struct snap_stretch_store_ctx* stretch_ctx, struct snap_ranges_space* space, int result)
+{
+    std::cout << "space_added" << std::endl;
+    std::cout << "result " << result << std::endl;
+
+    if (space != nullptr)
+        free(space);
+
+    if (result != 0)
+        print_stretch_error(stretch_ctx);
+}
+
+void snapshot_overflow(struct snap_stretch_store_ctx* stretch_ctx, uint64_t filledStatus)
+{
+    std::cout << "snapshot_overflow" << std::endl;
+    std::cout << "filledStatus: " << filledStatus << std::endl;
+
+    print_stretch_error(stretch_ctx);
+}
+
+void snapshot_terminated(struct snap_stretch_store_ctx* stretch_ctx, uint64_t filledStatus)
+{
+    std::cout << "snapshot_terminated" << std::endl;
+    std::cout << "filledStatus: " << filledStatus << std::endl;
+
+    print_stretch_error(stretch_ctx);
 }
 
 int main(int argc, char *argv[])
 {
-	if (argc < 3)
-		throw std::runtime_error("need file path");
+    struct my_client_data clientData;
 
-	struct snap_ctx* snapCtx;
-	if (snap_ctx_create(&snapCtx) != 0)
-		throw std::system_error(errno, std::generic_category(), "Failed to create snap context");
+    if (argc < 3)
+        throw std::runtime_error("need file path");
 
-	struct stat snapDev;
-	stat(argv[1], &snapDev);
-	struct ioctl_dev_id_s snapDevId = to_dev_id(snapDev.st_rdev);
+    struct snap_ctx* snapCtx;
+    if (snap_ctx_create(&snapCtx) != 0)
+        throw std::system_error(errno, std::generic_category(), "Failed to create snap context");
 
-	g_dirPath = std::string(argv[2]);
-	struct stat snapStoreDev;
-	stat(g_dirPath.c_str(), &snapStoreDev);
-	struct ioctl_dev_id_s snapStoreDevId = to_dev_id(snapStoreDev.st_dev);
+    struct stat snapDev;
+    stat(argv[1], &snapDev);
+    struct ioctl_dev_id_s snapDevId = to_dev_id(snapDev.st_rdev);
 
-	snap_store* snapStore = init_snap_store(snapCtx, (500 * 1024 * 1024)/2, snapStoreDevId, snapDevId);
-	std::cout << "Create snap store: " << snap_store_to_str(snapStore) << std::endl;
-	add_snap_portion(snapCtx, snapStore);
+    clientData.dirPath = std::string(argv[2]);
+    struct stat snapStoreDev;
+    stat(argv[2], &snapStoreDev);
+    struct ioctl_dev_id_s snapStoreDevId = to_dev_id(snapStoreDev.st_dev);
 
-	unsigned long long snapshotId = snap_create_snapshot(snapCtx, snapDevId);
-	if (snapshotId == 0)
-		throw std::system_error(errno, std::generic_category(), "Failed to create snapshot");
+    snap_stretch_store_ctx* stretch_ctx = PrepareStretchCtx(clientData, snapDevId, snapStoreDevId);
+    std::cout << "Stretch prepared." << std::endl;
 
-	std::cout << "Successfully create file snapshot id: " << snapshotId << std::endl;
-	watch(snapCtx, snapStore);
+    stretch_callbacks callbacks;
+    callbacks.snapshot_terminated = snapshot_terminated;
+    callbacks.snapshot_overflow = snapshot_overflow;
+    callbacks.snap_space_added_result = space_added;
+    callbacks.require_snapstore_space = require_snapshot_store_space;
+
+    unsigned long long snapshotId = snap_create_snapshot(snapCtx, snapDevId);
+    if (snapshotId == 0)
+        throw std::system_error(errno, std::generic_category(), "Failed to create snapshot");
+
+    std::cout << "Successfully create stretch snapshot: " << snapshotId << "." << std::endl;
+
+    std::cout << "Running maintenance loop" << std::endl;
+    int res = stretch_store_maintenance_loop(stretch_ctx, &callbacks);
+
+    std::cout << "Exit: " << res << std::endl;
+    return res;
 }
 
 

@@ -1,6 +1,10 @@
 #ifndef BLK_SNAP_TYPES_H
 #define BLK_SNAP_TYPES_H
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 //@todo: [TBD] should be a common part or in <linux/*>
 #include "../../module/blk-snap-ctl.h"
 
@@ -19,6 +23,17 @@ struct cbt_info_s{
 	unsigned char generationId[16];
 };
 */
+
 #pragma pack(pop)
+
+struct snap_ranges_space
+{
+    unsigned int count;
+    struct ioctl_range_s ranges[0];
+};
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif //BLK_SNAP_TYPES_H
