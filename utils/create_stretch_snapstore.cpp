@@ -154,11 +154,12 @@ int main(int argc, char *argv[])
     callbacks.snap_space_added_result = space_added;
     callbacks.require_snapstore_space = require_snapshot_store_space;
 
-    unsigned long long snapshotId = snap_create_snapshot(snapCtx, snapDevId);
+    /*unsigned long long snapshotId = snap_create_snapshot(snapCtx, snapDevId);
     if (snapshotId == 0)
         throw std::system_error(errno, std::generic_category(), "Failed to create snapshot");
 
     std::cout << "Successfully create stretch snapshot: " << snapshotId << "." << std::endl;
+*/
 
     std::cout << "Running maintenance loop" << std::endl;
     int res = stretch_store_maintenance_loop(stretch_ctx, &callbacks);

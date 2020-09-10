@@ -181,6 +181,7 @@ int process_half_fill_response(struct snap_stretch_store_ctx* stretch_ctx, struc
     struct snap_ranges_space* space = stretch_ctx->callbacks->require_snapstore_space(stretch_ctx, half_fill->FilledStatus);
     if (space == NULL)
     {
+        //@todo: if client want send error
         //@todo: mb it's ok
         return 0;
     }
