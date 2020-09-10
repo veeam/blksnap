@@ -220,8 +220,6 @@ int __init veeamsnap_init(void)
 
 		if ((result = snapstore_device_init( )) != SUCCESS)
 			break;
-		if ((result = snapstore_init( )) != SUCCESS)
-			break;
 
 		if ((result = snapimage_init( )) != SUCCESS)
 			break;

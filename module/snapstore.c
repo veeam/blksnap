@@ -6,7 +6,8 @@
 #define SECTION "snapstore "
 #include "log_format.h"
 
-container_t Snapstore;
+LIST_HEAD(snapstores);
+DECLARE_RWSEM(snapstores_lock);
 
 bool _snapstore_check_halffill( snapstore_t* snapstore, sector_t* fill_status )
 {
@@ -50,28 +51,30 @@ void _snapstore_destroy( snapstore_t* snapstore )
 
 		ctrl_pipe_put_resource( pipe );
 	}
-	container_free( &snapstore->content );
+	
+	kfree(snapstore);
 }
 
 void _snapstore_destroy_cb( void* resource )
 {
-	_snapstore_destroy( (snapstore_t*)resource );
-}
+	snapstore_t* snapstore = (snapstore_t*)resource;
 
-int snapstore_init( )
-{
-	int res = SUCCESS;
+	down_write(&snapstores_lock);
+	list_del(&snapstore->link);
+	up_write(&snapstores_lock);
 
-	res = container_init( &Snapstore, sizeof( snapstore_t ) );
-	if (res != SUCCESS)
-		log_err( "Failed to initialize snapstore" );
-
-	return res;
+	_snapstore_destroy(snapstore);
 }
 
 void snapstore_done( )
 {
-	if (SUCCESS != container_done( &Snapstore ))
+	bool is_empty;
+	down_read(&snapstores_lock);
+	is_empty = list_empty(&snapstores);
+	up_read(&snapstores_lock);
+
+	//BUG_ON(!is_empty)
+	if (!is_empty)
 		log_err( "Unable to perform snapstore cleanup: container is not empty" );
 }
 
@@ -84,10 +87,11 @@ int snapstore_create( uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, siz
 	if (dev_id_set_length == 0)
 		return -EINVAL;
 
-	snapstore = (snapstore_t*)container_new( &Snapstore );
+	snapstore = kzalloc(sizeof(snapstore_t), GFP_KERNEL);
 	if (snapstore == NULL)
 		return -ENOMEM;
 
+	INIT_LIST_HEAD( &snapstore->link );
 	uuid_copy( &snapstore->id, id );
 
 	log_tr_uuid( "Create snapstore with id ", (&snapstore->id) );
@@ -101,16 +105,16 @@ int snapstore_create( uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, siz
 	snapstore->halffilled = false;
 	snapstore->overflowed = false;
 
-	if (snapstore_dev_id == 0){
+	if (snapstore_dev_id == 0)
 		log_tr( "Memory snapstore create" );
-		// memory buffer selected
-		// snapstore_mem_create( size );
-	}
+
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore_dev_id == 0xFFFFffff){
 		snapstore_multidev_t* multidev = NULL;
 		res = snapstore_multidev_create( &multidev );
 		if (res != SUCCESS){
+			kfree(snapstore);
+
 			log_err_uuid( "Failed to create multidevice snapstore ", id );
 			return res;
 		}
@@ -121,11 +125,17 @@ int snapstore_create( uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, siz
 		snapstore_file_t* file = NULL;
 		res = snapstore_file_create( snapstore_dev_id, &file );
 		if (res != SUCCESS){
+			kfree(snapstore);
+
 			log_err_uuid( "Failed to create snapstore file for snapstore ", id );
 			return res;
 		}
 		snapstore->file = file;
 	}
+
+	down_write(&snapstores_lock);
+	list_add_tail(&snapstores, &snapstore->link);
+	up_write(&snapstores_lock);
 
 	shared_resource_init( &snapstore->shared, snapstore, _snapstore_destroy_cb );
 
@@ -149,13 +159,16 @@ int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_l
 	int res = SUCCESS;
 	size_t dev_id_inx;
 	snapstore_t* snapstore = NULL;
+	snapstore_multidev_t* multidev = NULL;
 
 	if (dev_id_set_length == 0)
 		return -EINVAL;
 
-	snapstore = (snapstore_t*)container_new( &Snapstore );
+	snapstore = kzalloc(sizeof(snapstore_t), GFP_KERNEL);
 	if (snapstore == NULL)
 		return -ENOMEM;
+
+	INIT_LIST_HEAD(&snapstore->link);
 
 	uuid_copy( &snapstore->id, id );
 
@@ -170,15 +183,19 @@ int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_l
 	snapstore->halffilled = false;
 	snapstore->overflowed = false;
 
-	{
-		snapstore_multidev_t* multidev = NULL;
-		res = snapstore_multidev_create( &multidev );
-		if (res != SUCCESS){
-			log_err_uuid( "Failed to create snapstore file for snapstore ", id );
-			return res;
-		}
-		snapstore->multidev = multidev;
+
+	res = snapstore_multidev_create( &multidev );
+	if (res != SUCCESS){
+		kfree(snapstore);
+
+		log_err_uuid( "Failed to create snapstore file for snapstore ", id );
+		return res;
 	}
+	snapstore->multidev = multidev;
+	
+	down_write(&snapstores_lock);
+	list_add_tail( &snapstore->link, &snapstores );
+	up_write(&snapstores_lock);
 
 	shared_resource_init( &snapstore->shared, snapstore, _snapstore_destroy_cb );
 
@@ -218,17 +235,21 @@ int snapstore_cleanup( uuid_t* id, u64* filled_bytes )
 snapstore_t* _snapstore_find( uuid_t* id )
 {
 	snapstore_t* result = NULL;
-	content_t* content;
 
-	CONTAINER_FOREACH_BEGIN( Snapstore, content )
-	{
-		snapstore_t* snapstore = (snapstore_t*)content;
-		if (uuid_equal( &snapstore->id, id )){
-			result = snapstore;
-			break;
+	down_read( &snapstores_lock );
+	if (!list_empty( &snapstores )) {
+		struct list_head* _head;
+
+		list_for_each( _head, &snapstores ) {
+			snapstore_t* snapstore = list_entry( _head, snapstore_t, link );
+
+			if (uuid_equal( &snapstore->id, id )){
+				result = snapstore;
+				break;
+			}
 		}
 	}
-	CONTAINER_FOREACH_END( Snapstore );
+	up_read( &snapstores_lock );
 
 	return result;
 }
@@ -787,5 +808,3 @@ int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* s
 
 	return res;
 }
-
-
