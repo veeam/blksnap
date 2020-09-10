@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <sys/types.h>
+#include <stdint.h>
 #include "types.h"
 
 #define SNAP_ID_LENGTH 16
@@ -57,6 +58,16 @@ int snap_mark_dirty_blocks(struct snap_ctx* ctx,
 						   struct ioctl_dev_id_s devId,
 						   struct block_range_s* dirty_blocks,
 						   unsigned int count);
+
+
+struct snapshot_store_ranges
+{
+    uint32_t rangesSize;
+    struct {
+        uint64_t left;
+        uint64_t right;
+    } ranges[0];
+};
 
 //@todo make with this something
 int snap_poll(struct snap_ctx* ctx, int timeout);

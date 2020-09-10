@@ -12,11 +12,11 @@ target_link_libraries(get_tracking BlkSnapLib)
 add_executable(read_cbt read_cbt.cpp)
 target_link_libraries(read_cbt BlkSnapLib)
 
-add_executable(create_snapstore create_snapstore.cpp)
-target_link_libraries(create_snapstore BlkSnapLib)
-
 add_executable(create_inmemory_snapstore create_inmemory_snapstore.cpp)
 target_link_libraries(create_inmemory_snapstore BlkSnapLib)
+
+add_executable(create_snapshot create_snapshot.cpp)
+target_link_libraries(create_snapshot BlkSnapLib)
 
 add_executable(get_tracking_block_size get_tracking_block_size.cpp)
 target_link_libraries(get_tracking_block_size BlkSnapLib)
@@ -33,5 +33,5 @@ target_link_libraries(snapshot_store_cleanup BlkSnapLib)
 add_executable(create_file_snapstore create_file_snapstore.cpp)
 target_link_libraries(create_file_snapstore BlkSnapLib)
 
-add_executable(create_stretch_snapshot create_stretch_snapshot.cpp)
-target_link_libraries(create_stretch_snapshot BlkSnapLib)
+add_executable(create_stretch_snapstore create_stretch_snapstore.cpp)
+target_link_libraries(create_stretch_snapstore BlkSnapLib)
