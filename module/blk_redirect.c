@@ -3,7 +3,7 @@
 #include "blk_redirect.h"
 #include "blk_direct.h"
 
-#define SECTION "blk	   "
+#define SECTION "blk       "
 #include "log_format.h"
 
 #define bio_vec_sectors(bv) (bv.bv_len >> SECTOR_SHIFT)

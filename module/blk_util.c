@@ -3,7 +3,7 @@
 #include "queue_spinlocking.h"
 #include "blk_util.h"
 
-#define SECTION "blk	   "
+#define SECTION "blk       "
 #include "log_format.h"
 
 int blk_dev_open( dev_t dev_id, struct block_device** p_blk_dev )

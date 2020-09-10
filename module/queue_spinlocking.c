@@ -1,7 +1,7 @@
 #include "common.h"
 #include "queue_spinlocking.h"
 
-#define SECTION "queue	 "
+#define SECTION "queue     "
 #include "log_format.h"
 
 int queue_sl_init( queue_sl_t* queue, int content_size )

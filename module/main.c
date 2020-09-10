@@ -23,7 +23,7 @@
 #include <linux/module.h>
 
 
-#define SECTION "main	  "
+#define SECTION "main      "
 #include "log_format.h"
 
 #include <linux/notifier.h>

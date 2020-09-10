@@ -6,7 +6,7 @@
 #include "snapstore_blk.h"
 
 
-#define SECTION "blk	   "
+#define SECTION "blk       "
 #include "log_format.h"
 
 

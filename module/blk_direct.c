@@ -1,7 +1,7 @@
 #include "common.h"
 #include "blk_direct.h"
 
-#define SECTION "blk	   "
+#define SECTION "blk       "
 #include "log_format.h"
 
 struct bio_set g_BlkDirectBioset = { 0 };
