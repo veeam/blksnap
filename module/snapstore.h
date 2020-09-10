@@ -14,7 +14,7 @@
 
 typedef struct snapstore_s
 {
-	content_t content;
+	struct list_head link;
 	shared_resource_t shared;
 	uuid_t id;
 
@@ -32,7 +32,6 @@ typedef struct snapstore_s
 }snapstore_t;
 
 
-int snapstore_init( void );
 void snapstore_done( void );
 
 int snapstore_create(uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, size_t dev_id_set_length);
