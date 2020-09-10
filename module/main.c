@@ -218,9 +218,6 @@ int __init veeamsnap_init(void)
 		if ((result = tracker_queue_init( )) != SUCCESS)
 			break;
 
-		if ((result = snapshot_Init( )) != SUCCESS)
-			break;
-
 		if ((result = snapstore_device_init( )) != SUCCESS)
 			break;
 		if ((result = snapstore_init( )) != SUCCESS)
@@ -261,29 +258,27 @@ void __exit veeamsnap_exit(void)
 
 	ctrl_sysfs_done(&veeamsnap_device);
 
-	result = snapshot_Done( );
+	snapshot_Done( );
+
+	snapstore_device_done( );
+	snapstore_done( );
+
+	result = tracker_done( );
 	if (SUCCESS == result){
-
-		snapstore_device_done( );
-		snapstore_done( );
-
-		result = tracker_done( );
-		if (SUCCESS == result){
-			result = tracker_queue_done( );
-			if (SUCCESS == result)
-				result = blk_filter_unregister(&g_filter);
-		}
-
-		snapimage_done( );
-
-		sparsebitmap_done( );
-
-		blk_deferred_bioset_free( );
-		blk_deferred_done( );
-
-		blk_redirect_bioset_free( );
-		blk_direct_bioset_free( );
+		result = tracker_queue_done( );
+		if (SUCCESS == result)
+			result = blk_filter_unregister(&g_filter);
 	}
+
+	snapimage_done( );
+
+	sparsebitmap_done( );
+
+	blk_deferred_bioset_free( );
+	blk_deferred_done( );
+
+	blk_redirect_bioset_free( );
+	blk_direct_bioset_free( );
 
 	if (SUCCESS != result){
 		log_tr_d( "Failed to unload. errno=", result );

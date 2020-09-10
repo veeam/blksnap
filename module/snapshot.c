@@ -7,168 +7,78 @@
 #define SECTION "snapshot  "
 #include "log_format.h"
 
-static container_t Snapshots;
+LIST_HEAD(snapshots);
+DECLARE_RWSEM(snapshots_lock);
 
-int _snapshot_destroy( snapshot_t* p_snapshot );
+void _snapshot_destroy( snapshot_t* p_snapshot );
 
-
-int snapshot_Init( void )
+void snapshot_Done( void )
 {
-	return container_init( &Snapshots, sizeof( snapshot_t ) );
-}
-
-int snapshot_Done( void )
-{
-	int result = SUCCESS;
-	content_t* content;
-
+	snapshot_t* snap;
 	log_tr( "Removing all snapshots" );
 
-	while (NULL != (content = container_get_first( &Snapshots ))){
-		int status = SUCCESS;
-		snapshot_t* p_snapshot = (snapshot_t*)content;
+	do {
+		snap = NULL;
+		down_write( &snapshots_lock );
+		if (!list_empty( &snapshots )) {
+			snapshot_t* snap = list_entry( snapshots.next, snapshot_t, link );
 
-		status = _snapshot_destroy( p_snapshot );
-		if (status != SUCCESS){
-			log_err_format( "Failed to destroy snapshot [0x%llx]", p_snapshot->id );
-			result = status;
+			list_del( &snap->link );
 		}
-	}
+		up_write( &snapshots_lock );
 
-	if (result == SUCCESS){
-		if (SUCCESS != (result = container_done( &Snapshots ))){
-			log_err( "Unable to destroy snapshot container: not empty" );
-		};
-	}
-	return result;
+		if (snap)
+			_snapshot_destroy( snap );
+
+	} while(snap);
 }
 
 int _snapshot_New( dev_t* p_dev, int count, snapshot_t** pp_snapshot )
 {
-	int result = SUCCESS;
 	snapshot_t* p_snapshot = NULL;
 	dev_t* snap_set = NULL;
 
-	p_snapshot = (snapshot_t*)content_new( &Snapshots );
+	p_snapshot = (snapshot_t*)kzalloc( sizeof(snapshot_t), GFP_KERNEL );
 	if (NULL == p_snapshot){
 		log_err( "Unable to create snapshot: failed to allocate memory for snapshot structure" );
 		return -ENOMEM;
 	}
+	INIT_LIST_HEAD( &p_snapshot->link );
 
-	do{
-		p_snapshot->id = (unsigned long long)( 0 ) + (unsigned long)(p_snapshot );
+	p_snapshot->id = (unsigned long)(p_snapshot );
 
-		p_snapshot->dev_id_set = NULL;
-		p_snapshot->dev_id_set_size = 0;
+	snap_set = (dev_t*)kzalloc( sizeof( dev_t ) * count, GFP_KERNEL );
+	if (NULL == snap_set) {
+		kfree(p_snapshot);
 
-		{
-			size_t buffer_length = sizeof( dev_t ) * count;
-			snap_set = (dev_t*)kzalloc( buffer_length, GFP_KERNEL );
-			if (NULL == snap_set){
-				log_err( "Unable to create snapshot: faile to allocate memory for snapshot map" );
-				result = -ENOMEM;
-				break;
-			}
-			memcpy( snap_set, p_dev, buffer_length );
-		}
-
-		p_snapshot->dev_id_set_size = count;
-		p_snapshot->dev_id_set = snap_set;
-
-		*pp_snapshot = p_snapshot;
-		container_push_back( &Snapshots, &p_snapshot->content );
-	} while (false);
-
-	if (result != SUCCESS){
-		if (snap_set != NULL){
-			kfree( snap_set );
-			snap_set = NULL;
-		}
-
-		content_free( &p_snapshot->content );
+		log_err( "Unable to create snapshot: faile to allocate memory for snapshot map" );
+		return -ENOMEM;
 	}
-	return result;
+	memcpy( snap_set, p_dev, sizeof( dev_t ) * count );
+
+	p_snapshot->dev_id_set_size = count;
+	p_snapshot->dev_id_set = snap_set;
+
+	down_write(&snapshots_lock);
+	list_add_tail(&snapshots, &p_snapshot->link);
+	up_write(&snapshots_lock);
+
+	*pp_snapshot = p_snapshot;
+
+	return SUCCESS;
 }
-
-int _snapshot_Free( snapshot_t* snapshot )
-{
-	int result = SUCCESS;
-
-	if (snapshot->dev_id_set != NULL){
-		kfree( snapshot->dev_id_set );
-		snapshot->dev_id_set = NULL;
-		snapshot->dev_id_set_size = 0;
-	}
-	return result;
-}
-
-int _snapshot_Delete( snapshot_t* p_snapshot )
-{
-	int result;
-	result = _snapshot_Free( p_snapshot );
-
-	if (result == SUCCESS)
-		content_free( &p_snapshot->content );
-	return result;
-}
-
-typedef struct FindBySnapshotId_s
-{
-	unsigned long long id;
-	content_t* pContent;
-}FindBySnapshotId_t;
-
-int _FindById_cb( content_t* pContent, void* parameter )
-{
-	FindBySnapshotId_t* pParam = (FindBySnapshotId_t*)parameter;
-	snapshot_t* p_snapshot = (snapshot_t*)pContent;
-
-	if (p_snapshot->id == pParam->id){
-		pParam->pContent = pContent;
-		return SUCCESS;	//don`t continue
-	}
-	return ENODATA; //continue
-}
-/*
-* return:
-*	 SUCCESS if found;
-*	 ENODATA if not found
-*	 anything else in error case.
-*/
-int snapshot_FindById( unsigned long long id, snapshot_t** pp_snapshot )
-{
-	int result = SUCCESS;
-	FindBySnapshotId_t param = {
-		.id = id,
-		.pContent = NULL
-	};
-
-	result = container_enum( &Snapshots, _FindById_cb, &param );
-
-	if (SUCCESS == result){
-		*pp_snapshot = (snapshot_t*)param.pContent;
-		if ((NULL == param.pContent))
-			result = -ENODATA;
-	}
-	else
-		*pp_snapshot = NULL;
-	return result;
-}
-
 
 int _snapshot_remove_device( dev_t dev_id )
 {
-	int result = SUCCESS;
+	int result;
 	tracker_t* tracker = NULL;
 
 	result = tracker_find_by_dev_id( dev_id, &tracker );
 	if (result != SUCCESS){
-		if (result == -ENODEV){
+		if (result == -ENODEV)
 			log_err_dev_t( "Cannot find device by device id=", dev_id );
-		}
-		else{
+		else
 			log_err_dev_t( "Failed to find device by device id=", dev_id );
-		}
 		return SUCCESS;
 	}
 
@@ -178,28 +88,22 @@ int _snapshot_remove_device( dev_t dev_id )
 	tracker_snapshot_id_set(tracker, 0ull);
 
 	log_tr_format( "Device [%d:%d] successfully removed from snapshot", MAJOR( dev_id ), MINOR( dev_id ) );
-
-	return result;
+	return SUCCESS;
 }
 
-int _snapshot_cleanup( snapshot_t* snapshot )
+void _snapshot_cleanup( snapshot_t* snapshot )
 {
-	int result = SUCCESS;
 	int inx = 0;
-	unsigned long long snapshot_id = snapshot->id;
 
 	for (; inx < snapshot->dev_id_set_size; ++inx){
-		result = _snapshot_remove_device( snapshot->dev_id_set[inx] );
-		if (result != SUCCESS){
+		int result = _snapshot_remove_device( snapshot->dev_id_set[inx] );
+		if (result != SUCCESS)
 			log_err_format( "Failed to remove device [%d:%d] from snapshot", snapshot->dev_id_set[inx] );
-		}
 	}
 
-	result = _snapshot_Delete( snapshot );
-	if (result != SUCCESS){
-		log_err_format( "Failed to delete snapshot [0x%llx]", snapshot_id );
-	}
-	return result;
+	if (snapshot->dev_id_set != NULL)
+		kfree( snapshot->dev_id_set );
+	kfree( snapshot );
 }
 
 int snapshot_Create( dev_t* dev_id_set, unsigned int dev_id_set_size, unsigned int cbt_block_size_degree, unsigned long long* psnapshot_id )
@@ -255,23 +159,19 @@ int snapshot_Create( dev_t* dev_id_set, unsigned int dev_id_set_size, unsigned i
 		log_tr_format( "Snapshot [0x%llx] was created", snapshot->id );
 	} while (false);
 
-	if (SUCCESS != result){
-		int res;
-
+	if (SUCCESS != result) {
 		log_tr_format( "Snapshot [0x%llx] cleanup", snapshot->id );
 
-		container_get( &snapshot->content );
-		res = _snapshot_cleanup( snapshot );
-		if (res != SUCCESS){
-			log_err_format( "Failed to perform snapshot [0x%llx] cleanup", snapshot->id );
-			container_push_back( &Snapshots, &snapshot->content );
-		}
+		down_write( &snapshots_lock );
+		list_del( &snapshot->link );
+		up_write( &snapshots_lock );
+
+		_snapshot_cleanup( snapshot );
 	}
 	return result;
 }
 
-
-int _snapshot_destroy( snapshot_t* snapshot )
+void _snapshot_destroy( snapshot_t* snapshot )
 {
 	int result = SUCCESS;
 	size_t inx;
@@ -283,35 +183,42 @@ int _snapshot_destroy( snapshot_t* snapshot )
 	result = tracker_release_snapshot( snapshot );
 	if (result != SUCCESS){
 		log_err_format( "Failed to release snapshot [0x%llx]", snapshot->id );
-		return result;
 	}
 
 	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx){
 		/*int res = */snapimage_destroy( snapshot->dev_id_set[inx] );
 	}
 
-	return _snapshot_cleanup( snapshot );
+	_snapshot_cleanup( snapshot );
 }
 
 int snapshot_Destroy( unsigned long long snapshot_id )
 {
-	int result = SUCCESS;
 	snapshot_t* snapshot = NULL;
 
 	log_tr_format( "Destroy snapshot [0x%llx]", snapshot_id );
 
-	result = snapshot_FindById( snapshot_id, &snapshot );
-	if (result != SUCCESS){
+	down_read( &snapshots_lock );
+	if ( !list_empty(&snapshots) ) {
+		struct list_head* _head;
+
+		list_for_each( _head, &snapshots ){
+			snapshot_t *_snap = list_entry(_head, snapshot_t, link);
+
+			if (_snap->id == snapshot_id){
+				snapshot = _snap;
+				list_del( &snapshot->link );
+				break;
+			}
+		}
+	}
+	up_read( &snapshots_lock );
+
+	if (NULL == snapshot) {
 		log_err_format( "Unable to destroy snapshot [0x%llx]: cannot find snapshot by id", snapshot_id );
-		return result;
+		return -ENODEV;
 	}
-
-	container_get( &snapshot->content );
-	result = _snapshot_destroy( snapshot );
-	if (result != SUCCESS){
-		container_push_back( &Snapshots, &snapshot->content );
-	}
-	return result;
+	
+	_snapshot_destroy(snapshot);
+	return SUCCESS;
 }
-
-

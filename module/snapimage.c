@@ -25,7 +25,7 @@ static DEFINE_SPINLOCK(g_snapimage_minors_lock);
 LIST_HEAD(snap_images);
 DECLARE_RWSEM(snap_images_lock);
 
-struct rw_semaphore snap_image_destroy_lock;
+DECLARE_RWSEM(snap_image_destroy_lock);
 
 typedef struct snapimage_s{
 	struct list_head link;
@@ -541,7 +541,7 @@ int snapimage_create( dev_t original_dev )
 		cbt_map = tracker->cbt_map;
 	}
 
-	image = kmalloc( sizeof(snapimage_t), GFP_KERNEL);
+	image = kzalloc( sizeof(snapimage_t), GFP_KERNEL);
 	if (image == NULL){
 		log_err("Failed to allocate snapshot image structure" );
 		return -ENOMEM;
@@ -863,8 +863,6 @@ int snapimage_init( void )
 {
 	int res = SUCCESS;
 
-	init_rwsem(&snap_image_destroy_lock);
-
 	res = register_blkdev( g_snapimage_major, SNAP_IMAGE_NAME );
 	if (res >= SUCCESS){
 		g_snapimage_major = res;
@@ -892,13 +890,13 @@ int snapimage_done( void )
 	while(true) {
 		snapimage_t* image = NULL;
 
-		down_write(&snap_image_destroy_lock);
+		down_write(&snap_images_lock);
 		if (!list_empty(&snap_images)) {
 			image = list_entry( snap_images.next, snapimage_t, link );
 
 			list_del( &image->link );
 		}
-		up_write(&snap_image_destroy_lock);
+		up_write(&snap_images_lock);
 
 		if (NULL == image)
 			break;

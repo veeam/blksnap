@@ -11,5 +11,3 @@ int snapimage_destroy( dev_t original_dev );
 int snapimage_collect_images( int count, struct image_info_s* p_user_image_info, int* p_real_count );
 
 int snapimage_mark_dirty_blocks(dev_t image_dev_id, struct block_range_s* block_ranges, unsigned int count);
-
-
