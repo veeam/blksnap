@@ -9,85 +9,79 @@
 
 int inc_snapstore_block_size_pow(void);
 
-container_t SnapstoreDevices;
+LIST_HEAD(snapstore_devices);
+DECLARE_RWSEM(snapstore_devices_lock);
 
 static inline void _snapstore_device_descr_write_lock( snapstore_device_t* snapstore_device )
 {
-//	down_write( &snapstore_device->store_block_map_locker );
 	mutex_lock( &snapstore_device->store_block_map_locker );
 }
 static inline void _snapstore_device_descr_write_unlock( snapstore_device_t* snapstore_device )
 {
-//	up_write( &snapstore_device->store_block_map_locker );
 	mutex_unlock( &snapstore_device->store_block_map_locker );
-}
-
-
-int snapstore_device_init( void )
-{
-	int res = SUCCESS;
-
-	res = container_init( &SnapstoreDevices, sizeof( snapstore_device_t ) );
-	if (res != SUCCESS)
-		return res;
-
-
-	return res;
 }
 
 void snapstore_device_done( void )
 {
-	if (SUCCESS != container_done( &SnapstoreDevices )){
-		snapstore_device_t* snapstore_device;
+	snapstore_device_t* snapstore_device = NULL;
 
-		log_err( "Cleanup snapstore devices" );
-
-		while (NULL != (snapstore_device = (snapstore_device_t*)container_get_first( &SnapstoreDevices ))){
-			snapstore_device_put_resource( snapstore_device );
+	do {
+		down_write(&snapstore_devices_lock);
+		if (!list_empty(&snapstore_devices)) {
+			snapstore_device = list_entry( snapstore_devices.next, snapstore_device_t, link );
+			list_del( &snapstore_device->link );
 		}
-	}
+		up_write(&snapstore_devices_lock);
+
+		snapstore_device_put_resource( snapstore_device );
+	} while(snapstore_device);
 }
 
 snapstore_device_t* snapstore_device_find_by_dev_id( dev_t dev_id )
 {
-	content_t* content;
 	snapstore_device_t* result = NULL;
 
-	CONTAINER_FOREACH_BEGIN( SnapstoreDevices, content )
-	{
-		snapstore_device_t* snapstore_device = (snapstore_device_t*)(content);
+	down_read( &snapstore_devices_lock );
+	if (!list_empty( &snapstore_devices )) {
+		struct list_head* _head;
 
-		if (dev_id == snapstore_device->dev_id){
-			result = snapstore_device;
-			//_container_del( &SnapstoreDevices, content );
-			break;
+		list_for_each( _head, &snapstore_devices ) {
+			snapstore_device_t* snapstore_device = list_entry( _head, snapstore_device_t, link );
+
+			if (dev_id == snapstore_device->dev_id){
+				result = snapstore_device;
+				break;
+			}
 		}
 	}
-	CONTAINER_FOREACH_END( SnapstoreDevices );
+	up_read( &snapstore_devices_lock );
 
 	return result;
 }
 
 snapstore_device_t* _snapstore_device_get_by_snapstore_id( uuid_t* id )
 {
-	content_t* content;
 	snapstore_device_t* result = NULL;
 
-	CONTAINER_FOREACH_BEGIN( SnapstoreDevices, content )
-	{
-		snapstore_device_t* snapstore_device = (snapstore_device_t*)(content);
+	down_write( &snapstore_devices_lock );
+	if (!list_empty( &snapstore_devices )) {
+		struct list_head* _head;
 
-		if (uuid_equal( id, &snapstore_device->snapstore->id )){
-			result = snapstore_device;
-			_container_del( &SnapstoreDevices, content );
-			//found
-			break;
+		list_for_each( _head, &snapstore_devices ) {
+			snapstore_device_t* snapstore_device = list_entry( _head, snapstore_device_t, link );
+
+			if (uuid_equal( id, &snapstore_device->snapstore->id )) {
+
+				result = snapstore_device;
+				list_del( &snapstore_device->link );
+				break;
+			}
 		}
 	}
-	CONTAINER_FOREACH_END( SnapstoreDevices );
+	up_write( &snapstore_devices_lock );
+
 	return result;
 }
-
 
 void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 {
@@ -106,7 +100,8 @@ void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 		snapstore_put( snapstore_device->snapstore );
 		snapstore_device->snapstore = NULL;
 	}
-	content_free( &snapstore_device->content );
+
+	kfree( snapstore_device );
 }
 
 void snapstore_device_free_cb( void* resource )
@@ -132,16 +127,18 @@ int snapstore_device_cleanup( uuid_t* id )
 int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 {
 	int res = SUCCESS;
-	snapstore_device_t* snapstore_device;
+	snapstore_device_t* snapstore_device = kzalloc(sizeof(snapstore_device_t), GFP_KERNEL);
 
-	snapstore_device = (snapstore_device_t*)content_new( &SnapstoreDevices );
 	if (NULL == snapstore_device)
 		return -ENOMEM;
 
+	INIT_LIST_HEAD( &snapstore_device->link );
 	snapstore_device->dev_id = dev_id;
 
 	res = blk_dev_open( dev_id, &snapstore_device->orig_blk_dev );
-	if (res != SUCCESS){
+	if (res != SUCCESS) {
+		kfree(snapstore_device);
+
 		log_err_dev_t( "Unable to create snapstore device: failed to open original device ", dev_id );
 		return res;
 	}
@@ -188,7 +185,10 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 
 	snapstore_device->snapstore = snapstore_get(snapstore);
 
-	container_push_back(&SnapstoreDevices, &snapstore_device->content);
+	down_write( &snapstore_devices_lock );
+	list_add_tail( &snapstore_device->link, &snapstore_devices );
+	up_write( &snapstore_devices_lock );
+
 	snapstore_device_get_resource(snapstore_device);
 
 	return SUCCESS;

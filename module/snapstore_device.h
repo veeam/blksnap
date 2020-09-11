@@ -17,7 +17,7 @@ typedef struct snapstore_copy_block_request_s
 
 typedef struct snapstore_device_s
 {
-	content_t content;
+	struct list_head link;
 	shared_resource_t shared;
 	dev_t dev_id;
 	snapstore_t* snapstore;
@@ -34,7 +34,6 @@ typedef struct snapstore_device_s
 	volatile bool corrupted;
 }snapstore_device_t;
 
-int snapstore_device_init( void );
 void snapstore_device_done( void );
 
 static inline snapstore_device_t* snapstore_device_get_resource( snapstore_device_t* snapstore_device )

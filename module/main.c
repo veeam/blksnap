@@ -38,7 +38,7 @@ static int g_param_zerosnapdata = 0;		/*rudiment */
 static int g_param_debuglogging = 0;		/*rudiment */
 static unsigned int g_param_fixflags = 0;   /*rudiment */
 
-static char* g_logdir = NULL; 
+static char* g_logdir = NULL;
 static unsigned long g_param_logmaxsize = 15*1024*1024;
 
 static int g_param_snapstore_block_size_pow = 14;
@@ -59,7 +59,7 @@ int inc_snapstore_block_size_pow(void)
 {
 	if (g_param_snapstore_block_size_pow > 30)
 		return -EFAULT;
-	
+
 	++g_param_snapstore_block_size_pow;
 	return SUCCESS;
 }
@@ -218,8 +218,6 @@ int __init veeamsnap_init(void)
 		if ((result = tracker_queue_init( )) != SUCCESS)
 			break;
 
-		if ((result = snapstore_device_init( )) != SUCCESS)
-			break;
 
 		if ((result = snapimage_init( )) != SUCCESS)
 			break;
