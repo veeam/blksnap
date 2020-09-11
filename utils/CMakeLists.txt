@@ -1,37 +1,37 @@
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -no-pie -static-libstdc++ -static-libgcc")
 
-add_executable(add_to_tracking add_to_tracking.cpp)
-target_link_libraries(add_to_tracking BlkSnapLib)
+add_executable(tracking_add tracking_add.cpp)
+target_link_libraries(tracking_add BlkSnapLib)
 
-add_executable(remove_from_tracking remove_from_tracking.cpp)
-target_link_libraries(remove_from_tracking BlkSnapLib)
+add_executable(tracking_remove tracking_remove.cpp)
+target_link_libraries(tracking_remove BlkSnapLib)
 
-add_executable(get_tracking get_tracking.cpp)
-target_link_libraries(get_tracking BlkSnapLib)
+add_executable(tracking_get tracking_get.cpp)
+target_link_libraries(tracking_get BlkSnapLib)
 
-add_executable(read_cbt read_cbt.cpp)
-target_link_libraries(read_cbt BlkSnapLib)
+add_executable(tracking_block_size tracking_block_size.cpp)
+target_link_libraries(tracking_block_size BlkSnapLib)
 
-add_executable(create_inmemory_snapstore create_inmemory_snapstore.cpp)
-target_link_libraries(create_inmemory_snapstore BlkSnapLib)
+add_executable(tracking_read tracking_read.cpp)
+target_link_libraries(tracking_read BlkSnapLib)
 
-add_executable(create_snapshot create_snapshot.cpp)
-target_link_libraries(create_snapshot BlkSnapLib)
+add_executable(snapshot_create snapshot_create.cpp)
+target_link_libraries(snapshot_create BlkSnapLib)
 
-add_executable(get_tracking_block_size get_tracking_block_size.cpp)
-target_link_libraries(get_tracking_block_size BlkSnapLib)
+add_executable(snapshot_destroy snapshot_destroy.cpp)
+target_link_libraries(snapshot_destroy BlkSnapLib)
 
-add_executable(destroy_snapshot destroy_snapshot.cpp)
-target_link_libraries(destroy_snapshot BlkSnapLib)
-
-add_executable(snapshot_get_errno snapshot_get_errno.cpp)
-target_link_libraries(snapshot_get_errno BlkSnapLib)
+add_executable(snapshot_errno snapshot_errno.cpp)
+target_link_libraries(snapshot_errno BlkSnapLib)
 
 add_executable(snapshot_store_cleanup snapshot_store_cleanup.cpp)
 target_link_libraries(snapshot_store_cleanup BlkSnapLib)
 
-add_executable(create_file_snapstore create_file_snapstore.cpp)
-target_link_libraries(create_file_snapstore BlkSnapLib)
+add_executable(file_snapstore_create file_snapstore_create.cpp)
+target_link_libraries(file_snapstore_create BlkSnapLib)
 
-add_executable(create_stretch_snapstore create_stretch_snapstore.cpp)
-target_link_libraries(create_stretch_snapstore BlkSnapLib)
+add_executable(inmemory_snapstore_create inmemory_snapstore_create.cpp)
+target_link_libraries(inmemory_snapstore_create BlkSnapLib)
+
+add_executable(stretch_snapstore_create stretch_snapstore_create.cpp)
+target_link_libraries(stretch_snapstore_create BlkSnapLib)
