@@ -29,8 +29,9 @@ int snapstore_multidev_create( snapstore_multidev_t** p_multidev )
 
 void snapstore_multidev_destroy( snapstore_multidev_t* multidev )
 {
-	//BUG_ON(NULL == multidev);
+	multidev_el_t* el;
 
+	//BUG_ON(NULL == multidev);
 	blk_descr_multidev_pool_done( &multidev->pool );
 
 	do {

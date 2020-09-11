@@ -30,7 +30,6 @@
 #include <linux/blk-filter.h>
 #define VEEAMSNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
 
-//#include <linux/reboot.h>	   //use old methon
 #include <linux/syscore_ops.h>	//more modern method
 
 
@@ -136,11 +135,7 @@ static void blk_snap_syscore_shutdown(void)
 	//stop logging thread. In this time it is not needed
 	logging_done();
 
-	{//stop tracking
-		int result = tracker_remove_all();
-		if (result != SUCCESS)
-			log_err("Failed to remove all tracking devices from tracking");
-	}
+	tracker_remove_all();
 }
 
 struct syscore_ops blk_snap_syscore_ops = {
@@ -212,9 +207,6 @@ int __init veeamsnap_init(void)
 		if ((result = sparsebitmap_init( )) != SUCCESS)
 			break;
 
-		if ((result = tracker_init( )) != SUCCESS)
-			break;
-
 		if ((result = tracker_queue_init( )) != SUCCESS)
 			break;
 
@@ -257,12 +249,12 @@ void __exit veeamsnap_exit(void)
 	snapstore_device_done( );
 	snapstore_done( );
 
-	result = tracker_done( );
-	if (SUCCESS == result){
-		result = tracker_queue_done( );
-		if (SUCCESS == result)
-			result = blk_filter_unregister(&g_filter);
-	}
+	tracker_done( );
+
+	result = tracker_queue_done( );
+	if (SUCCESS == result)
+		result = blk_filter_unregister(&g_filter);
+
 
 	snapimage_done( );
 

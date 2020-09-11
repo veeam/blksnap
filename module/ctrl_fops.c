@@ -424,7 +424,7 @@ int ioctl_snapstore_file( unsigned long arg )
 {
 	int res = SUCCESS;
 	struct ioctl_snapstore_file_add_s param;
-	page_array_t* ranges = NULL;//struct ioctl_range_s* ranges = NULL;	
+	page_array_t* ranges = NULL;//struct ioctl_range_s* ranges = NULL;
 	size_t ranges_buffer_size;
 
 	if (0 != copy_from_user( &param, (void*)arg, sizeof( struct ioctl_snapstore_file_add_s ) )){
@@ -498,7 +498,7 @@ int ioctl_snapstore_file_multidev( unsigned long arg )
 	{
 	int res = SUCCESS;
 	struct ioctl_snapstore_file_add_multidev_s param;
-	page_array_t* ranges = NULL;//struct ioctl_range_s* ranges = NULL;	
+	page_array_t* ranges = NULL;//struct ioctl_range_s* ranges = NULL;
 	size_t ranges_buffer_size;
 
 	if (0 != copy_from_user( &param, (void*)arg, sizeof( struct ioctl_snapstore_file_add_multidev_s ) )){
@@ -587,8 +587,6 @@ int ioctl_printstate( unsigned long arg )
 	log_tr( "state:" );
 	log_tr_format( "version: %d.%d.%d.%d.", version.major, version.minor, version.revision, version.build );
 
-//	snapimage_print_state( );
-	tracker_print_state( );
 	page_arrays_print_state( );
 	blk_deferred_print_state( );
 
