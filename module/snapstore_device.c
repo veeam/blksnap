@@ -33,7 +33,8 @@ void snapstore_device_done( void )
 		}
 		up_write(&snapstore_devices_lock);
 
-		snapstore_device_put_resource( snapstore_device );
+		if (snapstore_device)
+			snapstore_device_put_resource( snapstore_device );
 	} while(snapstore_device);
 }
 
