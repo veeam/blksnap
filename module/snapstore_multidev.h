@@ -8,7 +8,7 @@
 
 typedef struct multidev_el_s
 {
-	content_sl_t content;
+	struct list_head link;
 
 	dev_t dev_id;
 	struct block_device* blk_dev;
@@ -17,7 +17,8 @@ typedef struct multidev_el_s
 
 typedef struct snapstore_multidev_s
 {
-	container_sl_t devicelist; //for mapping device id to opened device struct pointer
+	struct list_head devicelist; //for mapping device id to opened device struct pointer
+	spinlock_t devicelist_lock;
 
 	blk_descr_pool_t pool;
 }snapstore_multidev_t;

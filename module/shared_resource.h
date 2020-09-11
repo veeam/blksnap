@@ -1,5 +1,8 @@
 #pragma once
 
+//TODO: redesign for kref
+//look https://www.kernel.org/doc/html/latest/core-api/kref.html
+
 typedef void (shared_resource_free_cb)(void* this_resource);
 
 typedef struct shared_resource_s
