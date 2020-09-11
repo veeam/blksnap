@@ -253,7 +253,7 @@ void tracker_remove_all(void )
 
 		write_lock( &trackers_lock );
 		if (!list_empty( &trackers )){
-			tracker_t* tracker = list_entry( trackers.next, tracker_t, link );
+			tracker = list_entry( trackers.next, tracker_t, link );
 
 			list_del( &tracker->link );
 		}
