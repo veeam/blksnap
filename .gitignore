@@ -1,4 +1,6 @@
 .*
+!.gitignore
+!.editorconfig
 cmake*
 bins
 *.o
