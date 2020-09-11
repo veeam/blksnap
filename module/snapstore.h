@@ -3,7 +3,6 @@
 #include <linux/uuid.h>
 #include "blk-snap-ctl.h"
 #include "rangevector.h"
-#include "container.h"
 #include "snapstore_mem.h"
 #include "snapstore_file.h"
 #include "snapstore_multidev.h"

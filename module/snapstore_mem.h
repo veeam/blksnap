@@ -1,12 +1,12 @@
 #pragma once
 
-#include "container.h"
 #include "blk_descr_mem.h"
-
 
 typedef struct snapstore_mem_s{
 
-	container_t blocks_list;
+	struct list_head blocks;
+	struct mutex blocks_lock;
+
 	size_t blocks_limit;
 	size_t blocks_allocated;
 

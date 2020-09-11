@@ -6,57 +6,55 @@
 #include "log_format.h"
 
 typedef struct buffer_el_s{
-	content_t content;
+	struct list_head link;
 	void* buff;
 }buffer_el_t;
 
 
 snapstore_mem_t* snapstore_mem_create( size_t available_blocks )
 {
-	int res;
-	snapstore_mem_t* mem = NULL;
+	snapstore_mem_t* mem = kzalloc( sizeof( snapstore_mem_t ), GFP_KERNEL );
 
-	mem = kzalloc( sizeof( snapstore_mem_t ), GFP_KERNEL );
-	if (mem == NULL)
+	if (NULL == mem)
 		return NULL;
-	
+
 	blk_descr_mem_pool_init( &mem->pool, available_blocks );
 
 	mem->blocks_limit = available_blocks;
-	do{
-		res = container_init( &mem->blocks_list, sizeof( buffer_el_t ) );
-		if (res != SUCCESS)
-			break;
 
-
-	} while (false);
-	if (res != SUCCESS){
-		kfree( mem );
-		mem = NULL;
-	}
+	INIT_LIST_HEAD( &mem->blocks );
+	mutex_init( &mem->blocks_lock );
 
 	return mem;
 }
 
 void snapstore_mem_destroy( snapstore_mem_t* mem )
 {
-	if (mem != NULL){
-		buffer_el_t* buffer_el = NULL;
+	buffer_el_t* buffer_el;
 
-		while ( NULL != (buffer_el = (buffer_el_t*)container_get_first( &mem->blocks_list )) )
-		{
-			//dbg_vfree( buffer_el->buff, snapstore_block_size() * SECTOR512 );
-			vfree( buffer_el->buff );
-			content_free( &buffer_el->content );
+	if (NULL == mem)
+		return ;
+
+	do {
+		buffer_el = NULL;
+
+		mutex_lock( &mem->blocks_lock );
+		if (!list_empty( &mem->blocks )) {
+			buffer_el = list_entry( mem->blocks.next, buffer_el_t, link );
+
+			list_del( &buffer_el->link );
 		}
+		mutex_unlock( &mem->blocks_lock );
 
-		if (SUCCESS != container_done( &mem->blocks_list ))
-			log_err( "Unable to perform snapstore cleanup in memory: memory blocks container is not empty" );
+		if (buffer_el) {
+			vfree( buffer_el->buff );
+			kfree( buffer_el);
+		}
+	}while(buffer_el);
 
-		blk_descr_mem_pool_done( &mem->pool );
+	blk_descr_mem_pool_done( &mem->pool );
 
-		kfree( mem );
-	}
+	kfree( mem );
 }
 
 void* snapstore_mem_get_block( snapstore_mem_t* mem )
@@ -64,13 +62,16 @@ void* snapstore_mem_get_block( snapstore_mem_t* mem )
 	buffer_el_t* buffer_el;
 
 	if (mem->blocks_allocated >= mem->blocks_limit){
-		log_err_format( "Unable to get block from snapstore in memory: block limit is reached, allocated %ld, limit %ld", mem->blocks_allocated, mem->blocks_limit );
+		log_err("Unable to get block from snapstore in memory.");
+		log_err_format( "Block limit is reached, allocated %ld, limit %ld",
+			mem->blocks_allocated, mem->blocks_limit );
 		return NULL;
 	}
 
-	buffer_el = (buffer_el_t*)content_new( &mem->blocks_list );
+	buffer_el = kzalloc(sizeof(buffer_el_t), GFP_KERNEL);
 	if (buffer_el == NULL)
 		return NULL;
+	INIT_LIST_HEAD( &buffer_el->link );
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
 	buffer_el->buff = __vmalloc(snapstore_block_size() * SECTOR_SIZE, GFP_NOIO);
@@ -78,7 +79,7 @@ void* snapstore_mem_get_block( snapstore_mem_t* mem )
 	buffer_el->buff = __vmalloc( snapstore_block_size() * SECTOR_SIZE, GFP_NOIO, PAGE_KERNEL );
 #endif
 	if (buffer_el->buff == NULL){
-		content_free( &buffer_el->content );
+		kfree( buffer_el );
 		return NULL;
 	}
 
@@ -87,6 +88,9 @@ void* snapstore_mem_get_block( snapstore_mem_t* mem )
 		log_tr_format( "%d MiB was allocated", mem->blocks_allocated );
 	}
 
-	container_push_back( &mem->blocks_list, &buffer_el->content );
+	mutex_lock( &mem->blocks_lock );
+	list_add_tail( &buffer_el->link, &mem->blocks);
+	mutex_unlock( &mem->blocks_lock );
+
 	return buffer_el->buff;
 }

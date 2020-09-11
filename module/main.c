@@ -218,7 +218,6 @@ int __init veeamsnap_init(void)
 		if ((result = tracker_queue_init( )) != SUCCESS)
 			break;
 
-
 		if ((result = snapimage_init( )) != SUCCESS)
 			break;
 
@@ -243,7 +242,6 @@ int __init veeamsnap_init(void)
 
 void __exit veeamsnap_exit(void)
 {
-	int conteiner_cnt = 0;
 	int result;
 	log_tr("Unloading module");
 
@@ -286,14 +284,6 @@ void __exit veeamsnap_exit(void)
 	ctrl_done( );
 
 	logging_done( );
-
-	conteiner_cnt = container_alloc_counter( );
-	if (conteiner_cnt != 0)
-		log_err_d( "container_alloc_counter=", conteiner_cnt );
-
-	conteiner_cnt = container_sl_alloc_counter( );
-	if (conteiner_cnt != 0)
-		log_err_d( "container_sl_alloc_counter=", conteiner_cnt );
 }
 
 module_init(veeamsnap_init);
