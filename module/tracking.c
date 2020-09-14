@@ -2,7 +2,6 @@
 #include "tracking.h"
 
 #include "tracker.h"
-#include "tracker_queue.h"
 #include "blk_util.h"
 #include "blk_direct.h"
 #include "defer_io.h"
@@ -16,50 +15,45 @@
 bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
 {
 	bool was_catched = false;
-
-	tracker_queue_t* tracker_queue = NULL;
 	tracker_t* tracker = NULL;
 
 	bio_get(bio);
 
-	if (SUCCESS == tracker_queue_find(bio->bi_disk, bio->bi_partno, &tracker_queue)) {
-		if (SUCCESS == tracker_find_by_queue(tracker_queue, &tracker)) {
+	if (SUCCESS == tracker_find_by_queue(bio->bi_disk, bio->bi_partno, &tracker)) {
+		if ((bio->bi_end_io != blk_direct_bio_endio) &&
+			(bio->bi_end_io != blk_redirect_bio_endio) &&
+			(bio->bi_end_io != blk_deferred_bio_endio)) {
 
-			if ((bio->bi_end_io != blk_direct_bio_endio) &&
-				(bio->bi_end_io != blk_redirect_bio_endio) &&
-				(bio->bi_end_io != blk_deferred_bio_endio)) {
+			if (tracker->is_unfreezable)
+				down_read(&tracker->unfreezable_lock);
 
-				if (tracker->is_unfreezable)
-					down_read(&tracker->unfreezable_lock);
-
-				if (atomic_read(&tracker->is_captured)) {
-					// do copy-on-write
-					int res = defer_io_redirect_bio(tracker->defer_io, bio, tracker);
-					if (SUCCESS == res) {
-						was_catched = true;
-						*result = 0;
-					}
+			if (atomic_read(&tracker->is_captured)) {
+				// do copy-on-write
+				int res = defer_io_redirect_bio(tracker->defer_io, bio, tracker);
+				if (SUCCESS == res) {
+					was_catched = true;
+					*result = 0;
 				}
-
-				if (tracker->is_unfreezable)
-					up_read(&tracker->unfreezable_lock);
 			}
 
-			if (!was_catched) {
-				bool cbt_locked = false;
+			if (tracker->is_unfreezable)
+				up_read(&tracker->unfreezable_lock);
+		}
 
-				if (tracker && bio_data_dir(bio) && bio_has_data(bio)) {
-					cbt_locked = tracker_cbt_bitmap_lock(tracker);
-					if (cbt_locked)
-					{
-						sector_t sectStart = bio->bi_iter.bi_sector;
-						sector_t sectCount = bio_sectors(bio);
-						tracker_cbt_bitmap_set(tracker, sectStart, sectCount);
-					}
-				}
+		if (!was_catched) {
+			bool cbt_locked = false;
+
+			if (tracker && bio_data_dir(bio) && bio_has_data(bio)) {
+				cbt_locked = tracker_cbt_bitmap_lock(tracker);
 				if (cbt_locked)
-					tracker_cbt_bitmap_unlock(tracker);
+				{
+					sector_t sectStart = bio->bi_iter.bi_sector;
+					sector_t sectCount = bio_sectors(bio);
+					tracker_cbt_bitmap_set(tracker, sectStart, sectCount);
+				}
 			}
+			if (cbt_locked)
+				tracker_cbt_bitmap_unlock(tracker);
 		}
 	}
 
@@ -124,17 +118,13 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
 	else if (-ENODATA == result)
 	{
 		struct block_device* target_dev = NULL;
-		tracker_queue_t* tracker_queue = NULL;
-
 		do {//check space already under tracking
 
 			result = blk_dev_open(dev_id, &target_dev);
 			if (result != SUCCESS)
 				break;
 
-			if (SUCCESS == tracker_queue_find(target_dev->bd_disk, target_dev->bd_partno, &tracker_queue)) {
-				// one tracker for one partition and for one tracker_queue
-				// so it`s not normal then tracker_queue exist without tracker.
+			if (SUCCESS == tracker_find_by_queue(target_dev->bd_disk, target_dev->bd_partno, &tracker)) {
 				result = -EALREADY;
 				log_err("Tracker queue already exist.");
 				break;
@@ -164,7 +154,7 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
 	else
 		log_err_format( "Unable to add device [%d:%d] under tracking: invalid trackers container. errno=%d",
 			MAJOR( dev_id ), MINOR( dev_id ), result );
-	
+
 
 	return result;
 }

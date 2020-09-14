@@ -1,6 +1,5 @@
 #pragma once
 #include "container_spinlocking.h"
-#include "tracker_queue.h"
 #include "cbt_map.h"
 #include "defer_io.h"
 #include "blk-snap-ctl.h"
@@ -13,7 +12,6 @@ typedef struct tracker_s
 	dev_t original_dev_id;
 
 	struct block_device* target_dev;
-	tracker_queue_t* tracker_queue;
 
 	cbt_map_t* cbt_map;
 
@@ -29,10 +27,8 @@ typedef struct tracker_s
 
 void tracker_done( void );
 
-int tracker_find_by_queue(tracker_queue_t* queue, tracker_t** ptracker);
-
+int tracker_find_by_queue(struct gendisk *disk, u8 partno, tracker_t** ptracker);
 int tracker_find_by_dev_id(dev_t dev_id, tracker_t** ptracker);
-//int tracker_find_by_sb(struct super_block* sb, tracker_t** ptracker);
 
 int tracker_enum_cbt_info(int max_count, struct cbt_info_s* p_cbt_info, int* p_count);
 

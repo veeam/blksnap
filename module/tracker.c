@@ -12,7 +12,7 @@ void tracker_done(void )
 	tracker_remove_all();
 }
 
-int tracker_find_by_queue(tracker_queue_t* tq, tracker_t** ptracker)
+int tracker_find_by_queue(struct gendisk *disk, u8 partno, tracker_t** ptracker)
 {
 	int result = -ENODATA;
 
@@ -23,7 +23,7 @@ int tracker_find_by_queue(tracker_queue_t* tq, tracker_t** ptracker)
 		list_for_each( _head, &trackers ) {
 			tracker_t* _tracker = list_entry( _head, tracker_t, link );
 
-			if (tq == _tracker->tracker_queue) {
+			if ((disk == _tracker->target_dev->bd_disk) && (partno == _tracker->target_dev->bd_partno)) {
 				if (ptracker != NULL)
 					*ptracker = _tracker;
 
@@ -152,24 +152,21 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 			(unsigned long long)blk_dev_get_capacity(tracker->target_dev));
 
 
-		if (cbt_map == NULL){
+		if (cbt_map == NULL) {
 			cbt_map = cbt_map_create(cbt_block_size_degree-SECTOR_SHIFT, blk_dev_get_capacity(tracker->target_dev));
 			if (cbt_map == NULL){
 				result = -ENOMEM;
 				break;
 			}
-			tracker_cbt_start(tracker, snapshot_id, cbt_map);
 		}
-		else
-			tracker_cbt_start(tracker, snapshot_id, cbt_map);
+
+		tracker_cbt_start(tracker, snapshot_id, cbt_map);
 
 		result = blk_freeze_bdev( tracker->original_dev_id, tracker->target_dev, &superblock );
 		if (result != SUCCESS){
 			tracker->is_unfreezable = true;
 			break;
 		}
-
-		result = tracker_queue_ref(tracker->target_dev->bd_disk, tracker->target_dev->bd_partno, &tracker->tracker_queue);
 
 		superblock = blk_thaw_bdev( tracker->original_dev_id, tracker->target_dev, superblock );
 
@@ -178,7 +175,7 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 	if (SUCCESS ==result){
 		*ptracker = tracker;
 	}else{
-		int remove_status = SUCCESS;
+		int remove_status;
 
 		log_err_dev_t( "Failed to create tracker for device ", tracker->original_dev_id );
 
@@ -205,10 +202,6 @@ int _tracker_remove( tracker_t* tracker )
 		else
 			result = blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
 
-		if (NULL != tracker->tracker_queue){
-			tracker_queue_unref( tracker->tracker_queue );
-			tracker->tracker_queue = NULL;
-		}
 		if (tracker->is_unfreezable)
 			up_write(&tracker->unfreezable_lock);
 		else

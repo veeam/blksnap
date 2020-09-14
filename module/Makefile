@@ -30,7 +30,6 @@ blk-snap-y += snapstore_mem.o
 blk-snap-y += snapstore_multidev.o
 blk-snap-y += sparse_bitmap.o
 blk-snap-y += tracker.o
-blk-snap-y += tracker_queue.o
 blk-snap-y += tracking.o
 
 obj-$(CONFIG_BLK_SNAP)	 += blk-snap.o

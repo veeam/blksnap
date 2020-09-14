@@ -14,7 +14,6 @@
 #include "snapstore_device.h"
 
 #include "snapshot.h"
-#include "tracker_queue.h"
 #include "tracker.h"
 #include "tracking.h"
 #include "sparse_bitmap.h"
@@ -207,9 +206,6 @@ int __init veeamsnap_init(void)
 		if ((result = sparsebitmap_init( )) != SUCCESS)
 			break;
 
-		if ((result = tracker_queue_init( )) != SUCCESS)
-			break;
-
 		if ((result = snapimage_init( )) != SUCCESS)
 			break;
 
@@ -237,9 +233,6 @@ void __exit veeamsnap_exit(void)
 	int result;
 	log_tr("Unloading module");
 
-
-	log_tr("Unregistering reboot notification");
-
 	unregister_syscore_ops(&blk_snap_syscore_ops);
 
 	ctrl_sysfs_done(&veeamsnap_device);
@@ -251,10 +244,8 @@ void __exit veeamsnap_exit(void)
 
 	tracker_done( );
 
-	result = tracker_queue_done( );
-	if (SUCCESS == result)
-		result = blk_filter_unregister(&g_filter);
-
+	result = blk_filter_unregister(&g_filter);
+	BUG_ON(result);
 
 	snapimage_done( );
 
@@ -265,11 +256,6 @@ void __exit veeamsnap_exit(void)
 
 	blk_redirect_bioset_free( );
 	blk_direct_bioset_free( );
-
-	if (SUCCESS != result){
-		log_tr_d( "Failed to unload. errno=", result );
-		return;
-	}
 
 	unregister_chrdev(veeamsnap_major, MODULE_NAME);
 
