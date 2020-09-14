@@ -100,7 +100,8 @@ int _dev_direct_submit_pages(
 		sector_t unordered = arr_ofs & ((PAGE_SIZE / SECTOR_SIZE) - 1);
 		sector_t bvec_len_sect = min_t( sector_t, ((PAGE_SIZE / SECTOR_SIZE) - unordered), size_sector );
 
-		if (0 == bio_add_page( bb, arr->pg[page_inx].page, sector_to_uint( bvec_len_sect ), sector_to_uint( unordered ) ))
+		if (0 == bio_add_page(bb, arr->pg[page_inx].page,
+			(unsigned int)from_sectors(bvec_len_sect), (unsigned int)from_sectors(unordered)))
 			goto blk_dev_direct_submit_pages_label_failed;
 
 		++page_inx;
@@ -110,7 +111,8 @@ int _dev_direct_submit_pages(
 	{
 		sector_t bvec_len_sect = min_t( sector_t, (PAGE_SIZE / SECTOR_SIZE), (size_sector - process_sect) );
 
-		if (0 == bio_add_page( bb, arr->pg[page_inx].page, sector_to_uint( bvec_len_sect ), 0 )){
+		if (0 == bio_add_page( bb, arr->pg[page_inx].page,
+			(unsigned int)from_sectors( bvec_len_sect ), 0 )) {
 			break;
 		}
 		++page_inx;
@@ -124,7 +126,7 @@ int _dev_direct_submit_pages(
 		log_err_d( "Failed to submit direct IO. errno=", bio_compl->error );
 		process_sect = 0;
 	}
-	
+
 blk_dev_direct_submit_pages_label_failed:
 	bio_put( bb );
 

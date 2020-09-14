@@ -51,7 +51,7 @@ void _snapstore_destroy( snapstore_t* snapstore )
 
 		ctrl_pipe_put_resource( pipe );
 	}
-	
+
 	kfree(snapstore);
 }
 
@@ -192,7 +192,7 @@ int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_l
 		return res;
 	}
 	snapstore->multidev = multidev;
-	
+
 	down_write(&snapstores_lock);
 	list_add_tail( &snapstore->link, &snapstores );
 	up_write(&snapstores_lock);
@@ -221,7 +221,7 @@ int snapstore_cleanup( uuid_t* id, u64* filled_bytes )
 	sector_t filled;
 	res = snapstore_check_halffill( id, &filled );
 	if (res == SUCCESS){
-		*filled_bytes = sector_to_streamsize( filled );
+		*filled_bytes = (u64)from_sectors( filled );
 
 		log_tr_format( "Snapstore fill size: %lld MiB", (*filled_bytes >> 20) );
 	}else{
@@ -335,12 +335,12 @@ int zerosectors_add_ranges( rangevector_t* zero_sectors, page_array_t* ranges, s
 
 		for (inx = 0; inx < ranges_cnt; ++inx){
 			int res = SUCCESS;
-			
+
 			range_t range;
 			struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
-			range.ofs = sector_from_streamsize( ioctl_range->left );
-			range.cnt = sector_from_streamsize( ioctl_range->right ) - range.ofs;
+			range.ofs = (sector_t)to_sectors( ioctl_range->left );
+			range.cnt = (blkcnt_t)to_sectors( ioctl_range->right ) - range.ofs;
 
 			res = rangevector_add( zero_sectors, &range );
 			if (res != SUCCESS){
@@ -387,8 +387,8 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 			range_t range;
 			struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
-			range.ofs = sector_from_streamsize( ioctl_range->left );
-			range.cnt = sector_from_streamsize( ioctl_range->right ) - range.ofs;
+			range.ofs = (sector_t)to_sectors( ioctl_range->left );
+			range.cnt = (blkcnt_t)to_sectors( ioctl_range->right ) - range.ofs;
 
 			//log_tr_range( "range=", range );
 
@@ -431,7 +431,7 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 	}
 	if ((res == SUCCESS) && (current_blk_size != 0))
 		log_warn( "Snapstore portion was not ordered by Copy-on-Write block size" );
-	
+
 	if ((res == SUCCESS) && (snapstore->file != NULL)){
 		snapstore_device_t* snapstore_device = snapstore_device_find_by_dev_id( snapstore->file->blk_dev_id );
 		if (snapstore_device != NULL){
@@ -476,12 +476,12 @@ int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_
 		for (inx = 0; inx < ranges_cnt; ++inx){
 			size_t blocks_count = 0;
 			sector_t range_offset = 0;
-
 			range_t range;
+
 			struct ioctl_range_s* data = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
-			range.ofs = sector_from_streamsize( data->left );
-			range.cnt = sector_from_streamsize( data->right ) - range.ofs;
+			range.ofs = (sector_t)to_sectors( data->left );
+			range.cnt = (blkcnt_t)to_sectors( data->right ) - range.ofs;
 
 			//log_tr_format( "range=%lld:%lld", range.ofs, range.cnt );
 
@@ -566,7 +566,7 @@ blk_descr_unify_t* snapstore_get_empty_block( snapstore_t* snapstore )
 		if (snapstore->ctrl_pipe){
 			sector_t fill_status;
 			_snapstore_check_halffill( snapstore, &fill_status );
-			ctrl_pipe_request_overflow( snapstore->ctrl_pipe, -EINVAL, sector_to_streamsize( fill_status ) );
+			ctrl_pipe_request_overflow( snapstore->ctrl_pipe, -EINVAL, (u64)from_sectors( fill_status ) );
 		}
 		snapstore->overflowed = true;
 	}
@@ -598,7 +598,7 @@ int snapstore_request_store( snapstore_t* snapstore, blk_deferred_request_t* dio
 
 			if (_snapstore_check_halffill( snapstore, &fill_status )){
 				snapstore->halffilled = true;
-				ctrl_pipe_request_halffill( snapstore->ctrl_pipe, sector_to_streamsize( fill_status ) );
+				ctrl_pipe_request_halffill( snapstore->ctrl_pipe, (u64)from_sectors( fill_status ) );
 			}
 		}
 	}
@@ -693,7 +693,7 @@ int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* sn
 	else if (snapstore->mem){
 		blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)blk_descr_ptr;
 
-		res = blk_dev_redirect_memcpy_part( rq_endio, READ, blk_descr->buff + sector_to_size( block_ofs ), rq_ofs, rq_count );
+		res = blk_dev_redirect_memcpy_part( rq_endio, READ, blk_descr->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
 		if (res != SUCCESS){
 			log_err( "Failed to read from snapstore memory" );
 		}else
@@ -790,7 +790,8 @@ int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* s
 	else if (snapstore->mem){
 		blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)blk_descr_ptr;
 
-		res = blk_dev_redirect_memcpy_part( rq_endio, WRITE, blk_descr->buff + sector_to_size( block_ofs ), rq_ofs, rq_count );
+		res = blk_dev_redirect_memcpy_part( rq_endio, WRITE,
+			blk_descr->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
 		if (res != SUCCESS){
 			log_err( "Failed to write to snapstore memory" );
 		}

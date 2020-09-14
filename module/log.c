@@ -392,9 +392,6 @@ int _logging_thread( void *data )
 	queue_sl_active( &logging->log_rq_queue, false );
 	result = _logging_process( logging );
 
-	//if (queue_sl_unactive( logging->rq_proc_queue )){
-	//	wake_up_interruptible( &logging->rq_complete_event );
-	//}
 #ifdef LOGFILE
 	_logging_close( logging );
 #endif
@@ -484,9 +481,6 @@ static int _logging_buffer( const char* section, const unsigned level, const cha
 		pr_err( "ERR %s:%s Failed to add logging request to queue\n", MODULE_NAME, SECTION );
 		queue_content_sl_free( &rq->content );
 
-		//if (queue_sl_unactive( logging->rq_proc_queue )){
-		//	wake_up_interruptible( &logging->rq_complete_event );
-		//}
 		return -EFAULT;
 	}
 }

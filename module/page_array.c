@@ -54,7 +54,7 @@ page_array_t* page_array_alloc( size_t count, int gfp_opt )
 
 	if (SUCCESS == res)
 		return arr;
-	
+
 	page_array_free( arr );
 	return NULL;
 }
@@ -238,7 +238,7 @@ void* page_get_element( page_array_t* arr, size_t index, size_t sizeof_element )
 char* page_get_sector( page_array_t* arr, sector_t arr_ofs )
 {
 	size_t pg_inx = arr_ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
-	size_t pg_ofs = sector_to_size( arr_ofs & ((1 << (PAGE_SHIFT - SECTOR_SHIFT)) - 1) );
+	size_t pg_ofs = (size_t)from_sectors( arr_ofs & ((1 << (PAGE_SHIFT - SECTOR_SHIFT)) - 1) );
 
 	return (arr->pg[pg_inx].addr + pg_ofs);
 }

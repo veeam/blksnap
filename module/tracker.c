@@ -94,7 +94,7 @@ int tracker_enum_cbt_info( int max_count, struct cbt_info_s* p_cbt_info, int* p_
 					p_cbt_info[count].snap_number = 0;
 				}
 
-				p_cbt_info[count].dev_capacity = sector_to_streamsize(blk_dev_get_capacity(tracker->target_dev));
+				p_cbt_info[count].dev_capacity = (u64)from_sectors(blk_dev_get_capacity(tracker->target_dev));
 			}
 
 			++count;

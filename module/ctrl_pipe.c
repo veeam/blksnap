@@ -65,7 +65,7 @@ ctrl_pipe_t* ctrl_pipe_new( void )
 	}
 	INIT_LIST_HEAD( &pipe->link );
 
-	
+
 	ret = kfifo_alloc(&pipe->cmd_to_user, CMD_TO_USER_FIFO_SIZE, GFP_KERNEL);
 	if (ret) {
 		pr_err("Failed to allocate fifo. errno=%d.\n", ret);
@@ -285,7 +285,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
 				break;
 			}
 
-			result = snapstore_stretch_initiate( unique_id, pipe, sector_from_streamsize( stretch_empty_limit ) );
+			result = snapstore_stretch_initiate( unique_id, pipe, (sector_t)to_sectors( stretch_empty_limit ) );
 			if (result != SUCCESS){
 				log_err_uuid( "Failed to initiate stretch snapstore", unique_id );
 					break;
@@ -294,7 +294,7 @@ ssize_t ctrl_pipe_command_initiate( ctrl_pipe_t* pipe, const char __user *buffer
 	} while (false);
 	kfree( kernel_buffer );
 	ctrl_pipe_request_acknowledge( pipe, result );
-	
+
 	if (result == SUCCESS)
 		return processed;
 	return result;

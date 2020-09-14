@@ -151,7 +151,6 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 	snapstore_device->corrupted = false;
 	atomic_set( &snapstore_device->req_failed_cnt, 0 );
 
-	//init_rwsem( &snapstore_device->store_block_map_locker );
 	mutex_init(&snapstore_device->store_block_map_locker);
 
 	rangevector_init(&snapstore_device->zero_sectors, true);

@@ -160,7 +160,8 @@ __reprocess_bv:
 			new_bio->bi_iter.bi_sector = target_pos + processed_sectors;
 		}
 
-		if (0 == bio_add_page( new_bio, bvec.bv_page, sector_to_uint( bvec_sectors ), bvec.bv_offset + sector_to_uint( bvec_ofs ) )){
+		if (0 == bio_add_page( new_bio, bvec.bv_page, (unsigned int)from_sectors( bvec_sectors ),
+			bvec.bv_offset + (unsigned int)from_sectors( bvec_ofs ) )){
 			if (bio_sectors( new_bio ) == 0){
 				res = -EIO;
 				goto __fail_out;
@@ -277,15 +278,15 @@ int blk_dev_redirect_memcpy_part( blk_redirect_bio_endio_t* rq_endio, int direct
 			void* mem = kmap_atomic( bvec.bv_page );
 			if (direction == READ){
 				memcpy(
-					mem + bvec.bv_offset + sector_to_uint( bvec_ofs ),
-					buff + sector_to_uint( processed_sectors ),
-					sector_to_uint( bvec_sectors ) );
+					mem + bvec.bv_offset + (unsigned int)from_sectors( bvec_ofs ),
+					buff + (unsigned int)from_sectors( processed_sectors ),
+					(unsigned int)from_sectors( bvec_sectors ) );
 			}
 			else{
 				memcpy(
-					buff + sector_to_uint( processed_sectors ),
-					mem + bvec.bv_offset + sector_to_uint( bvec_ofs ),
-					sector_to_uint( bvec_sectors ) );
+					buff + (unsigned int)from_sectors( processed_sectors ),
+					mem + bvec.bv_offset + (unsigned int)from_sectors( bvec_ofs ),
+					(unsigned int)from_sectors( bvec_sectors ) );
 			}
 			kunmap_atomic( mem );
 		}
@@ -330,7 +331,8 @@ int blk_dev_redirect_zeroed_part( blk_redirect_bio_endio_t* rq_endio, sector_t r
 		{
 			void* mem = kmap_atomic( bvec.bv_page );
 
-			memset( mem + bvec.bv_offset + sector_to_uint( bvec_ofs ), 0, sector_to_uint( bvec_sectors ) );
+			memset( mem + bvec.bv_offset + (unsigned int)from_sectors( bvec_ofs ), 0,
+				(unsigned int)from_sectors( bvec_sectors ) );
 
 			kunmap_atomic( mem );
 		}
@@ -343,7 +345,9 @@ int blk_dev_redirect_zeroed_part( blk_redirect_bio_endio_t* rq_endio, sector_t r
 	return SUCCESS;
 }
 
-int blk_dev_redirect_read_zeroed( blk_redirect_bio_endio_t* rq_endio, struct block_device*  blk_dev, sector_t rq_pos, sector_t blk_ofs_start, sector_t blk_ofs_count, rangevector_t* zero_sectors )
+int blk_dev_redirect_read_zeroed(blk_redirect_bio_endio_t* rq_endio, struct block_device*  blk_dev,
+	sector_t rq_pos, sector_t blk_ofs_start, sector_t blk_ofs_count,
+	rangevector_t* zero_sectors )
 {
 	int res = SUCCESS;
 	sector_t current_portion;

@@ -44,7 +44,7 @@ typedef struct snapimage_s{
 
 	atomic_t own_cnt;
 
-	queue_sl_t rq_proc_queue;
+	queue_sl_t image_queue;
 
 	struct task_struct* rq_processor;
 
@@ -294,7 +294,7 @@ void _snapimage_processing( snapimage_t * image )
 	blk_redirect_bio_endio_t* rq_endio;
 
 	atomic64_inc( &image->state_inprocess );
-	rq_endio = (blk_redirect_bio_endio_t*)queue_sl_get_first( &image->rq_proc_queue );
+	rq_endio = (blk_redirect_bio_endio_t*)queue_sl_get_first( &image->image_queue );
 
 	if (bio_data_dir( rq_endio->bio ) == READ){
 		image->last_read_sector = rq_endio->bio->bi_iter.bi_sector;
@@ -324,8 +324,8 @@ int snapimage_processor_waiting( snapimage_t *image )
 {
 	int res = SUCCESS;
 
-	if (queue_sl_empty( image->rq_proc_queue )){
-		res = wait_event_interruptible_timeout( image->rq_proc_event, (!queue_sl_empty( image->rq_proc_queue ) || kthread_should_stop( )), 5 * HZ );
+	if (queue_sl_empty( image->image_queue )){
+		res = wait_event_interruptible_timeout( image->rq_proc_event, (!queue_sl_empty( image->image_queue ) || kthread_should_stop( )), 5 * HZ );
 		if (res > 0){
 			res = SUCCESS;
 		}
@@ -353,7 +353,7 @@ int snapimage_processor_thread( void *data )
 	{
 		int res = snapimage_processor_waiting( image );
 		if (res == SUCCESS){
-			if (!queue_sl_empty( image->rq_proc_queue ))
+			if (!queue_sl_empty( image->image_queue ))
 				_snapimage_processing( image );
 		} else if (res == -ETIME){
 			//Nobody read me
@@ -367,7 +367,7 @@ int snapimage_processor_thread( void *data )
 	log_tr( "Snapshot image disk delete" );
 	del_gendisk( image->disk );
 
-	while (!queue_sl_empty( image->rq_proc_queue ))
+	while (!queue_sl_empty( image->image_queue ))
 		_snapimage_processing( image );
 
 	log_tr_format( "Snapshot image thread for device [%d:%d] complete", MAJOR( image->image_dev ), MINOR( image->image_dev ) );
@@ -393,7 +393,7 @@ void _snapimage_bio_complete_cb( void* complete_param, struct bio* bio, int err 
 
 	_snapimage_bio_complete( bio, err );
 
-	if (queue_sl_unactive( image->rq_proc_queue )){
+	if (queue_sl_unactive( image->image_queue )){
 		wake_up_interruptible( &image->rq_complete_event );
 	}
 
@@ -433,7 +433,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 	do{
 		blk_redirect_bio_endio_t* rq_endio;
 
-		if (false == atomic_read( &(image->rq_proc_queue.active_state) )){
+		if (false == atomic_read( &(image->image_queue.active_state) )){
 			_snapimage_bio_complete( bio, -ENODEV );
 			break;
 		}
@@ -452,7 +452,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 			}
 		}
 
-		rq_endio = (blk_redirect_bio_endio_t*)queue_content_sl_new_opt( &image->rq_proc_queue, GFP_NOIO );
+		rq_endio = (blk_redirect_bio_endio_t*)queue_content_sl_new_opt( &image->image_queue, GFP_NOIO );
 		if (NULL == rq_endio){
 			log_err("Unable to make snapshot image request: failed to allocate redirect bio structure");
 			_snapimage_bio_complete( bio, -ENOMEM );
@@ -465,14 +465,14 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 
 		atomic64_inc( &image->state_received );
 
-		if (SUCCESS == queue_sl_push_back( &image->rq_proc_queue, &rq_endio->content )){
+		if (SUCCESS == queue_sl_push_back( &image->image_queue, &rq_endio->content )){
 			wake_up( &image->rq_proc_event );
 		}
 		else{
 			queue_content_sl_free( &rq_endio->content );
 			_snapimage_bio_complete( bio, -EIO );
 
-			if (queue_sl_unactive( image->rq_proc_queue )){
+			if (queue_sl_unactive( image->image_queue )){
 				wake_up_interruptible( &image->rq_complete_event );
 			}
 		}
@@ -616,10 +616,10 @@ int snapimage_create( dev_t original_dev )
 		disk->queue = image->queue;
 
 		set_capacity( disk, image->capacity );
-		log_tr_format( "Snapshot image device capacity %lld bytes", sector_to_streamsize(image->capacity) );
+		log_tr_format( "Snapshot image device capacity %lld bytes", (u64)from_sectors(image->capacity) );
 
 		//res = -ENOMEM;
-		queue_sl_init( &image->rq_proc_queue, sizeof( blk_redirect_bio_endio_t ) );
+		queue_sl_init( &image->image_queue, sizeof( blk_redirect_bio_endio_t ) );
 
 		{
 			struct task_struct* task = kthread_create( snapimage_processor_thread, image, disk->disk_name );
@@ -661,7 +661,7 @@ int snapimage_create( dev_t original_dev )
 void _snapimage_stop( snapimage_t* image )
 {
 	if (image->rq_processor != NULL){
-		if (queue_sl_active( &image->rq_proc_queue, false )){
+		if (queue_sl_active( &image->image_queue, false )){
 			struct request_queue* q = image->queue;
 
 			log_tr( "Snapshot image request processing stop" );
@@ -676,8 +676,8 @@ void _snapimage_stop( snapimage_t* image )
 		kthread_stop( image->rq_processor );
 		image->rq_processor = NULL;
 
-		while (!queue_sl_unactive( image->rq_proc_queue ))
-			wait_event_interruptible( image->rq_complete_event, queue_sl_unactive( image->rq_proc_queue ) );
+		while (!queue_sl_unactive( image->image_queue ))
+			wait_event_interruptible( image->rq_complete_event, queue_sl_unactive( image->image_queue ) );
 	}
 }
 
@@ -702,7 +702,7 @@ int _snapimage_destroy( snapimage_t* image )
 		disk->private_data = NULL;
 		put_disk( disk );
 	}
-	queue_sl_done( &image->rq_proc_queue );
+	queue_sl_done( &image->image_queue );
 
 	spin_lock( &g_snapimage_minors_lock );
 	bitmap_clear( g_snapimage_minors, MINOR(image->image_dev), (int)1 );

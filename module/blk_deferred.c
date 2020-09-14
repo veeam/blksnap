@@ -218,7 +218,7 @@ sector_t _blk_deferred_submit_pages(
 
 		BUG_ON( (page_inx > arr->pg_cnt) );
 		page = arr->pg[page_inx].page;
-		if (0 == bio_add_page( bio, page, sector_to_uint( bvec_len_sect ), sector_to_uint( unordered ) )){
+		if (0 == bio_add_page( bio, page, (unsigned int)from_sectors( bvec_len_sect ), (unsigned int)from_sectors( unordered ) )){
 			bio_put( bio );
 			return 0;
 		}
@@ -233,7 +233,7 @@ sector_t _blk_deferred_submit_pages(
 
 		BUG_ON( (page_inx > arr->pg_cnt));
 		page = arr->pg[page_inx].page;
-		if (0 == bio_add_page( bio, page, sector_to_uint( bvec_len_sect ), 0 ))
+		if (0 == bio_add_page( bio, page, (unsigned int)from_sectors( bvec_len_sect ), 0 ))
 			break;
 
 		++page_inx;
@@ -522,7 +522,7 @@ int blk_deffered_request_store_mem( blk_deferred_request_t* dio_copy_req )
 				res = -EIO;
 				break;
 			}
-			processed += sector_from_size( portion );
+			processed += (sector_t)to_sectors( portion );
 		}
 	}
 
