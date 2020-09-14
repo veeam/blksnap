@@ -17,7 +17,7 @@
 #define MAX_FILENAME_SIZE 256
 #define MAX_TIMESTRING_SIZE 256
 
-typedef struct _logging_request_t
+typedef struct _log_request_t
 {
 	queue_content_sl_t content;
 	struct timespec64 m_time;
@@ -28,7 +28,7 @@ typedef struct _logging_request_t
 
 	size_t m_len;
 	char m_buff[1];//must be last entry
-}logging_request_t;
+}log_request_t;
 
 #define LOGGING_STATE_READY 0
 #define LOGGING_STATE_ERROR 1
@@ -53,7 +53,7 @@ typedef struct _logging_t
 	volatile bool m_is_file_logging;
 	volatile int m_state;
 
-	queue_sl_t m_rq_proc_queue; //log request processing queue
+	queue_sl_t log_rq_queue; //log request processing queue
 }logging_t;
 
 static logging_t g_logging;
@@ -235,12 +235,10 @@ static int _logging_waiting( logging_t* logging )
 {
 	int result;
 
-	if (!queue_sl_empty( logging->m_rq_proc_queue ))
+	if (!queue_sl_empty( logging->log_rq_queue ))
 		return SUCCESS;
 
-	//return wait_event_interruptible( logging->m_new_rq_event, (!queue_sl_empty( logging->m_rq_proc_queue ) || kthread_should_stop( )) );
-
-	result = wait_event_interruptible_timeout(logging->m_new_rq_event, (!queue_sl_empty(logging->m_rq_proc_queue) || kthread_should_stop()), 10 * HZ); //HZ - ticks per seconds
+	result = wait_event_interruptible_timeout(logging->m_new_rq_event, (!queue_sl_empty(logging->log_rq_queue) || kthread_should_stop()), 10 * HZ); //HZ - ticks per seconds
 	if (0 == result)
 		return -ETIME; //timeout, condition evaluated to false
 	if (result > 0)
@@ -249,7 +247,7 @@ static int _logging_waiting( logging_t* logging )
 	return result;
 }
 
-static inline void _log_prefix( char* timebuff, const size_t buffsize, struct tm* _time, logging_request_t* rq, const char* level_text )
+static inline void _log_prefix( char* timebuff, const size_t buffsize, struct tm* _time, log_request_t* rq, const char* level_text )
 {
 	snprintf( timebuff, buffsize, "[%02d.%02d.%04ld %02d:%02d:%02d-%06ld] <%d> %s | %s",
 		_time->tm_mday,
@@ -287,9 +285,9 @@ static inline const char* _log_level_to_text( unsigned level )
 static int _logging_process( logging_t* logging )
 {
 	int res = SUCCESS;
-	logging_request_t* rq;
+	log_request_t* rq;
 
-	while (NULL != (rq = (logging_request_t*)queue_sl_get_first( &logging->m_rq_proc_queue )) )
+	while (NULL != (rq = (log_request_t*)queue_sl_get_first( &logging->log_rq_queue )) )
 	{
 		if (rq->m_len == 0){//command received
 			if (rq->m_level == LOGGING_LEVEL_CMD){
@@ -391,7 +389,7 @@ int _logging_thread( void *data )
 		schedule( );
 	}
 
-	queue_sl_active( &logging->m_rq_proc_queue, false );
+	queue_sl_active( &logging->log_rq_queue, false );
 	result = _logging_process( logging );
 
 	//if (queue_sl_unactive( logging->rq_proc_queue )){
@@ -421,15 +419,8 @@ int logging_init( const char* logdir, unsigned long logmaxsize )
 
 	memset( &logging->m_modify_time, 0, sizeof(logging->m_modify_time) );
 	logging->m_state = LOGGING_STATE_READY;
-	
-	{
-		int res = queue_sl_init( &logging->m_rq_proc_queue, sizeof( logging_request_t ) );
-		if (res != SUCCESS){
-			pr_err( "ERR %s:%s Failed to initialize request processing queue\n", MODULE_NAME, SECTION);
-			return res;
-		}
-	}
 
+	queue_sl_init( &logging->log_rq_queue, sizeof( log_request_t ) );
 	{
 		struct task_struct* task = kthread_create( _logging_thread, logging, MODULE_NAME"_log" );
 		if (IS_ERR( task )) {
@@ -450,23 +441,23 @@ void logging_done( void )
 
 	logging->m_state = LOGGING_STATE_DONE;
 	if (logging->m_rq_thread != NULL){
-		
+
 		kthread_stop( logging->m_rq_thread );
 		logging->m_rq_thread = NULL;
 	}
 
-	queue_sl_done( &logging->m_rq_proc_queue );
+	queue_sl_done( &logging->log_rq_queue );
 }
 
 static int _logging_buffer( const char* section, const unsigned level, const char* buff, const size_t len )
 {
 	logging_t* logging = &g_logging;
-	logging_request_t* rq = NULL;
+	log_request_t* rq = NULL;
 
 	if (logging->m_state != LOGGING_STATE_READY)
 		return -EINVAL;
-	
-	rq = ( logging_request_t* )queue_content_sl_new_opt_append( &logging->m_rq_proc_queue, GFP_NOIO, len );
+
+	rq = ( log_request_t* )queue_content_sl_new_opt_append( &logging->log_rq_queue, GFP_NOIO, len );
 	if (NULL == rq){
 		pr_err( "ERR %s:%s Cannot allocate memory for logging\n", MODULE_NAME, SECTION );
 		return -ENOMEM;
@@ -482,8 +473,8 @@ static int _logging_buffer( const char* section, const unsigned level, const cha
 	if ((len != 0) && (buff != NULL))
 		memcpy( rq->m_buff, buff, len );
 	rq->m_buff[len] = '\n';
-	
-	if (SUCCESS == queue_sl_push_back( &logging->m_rq_proc_queue, &rq->content )){
+
+	if (SUCCESS == queue_sl_push_back( &logging->log_rq_queue, &rq->content )){
 		wake_up( &logging->m_new_rq_event );
 		return SUCCESS;
 	}
@@ -518,7 +509,7 @@ void logging_mode_file(void)
 void logging_flush(void)
 {
 	logging_t* logging = &g_logging;
-	while (0 != queue_sl_length(logging->m_rq_proc_queue))
+	while (0 != queue_sl_length(logging->log_rq_queue))
 		schedule();
 }
 
@@ -544,7 +535,7 @@ void log_s( const char* section, const unsigned level, const char* s )
 	if (SUCCESS != _logging_buffer(section, level, s, linesize)){
 		_log_kernel_tr( section, s );
 	}
-	
+
 }
 
 void log_s_s( const char* section, const unsigned level, const char* s1, const char* s2 )
@@ -629,10 +620,10 @@ void log_s_uuid(const char* section, const unsigned level, const char* s, const 
 {
 	char _tmp[MAX_LINE_SIZE];
 
-	snprintf(_tmp, sizeof(_tmp), "%s[%08x-%04x-%04x-%04x-%02x%02x%02x%02x%02x%02x]", s, 
-		(unsigned int*)(&uuid->b[0]), 
-		(unsigned short*)(&uuid->b[4]), 
-		(unsigned short*)(&uuid->b[6]), 
+	snprintf(_tmp, sizeof(_tmp), "%s[%08x-%04x-%04x-%04x-%02x%02x%02x%02x%02x%02x]", s,
+		(unsigned int*)(&uuid->b[0]),
+		(unsigned short*)(&uuid->b[4]),
+		(unsigned short*)(&uuid->b[6]),
 		(unsigned short*)(&uuid->b[8]),
 		uuid->b[10], uuid->b[11], uuid->b[12], uuid->b[13], uuid->b[14], uuid->b[15]);
 	log_s(section, level, _tmp);
@@ -657,7 +648,7 @@ void log_s_bytes(const char* section, const unsigned level, const unsigned char*
 	}
 	_tmp[pos] = '\0';
 	log_s(section, level, _tmp);
-	
+
 }
 
 void log_vformat(const char* section, const int level, const char *frm, va_list args)

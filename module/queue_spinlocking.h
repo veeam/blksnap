@@ -18,11 +18,15 @@ typedef struct queue_content_sl_s
 }queue_content_sl_t;
 
 
-int queue_sl_init( queue_sl_t* queue, int content_size );
-int queue_sl_done( queue_sl_t* queue );
+void queue_sl_init( queue_sl_t* queue, int content_size );
+void queue_sl_done( queue_sl_t* queue );
 
 queue_content_sl_t* queue_content_sl_new_opt_append( queue_sl_t* queue, gfp_t gfp_opt, size_t append_size );
-queue_content_sl_t* queue_content_sl_new_opt( queue_sl_t* queue, gfp_t gfp_opt );
+static inline queue_content_sl_t* queue_content_sl_new_opt( queue_sl_t* queue, gfp_t gfp_opt )
+{
+	return queue_content_sl_new_opt_append( queue, gfp_opt, 0 );
+};
+
 void queue_content_sl_free( queue_content_sl_t* content );
 
 int  queue_sl_push_back( queue_sl_t* queue, queue_content_sl_t* content );

@@ -10,7 +10,7 @@
 #include <asm/div64.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
-#include <linux/hdreg.h> 
+#include <linux/hdreg.h>
 #include <linux/kthread.h>
 
 #define SECTION "snapimage "
@@ -201,7 +201,7 @@ int _snapimage_ioctl( struct block_device *bdev, fmode_t mode, unsigned cmd, uns
 				res = SUCCESS;
 		}
 		break;
-		case CDROM_GET_CAPABILITY: //0x5331  / * get capabilities * / 
+		case CDROM_GET_CAPABILITY: //0x5331  / * get capabilities * /
 		{
 			struct gendisk *disk = bdev->bd_disk;
 
@@ -360,7 +360,7 @@ int snapimage_processor_thread( void *data )
 {
 
 	snapimage_t *image = data;
-	
+
 	log_tr_format( "Snapshot image thread for device [%d:%d] start", MAJOR( image->image_dev ), MINOR( image->image_dev ) );
 
 	add_disk( image->disk );
@@ -580,7 +580,7 @@ int snapimage_create( dev_t original_dev )
 		mutex_init( &image->open_locker );
 		image->open_bdev = NULL;
 		image->open_cnt = 0;
-	   
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
 		image->queue = blk_alloc_queue(NUMA_NO_NODE);
 #else
@@ -638,11 +638,7 @@ int snapimage_create( dev_t original_dev )
 		log_tr_format( "Snapshot image device capacity %lld bytes", sector_to_streamsize(image->capacity) );
 
 		//res = -ENOMEM;
-		res = queue_sl_init( &image->rq_proc_queue, sizeof( blk_redirect_bio_endio_t ) );
-		if (res != SUCCESS){
-			log_err_d( "Failed to initialize request processing queue for snapshot image device. errno=", res );
-			break;
-		}
+		queue_sl_init( &image->rq_proc_queue, sizeof( blk_redirect_bio_endio_t ) );
 
 		{
 			struct task_struct* task = kthread_create( snapimage_processor_thread, image, disk->disk_name );
@@ -733,13 +729,13 @@ int _snapimage_destroy( snapimage_t* image )
 
 	return SUCCESS;
 }
-	
+
 snapimage_t* snapimage_find(dev_t original_dev)
 {
 	snapimage_t* image = NULL;
 
 	down_read( &snap_images_lock );
-	if (!list_empty( &snap_images )) { 
+	if (!list_empty( &snap_images )) {
 		struct list_head* _list_head;
 
 		list_for_each( _list_head, &snap_images ) {
@@ -787,7 +783,7 @@ int snapimage_destroy( dev_t original_dev )
 	log_tr_dev_t( "Destroy snapshot image for device ", original_dev );
 
 	down_write( &snap_images_lock );
-	if (!list_empty( &snap_images )) { 
+	if (!list_empty( &snap_images )) {
 		struct list_head* _list_head;
 
 		list_for_each( _list_head, &snap_images ) {
@@ -832,7 +828,7 @@ int snapimage_destroy_for( dev_t* p_dev, int count )
 	for (; inx < count; ++inx){
 		int local_res = snapimage_destroy( p_dev[inx] );
 		if (local_res != SUCCESS){
-			log_err_format( "Failed to release snapshot image for original device [%d:%d]. errno=%d", 
+			log_err_format( "Failed to release snapshot image for original device [%d:%d]. errno=%d",
 				MAJOR( p_dev[inx] ), MINOR( p_dev[inx] ), 0 - local_res );
 			res = local_res;
 		}

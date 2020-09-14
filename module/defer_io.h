@@ -46,4 +46,4 @@ static inline void defer_io_put_resource( defer_io_t* defer_io )
 
 int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker);
 
-void defer_io_print_state( defer_io_t* defer_io );
+

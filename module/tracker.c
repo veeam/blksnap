@@ -286,17 +286,16 @@ void tracker_cbt_bitmap_set( tracker_t* tracker, sector_t sector, sector_t secto
 
 bool tracker_cbt_bitmap_lock( tracker_t* tracker )
 {
-	bool result = false;
-	if (tracker->cbt_map){
-		cbt_map_read_lock( tracker->cbt_map );
+	if (NULL == tracker->cbt_map)
+		return false;
 
-		if (tracker->cbt_map->active){
-			result = true;
-		}
-		else
-			cbt_map_read_unlock( tracker->cbt_map );
+	cbt_map_read_lock( tracker->cbt_map );
+	if (!tracker->cbt_map->active) {
+		cbt_map_read_unlock( tracker->cbt_map );
+		return false;
 	}
-	return result;
+
+	return true;
 }
 
 void tracker_cbt_bitmap_unlock( tracker_t* tracker )
