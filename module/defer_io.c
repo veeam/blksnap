@@ -52,9 +52,6 @@ void _defer_io_finish( defer_io_t* defer_io, queue_sl_t* queue_in_progress )
 		bio_put(orig_req->bio);
 		filter_submit_original_bio(orig_req->bio);
 
-		atomic64_inc(&defer_io->state_bios_processed);
-		atomic64_add(sectCount, &defer_io->state_sectors_processed);
-
 		if (cbt_locked)
 			tracker_cbt_bitmap_unlock( tracker );
 
@@ -142,7 +139,6 @@ int defer_io_work_thread( void* p )
 					break;
 				}
 
-				atomic64_add( dio_copy_req->sect_len, &defer_io->state_sectors_copy_read );
 			} while (false);
 
 			_defer_io_finish( defer_io, &queue_in_process );
@@ -180,16 +176,7 @@ void _defer_io_destroy( void* this_resource )
 
 	if (NULL == defer_io)
 		return;
-	{
-		u64 processed;
-		u64 copyed;
 
-		processed = atomic64_read( &defer_io->state_sectors_processed );
-		copyed = atomic64_read( &defer_io->state_sectors_copy_read );
-
-		log_tr_format( "%lld MiB was processed", (processed >> (20-SECTOR_SHIFT)) );
-		log_tr_format( "%lld MiB was copied", (copyed >> (20 - SECTOR_SHIFT)) );
-	}
 	if (defer_io->dio_thread)
 		defer_io_stop( defer_io );
 
@@ -207,7 +194,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 {
 	int res = SUCCESS;
 	defer_io_t* defer_io = NULL;
-	//char thread_name[32];
+	snapstore_device_t* snapstore_device;
 
 	log_tr_dev_t( "Defer IO processor was created for device ", dev_id );
 
@@ -215,65 +202,45 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 	if (defer_io == NULL)
 		return -ENOMEM;
 
-	do{
-		atomic64_set( &defer_io->state_bios_received, 0 );
-		atomic64_set( &defer_io->state_bios_processed, 0 );
-		atomic64_set( &defer_io->state_sectors_received, 0 );
-		atomic64_set( &defer_io->state_sectors_processed, 0 );
-		atomic64_set( &defer_io->state_sectors_copy_read, 0 );
+	snapstore_device = snapstore_device_find_by_dev_id( dev_id );
+	if (NULL == snapstore_device){
+		log_err_dev_t( "Unable to create defer IO processor: failed to initialize snapshot data for device ", dev_id );
 
-		defer_io->original_dev_id = dev_id;
-		defer_io->original_blk_dev = blk_dev;
-
-		{
-			snapstore_device_t* snapstore_device = snapstore_device_find_by_dev_id( defer_io->original_dev_id );
-			if (NULL == snapstore_device){
-				log_err_dev_t( "Unable to create defer IO processor: failed to initialize snapshot data for device ", dev_id );
-				res = -ENODATA;
-				break;
-			}
-			defer_io->snapstore_device = snapstore_device_get_resource( snapstore_device );
-		}
-
-
-		queue_sl_init( &defer_io->dio_queue, sizeof( defer_io_original_request_t ) );
-
-		init_waitqueue_head( &defer_io->queue_add_event );
-
-		atomic_set( &defer_io->queue_filling_count, 0 );
-
-		init_waitqueue_head( &defer_io->queue_throttle_waiter );
-
-		shared_resource_init( &defer_io->sharing_header, defer_io, _defer_io_destroy );
-
-		//if (sprintf( thread_name, "%s%d:%d", "veeamdeferio", MAJOR( dev_id ), MINOR( dev_id ) ) >= DISK_NAME_LEN){
-		//	log_err_dev_t( "Failed to create defer IO processor. Cannot create thread name for device ", dev_id );
-		//	res = -EINVAL;
-		//	break;
-		//}
-
-		defer_io->dio_thread = kthread_create( defer_io_work_thread, (void *)defer_io, "veeamdeferio%d:%d", MAJOR( dev_id ), MINOR( dev_id ) );
-		if (IS_ERR( defer_io->dio_thread )) {
-			res = PTR_ERR( defer_io->dio_thread );
-			log_err_d( "Unable to create defer IO processor: failed to create thread. errno=", res );
-			break;
-		}
-		wake_up_process( defer_io->dio_thread );
-
-	} while (false);
-
-	if (res == SUCCESS){
-
-		*pp_defer_io = defer_io;
-		log_tr( "Defer IO processor was created" );
+		kfree(defer_io);
+		return -ENODATA;
 	}
-	else{
+
+	defer_io->snapstore_device = snapstore_device_get_resource( snapstore_device );
+	defer_io->original_dev_id = dev_id;
+	defer_io->original_blk_dev = blk_dev;
+
+	shared_resource_init( &defer_io->sharing_header, defer_io, _defer_io_destroy );
+
+	queue_sl_init( &defer_io->dio_queue, sizeof( defer_io_original_request_t ) );
+
+	init_waitqueue_head( &defer_io->queue_add_event );
+
+	atomic_set( &defer_io->queue_filling_count, 0 );
+
+	init_waitqueue_head( &defer_io->queue_throttle_waiter );
+
+	defer_io->dio_thread = kthread_create( defer_io_work_thread, (void *)defer_io, "veeamdeferio%d:%d", MAJOR( dev_id ), MINOR( dev_id ) );
+	if (IS_ERR( defer_io->dio_thread )) {
+		res = PTR_ERR( defer_io->dio_thread );
+		log_err_d( "Unable to create defer IO processor: failed to create thread. errno=", res );
+
 		_defer_io_destroy( defer_io );
-		defer_io = NULL;
-		log_err_d( "Failed to create defer IO processor. errno=", res );
+		*pp_defer_io = NULL;
+
+		return res;
 	}
 
-	return res;
+	wake_up_process( defer_io->dio_thread );
+
+	*pp_defer_io = defer_io;
+	log_tr( "Defer IO processor was created" );
+
+	return SUCCESS;
 }
 
 
@@ -282,6 +249,7 @@ int defer_io_stop( defer_io_t* defer_io )
 	int res = SUCCESS;
 
 	log_tr_dev_t( "Defer IO thread for the device stopped ", defer_io->original_dev_id );
+
 	if (defer_io->dio_thread != NULL){
 		struct task_struct* dio_thread = defer_io->dio_thread;
 		defer_io->dio_thread = NULL;
@@ -291,13 +259,12 @@ int defer_io_stop( defer_io_t* defer_io )
 			log_err_d( "Failed to stop defer IO thread. errno=", res );
 		}
 	}
+
 	return res;
 }
 
-
 int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
 {
-	sector_t sectCount;
 	defer_io_original_request_t* dio_orig_req;
 
 	if (snapstore_device_is_corrupted( defer_io->snapstore_device ))
@@ -306,8 +273,6 @@ int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
 	dio_orig_req = (defer_io_original_request_t*)queue_content_sl_new_opt( &defer_io->dio_queue, GFP_NOIO );
 	if (dio_orig_req == NULL)
 		return -ENOMEM;
-
-	sectCount = bio_sectors(bio);
 
 	bio_get(dio_orig_req->bio = bio);
 
@@ -318,13 +283,11 @@ int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
 		return -EFAULT;
 	}
 
-	atomic64_inc( &defer_io->state_bios_received );
-	atomic64_add( sectCount, &defer_io->state_sectors_received );
-
 	atomic_inc( &defer_io->queue_filling_count );
 
 	wake_up_interruptible( &defer_io->queue_add_event );
 
 	return SUCCESS;
+
 }
 

@@ -223,20 +223,6 @@ int _snapimage_ioctl( struct block_device *bdev, fmode_t mode, unsigned cmd, uns
 	return res;
 }
 
-#ifdef CONFIG_COMPAT
-int _snapimage_compat_ioctl( struct block_device *bdev, fmode_t mode, unsigned cmd, unsigned long arg )
-{
-	down_read(&snap_image_destroy_lock);
-	{
-		snapimage_t* image = bdev->bd_disk->private_data;
-
-		log_tr_format( "Snapshot image compat ioctl receive unsupported command. Device [%d:%d], command 0x%x, arg 0xlx",
-			MAJOR( image->image_dev ), MINOR( image->image_dev ), cmd, arg );
-	}
-	up_read(&snap_image_destroy_lock);
-	return -ENOTTY;
-}
-#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,9,0)
 blk_qc_t _snapimage_submit_bio(struct bio *bio);
@@ -250,32 +236,29 @@ static struct block_device_operations g_snapimage_ops = {
 	.open = _snapimage_open,
 	.ioctl = _snapimage_ioctl,
 	.release = _snapimage_close,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = _snapimage_compat_ioctl,
-#endif
 };
 
-int _snapimage_request_read( defer_io_t* p_defer_io, blk_redirect_bio_endio_t* rq_endio )
+static inline
+int _snapimage_request_read(snapimage_t *image, blk_redirect_bio_endio_t* rq_endio)
 {
-	int res = -ENODATA;
+	snapstore_device_t* snapstore_device = image->defer_io->snapstore_device;
 
-	res = snapstore_device_read( p_defer_io->snapstore_device, rq_endio );
-
-	return res;
+	return snapstore_device_read( snapstore_device, rq_endio );
 }
 
-int _snapimage_request_write( snapimage_t * image, blk_redirect_bio_endio_t* rq_endio )
+int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_endio_t* rq_endio )
 {
+	snapstore_device_t* snapstore_device;
+	cbt_map_t* cbt_map;
 	int res = SUCCESS;
 
-	defer_io_t* p_defer_io = image->defer_io;
-	cbt_map_t* cbt_map = image->cbt_map;
+	BUG_ON( NULL == image->defer_io );
+	BUG_ON( NULL == image->cbt_map );
 
-	BUG_ON( NULL == p_defer_io );
-	BUG_ON( NULL == cbt_map );
+	snapstore_device = image->defer_io->snapstore_device;
+	cbt_map = image->cbt_map;
 
-
-	if (snapstore_device_is_corrupted( p_defer_io->snapstore_device ))
+	if (snapstore_device_is_corrupted( snapstore_device ))
 		return -ENODATA;
 
 	if (!bio_has_data( rq_endio->bio )){
@@ -284,8 +267,6 @@ int _snapimage_request_write( snapimage_t * image, blk_redirect_bio_endio_t* rq_
 		blk_redirect_complete( rq_endio, SUCCESS );
 		return SUCCESS;
 	}
-
-
 
 	if (cbt_map != NULL){
 		sector_t ofs = rq_endio->bio->bi_iter.bi_sector;
@@ -297,7 +278,7 @@ int _snapimage_request_write( snapimage_t * image, blk_redirect_bio_endio_t* rq_
 		}
 	}
 
-	res = snapstore_device_write( p_defer_io->snapstore_device, rq_endio );
+	res = snapstore_device_write( snapstore_device, rq_endio );
 
 	if (res != SUCCESS){
 		log_err( "Failed to write data to snapshot image" );
@@ -319,7 +300,7 @@ void _snapimage_processing( snapimage_t * image )
 		image->last_read_sector = rq_endio->bio->bi_iter.bi_sector;
 		image->last_read_size =  bio_sectors(rq_endio->bio);
 
-		res = _snapimage_request_read( image->defer_io, rq_endio );
+		res = _snapimage_request_read( image, rq_endio );
 		if (res != SUCCESS){
 			log_err_d( "Failed to read data from snapshot image. errno=", res );
 		}

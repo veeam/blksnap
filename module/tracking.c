@@ -28,9 +28,7 @@ bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
 				down_read(&tracker->unfreezable_lock);
 
 			if (atomic_read(&tracker->is_captured)) {
-				// do copy-on-write
-				int res = defer_io_redirect_bio(tracker->defer_io, bio, tracker);
-				if (SUCCESS == res) {
+				if (SUCCESS == defer_io_redirect_bio(tracker->defer_io, bio, tracker)) {
 					was_catched = true;
 					*result = 0;
 				}

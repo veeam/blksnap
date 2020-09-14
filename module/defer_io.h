@@ -19,16 +19,8 @@ typedef struct defer_io_s
 
 	struct task_struct* dio_thread;
 
-	void*  rangecopy_buff;
-	size_t rangecopy_buff_size;
-
 	queue_sl_t dio_queue;
 
-	atomic64_t state_bios_received;
-	atomic64_t state_bios_processed;
-	atomic64_t state_sectors_received;
-	atomic64_t state_sectors_processed;
-	atomic64_t state_sectors_copy_read;
 }defer_io_t;
 
 
