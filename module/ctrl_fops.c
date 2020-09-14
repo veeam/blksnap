@@ -588,7 +588,6 @@ int ioctl_printstate( unsigned long arg )
 	log_tr_format( "version: %d.%d.%d.%d.", version.major, version.minor, version.revision, version.build );
 
 	page_arrays_print_state( );
-	blk_deferred_print_state( );
 
 	log_tr( "--------------------------------------------------------------------------" );
 

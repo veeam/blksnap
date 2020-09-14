@@ -1,18 +1,9 @@
 #pragma once
 
-#include "container_spinlocking.h"
 #include "rangevector.h"
 #include "blk_deferred.h"
 #include "blk_redirect.h"
 #include "snapstore.h"
-
-typedef struct snapstore_copy_block_request_s
-{
-	content_sl_t content;
-	blk_descr_array_index_t block_index;
-	sector_t dst_ofs;
-}snapstore_copy_block_request_t;
-
 
 typedef struct snapstore_device_s
 {

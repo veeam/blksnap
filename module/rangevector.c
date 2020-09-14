@@ -1,6 +1,5 @@
 #include "common.h"
 #include "rangevector.h"
-#include "container_spinlocking.h"
 
 #define SECTION "ranges	"
 

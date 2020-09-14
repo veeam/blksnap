@@ -1,7 +1,6 @@
 #include "common.h"
 #include "blk_deferred.h"
 #include "blk_util.h"
-#include "container_spinlocking.h"
 #include "snapstore.h"
 #include "snapstore_blk.h"
 
@@ -19,56 +18,56 @@ typedef struct dio_bio_complete_s{
 	sector_t bio_sect_len;
 }dio_bio_complete_t;
 
-typedef struct dio_deadlocked_s
+typedef struct dio_deadlocked_list_s
 {
-	content_sl_t content;
+	struct list_head link;
+
 	blk_deferred_request_t* dio_req;
-}dio_deadlocked_t;
+}dio_deadlocked_list_t;
 
-static container_sl_t DioDeadlocked;
 
-atomic64_t dio_alloc_count;
-atomic64_t dio_free_count;
+LIST_HEAD(dio_deadlocked_list);
+DEFINE_RWLOCK(dio_deadlocked_list_lock);
 
-void blk_deferred_init( void )
-{
-	atomic64_set( &dio_alloc_count, 0 );
-	atomic64_set( &dio_free_count, 0 );
+atomic64_t dio_alloc_count = ATOMIC64_INIT(0);
+atomic64_t dio_free_count = ATOMIC64_INIT(0);
 
-	container_sl_init( &DioDeadlocked, sizeof( dio_deadlocked_t ) );
-}
+
 void blk_deferred_done( void )
 {
-	content_sl_t* content;
-	while (NULL != (content = container_sl_get_first( &DioDeadlocked )) )
-	{
-		dio_deadlocked_t* dio_locked = (dio_deadlocked_t*)content;
-		if (dio_locked->dio_req->sect_len == atomic64_read( &dio_locked->dio_req->sect_processed )){
-			blk_deferred_request_free( dio_locked->dio_req );
-		}
-		else{
-			log_err( "Locked defer IO is still in memory" );
-		}
-		content_sl_free( content );
-	}
+	dio_deadlocked_list_t* dio_locked;
 
-	container_sl_done( &DioDeadlocked );
-}
+	do {
+		dio_locked = NULL;
 
-void blk_deferred_print_state( void )
-{
-	log_warn( "" );
-	log_warn( "Defer IO state:" );
-	log_warn_lld( "Defer IO allocated: ", (long long int)atomic64_read( &dio_alloc_count ) );
-	log_warn_lld( "Defer IO freed: ", (long long int)atomic64_read( &dio_free_count ) );
-	log_warn_lld( "Defer IO in use: ", (long long int)atomic64_read( &dio_alloc_count ) - (long long int)atomic64_read( &dio_free_count ) );
+		write_lock( &dio_deadlocked_list_lock );
+		if (!list_empty( &dio_deadlocked_list )){
+			dio_locked = list_entry( dio_deadlocked_list.next, dio_deadlocked_list_t, link );
+
+			list_del( &dio_locked->link );
+		}
+		write_unlock(&dio_deadlocked_list_lock);
+
+		if (dio_locked) {
+			if (dio_locked->dio_req->sect_len == atomic64_read( &dio_locked->dio_req->sect_processed ))
+				blk_deferred_request_free( dio_locked->dio_req );
+			else
+				log_err( "Locked defer IO is still in memory" );
+
+			kfree(dio_locked);
+		}
+	} while(dio_locked);
 }
 
 void blk_deferred_request_deadlocked( blk_deferred_request_t* dio_req )
 {
-	dio_deadlocked_t* dio_locked = (dio_deadlocked_t*)content_sl_new( &DioDeadlocked );
+	dio_deadlocked_list_t* dio_locked = kzalloc(sizeof(dio_deadlocked_list_t), GFP_KERNEL);
+
 	dio_locked->dio_req = dio_req;
-	container_sl_push_back( &DioDeadlocked, &dio_locked->content );
+
+	write_lock( &dio_deadlocked_list_lock );
+	list_add_tail( &dio_locked->link, &dio_deadlocked_list);
+	write_unlock(&dio_deadlocked_list_lock);
 
 	log_warn( "Deadlock with defer IO" );
 }
@@ -449,7 +448,7 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 
 	if (res != SUCCESS)
 		return res;
-	
+
 	res = blk_deferred_request_wait( dio_copy_req );
 	return res;
 }

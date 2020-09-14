@@ -198,8 +198,6 @@ int __init veeamsnap_init(void)
 		if ((result = blk_redirect_bioset_create( )) != SUCCESS)
 			break;
 
-		blk_deferred_init( );
-
 		if ((result = blk_deferred_bioset_create( )) != SUCCESS)
 			break;
 

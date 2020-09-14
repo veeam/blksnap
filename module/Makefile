@@ -9,7 +9,6 @@ blk-snap-y += blk_direct.o
 blk-snap-y += blk_redirect.o
 blk-snap-y += blk_util.o
 blk-snap-y += cbt_map.o
-blk-snap-y += container_spinlocking.o
 blk-snap-y += ctrl_fops.o
 blk-snap-y += ctrl_pipe.o
 blk-snap-y += ctrl_sysfs.o

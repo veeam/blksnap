@@ -4,7 +4,6 @@
 
 #include "blk_deferred.h"
 #include "blk_descr_multidev.h"
-#include "container_spinlocking.h"
 
 typedef struct multidev_el_s
 {

@@ -32,9 +32,7 @@ typedef struct blk_deferred_request_s
 }blk_deferred_request_t;
 
 
-void blk_deferred_init( void );
 void blk_deferred_done( void );
-void blk_deferred_print_state( void );
 
 blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_descr_unify_t* blk_descr );
 void blk_deferred_free( blk_deferred_t* dio );
