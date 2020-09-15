@@ -336,7 +336,7 @@ int zerosectors_add_ranges( rangevector_t* zero_sectors, page_array_t* ranges, s
 		for (inx = 0; inx < ranges_cnt; ++inx){
 			int res = SUCCESS;
 
-			range_t range;
+			struct blk_range range;
 			struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
 			range.ofs = (sector_t)to_sectors( ioctl_range->left );
@@ -384,7 +384,7 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 			size_t blocks_count = 0;
 			sector_t range_offset = 0;
 
-			range_t range;
+			struct blk_range range;
 			struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
 			range.ofs = (sector_t)to_sectors( ioctl_range->left );
@@ -393,7 +393,7 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 			//log_tr_range( "range=", range );
 
 			while (range_offset < range.cnt){
-				range_t rg;
+				struct blk_range rg;
 
 				rg.ofs = range.ofs + range_offset;
 				rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
@@ -476,7 +476,7 @@ int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_
 		for (inx = 0; inx < ranges_cnt; ++inx){
 			size_t blocks_count = 0;
 			sector_t range_offset = 0;
-			range_t range;
+			struct blk_range range;
 
 			struct ioctl_range_s* data = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
@@ -486,7 +486,7 @@ int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_
 			//log_tr_format( "range=%lld:%lld", range.ofs, range.cnt );
 
 			while (range_offset < range.cnt){
-				range_t rg;
+				struct blk_range rg;
 				void* extension = NULL;
 				rg.ofs = range.ofs + range_offset;
 				rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
@@ -535,9 +535,9 @@ int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_
 }
 #endif
 
-void snapstore_order_border( range_t* in, range_t* out )
+void snapstore_order_border( struct blk_range* in, struct blk_range* out )
 {
-	range_t unorder;
+	struct blk_range unorder;
 
 	unorder.ofs = in->ofs & snapstore_block_mask();
 	out->ofs = in->ofs & ~snapstore_block_mask();
@@ -625,7 +625,7 @@ int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstor
 
 
 	if (snapstore->file){
-		range_t* rg;
+		struct blk_range* rg;
 		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
 
 
@@ -658,7 +658,7 @@ int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstor
 	}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore->multidev) {
-		range_t* rg;
+		struct blk_range* rg;
 		void** p_extentsion;
 		blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)blk_descr_ptr;
 
@@ -719,7 +719,7 @@ int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapsto
 	BUG_ON( NULL == snapstore );
 
 	if (snapstore->file){
-		range_t* rg;
+		struct blk_range* rg;
 		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
 
 
@@ -752,7 +752,7 @@ int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapsto
 	}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore->multidev) {
-		range_t* rg;
+		struct blk_range* rg;
 		void** p_extension;
 		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
 

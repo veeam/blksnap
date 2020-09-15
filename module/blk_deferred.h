@@ -1,6 +1,6 @@
 #pragma once
 #include "page_array.h"
-#include "range.h"
+#include "sector.h"
 #include "blk_descr_file.h"
 #include "blk_descr_mem.h"
 #include "blk_descr_multidev.h"
@@ -16,7 +16,7 @@ typedef struct blk_deferred_s
 	blk_descr_array_index_t blk_index; //for writing to snapstore
 	blk_descr_unify_t* blk_descr;	//for writing to snapstore - blk_descr_file_t or blk_descr_mem_t
 
-	range_t sect;
+	struct blk_range sect;
 
 	page_array_t* buff;
 }blk_deferred_t;

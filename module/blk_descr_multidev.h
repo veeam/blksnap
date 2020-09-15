@@ -2,7 +2,7 @@
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
-#include "range.h"
+#include "sector.h"
 #include "rangelist_ex.h"
 #include "blk_descr_unify.h"
 #include "blk_descr_pool.h"

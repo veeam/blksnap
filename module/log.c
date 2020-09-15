@@ -741,7 +741,7 @@ void log_s_uuid(const char* section, const unsigned level, const char* s, const 
 	log_s(section, level, _tmp);
 }
 */
-void log_s_range( const char* section, const unsigned level, const char* s, const range_t* range )
+void log_s_range( const char* section, const unsigned level, const char* s, const struct blk_range* range )
 {
 	char _tmp[MAX_LOGLINE_SIZE];
 	snprintf( _tmp, sizeof( _tmp ), "%s ofs=0x%llx, cnt=0x%llx", s, (unsigned long long)range->ofs, (unsigned long long)range->cnt );

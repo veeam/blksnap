@@ -363,8 +363,8 @@ int blk_dev_redirect_read_zeroed(blk_redirect_bio_t* rq_redir, struct block_devi
 	RANGEVECTOR_READ_LOCK( zero_sectors );
 	RANGEVECTOR_FOREACH_EL_BEGIN( zero_sectors, el )
 	{
-		range_t* first_zero_range;
-		range_t* last_zero_range;
+		struct blk_range* first_zero_range;
+		struct blk_range* last_zero_range;
 		size_t limit;
 
 		limit = (size_t)atomic_read( &el->cnt );
@@ -386,7 +386,7 @@ int blk_dev_redirect_read_zeroed(blk_redirect_bio_t* rq_redir, struct block_devi
 		}
 
 		while (from_sect < to_sect){
-			range_t* zero_range;
+			struct blk_range* zero_range;
 			zero_range = rangevector_el_find_first_hit( el, from_sect, to_sect );
 			if (zero_range == NULL)
 				break;

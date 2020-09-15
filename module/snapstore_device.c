@@ -265,7 +265,7 @@ int snapstore_device_add_request( snapstore_device_t* snapstore_device, blk_desc
 	return res;
 }
 
-int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, range_t* copy_range, blk_deferred_request_t** dio_copy_req )
+int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, struct blk_range* copy_range, blk_deferred_request_t** dio_copy_req )
 {
 	int res = SUCCESS;
 	blk_descr_array_index_t inx = 0;
@@ -312,7 +312,7 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 	sector_t blk_ofs_start = 0;		 //device range start
 	sector_t blk_ofs_count = 0;		 //device range length
 
-	range_t rq_range;
+	struct blk_range rq_range;
 	rangevector_t* zero_sectors = NULL;
 	zero_sectors = &snapstore_device->zero_sectors;
 
@@ -391,7 +391,7 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 	return res;
 }
 
-int _snapstore_device_copy_on_write( snapstore_device_t* snapstore_device, range_t* rq_range )
+int _snapstore_device_copy_on_write( snapstore_device_t* snapstore_device, struct blk_range* rq_range )
 {
 	int res = SUCCESS;
 	blk_deferred_request_t* dio_copy_req = NULL;
@@ -442,7 +442,7 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 	sector_t blk_ofs_start = 0;		 //device range start
 	sector_t blk_ofs_count = 0;		 //device range length
 
-	range_t rq_range;
+	struct blk_range rq_range;
 
 	BUG_ON( NULL == snapstore_device );
 	BUG_ON( NULL == rq_redir );

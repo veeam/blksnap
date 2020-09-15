@@ -27,7 +27,7 @@ void rangelist_ex_done( rangelist_ex_t* rglist )
 		kfree( el );
 }
 
-int rangelist_ex_add( rangelist_ex_t* rglist, range_t* rg, void* extension )
+int rangelist_ex_add( rangelist_ex_t* rglist, struct blk_range* rg, void* extension )
 {
 	rangelist_el_ex_t* el = kzalloc( sizeof( rangelist_el_ex_t ), GFP_KERNEL );
 	if (el == NULL)
@@ -44,7 +44,7 @@ int rangelist_ex_add( rangelist_ex_t* rglist, range_t* rg, void* extension )
 	return SUCCESS;
 }
 
-int rangelist_ex_get( rangelist_ex_t* rglist, range_t* rg, void** p_extension )
+int rangelist_ex_get( rangelist_ex_t* rglist, struct blk_range* rg, void** p_extension )
 {
 	rangelist_el_ex_t* el = _rangelist_ex_get_first( rglist );
 	if (el == NULL)

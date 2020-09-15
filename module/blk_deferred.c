@@ -415,7 +415,7 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 		list_for_each( _list_head, &dio_copy_req->dios ){
 			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
 
-			range_t* rg;
+			struct blk_range* rg;
 			sector_t page_array_ofs = 0;
 			blk_descr_file_t* blk_descr = (blk_descr_file_t*)dio->blk_descr;
 
@@ -464,7 +464,7 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 		struct list_head* _list_head;
 		list_for_each( _list_head, &dio_copy_req->dios ){
 			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
-			range_t* rg;
+			struct blk_range* rg;
 			void** p_extension;
 			sector_t page_array_ofs = 0;
 			blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)dio->blk_descr;

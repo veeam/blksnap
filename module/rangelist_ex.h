@@ -2,7 +2,7 @@
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
-#include "range.h"
+#include "sector.h"
 
 //  IS NOT LOCKED
 
@@ -14,7 +14,7 @@ typedef struct rangelist_ex_s
 typedef struct range_el_ex_s
 {
 	struct list_head link;
-	range_t rg;
+	struct blk_range rg;
 
 	void* extension;
 
@@ -24,8 +24,8 @@ typedef struct range_el_ex_s
 void rangelist_ex_init( rangelist_ex_t* rglist );
 void rangelist_ex_done( rangelist_ex_t* rglist );
 
-int rangelist_ex_add( rangelist_ex_t* rglist, range_t* rg, void* extension );
-int rangelist_ex_get( rangelist_ex_t* rglist, range_t* rg, void** p_extension );
+int rangelist_ex_add( rangelist_ex_t* rglist, struct blk_range* rg, void* extension );
+int rangelist_ex_get( rangelist_ex_t* rglist, struct blk_range* rg, void** p_extension );
 
 bool rangelist_ex_empty( rangelist_ex_t* rglist );
 

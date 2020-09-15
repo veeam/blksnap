@@ -32,7 +32,7 @@ void rangevector_cleanup( rangevector_t* rangevector )
 	}
 }
 
-int rangevector_add( rangevector_t* rangevector, range_t* rg )
+int rangevector_add( rangevector_t* rangevector, struct blk_range* rg )
 {
 	int res = SUCCESS;
 
@@ -86,7 +86,7 @@ int rangevector_v2p( rangevector_t* rangevector, sector_t virt_offset, sector_t 
 		size_t limit = (size_t)atomic_read( &el->cnt );
 
 		for (inx = 0; inx < limit; ++inx){
-			range_t* range = &el->ranges[inx];
+			struct blk_range* range = &el->ranges[inx];
 
 			virt_right = virt_left + range->cnt;
 			if ((virt_offset >= virt_left) && (virt_offset < virt_right)){
@@ -104,7 +104,7 @@ int rangevector_v2p( rangevector_t* rangevector, sector_t virt_offset, sector_t 
 	return result;
 }
 
-int rangevector_at( rangevector_t* rangevector, size_t inx, range_t* range )
+int rangevector_at( rangevector_t* rangevector, size_t inx, struct blk_range* range )
 {
 	int result = -ENODATA;
 	size_t curr_inx = 0;
@@ -136,15 +136,15 @@ void rangevector_sort( rangevector_t* rangevector )
 
 	RANGEVECTOR_WRITE_LOCK( rangevector );
 	do{
-		range_t* prange = NULL;
-		range_t* prange_prev = NULL;
+		struct blk_range* prange = NULL;
+		struct blk_range* prange_prev = NULL;
 
 		changed = false;
 		RANGEVECTOR_FOREACH_BEGIN( rangevector, prange )
 		{
 			if (prange_prev != NULL){
 				if (prange_prev->ofs > prange->ofs){
-					range_t tmp;
+					struct blk_range tmp;
 
 					tmp.ofs = prange_prev->ofs;
 					tmp.cnt = prange_prev->cnt;
@@ -171,7 +171,7 @@ void rangevector_sort( rangevector_t* rangevector )
 
 sector_t rangevector_length( rangevector_t* rangevector )
 {
-	range_t* prange = NULL;
+	struct blk_range* prange = NULL;
 	sector_t length_sect = 0;
 	RANGEVECTOR_READ_LOCK( rangevector );
 	RANGEVECTOR_FOREACH_BEGIN( rangevector, prange )
@@ -198,9 +198,9 @@ size_t rangevector_cnt( rangevector_t* rangevector )
 	return cnt;
 }
 
-range_t* rangevector_el_find_first_hit( rangevector_el_t* el, sector_t from_sect, sector_t to_sect )
+struct blk_range* rangevector_el_find_first_hit( rangevector_el_t* el, sector_t from_sect, sector_t to_sect )
 {
-	range_t* found = NULL;
+	struct blk_range* found = NULL;
 	size_t index = 0;
 	size_t limit_min = 0;
 	size_t limit_max = atomic_read( &el->cnt );
@@ -208,7 +208,7 @@ range_t* rangevector_el_find_first_hit( rangevector_el_t* el, sector_t from_sect
 	index = (limit_max - limit_min) / 2;
 
 	do{
-		range_t* rg = &el->ranges[index];
+		struct blk_range* rg = &el->ranges[index];
 
 		if ((rg->ofs + rg->cnt) <= from_sect){
 			size_t increment = (limit_max - index) / 2;
@@ -237,7 +237,7 @@ range_t* rangevector_el_find_first_hit( rangevector_el_t* el, sector_t from_sect
 	//check previous ranges
 	if (found != NULL){
 		while (index > 0){
-			range_t* rg;
+			struct blk_range* rg;
 			--index;
 			rg = &el->ranges[index];
 

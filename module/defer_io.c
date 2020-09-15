@@ -159,7 +159,7 @@ int _defer_io_copy_prepare( defer_io_t* defer_io, defer_io_queue_t* queue_in_pro
 
 		if (!kthread_should_stop( ) && !snapstore_device_is_corrupted( defer_io->snapstore_device )) {
 			if (bio_data_dir( dio_orig_req->bio ) && bio_has_data( dio_orig_req->bio )) {
-				range_t copy_range;
+				struct blk_range copy_range;
 
 				copy_range.ofs = dio_orig_req->bio->bi_iter.bi_sector;
 				copy_range.cnt = bio_sectors(dio_orig_req->bio);

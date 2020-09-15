@@ -56,7 +56,7 @@ int snapstore_add_file(uuid_t* id, page_array_t* ranges, size_t ranges_cnt);
 int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt);
 #endif
 
-void snapstore_order_border( range_t* in, range_t* out );
+void snapstore_order_border( struct blk_range* in, struct blk_range* out );
 
 blk_descr_unify_t* snapstore_get_empty_block( snapstore_t* snapstore );
 

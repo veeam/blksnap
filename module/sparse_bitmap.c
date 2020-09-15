@@ -387,7 +387,7 @@ void sparsebitmap_Clean( sparse_bitmap_t* bitmap )
 	bitmap->start_index = 0;
 }
 
-int _sparse_block_get_ranges_leaf( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, range_t* rg )
+int _sparse_block_get_ranges_leaf( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg )
 {
 	int res = SUCCESS;
 	size_t inx;
@@ -412,7 +412,7 @@ int _sparse_block_get_ranges_leaf( sparse_block_t* block, rangelist_t* rangelist
 	return res;
 }
 
-void _sparse_block_get_ranges_full( sparse_block_t* block, sector_t* index, range_t* rg )
+void _sparse_block_get_ranges_full( sparse_block_t* block, sector_t* index, struct blk_range* rg )
 {
 	sector_t block_size = 1ull << (SPARSE_BITMAP_BLOCK_SIZE_DEGREE * block->level);
 
@@ -423,7 +423,7 @@ void _sparse_block_get_ranges_full( sparse_block_t* block, sector_t* index, rang
 	*index += block_size;
 }
 
-int _sparse_block_get_ranges_empty( sparse_block_t* block, sector_t* index, range_t* rg, rangelist_t* rangelist )
+int _sparse_block_get_ranges_empty( sparse_block_t* block, sector_t* index, struct blk_range* rg, rangelist_t* rangelist )
 {
 	int res = SUCCESS;
 	sector_t block_size = 1ull << (SPARSE_BITMAP_BLOCK_SIZE_DEGREE * block->level);
@@ -436,9 +436,9 @@ int _sparse_block_get_ranges_empty( sparse_block_t* block, sector_t* index, rang
 	return res;
 }
 
-int _sparse_block_get_ranges( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, range_t* rg );
+int _sparse_block_get_ranges( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg );
 
-int _sparse_block_get_ranges_block(sparse_block_t* block, rangelist_t* rangelist, sector_t* index, range_t* rg)
+int _sparse_block_get_ranges_block(sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg)
 {
 	int res = SUCCESS;
 
@@ -466,7 +466,7 @@ int _sparse_block_get_ranges_block(sparse_block_t* block, rangelist_t* rangelist
 	return res;
 }
 
-int _sparse_block_get_ranges( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, range_t* rg )
+int _sparse_block_get_ranges( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg )
 {
 	if (block->level == 0)
 		return _sparse_block_get_ranges_leaf(block, rangelist, index, rg);
@@ -477,7 +477,7 @@ int _sparse_block_get_ranges( sparse_block_t* block, rangelist_t* rangelist, sec
 int sparsebitmap_convert2rangelist( sparse_bitmap_t* bitmap, rangelist_t* rangelist, sector_t start_index )
 {
 	int res = SUCCESS;
-	range_t rg = {0};
+	struct blk_range rg = {0};
 
 	res = _sparse_block_get_ranges( &bitmap->sparse_block, rangelist, &start_index, &rg );
 	if (res != SUCCESS)

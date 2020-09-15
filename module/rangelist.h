@@ -1,6 +1,6 @@
 #pragma once
 
-#include "range.h"
+#include "sector.h"
 
 //  IS NOT LOCKED
 
@@ -13,7 +13,7 @@ typedef struct rangelist_s
 typedef struct range_el_s
 {
 	struct list_head link;
-	range_t rg;
+	struct blk_range rg;
 }rangelist_el_t;
 
 
@@ -21,9 +21,9 @@ void rangelist_init( rangelist_t* rglist );
 
 void rangelist_done( rangelist_t* rglist );
 
-int rangelist_add( rangelist_t* rglist, range_t* rg );
+int rangelist_add( rangelist_t* rglist, struct blk_range* rg );
 
-int rangelist_get( rangelist_t* rglist, range_t* rg );
+int rangelist_get( rangelist_t* rglist, struct blk_range* rg );
 
 bool rangelist_empty( rangelist_t* rglist );
 

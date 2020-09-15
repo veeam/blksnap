@@ -1,5 +1,5 @@
 #pragma once
-#include "range.h"
+#include "sector.h"
 
 //#define RANGEVECTOR_EL_CAPACITY 250
 #define RANGEVECTOR_EL_CAPACITY 1000
@@ -8,7 +8,7 @@ typedef struct rangevector_el_s
 {
 	struct list_head link;
 	atomic_t cnt;
-	range_t ranges[RANGEVECTOR_EL_CAPACITY];
+	struct blk_range ranges[RANGEVECTOR_EL_CAPACITY];
 }rangevector_el_t;
 
 typedef struct rangevector_s
@@ -26,12 +26,12 @@ void rangevector_done( rangevector_t* rangevector );
 
 void rangevector_cleanup( rangevector_t* rangevector );
 
-int rangevector_add( rangevector_t* rangevector, range_t* rg );
+int rangevector_add( rangevector_t* rangevector, struct blk_range* rg );
 void rangevector_sort( rangevector_t* rangevector );
 
 int rangevector_v2p( rangevector_t* rangevector, sector_t virt_offset, sector_t virt_length, sector_t* p_phys_offset, sector_t* p_phys_length );
 
-int rangevector_at( rangevector_t* rangevector, size_t inx, range_t* range );
+int rangevector_at( rangevector_t* rangevector, size_t inx, struct blk_range* range );
 
 sector_t rangevector_length( rangevector_t* rangevector );
 
@@ -86,5 +86,5 @@ if ((rangevector)->use_lock){\
 
 size_t rangevector_cnt( rangevector_t* rangevector );
 
-range_t* rangevector_el_find_first_hit( rangevector_el_t* el, sector_t from_sect, sector_t to_sect );
+struct blk_range* rangevector_el_find_first_hit( rangevector_el_t* el, sector_t from_sect, sector_t to_sect );
 
