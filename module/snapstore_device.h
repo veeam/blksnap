@@ -44,8 +44,8 @@ int snapstore_device_cleanup( uuid_t* id );
 int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, range_t* copy_range, blk_deferred_request_t** dio_copy_req );
 int snapstore_device_store( snapstore_device_t* snapstore_device, blk_deferred_request_t* dio_copy_req );
 
-int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bio_endio_t* rq_endio ); //request from image
-int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_bio_endio_t* rq_endio ); //request from image
+int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bio_t* rq_redir ); //request from image
+int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_bio_t* rq_redir ); //request from image
 
 bool snapstore_device_is_corrupted( snapstore_device_t* snapstore_device );
 void snapstore_device_set_corrupted( snapstore_device_t* snapstore_device, int err_code );

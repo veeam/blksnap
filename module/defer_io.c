@@ -1,6 +1,5 @@
 #include "common.h"
 #include "defer_io.h"
-#include "queue_spinlocking.h"
 #include "blk_deferred.h"
 #include "tracker.h"
 #include "blk_util.h"
@@ -16,24 +15,109 @@
 blk_qc_t filter_submit_original_bio(struct bio *bio);
 
 typedef struct defer_io_original_request_s{
-	queue_content_sl_t content;
+	struct list_head link;
+	defer_io_queue_t *queue;
 
 	struct bio* bio;
 	tracker_t* tracker;
 
 }defer_io_original_request_t;
 
-
-void _defer_io_finish( defer_io_t* defer_io, queue_sl_t* queue_in_progress )
+void defer_io_queue_init( defer_io_queue_t* queue )
 {
-	while ( !queue_sl_empty( *queue_in_progress ) )
+	INIT_LIST_HEAD( &queue->list );
+
+	spin_lock_init( &queue->lock );
+
+	atomic_set( &queue->in_queue_cnt, 0);
+	atomic_set( &queue->active_state, true );
+}
+
+defer_io_original_request_t* defer_io_queue_new( defer_io_queue_t* queue )
+{
+	defer_io_original_request_t* dio_rq = kzalloc( sizeof(defer_io_original_request_t), GFP_NOIO );
+
+	if (NULL == dio_rq)
+		return NULL;
+
+	INIT_LIST_HEAD( &dio_rq->link );
+	dio_rq->queue = queue;
+
+	return dio_rq;
+}
+
+void defer_io_queue_free( defer_io_original_request_t* dio_rq )
+{
+	if (dio_rq)
+		kfree( dio_rq );
+}
+
+int defer_io_queue_push_back( defer_io_queue_t* queue, defer_io_original_request_t* dio_rq )
+{
+	int res = SUCCESS;
+
+	spin_lock( &queue->lock );
+
+	if (atomic_read( &queue->active_state )) {
+		INIT_LIST_HEAD( &dio_rq->link );
+
+		list_add_tail( &dio_rq->link, &queue->list );
+		atomic_inc( &queue->in_queue_cnt );
+	}
+	else
+		res = -EACCES;
+
+	spin_unlock( &queue->lock );
+	return res;
+}
+
+defer_io_original_request_t* defer_io_queue_get_first( defer_io_queue_t* queue )
+{
+	defer_io_original_request_t* dio_rq = NULL;
+
+	spin_lock( &queue->lock );
+
+	if (!list_empty( &queue->list )) {
+		dio_rq = list_entry( queue->list.next, defer_io_original_request_t, link );
+		list_del( &dio_rq->link );
+		atomic_dec( &queue->in_queue_cnt );
+	}
+
+	spin_unlock( &queue->lock );
+
+	return dio_rq;
+}
+
+bool defer_io_queue_active( defer_io_queue_t* queue, bool state )
+{
+	bool prev_state;
+
+	spin_lock( &queue->lock );
+
+	prev_state = atomic_read( &queue->active_state );
+	atomic_set( &queue->active_state, state );
+
+	spin_unlock( &queue->lock );
+
+	return prev_state;
+}
+
+#define defer_io_queue_empty( queue ) \
+	(atomic_read( &(queue).in_queue_cnt ) == 0)
+
+
+
+
+void _defer_io_finish( defer_io_t* defer_io, defer_io_queue_t* queue_in_progress )
+{
+	while ( !defer_io_queue_empty( *queue_in_progress ) )
 	{
 		tracker_t* tracker = NULL;
 		bool cbt_locked = false;
 		bool is_write_bio;
 		sector_t sectCount = 0;
 
-		defer_io_original_request_t* orig_req = (defer_io_original_request_t*)queue_sl_get_first( queue_in_progress );
+		defer_io_original_request_t* orig_req = defer_io_queue_get_first( queue_in_progress );
 
 		is_write_bio = bio_data_dir( orig_req->bio ) && bio_has_data( orig_req->bio );
 
@@ -55,23 +139,23 @@ void _defer_io_finish( defer_io_t* defer_io, queue_sl_t* queue_in_progress )
 		if (cbt_locked)
 			tracker_cbt_bitmap_unlock( tracker );
 
-		queue_content_sl_free( &orig_req->content );
+		defer_io_queue_free( orig_req );
 	}
 }
 
-int _defer_io_copy_prepare( defer_io_t* defer_io, queue_sl_t* queue_in_process, blk_deferred_request_t** dio_copy_req )
+int _defer_io_copy_prepare( defer_io_t* defer_io, defer_io_queue_t* queue_in_process, blk_deferred_request_t** dio_copy_req )
 {
 	int res = SUCCESS;
 	int dios_count = 0;
 	sector_t dios_sectors_count = 0;
 
 	//fill copy_request set
-	while (!queue_sl_empty( defer_io->dio_queue ) && (dios_count < DEFER_IO_DIO_REQUEST_LENGTH) && (dios_sectors_count < DEFER_IO_DIO_REQUEST_SECTORS_COUNT)){
+	while (!defer_io_queue_empty( defer_io->dio_queue ) && (dios_count < DEFER_IO_DIO_REQUEST_LENGTH) && (dios_sectors_count < DEFER_IO_DIO_REQUEST_SECTORS_COUNT)){
 
-		defer_io_original_request_t* dio_orig_req = (defer_io_original_request_t*)queue_sl_get_first( &defer_io->dio_queue );
+		defer_io_original_request_t* dio_orig_req = (defer_io_original_request_t*)defer_io_queue_get_first( &defer_io->dio_queue );
 		atomic_dec( &defer_io->queue_filling_count );
 
-		queue_sl_push_back( queue_in_process, &dio_orig_req->content );
+		defer_io_queue_push_back( queue_in_process, dio_orig_req );
 
 		if (!kthread_should_stop( ) && !snapstore_device_is_corrupted( defer_io->snapstore_device )) {
 			if (bio_data_dir( dio_orig_req->bio ) && bio_has_data( dio_orig_req->bio )) {
@@ -95,25 +179,24 @@ int _defer_io_copy_prepare( defer_io_t* defer_io, queue_sl_t* queue_in_process, 
 
 int defer_io_work_thread( void* p )
 {
-
-	queue_sl_t queue_in_process;
+	defer_io_queue_t queue_in_process = {0};
 	defer_io_t* defer_io = NULL;
 
 	//set_user_nice( current, -20 ); //MIN_NICE
-	queue_sl_init( &queue_in_process, sizeof( defer_io_original_request_t ) );
+	defer_io_queue_init( &queue_in_process );
 
 	defer_io = defer_io_get_resource((defer_io_t*)p);
 	log_tr_format("Defer IO thread for original device [%d:%d] started", MAJOR(defer_io->original_dev_id), MINOR(defer_io->original_dev_id));
 
-	while (!kthread_should_stop( ) || !queue_sl_empty( defer_io->dio_queue )){
+	while (!kthread_should_stop( ) || !defer_io_queue_empty( defer_io->dio_queue )){
 
-		if (queue_sl_empty( defer_io->dio_queue )){
-			int res = wait_event_interruptible_timeout( defer_io->queue_add_event, (!queue_sl_empty( defer_io->dio_queue )), VEEAMIMAGE_THROTTLE_TIMEOUT );
+		if (defer_io_queue_empty( defer_io->dio_queue )){
+			int res = wait_event_interruptible_timeout( defer_io->queue_add_event, (!defer_io_queue_empty( defer_io->dio_queue )), VEEAMIMAGE_THROTTLE_TIMEOUT );
 			if (-ERESTARTSYS == res)
 				log_err( "Signal received in defer IO thread. Waiting for completion with code ERESTARTSYS" );
 		}
 
-		if (!queue_sl_empty( defer_io->dio_queue )){
+		if (!defer_io_queue_empty( defer_io->dio_queue )){
 			int dio_copy_result = SUCCESS;
 			blk_deferred_request_t* dio_copy_req = NULL;
 
@@ -154,16 +237,14 @@ int defer_io_work_thread( void* p )
 		}
 
 		//wake up snapimage if defer io queue empty
-		if (queue_sl_empty( defer_io->dio_queue )){
+		if (defer_io_queue_empty( defer_io->dio_queue )){
 			wake_up_interruptible( &defer_io->queue_throttle_waiter );
 		}
 	}
-	queue_sl_active( &defer_io->dio_queue, false );
+	defer_io_queue_active( &defer_io->dio_queue, false );
 
 	//waiting for all sent request complete
 	_defer_io_finish( defer_io, &defer_io->dio_queue );
-
-	queue_sl_done(&queue_in_process);
 
 	log_tr_format( "Defer IO thread for original device [%d:%d] completed", MAJOR( defer_io->original_dev_id ), MINOR( defer_io->original_dev_id ) );
 	defer_io_put_resource(defer_io);
@@ -179,8 +260,6 @@ void _defer_io_destroy( void* this_resource )
 
 	if (defer_io->dio_thread)
 		defer_io_stop( defer_io );
-
-	queue_sl_done( &defer_io->dio_queue );
 
 	if (defer_io->snapstore_device)
 		snapstore_device_put_resource(defer_io->snapstore_device);
@@ -216,7 +295,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 
 	shared_resource_init( &defer_io->sharing_header, defer_io, _defer_io_destroy );
 
-	queue_sl_init( &defer_io->dio_queue, sizeof( defer_io_original_request_t ) );
+	defer_io_queue_init(&defer_io->dio_queue);
 
 	init_waitqueue_head( &defer_io->queue_add_event );
 
@@ -270,7 +349,7 @@ int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
 	if (snapstore_device_is_corrupted( defer_io->snapstore_device ))
 		return -ENODATA;
 
-	dio_orig_req = (defer_io_original_request_t*)queue_content_sl_new_opt( &defer_io->dio_queue, GFP_NOIO );
+	dio_orig_req = defer_io_queue_new( &defer_io->dio_queue);
 	if (dio_orig_req == NULL)
 		return -ENOMEM;
 
@@ -278,8 +357,8 @@ int defer_io_redirect_bio(defer_io_t* defer_io, struct bio *bio, void* tracker)
 
 	dio_orig_req->tracker = (tracker_t*)tracker;
 
-	if (SUCCESS != queue_sl_push_back( &defer_io->dio_queue, &dio_orig_req->content )){
-		queue_content_sl_free( &dio_orig_req->content );
+	if (SUCCESS != defer_io_queue_push_back( &defer_io->dio_queue, dio_orig_req )){
+		defer_io_queue_free( dio_orig_req );
 		return -EFAULT;
 	}
 

@@ -1,6 +1,5 @@
 #include "common.h"
 #include "log.h"
-#include "queue_spinlocking.h"
 #include "blk-snap-ctl.h"
 
 #include <linux/fs.h>
@@ -16,6 +15,127 @@
 #define MAX_LOGLINE_SIZE 256
 #define MAX_FILENAME_SIZE 256
 #define MAX_TIMESTRING_SIZE 256
+
+
+typedef struct queue_sl_s
+{
+	struct list_head list;
+	spinlock_t lock;
+
+	atomic_t active_state;
+	int content_size;
+	atomic_t in_queue_cnt;
+	atomic_t alloc_cnt;
+}queue_sl_t;
+
+typedef struct queue_content_sl_s
+{
+	struct list_head link;
+	queue_sl_t* queue;
+}queue_content_sl_t;
+
+
+void queue_sl_init( queue_sl_t* queue, int content_size )
+{
+	INIT_LIST_HEAD( &queue->list );
+
+	spin_lock_init( &queue->lock );
+
+	queue->content_size = content_size;
+
+	atomic_set( &queue->in_queue_cnt, 0);
+	atomic_set( &queue->alloc_cnt, 0 );
+
+	atomic_set( &queue->active_state, true );
+}
+
+queue_content_sl_t* queue_content_sl_new_opt_append( queue_sl_t* queue, gfp_t gfp_opt, size_t append_size )
+{
+	queue_content_sl_t* content = kzalloc( queue->content_size + append_size, gfp_opt );
+
+	if (NULL == content)
+		return NULL;
+
+	atomic_inc( &queue->alloc_cnt );
+
+	INIT_LIST_HEAD( &content->link );
+	content->queue = queue;
+
+	return content;
+}
+
+static inline queue_content_sl_t* queue_content_sl_new_opt( queue_sl_t* queue, gfp_t gfp_opt )
+{
+	return queue_content_sl_new_opt_append( queue, gfp_opt, 0 );
+};
+
+void queue_content_sl_free( queue_content_sl_t* content )
+{
+	if (content) {
+		atomic_dec( &content->queue->alloc_cnt );
+
+		kfree( content );
+	}
+}
+
+int queue_sl_push_back( queue_sl_t* queue, queue_content_sl_t* content )
+{
+	int res = SUCCESS;
+
+	spin_lock( &queue->lock );
+
+	if (atomic_read( &queue->active_state )) {
+		INIT_LIST_HEAD( &content->link );
+		list_add_tail( &content->link, &(queue)->list );
+		atomic_inc( &queue->in_queue_cnt );
+	}
+	else
+		res = -EACCES;
+
+	spin_unlock( &queue->lock );
+	return res;
+}
+
+queue_content_sl_t* queue_sl_get_first( queue_sl_t* queue )
+{
+	queue_content_sl_t* content = NULL;
+
+	spin_lock( &queue->lock );
+
+	if (!list_empty( &queue->list )) {
+		content = list_entry( queue->list.next, queue_content_sl_t, link );
+		list_del( &content->link );
+		atomic_dec( &queue->in_queue_cnt );
+	}
+
+	spin_unlock( &queue->lock );
+
+	return content;
+}
+
+bool queue_sl_active( queue_sl_t* queue, bool state )
+{
+	bool prev_state;
+
+	spin_lock( &queue->lock );
+
+	prev_state = atomic_read( &queue->active_state );
+	atomic_set( &queue->active_state, state );
+
+	spin_unlock( &queue->lock );
+
+	return prev_state;
+}
+
+#define queue_sl_length( queue ) \
+	atomic_read( &(queue).in_queue_cnt )
+
+#define queue_sl_empty( queue ) \
+	(atomic_read( &(queue).in_queue_cnt ) == 0)
+
+#define queue_sl_unactive( queue ) \
+	( (atomic_read( &((queue).active_state) ) == false) && (atomic_read( &((queue).alloc_cnt) ) == 0) )
+
 
 typedef struct _log_request_t
 {
@@ -442,8 +562,6 @@ void logging_done( void )
 		kthread_stop( logging->m_rq_thread );
 		logging->m_rq_thread = NULL;
 	}
-
-	queue_sl_done( &logging->log_rq_queue );
 }
 
 static int _logging_buffer( const char* section, const unsigned level, const char* buff, const size_t len )

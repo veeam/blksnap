@@ -3,7 +3,6 @@
 #include "snapimage.h"
 #include "blk_util.h"
 #include "defer_io.h"
-#include "queue_spinlocking.h"
 #include "cbt_map.h"
 #include "tracker.h"
 
@@ -17,6 +16,7 @@
 #include "log_format.h"
 
 #define SNAPIMAGE_MAX_DEVICES 2048
+
 
 static int g_snapimage_major = 0;
 static unsigned long* g_snapimage_minors;
@@ -38,13 +38,12 @@ typedef struct snapimage_s{
 
 	dev_t image_dev;
 
-	spinlock_t queue_lock;		// For exclusive access to our request queue
 	struct request_queue* queue;
 	struct gendisk* disk;
 
 	atomic_t own_cnt;
 
-	queue_sl_t image_queue;
+	redirect_bio_queue_t image_queue;
 
 	struct task_struct* rq_processor;
 
@@ -239,14 +238,14 @@ static struct block_device_operations g_snapimage_ops = {
 };
 
 static inline
-int _snapimage_request_read(snapimage_t *image, blk_redirect_bio_endio_t* rq_endio)
+int _snapimage_request_read(snapimage_t *image, blk_redirect_bio_t* rq_redir)
 {
 	snapstore_device_t* snapstore_device = image->defer_io->snapstore_device;
 
-	return snapstore_device_read( snapstore_device, rq_endio );
+	return snapstore_device_read( snapstore_device, rq_redir );
 }
 
-int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_endio_t* rq_endio )
+int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_t* rq_redir )
 {
 	snapstore_device_t* snapstore_device;
 	cbt_map_t* cbt_map;
@@ -261,16 +260,16 @@ int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_endio_t* rq_en
 	if (snapstore_device_is_corrupted( snapstore_device ))
 		return -ENODATA;
 
-	if (!bio_has_data( rq_endio->bio )){
-		log_warn_sz( "Snapshot image receive empty block IO. Flags=", rq_endio->bio->bi_flags );
+	if (!bio_has_data( rq_redir->bio )){
+		log_warn_sz( "Snapshot image receive empty block IO. Flags=", rq_redir->bio->bi_flags );
 
-		blk_redirect_complete( rq_endio, SUCCESS );
+		blk_redirect_complete( rq_redir, SUCCESS );
 		return SUCCESS;
 	}
 
 	if (cbt_map != NULL){
-		sector_t ofs = rq_endio->bio->bi_iter.bi_sector;
-		sector_t cnt = bio_sectors(rq_endio->bio);
+		sector_t ofs = rq_redir->bio->bi_iter.bi_sector;
+		sector_t cnt = bio_sectors(rq_redir->bio);
 
 		res = cbt_map_set_both( cbt_map, ofs, cnt );
 		if (res != SUCCESS){
@@ -278,7 +277,7 @@ int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_endio_t* rq_en
 		}
 	}
 
-	res = snapstore_device_write( snapstore_device, rq_endio );
+	res = snapstore_device_write( snapstore_device, rq_redir );
 
 	if (res != SUCCESS){
 		log_err( "Failed to write data to snapshot image" );
@@ -291,32 +290,32 @@ int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_endio_t* rq_en
 void _snapimage_processing( snapimage_t * image )
 {
 	int res = SUCCESS;
-	blk_redirect_bio_endio_t* rq_endio;
+	blk_redirect_bio_t* rq_redir;
 
 	atomic64_inc( &image->state_inprocess );
-	rq_endio = (blk_redirect_bio_endio_t*)queue_sl_get_first( &image->image_queue );
+	rq_redir = redirect_bio_queue_get_first( &image->image_queue );
 
-	if (bio_data_dir( rq_endio->bio ) == READ){
-		image->last_read_sector = rq_endio->bio->bi_iter.bi_sector;
-		image->last_read_size =  bio_sectors(rq_endio->bio);
+	if (bio_data_dir( rq_redir->bio ) == READ){
+		image->last_read_sector = rq_redir->bio->bi_iter.bi_sector;
+		image->last_read_size =  bio_sectors(rq_redir->bio);
 
-		res = _snapimage_request_read( image, rq_endio );
+		res = _snapimage_request_read( image, rq_redir );
 		if (res != SUCCESS){
 			log_err_d( "Failed to read data from snapshot image. errno=", res );
 		}
 	}
 	else{
-		image->last_write_sector = rq_endio->bio->bi_iter.bi_sector;
-		image->last_write_size = bio_sectors(rq_endio->bio);
+		image->last_write_sector = rq_redir->bio->bi_iter.bi_sector;
+		image->last_write_size = bio_sectors(rq_redir->bio);
 
-		res = _snapimage_request_write( image, rq_endio );
+		res = _snapimage_request_write( image, rq_redir );
 		if (res != SUCCESS){
 			log_err_d( "Failed to write data to snapshot image. errno=", res );
 		}
 	}
 
 	if (res != SUCCESS)
-		blk_redirect_complete( rq_endio, res );
+		blk_redirect_complete( rq_redir, res );
 }
 
 
@@ -324,8 +323,10 @@ int snapimage_processor_waiting( snapimage_t *image )
 {
 	int res = SUCCESS;
 
-	if (queue_sl_empty( image->image_queue )){
-		res = wait_event_interruptible_timeout( image->rq_proc_event, (!queue_sl_empty( image->image_queue ) || kthread_should_stop( )), 5 * HZ );
+	if (redirect_bio_queue_empty( image->image_queue )){
+		res = wait_event_interruptible_timeout( image->rq_proc_event,
+			(!redirect_bio_queue_empty( image->image_queue ) || kthread_should_stop( )),
+			5 * HZ );
 		if (res > 0){
 			res = SUCCESS;
 		}
@@ -353,7 +354,7 @@ int snapimage_processor_thread( void *data )
 	{
 		int res = snapimage_processor_waiting( image );
 		if (res == SUCCESS){
-			if (!queue_sl_empty( image->image_queue ))
+			if (!redirect_bio_queue_empty( image->image_queue ))
 				_snapimage_processing( image );
 		} else if (res == -ETIME){
 			//Nobody read me
@@ -367,7 +368,7 @@ int snapimage_processor_thread( void *data )
 	log_tr( "Snapshot image disk delete" );
 	del_gendisk( image->disk );
 
-	while (!queue_sl_empty( image->image_queue ))
+	while (!redirect_bio_queue_empty( image->image_queue ))
 		_snapimage_processing( image );
 
 	log_tr_format( "Snapshot image thread for device [%d:%d] complete", MAJOR( image->image_dev ), MINOR( image->image_dev ) );
@@ -393,7 +394,7 @@ void _snapimage_bio_complete_cb( void* complete_param, struct bio* bio, int err 
 
 	_snapimage_bio_complete( bio, err );
 
-	if (queue_sl_unactive( image->image_queue )){
+	if (redirect_bio_queue_unactive( image->image_queue )){
 		wake_up_interruptible( &image->rq_complete_event );
 	}
 
@@ -403,7 +404,7 @@ void _snapimage_bio_complete_cb( void* complete_param, struct bio* bio, int err 
 
 int _snapimage_throttling( defer_io_t* defer_io )
 {
-	return wait_event_interruptible( defer_io->queue_throttle_waiter, queue_sl_empty( defer_io->dio_queue ) );
+	return wait_event_interruptible( defer_io->queue_throttle_waiter, redirect_bio_queue_empty( defer_io->dio_queue ) );
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION( 5, 9, 0 )
@@ -431,7 +432,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 
 	atomic_inc( &image->own_cnt );
 	do{
-		blk_redirect_bio_endio_t* rq_endio;
+		blk_redirect_bio_t* rq_redir;
 
 		if (false == atomic_read( &(image->image_queue.active_state) )){
 			_snapimage_bio_complete( bio, -ENODEV );
@@ -452,27 +453,27 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 			}
 		}
 
-		rq_endio = (blk_redirect_bio_endio_t*)queue_content_sl_new_opt( &image->image_queue, GFP_NOIO );
-		if (NULL == rq_endio){
+		rq_redir = redirect_bio_queue_new( &image->image_queue );
+		if (NULL == rq_redir){
 			log_err("Unable to make snapshot image request: failed to allocate redirect bio structure");
 			_snapimage_bio_complete( bio, -ENOMEM );
 			break;
 		}
-		rq_endio->bio = bio;
-		rq_endio->complete_cb = _snapimage_bio_complete_cb;
-		rq_endio->complete_param = (void*)image;
+		rq_redir->bio = bio;
+		rq_redir->complete_cb = _snapimage_bio_complete_cb;
+		rq_redir->complete_param = (void*)image;
 		atomic_inc( &image->own_cnt );
 
 		atomic64_inc( &image->state_received );
 
-		if (SUCCESS == queue_sl_push_back( &image->image_queue, &rq_endio->content )){
+		if (SUCCESS == redirect_bio_queue_push_back( &image->image_queue, rq_redir )){
 			wake_up( &image->rq_proc_event );
 		}
 		else{
-			queue_content_sl_free( &rq_endio->content );
+			redirect_bio_queue_free( rq_redir );
 			_snapimage_bio_complete( bio, -EIO );
 
-			if (queue_sl_unactive( image->image_queue )){
+			if (redirect_bio_queue_unactive( image->image_queue )){
 				wake_up_interruptible( &image->rq_complete_event );
 			}
 		}
@@ -555,9 +556,6 @@ int snapimage_create( dev_t original_dev )
 
 		atomic_set( &image->own_cnt, 0 );
 
-		// queue with per request processing
-		spin_lock_init( &image->queue_lock );
-
 		mutex_init( &image->open_locker );
 		image->open_bdev = NULL;
 		image->open_cnt = 0;
@@ -619,7 +617,7 @@ int snapimage_create( dev_t original_dev )
 		log_tr_format( "Snapshot image device capacity %lld bytes", (u64)from_sectors(image->capacity) );
 
 		//res = -ENOMEM;
-		queue_sl_init( &image->image_queue, sizeof( blk_redirect_bio_endio_t ) );
+		redirect_bio_queue_init(&image->image_queue);
 
 		{
 			struct task_struct* task = kthread_create( snapimage_processor_thread, image, disk->disk_name );
@@ -661,7 +659,7 @@ int snapimage_create( dev_t original_dev )
 void _snapimage_stop( snapimage_t* image )
 {
 	if (image->rq_processor != NULL){
-		if (queue_sl_active( &image->image_queue, false )){
+		if (redirect_bio_queue_active( &image->image_queue, false )){
 			struct request_queue* q = image->queue;
 
 			log_tr( "Snapshot image request processing stop" );
@@ -676,8 +674,8 @@ void _snapimage_stop( snapimage_t* image )
 		kthread_stop( image->rq_processor );
 		image->rq_processor = NULL;
 
-		while (!queue_sl_unactive( image->image_queue ))
-			wait_event_interruptible( image->rq_complete_event, queue_sl_unactive( image->image_queue ) );
+		while (!redirect_bio_queue_unactive( image->image_queue ))
+			wait_event_interruptible( image->rq_complete_event, redirect_bio_queue_unactive( image->image_queue ) );
 	}
 }
 
@@ -702,7 +700,7 @@ int _snapimage_destroy( snapimage_t* image )
 		disk->private_data = NULL;
 		put_disk( disk );
 	}
-	queue_sl_done( &image->image_queue );
+	//redirect_bio_queue_done( &image->image_queue );
 
 	spin_lock( &g_snapimage_minors_lock );
 	bitmap_clear( g_snapimage_minors, MINOR(image->image_dev), (int)1 );

@@ -1,5 +1,4 @@
 #include "common.h"
-#include "queue_spinlocking.h"
 #include "blk_util.h"
 
 #define SECTION "blk       "

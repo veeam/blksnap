@@ -16,7 +16,6 @@ blk-snap-y += defer_io.o
 blk-snap-y += log.o
 blk-snap-y += main.o
 blk-snap-y += page_array.o
-blk-snap-y += queue_spinlocking.o
 blk-snap-y += rangelist.o
 blk-snap-$(CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV) += rangelist_ex.o
 blk-snap-y += rangevector.o

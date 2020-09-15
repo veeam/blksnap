@@ -3,6 +3,16 @@
 #include "shared_resource.h"
 #include "snapstore_device.h"
 
+
+typedef struct defer_io_queue
+{
+	struct list_head list;
+	spinlock_t lock;
+
+	atomic_t active_state;
+	atomic_t in_queue_cnt;
+}defer_io_queue_t;
+
 typedef struct defer_io_s
 {
 	shared_resource_t sharing_header;
@@ -19,7 +29,7 @@ typedef struct defer_io_s
 
 	struct task_struct* dio_thread;
 
-	queue_sl_t dio_queue;
+	defer_io_queue_t dio_queue;
 
 }defer_io_t;
 

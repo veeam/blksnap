@@ -301,7 +301,7 @@ int snapstore_device_store( snapstore_device_t* snapstore_device, blk_deferred_r
 	return res;
 }
 
-int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bio_endio_t* rq_endio )
+int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bio_t* rq_redir )
 {
 	int res = SUCCESS;
 
@@ -319,13 +319,13 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 	if (snapstore_device_is_corrupted( snapstore_device ))
 		return -ENODATA;
 
-	rq_range.cnt = bio_sectors(rq_endio->bio);
-	rq_range.ofs = rq_endio->bio->bi_iter.bi_sector;
+	rq_range.cnt = bio_sectors(rq_redir->bio);
+	rq_range.ofs = rq_redir->bio->bi_iter.bi_sector;
 
-	if (!bio_has_data( rq_endio->bio )){
-		log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_endio->bio->bi_flags );
+	if (!bio_has_data( rq_redir->bio )){
+		log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_redir->bio->bi_flags );
 
-		blk_redirect_complete( rq_endio, SUCCESS );
+		blk_redirect_complete( rq_redir, SUCCESS );
 		return SUCCESS;
 	}
 
@@ -353,7 +353,7 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 		}
 		if (blk_descr ){
 			//push snapstore read
-			res = snapstore_redirect_read( rq_endio, snapstore_device->snapstore, blk_descr, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
+			res = snapstore_redirect_read( rq_redir, snapstore_device->snapstore, blk_descr, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 			if (res != SUCCESS){
 				log_err( "Failed to read from snapstore device" );
 				break;
@@ -363,9 +363,9 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 
 			//device read with zeroing
 			if (zero_sectors)
-				res = blk_dev_redirect_read_zeroed( rq_endio, snapstore_device->orig_blk_dev, rq_range.ofs, blk_ofs_start, blk_ofs_count, zero_sectors );
+				res = blk_dev_redirect_read_zeroed( rq_redir, snapstore_device->orig_blk_dev, rq_range.ofs, blk_ofs_start, blk_ofs_count, zero_sectors );
 			else
-				res = blk_dev_redirect_part( rq_endio, READ, snapstore_device->orig_blk_dev, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
+				res = blk_dev_redirect_part( rq_redir, READ, snapstore_device->orig_blk_dev, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 
 			if (res != SUCCESS){
 				log_err_dev_t( "Failed to redirect read request to the original device ", snapstore_device->dev_id );
@@ -377,10 +377,10 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 	}
 
 	if (res == SUCCESS){
-		if (atomic64_read( &rq_endio->bio_endio_count ) > 0ll) //async direct access needed
-			blk_dev_redirect_submit( rq_endio );
+		if (atomic64_read( &rq_redir->bio_count ) > 0ll) //async direct access needed
+			blk_dev_redirect_submit( rq_redir );
 		else
-			blk_redirect_complete( rq_endio, res );
+			blk_redirect_complete( rq_redir, res );
 	}
 	else{
 		log_err_d( "Failed to read from snapstore device. errno=", res );
@@ -431,7 +431,7 @@ int _snapstore_device_copy_on_write( snapstore_device_t* snapstore_device, range
 }
 
 
-int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_bio_endio_t* rq_endio )
+int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_bio_t* rq_redir )
 {
 	int res = SUCCESS;
 
@@ -445,19 +445,19 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 	range_t rq_range;
 
 	BUG_ON( NULL == snapstore_device );
-	BUG_ON( NULL == rq_endio );
-	BUG_ON( NULL == rq_endio->bio );
+	BUG_ON( NULL == rq_redir );
+	BUG_ON( NULL == rq_redir->bio );
 
 	if (snapstore_device_is_corrupted( snapstore_device ))
 		return -ENODATA;
 
-	rq_range.cnt = bio_sectors(rq_endio->bio);
-	rq_range.ofs = rq_endio->bio->bi_iter.bi_sector;
+	rq_range.cnt = bio_sectors(rq_redir->bio);
+	rq_range.ofs = rq_redir->bio->bi_iter.bi_sector;
 
-	if (!bio_has_data( rq_endio->bio )){
-		log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_endio->bio->bi_flags );
+	if (!bio_has_data( rq_redir->bio )){
+		log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_redir->bio->bi_flags );
 
-		blk_redirect_complete( rq_endio, SUCCESS );
+		blk_redirect_complete( rq_redir, SUCCESS );
 		return SUCCESS;
 	}
 
@@ -492,7 +492,7 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 			break;
 		}
 
-		res = snapstore_redirect_write( rq_endio, snapstore_device->snapstore, blk_descr, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
+		res = snapstore_redirect_write( rq_redir, snapstore_device->snapstore, blk_descr, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 		if (res != SUCCESS){
 			log_err( "Unable to write from snapstore device: failed to redirect write request to snapstore" );
 			break;
@@ -501,11 +501,11 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 		blk_ofs_start += blk_ofs_count;
 	}
 	if (res == SUCCESS){
-		if (atomic64_read( &rq_endio->bio_endio_count ) > 0){ //async direct access needed
-			blk_dev_redirect_submit( rq_endio );
+		if (atomic64_read( &rq_redir->bio_count ) > 0){ //async direct access needed
+			blk_dev_redirect_submit( rq_redir );
 		}
 		else{
-			blk_redirect_complete( rq_endio, res );
+			blk_redirect_complete( rq_redir, res );
 		}
 	}
 	else{

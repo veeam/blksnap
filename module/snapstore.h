@@ -62,8 +62,8 @@ blk_descr_unify_t* snapstore_get_empty_block( snapstore_t* snapstore );
 
 int snapstore_request_store( snapstore_t* snapstore, blk_deferred_request_t* dio_copy_req );
 
-int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count );
-int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count );
+int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count );
+int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count );
 
 int snapstore_check_halffill( uuid_t* unique_id, sector_t* fill_status );
 

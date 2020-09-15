@@ -617,7 +617,7 @@ int snapstore_request_store( snapstore_t* snapstore, blk_deferred_request_t* dio
 	return res;
 }
 
-int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
+int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
 {
 	int res = SUCCESS;
 	sector_t current_ofs = 0;
@@ -639,7 +639,7 @@ int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* sn
 				sector_t pos = rg->ofs + block_ofs;
 				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
 
-				res = blk_dev_redirect_part( rq_endio, READ, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
+				res = blk_dev_redirect_part( rq_redir, READ, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
 
 				if (res != SUCCESS){
 					log_err_sect( "Failed to read from snapstore file. Sector #", pos );
@@ -673,7 +673,7 @@ int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* sn
 				sector_t pos = rg->ofs + block_ofs;
 				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
 
-				res = blk_dev_redirect_part( rq_endio, READ, blk_dev, pos, rq_ofs + current_ofs, len );
+				res = blk_dev_redirect_part( rq_redir, READ, blk_dev, pos, rq_ofs + current_ofs, len );
 
 				if (res != SUCCESS){
 					log_err_sect( "Failed to read from snapstore file. Sector #", pos );
@@ -693,7 +693,7 @@ int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* sn
 	else if (snapstore->mem){
 		blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)blk_descr_ptr;
 
-		res = blk_dev_redirect_memcpy_part( rq_endio, READ, blk_descr->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
+		res = blk_dev_redirect_memcpy_part( rq_redir, READ, blk_descr->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
 		if (res != SUCCESS){
 			log_err( "Failed to read from snapstore memory" );
 		}else
@@ -709,13 +709,13 @@ int snapstore_redirect_read( blk_redirect_bio_endio_t* rq_endio, snapstore_t* sn
 	return res;
 }
 
-int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
+int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
 {
 	int res = SUCCESS;
 	sector_t current_ofs = 0;
 	sector_t block_ofs = target_pos & snapstore_block_mask();
 
-	BUG_ON( NULL == rq_endio );
+	BUG_ON( NULL == rq_redir );
 	BUG_ON( NULL == snapstore );
 
 	if (snapstore->file){
@@ -733,7 +733,7 @@ int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* s
 				sector_t pos = rg->ofs + block_ofs;
 				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
 
-				res = blk_dev_redirect_part( rq_endio, WRITE, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
+				res = blk_dev_redirect_part( rq_redir, WRITE, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
 
 				if (res != SUCCESS){
 					log_err_sect( "Failed to write to snapstore file. Sector #", pos );
@@ -769,7 +769,7 @@ int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* s
 				sector_t pos = rg->ofs + block_ofs;
 				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
 
-				res = blk_dev_redirect_part( rq_endio, WRITE, blk_dev, pos, rq_ofs + current_ofs, len );
+				res = blk_dev_redirect_part( rq_redir, WRITE, blk_dev, pos, rq_ofs + current_ofs, len );
 
 				if (res != SUCCESS){
 					log_err_sect( "Failed to write to snapstore file. Sector #", pos );
@@ -790,7 +790,7 @@ int snapstore_redirect_write( blk_redirect_bio_endio_t* rq_endio, snapstore_t* s
 	else if (snapstore->mem){
 		blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)blk_descr_ptr;
 
-		res = blk_dev_redirect_memcpy_part( rq_endio, WRITE,
+		res = blk_dev_redirect_memcpy_part( rq_redir, WRITE,
 			blk_descr->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
 		if (res != SUCCESS){
 			log_err( "Failed to write to snapstore memory" );
