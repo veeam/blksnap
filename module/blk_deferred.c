@@ -413,16 +413,13 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 
 	blk_deferred_request_waiting_skip( dio_copy_req );
 
-	if (list_empty( &dio_copy_req->dios ))
-		return res;
-
+	BUG_ON(list_empty( &dio_copy_req->dios ));
 	list_for_each( _dio_list_head, &dio_copy_req->dios ){
 		blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
 		sector_t page_array_ofs = 0;
 		blk_descr_file_t* blk_descr = (blk_descr_file_t*)dio->blk_descr;
 
-		//BUG_ON( NULL == dio );
-		//BUG_ON( NULL == dio->blk_descr );
+		BUG_ON(list_empty( &blk_descr->rangelist ));
 		list_for_each( _rangelist_head, &blk_descr->rangelist ) {
 			sector_t process_sect;
 			blk_range_link_t *range_link = list_entry( _rangelist_head, blk_range_link_t, link );
@@ -459,21 +456,17 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 
 	blk_deferred_request_waiting_skip( dio_copy_req );
 
-	if (list_empty( &dio_copy_req->dios ))
-		return res;
-
+	BUG_ON(list_empty( &dio_copy_req->dios ));
 	list_for_each( _dio_list_head, &dio_copy_req->dios ){
 		blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
 		sector_t page_array_ofs = 0;
 		blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)dio->blk_descr;
 
-		//BUG_ON( NULL == dio );
-		//BUG_ON( NULL == dio->blk_descr );
+		BUG_ON(list_empty(&blk_descr->rangelist));
 		list_for_each( _ranges_list_head, &blk_descr->rangelist ) {
 			sector_t process_sect;
 			blk_range_link_ex_t* range_link = list_entry( _ranges_list_head, blk_range_link_ex_t, link );
 
-			//BUG_ON( NULL == dio->buff );
 			process_sect = blk_deferred_submit_pages( range_link->blk_dev, dio_copy_req,
 				WRITE, page_array_ofs, dio->buff, range_link->rg.ofs, range_link->rg.cnt );
 			if (range_link->rg.cnt != process_sect){

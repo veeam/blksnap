@@ -4,13 +4,20 @@
 #define SECTION "blk_descr "
 #include "log_format.h"
 
+static inline void list_assign( struct list_head *dst, struct list_head *src )
+{
+	dst->next = src->next;
+	dst->prev = src->prev;
+
+	src->next->prev = dst;
+	src->prev->next = dst;
+}
 
 void blk_descr_file_init( blk_descr_file_t* blk_descr, struct list_head *rangelist )
 {
 	blk_descr_unify_init( &blk_descr->unify );
 
-	INIT_LIST_HEAD(&blk_descr->rangelist);
-	list_replace( &blk_descr->rangelist, rangelist);
+	list_assign( &blk_descr->rangelist, rangelist);
 }
 
 void blk_descr_file_done( blk_descr_file_t* blk_descr )
