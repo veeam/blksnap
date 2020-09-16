@@ -79,7 +79,7 @@ void blk_descr_pool_done( blk_descr_pool_t* pool, blk_descr_cleanup_t blocks_cle
 	mutex_unlock(&pool->lock);
 }
 
-blk_descr_unify_t* blk_descr_pool_alloc( blk_descr_pool_t* pool, size_t blk_descr_size, blk_descr_alloc_t block_alloc, void* arg )
+blk_descr_unify_t* blk_descr_pool_alloc( blk_descr_pool_t* pool, size_t blk_descr_size, blk_descr_allocate_cb block_alloc, void* arg )
 {
 	blk_descr_unify_t* blk_descr = NULL;
 

@@ -350,7 +350,9 @@ void sparsebitmap_create( sparse_bitmap_t* bitmap, u64 min_index, u64 length )
 
 void sparsebitmap_destroy( sparse_bitmap_t* bitmap )
 {
-	sparsebitmap_Clean( bitmap );
+	_sparse_block_free( &bitmap->sparse_block );
+	bitmap->length = 0;
+	bitmap->start_index = 0;
 }
 
 
@@ -378,112 +380,4 @@ int sparsebitmap_Get( sparse_bitmap_t* bitmap, u64 index, bool* p_state )
 
 	*p_state = _sparse_block_get( &bitmap->sparse_block, index );
 	return SUCCESS;
-}
-
-void sparsebitmap_Clean( sparse_bitmap_t* bitmap )
-{
-	_sparse_block_free( &bitmap->sparse_block );
-	bitmap->length = 0;
-	bitmap->start_index = 0;
-}
-
-int _sparse_block_get_ranges_leaf( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg )
-{
-	int res = SUCCESS;
-	size_t inx;
-
-	for (inx = 0; inx < SPARSE_BITMAP_BLOCK_SIZE; ++inx){
-		size_t bit_mask = ((size_t)(1) << inx);
-		if ((block->bit_block & bit_mask) != 0){
-			if (0 == rg->cnt )
-				rg->ofs = *index;
-			++rg->cnt;
-		}
-		else{
-			if (0 != rg->cnt){
-				res = rangelist_add( rangelist, rg );
-				rg->ofs = 0;
-				rg->cnt = 0;
-			}
-		}
-
-		++*index;
-	}
-	return res;
-}
-
-void _sparse_block_get_ranges_full( sparse_block_t* block, sector_t* index, struct blk_range* rg )
-{
-	sector_t block_size = 1ull << (SPARSE_BITMAP_BLOCK_SIZE_DEGREE * block->level);
-
-	if (0 == rg->cnt)
-		rg->ofs = *index;
-	rg->cnt += block_size;
-
-	*index += block_size;
-}
-
-int _sparse_block_get_ranges_empty( sparse_block_t* block, sector_t* index, struct blk_range* rg, rangelist_t* rangelist )
-{
-	int res = SUCCESS;
-	sector_t block_size = 1ull << (SPARSE_BITMAP_BLOCK_SIZE_DEGREE * block->level);
-
-	if (0 != rg->cnt)
-		res = rangelist_add( rangelist, rg );
-
-	*index += block_size;
-
-	return res;
-}
-
-int _sparse_block_get_ranges( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg );
-
-int _sparse_block_get_ranges_block(sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg)
-{
-	int res = SUCCESS;
-
-	if (block->blocks_array == BLOCK_FULL)
-		_sparse_block_get_ranges_full( block, index, rg );
-	else if (block->blocks_array == BLOCK_EMPTY)
-		res = _sparse_block_get_ranges_empty( block, index, rg, rangelist );
-	else {
-		size_t inx;
-
-		for (inx = 0; inx < SPARSE_BITMAP_BLOCK_SIZE; ++inx){
-			void* blk = block->blocks_array->blk[inx];
-
-			if (blk == BLOCK_FULL)
-				_sparse_block_get_ranges_full( block, index, rg );
-			else if (blk == BLOCK_EMPTY)
-				res = _sparse_block_get_ranges_empty( block, index, rg, rangelist );
-			else
-				res = _sparse_block_get_ranges( blk, rangelist, index, rg );
-
-			if (res != SUCCESS)
-				break;
-		}
-	}
-	return res;
-}
-
-int _sparse_block_get_ranges( sparse_block_t* block, rangelist_t* rangelist, sector_t* index, struct blk_range* rg )
-{
-	if (block->level == 0)
-		return _sparse_block_get_ranges_leaf(block, rangelist, index, rg);
-	else
-		return _sparse_block_get_ranges_block(block, rangelist, index, rg);
-}
-
-int sparsebitmap_convert2rangelist( sparse_bitmap_t* bitmap, rangelist_t* rangelist, sector_t start_index )
-{
-	int res = SUCCESS;
-	struct blk_range rg = {0};
-
-	res = _sparse_block_get_ranges( &bitmap->sparse_block, rangelist, &start_index, &rg );
-	if (res != SUCCESS)
-		return res;
-
-	if (0 != rg.cnt)
-		res = rangelist_add( rangelist, &rg );
-	return res;
 }

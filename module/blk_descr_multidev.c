@@ -7,16 +7,21 @@
 #define SECTION "blk_descr "
 #include "log_format.h"
 
-void blk_descr_multidev_init( blk_descr_multidev_t* blk_descr, rangelist_ex_t* rangelist )
+void blk_descr_multidev_init( blk_descr_multidev_t* blk_descr, struct list_head* rangelist )
 {
 	blk_descr_unify_init( &blk_descr->unify );
 
-	rangelist_ex_copy( &blk_descr->rangelist, rangelist );
+	memcpy(&blk_descr->rangelist, rangelist, sizeof(struct list_head));
 }
 
 void blk_descr_multidev_done( blk_descr_multidev_t* blk_descr )
 {
-	rangelist_ex_done( &blk_descr->rangelist );
+	while (!list_empty( &blk_descr->rangelist )) {
+		blk_range_link_ex_t *rangelist = list_entry( blk_descr->rangelist.next, blk_range_link_ex_t, link );
+
+		list_del( &rangelist->link );
+		kfree( rangelist );
+	}
 }
 
 void blk_descr_multidev_pool_init( blk_descr_pool_t* pool )
@@ -38,7 +43,8 @@ void blk_descr_multidev_pool_done( blk_descr_pool_t* pool )
 	blk_descr_pool_done( pool, _blk_descr_multidev_cleanup );
 }
 
-blk_descr_unify_t* _blk_descr_multidev_alloc( blk_descr_unify_t* blocks, size_t index, void* arg )
+static
+blk_descr_unify_t* _blk_descr_multidev_allocate( blk_descr_unify_t* blocks, size_t index, void* arg )
 {
 	blk_descr_multidev_t* multidev_blocks = (blk_descr_multidev_t*)blocks;
 	blk_descr_multidev_t* block_file = &multidev_blocks[index];
@@ -48,11 +54,11 @@ blk_descr_unify_t* _blk_descr_multidev_alloc( blk_descr_unify_t* blocks, size_t 
 	return (blk_descr_unify_t*)block_file;
 }
 
-int blk_descr_multidev_pool_add( blk_descr_pool_t* pool, rangelist_ex_t* rangelist )
+int blk_descr_multidev_pool_add( blk_descr_pool_t* pool, struct list_head* rangelist )
 {
 	blk_descr_multidev_t* blk_descr;
 
-	blk_descr = (blk_descr_multidev_t*)blk_descr_pool_alloc( pool, sizeof( blk_descr_multidev_t ), _blk_descr_multidev_alloc, (void*)rangelist );
+	blk_descr = (blk_descr_multidev_t*)blk_descr_pool_alloc( pool, sizeof( blk_descr_multidev_t ), _blk_descr_multidev_allocate, (void*)rangelist );
 	if (blk_descr == NULL){
 		log_err( "Failed to allocate block descriptor" );
 		return -ENOMEM;

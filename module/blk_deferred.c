@@ -411,35 +411,34 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 	blk_deferred_request_waiting_skip( dio_copy_req );
 
 	if (!list_empty( &dio_copy_req->dios )){
-		struct list_head* _list_head;
-		list_for_each( _list_head, &dio_copy_req->dios ){
-			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
+		struct list_head* _dio_list_head;
+		list_for_each( _dio_list_head, &dio_copy_req->dios ){
+			blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
 
 			struct blk_range* rg;
 			sector_t page_array_ofs = 0;
 			blk_descr_file_t* blk_descr = (blk_descr_file_t*)dio->blk_descr;
 
-			BUG_ON( NULL == dio );
-			BUG_ON( NULL == dio->blk_descr );
+			//BUG_ON( NULL == dio );
+			//BUG_ON( NULL == dio->blk_descr );
 
-			RANGELIST_FOREACH_BEGIN( blk_descr->rangelist, rg )
-			{
-				sector_t process_sect;
-				BUG_ON( NULL == dio->buff );
+			if (!list_empty( &blk_descr->rangelist )) {
+				struct list_head* _rangelist_head;
 
-				//log_err_range( "rg=", (*rg) );
+				list_for_each( _rangelist_head, &blk_descr->rangelist ) {
+					sector_t process_sect;
+					blk_range_link_t *range_link = list_entry( _rangelist_head, blk_range_link_t, link );
 
-				process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->buff, rg->ofs, rg->cnt );
-				BUG_ON( rg->cnt != process_sect );
-
-				if (rg->cnt != process_sect){
-					log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
-					res = -EIO;
-					break;
+					//BUG_ON( NULL == dio->buff );
+					process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->buff, rg->ofs, rg->cnt );
+					if (range_link->rg.cnt != process_sect){
+						log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
+						res = -EIO;
+						break;
+					}
+					page_array_ofs += range_link->rg.cnt;
 				}
-				page_array_ofs += rg->cnt;
 			}
-			RANGELIST_FOREACH_END( );
 
 			if (res != SUCCESS)
 				break;
@@ -461,37 +460,33 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 	blk_deferred_request_waiting_skip( dio_copy_req );
 
 	if (!list_empty( &dio_copy_req->dios )){
-		struct list_head* _list_head;
-		list_for_each( _list_head, &dio_copy_req->dios ){
-			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
-			struct blk_range* rg;
-			void** p_extension;
+		struct list_head* _dio_list_head;
+		list_for_each( _dio_list_head, &dio_copy_req->dios ){
+			blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
 			sector_t page_array_ofs = 0;
 			blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)dio->blk_descr;
 
-			BUG_ON( NULL == dio );
-			BUG_ON( NULL == dio->blk_descr );
+			//BUG_ON( NULL == dio );
+			//BUG_ON( NULL == dio->blk_descr );
 
-			RANGELIST_EX_FOREACH_BEGIN( blk_descr->rangelist, rg, p_extension )
-			{
-				sector_t process_sect;
-				struct block_device* blk_dev = (struct block_device*)(*p_extension);
+			if (!list_empty( &blk_descr->rangelist)) {
+				struct list_head* _ranges_list_head;
 
-				BUG_ON( NULL == dio->buff );
+				list_for_each( _ranges_list_head, &blk_descr->rangelist ) {
+					sector_t process_sect;
+					blk_range_link_ex_t* range_link = list_entry( _ranges_list_head, blk_range_link_ex_t, link );
 
-				//log_err_range( "rg=", (*rg) );
-
-				process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->buff, rg->ofs, rg->cnt );
-				BUG_ON( rg->cnt != process_sect );
-
-				if (rg->cnt != process_sect){
-					log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
-					res = -EIO;
-					break;
+					//BUG_ON( NULL == dio->buff );
+					process_sect = blk_deferred_submit_pages( range_link->blk_dev, dio_copy_req,
+						WRITE, page_array_ofs, dio->buff, range_link->rg.ofs, range_link->rg.cnt );
+					if (range_link->rg.cnt != process_sect){
+						log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
+						res = -EIO;
+						break;
+					}
+					page_array_ofs += range_link->rg.cnt;
 				}
-				page_array_ofs += rg->cnt;
 			}
-			RANGELIST_EX_FOREACH_END( );
 
 			if (res != SUCCESS)
 				break;

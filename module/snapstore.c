@@ -353,11 +353,30 @@ int zerosectors_add_ranges( rangevector_t* zero_sectors, page_array_t* ranges, s
 	return SUCCESS;
 }
 
+static
+int rangelist_add( struct list_head *rglist, struct blk_range* rg )
+{
+	blk_range_link_t* range_link = kzalloc( sizeof( blk_range_link_t ), GFP_KERNEL );
+	if (range_link == NULL)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD( &range_link->link );
+
+	range_link->rg.ofs = rg->ofs;
+	range_link->rg.cnt = rg->cnt;
+
+	list_add_tail( &range_link->link, rglist );
+
+	return SUCCESS;
+}
+
 int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 {
 	int res = SUCCESS;
 	snapstore_t* snapstore = NULL;
 	sector_t current_blk_size = 0;
+	LIST_HEAD( blk_rangelist );
+	size_t inx;
 
 	log_tr_format( "Snapstore add %ld ranges", ranges_cnt );
 
@@ -375,60 +394,51 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 		return -EFAULT;
 	}
 
-	{
-		size_t inx;
-		rangelist_t blk_rangelist;
-		rangelist_init( &blk_rangelist );
+	for (inx = 0; inx < ranges_cnt; ++inx) {
+		size_t blocks_count = 0;
+		sector_t range_offset = 0;
 
-		for (inx = 0; inx < ranges_cnt; ++inx){
-			size_t blocks_count = 0;
-			sector_t range_offset = 0;
+		struct blk_range range;
+		struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
-			struct blk_range range;
-			struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
+		range.ofs = (sector_t)to_sectors( ioctl_range->left );
+		range.cnt = (blkcnt_t)to_sectors( ioctl_range->right ) - range.ofs;
 
-			range.ofs = (sector_t)to_sectors( ioctl_range->left );
-			range.cnt = (blkcnt_t)to_sectors( ioctl_range->right ) - range.ofs;
+		while (range_offset < range.cnt){
+			struct blk_range rg;
 
-			//log_tr_range( "range=", range );
+			rg.ofs = range.ofs + range_offset;
+			rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
 
-			while (range_offset < range.cnt){
-				struct blk_range rg;
+			range_offset += rg.cnt;
 
-				rg.ofs = range.ofs + range_offset;
-				rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
+			res = rangelist_add( &blk_rangelist, &rg );
+			if (res != SUCCESS){
+				log_err( "Unable to add file to snapstore: cannot add range to rangelist" );
+				break;
+			}
+			current_blk_size += rg.cnt;
 
-				range_offset += rg.cnt;
-
-				//log_tr_range( "add rg=", rg );
-
-				res = rangelist_add( &blk_rangelist, &rg );
+			if (current_blk_size == snapstore_block_size()){//allocate  block
+				res = blk_descr_file_pool_add( &snapstore->file->pool, &blk_rangelist );
 				if (res != SUCCESS){
-					log_err( "Unable to add file to snapstore: cannot add range to rangelist" );
+					log_err( "Unable to add file to snapstore: cannot initialize new block" );
 					break;
 				}
-				current_blk_size += rg.cnt;
 
-				if (current_blk_size == snapstore_block_size()){//allocate  block
-					res = blk_descr_file_pool_add( &snapstore->file->pool, &blk_rangelist );
-					if (res != SUCCESS){
-						log_err( "Unable to add file to snapstore: cannot initialize new block" );
-						break;
-					}
+				snapstore->halffilled = false;
 
-					snapstore->halffilled = false;
-
-					current_blk_size = 0;
-					rangelist_init( &blk_rangelist );
-					++blocks_count;
-				}
+				current_blk_size = 0;
+				INIT_LIST_HEAD( &blk_rangelist );//renew list
+				++blocks_count;
 			}
-			if (res != SUCCESS)
-				break;
-
-			//log_traceln_sz( "blocks_count=", blocks_count );
 		}
+		if (res != SUCCESS)
+			break;
+
+		//log_traceln_sz( "blocks_count=", blocks_count );
 	}
+
 	if ((res == SUCCESS) && (current_blk_size != 0))
 		log_warn( "Snapstore portion was not ordered by Copy-on-Write block size" );
 
@@ -446,11 +456,31 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 }
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
+static
+int rangelist_ex_add( struct list_head *list, struct blk_range* rg, struct block_device* blk_dev )
+{
+	blk_range_link_ex_t* range_link = kzalloc( sizeof( blk_range_link_ex_t ), GFP_KERNEL );
+	if (range_link == NULL)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD( &range_link->link );
+
+	range_link->rg.ofs = rg->ofs;
+	range_link->rg.cnt = rg->cnt;
+	range_link->blk_dev = blk_dev;
+
+	list_add_tail( &range_link->link, list );
+
+	return SUCCESS;
+}
+
 int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt)
 {
 	int res = SUCCESS;
 	snapstore_t* snapstore = NULL;
 	sector_t current_blk_size = 0;
+	size_t inx;
+	LIST_HEAD(blk_rangelist);
 
 	log_tr_format( "Snapstore add %ld ranges for device [%d:%d]", ranges_cnt, MAJOR(dev_id), MINOR(dev_id) );
 
@@ -461,73 +491,66 @@ int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_
 	if (snapstore == NULL){
 		log_err_uuid( "Unable to add file to snapstore: cannot find snapstore by id ", id );
 		return -ENODATA;
-			}
+	}
 
-	if (snapstore->multidev == NULL){
+	if (snapstore->multidev == NULL) {
 		log_err( "Unable to add file to multidevice snapstore: multidevice snapstore was not initialized" );
 		return -EFAULT;
-		}
-
-	{
-		size_t inx;
-		rangelist_ex_t blk_rangelist;
-		rangelist_ex_init( &blk_rangelist );
-
-		for (inx = 0; inx < ranges_cnt; ++inx){
-			size_t blocks_count = 0;
-			sector_t range_offset = 0;
-			struct blk_range range;
-
-			struct ioctl_range_s* data = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
-
-			range.ofs = (sector_t)to_sectors( data->left );
-			range.cnt = (blkcnt_t)to_sectors( data->right ) - range.ofs;
-
-			//log_tr_format( "range=%lld:%lld", range.ofs, range.cnt );
-
-			while (range_offset < range.cnt){
-				struct blk_range rg;
-				void* extension = NULL;
-				rg.ofs = range.ofs + range_offset;
-				rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
-
-				range_offset += rg.cnt;
-
-				//log_tr_range( "add rg=", rg );
-				extension = (void*)snapstore_multidev_get_device( snapstore->multidev, dev_id );
-				if (NULL == extension){
-					log_err_format( "Cannot find or open device [%d:%d] for multidevice snapstore", MAJOR( dev_id ), MINOR( dev_id ) );
-					res = -ENODEV;
-					break;
 	}
 
-				res = rangelist_ex_add( &blk_rangelist, &rg, extension );
-				if (res != SUCCESS){
-					log_err( "Unable to add file to snapstore: failed to add range to rangelist" );
-					break;
-				}
-				current_blk_size += rg.cnt;
+	for (inx = 0; inx < ranges_cnt; ++inx) {
+		size_t blocks_count = 0;
+		sector_t range_offset = 0;
+		struct blk_range range;
 
-				if (current_blk_size == snapstore_block_size()){//allocate  block
-					res = blk_descr_multidev_pool_add( &snapstore->multidev->pool, &blk_rangelist );
-					if (res != SUCCESS){
-						log_err( "Unable to add file to snapstore: failed to initialize new block" );
-						break;
-					}
+		struct ioctl_range_s* data = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
 
-					snapstore->halffilled = false;
+		range.ofs = (sector_t)to_sectors( data->left );
+		range.cnt = (blkcnt_t)to_sectors( data->right ) - range.ofs;
 
-					current_blk_size = 0;
-					rangelist_ex_init( &blk_rangelist );
-					++blocks_count;
-				}
-			}
-			if (res != SUCCESS)
+		//log_tr_format( "range=%lld:%lld", range.ofs, range.cnt );
+
+		while (range_offset < range.cnt){
+			struct blk_range rg;
+			struct block_device* blk_dev = NULL;
+			rg.ofs = range.ofs + range_offset;
+			rg.cnt = min_t( sector_t, (range.cnt - range_offset), (snapstore_block_size() - current_blk_size) );
+
+			range_offset += rg.cnt;
+
+			//log_tr_range( "add rg=", rg );
+			blk_dev = snapstore_multidev_get_device( snapstore->multidev, dev_id );
+			if (NULL == blk_dev){
+				log_err_format( "Cannot find or open device [%d:%d] for multidevice snapstore", MAJOR( dev_id ), MINOR( dev_id ) );
+				res = -ENODEV;
 				break;
+			}
 
-			//log_traceln_sz( "blocks_count=", blocks_count );
+			res = rangelist_ex_add( &blk_rangelist, &rg, blk_dev );
+			if (res != SUCCESS){
+				log_err( "Unable to add file to snapstore: failed to add range to rangelist" );
+				break;
+			}
+			current_blk_size += rg.cnt;
+
+			if (current_blk_size == snapstore_block_size()){//allocate  block
+				res = blk_descr_multidev_pool_add( &snapstore->multidev->pool, &blk_rangelist );
+				if (res != SUCCESS){
+					log_err( "Unable to add file to snapstore: failed to initialize new block" );
+					break;
+				}
+
+				snapstore->halffilled = false;
+
+				current_blk_size = 0;
+				INIT_LIST_HEAD(&blk_rangelist);
+				++blocks_count;
+			}
 		}
-	}
+		if (res != SUCCESS)
+			break;
+	}//for
+
 	if ((res == SUCCESS) && (current_blk_size != 0))
 		log_warn( "Snapstore portion was not ordered by Copy-on-Write block size" );
 
@@ -624,70 +647,69 @@ int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstor
 	sector_t block_ofs = target_pos & snapstore_block_mask();
 
 
-	if (snapstore->file){
-		struct blk_range* rg;
+	if (snapstore->file) {
 		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
 
+		if (!list_empty( &blk_descr->rangelist )) {
+			struct list_head* _list_head;
 
-		RANGELIST_FOREACH_BEGIN( blk_descr->rangelist, rg )
-		{
-			if (current_ofs >= rq_count)
-				break;
+			list_for_each( _list_head, &blk_descr->rangelist ) {
+				blk_range_link_t* range_link = list_entry( _list_head, blk_range_link_t, link );
 
-			if (rg->cnt > block_ofs)//read first portion from block
-			{
-				sector_t pos = rg->ofs + block_ofs;
-				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
 
-				res = blk_dev_redirect_part( rq_redir, READ, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
-
-				if (res != SUCCESS){
-					log_err_sect( "Failed to read from snapstore file. Sector #", pos );
+				if (current_ofs >= rq_count)
 					break;
-				}
 
-				current_ofs += len;
-				block_ofs = 0;
-			}
-			else{
-				block_ofs -= rg->cnt;
+				if (range_link->rg.cnt > block_ofs) {//read first portion from block
+
+					sector_t pos = range_link->rg.ofs + block_ofs;
+					sector_t len = min_t( sector_t, (range_link->rg.cnt - block_ofs), (rq_count - current_ofs) );
+
+					res = blk_dev_redirect_part( rq_redir, READ, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
+					if (res != SUCCESS){
+						log_err_sect( "Failed to read from snapstore file. Sector #", pos );
+						break;
+					}
+
+					current_ofs += len;
+					block_ofs = 0;
+				}
+				else
+					block_ofs -= range_link->rg.cnt;
 			}
 		}
-		RANGELIST_FOREACH_END( );
-
 	}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore->multidev) {
-		struct blk_range* rg;
-		void** p_extentsion;
 		blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)blk_descr_ptr;
 
-		RANGELIST_EX_FOREACH_BEGIN( blk_descr->rangelist, rg, p_extentsion )
-		{
-			struct block_device*  blk_dev = (struct block_device*)(*p_extentsion);
-			if (current_ofs >= rq_count)
-				break;
+		if (!list_empty( &blk_descr->rangelist )) {
+			struct list_head* _list_head;
 
-			if (rg->cnt > block_ofs)//read first portion from block
-			{
-				sector_t pos = rg->ofs + block_ofs;
-				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
+			list_for_each( _list_head, &blk_descr->rangelist ) {
+				blk_range_link_ex_t* range_link = list_entry( _list_head, blk_range_link_ex_t, link );
 
-				res = blk_dev_redirect_part( rq_redir, READ, blk_dev, pos, rq_ofs + current_ofs, len );
-
-				if (res != SUCCESS){
-					log_err_sect( "Failed to read from snapstore file. Sector #", pos );
+				if (current_ofs >= rq_count)
 					break;
-				}
 
-				current_ofs += len;
-				block_ofs = 0;
-			}
-			else{
-				block_ofs -= rg->cnt;
+				if (range_link->rg.cnt > block_ofs) {//read first portion from block
+					sector_t pos = range_link->rg.ofs + block_ofs;
+					sector_t len = min_t( sector_t, (range_link->rg.cnt - block_ofs), (rq_count - current_ofs) );
+
+					res = blk_dev_redirect_part( rq_redir, READ, range_link->blk_dev, pos, rq_ofs + current_ofs, len );
+
+					if (res != SUCCESS) {
+						log_err_sect( "Failed to read from snapstore file. Sector #", pos );
+						break;
+					}
+
+					current_ofs += len;
+					block_ofs = 0;
+				} else
+					block_ofs -= range_link->rg.cnt;
 			}
 		}
-		RANGELIST_EX_FOREACH_END( );
+
 	}
 #endif
 	else if (snapstore->mem){
@@ -719,72 +741,66 @@ int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapsto
 	BUG_ON( NULL == snapstore );
 
 	if (snapstore->file){
-		struct blk_range* rg;
 		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
 
+		if (!list_empty( &blk_descr->rangelist )){
+			struct list_head* _list_head;
 
-		RANGELIST_FOREACH_BEGIN( blk_descr->rangelist, rg )
-		{
-			if (current_ofs >= rq_count)
-				break;
+			list_for_each( _list_head, &blk_descr->rangelist ) {
+				blk_range_link_t* range_link = list_entry( _list_head, blk_range_link_t, link );
 
-			if (rg->cnt > block_ofs)//read first portion from block
-			{
-				sector_t pos = rg->ofs + block_ofs;
-				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
-
-				res = blk_dev_redirect_part( rq_redir, WRITE, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
-
-				if (res != SUCCESS){
-					log_err_sect( "Failed to write to snapstore file. Sector #", pos );
+				if (current_ofs >= rq_count)
 					break;
-				}
 
-				current_ofs += len;
-				block_ofs = 0;
-			}
-			else{
-				block_ofs -= rg->cnt;
+				if (range_link->rg.cnt > block_ofs) {//read first portion from block
+					sector_t pos = range_link->rg.ofs + block_ofs;
+					sector_t len = min_t( sector_t, (range_link->rg.cnt - block_ofs), (rq_count - current_ofs) );
+
+					res = blk_dev_redirect_part( rq_redir, WRITE, snapstore->file->blk_dev, pos, rq_ofs + current_ofs, len );
+
+					if (res != SUCCESS){
+						log_err_sect( "Failed to write to snapstore file. Sector #", pos );
+						break;
+					}
+
+					current_ofs += len;
+					block_ofs = 0;
+				}
+				else
+					block_ofs -= range_link->rg.cnt;
 			}
 		}
-		RANGELIST_FOREACH_END( );
-
 	}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore->multidev) {
-		struct blk_range* rg;
-		void** p_extension;
 		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
 
+		if (!list_empty( &blk_descr->rangelist )) {
+			struct list_head* _list_head;
 
-		RANGELIST_EX_FOREACH_BEGIN( blk_descr->rangelist, rg, p_extension )
-		{
-			struct block_device*  blk_dev = (struct block_device*)(*p_extension);
+			list_for_each( _list_head, &blk_descr->rangelist ) {
+				blk_range_link_ex_t* range_link = list_entry( _list_head, blk_range_link_ex_t, link );
 
-			if (current_ofs >= rq_count)
-				break;
-
-			if (rg->cnt > block_ofs)//read first portion from block
-			{
-				sector_t pos = rg->ofs + block_ofs;
-				sector_t len = min_t( sector_t, (rg->cnt - block_ofs), (rq_count - current_ofs) );
-
-				res = blk_dev_redirect_part( rq_redir, WRITE, blk_dev, pos, rq_ofs + current_ofs, len );
-
-				if (res != SUCCESS){
-					log_err_sect( "Failed to write to snapstore file. Sector #", pos );
+				if (current_ofs >= rq_count)
 					break;
-				}
 
-				current_ofs += len;
-				block_ofs = 0;
-			}
-			else{
-				block_ofs -= rg->cnt;
+				if (range_link->rg.cnt > block_ofs) {//read first portion from block
+					sector_t pos = range_link->rg.ofs + block_ofs;
+					sector_t len = min_t( sector_t, (range_link->rg.cnt - block_ofs), (rq_count - current_ofs) );
+
+					res = blk_dev_redirect_part( rq_redir, WRITE, range_link->blk_dev, pos, rq_ofs + current_ofs, len );
+
+					if (res != SUCCESS){
+						log_err_sect( "Failed to write to snapstore file. Sector #", pos );
+						break;
+					}
+
+					current_ofs += len;
+					block_ofs = 0;
+				} else
+					block_ofs -= range_link->rg.cnt;
 			}
 		}
-		RANGELIST_EX_FOREACH_END( );
-
 	}
 #endif
 	else if (snapstore->mem){
