@@ -49,7 +49,7 @@ blk_descr_unify_t* _blk_descr_multidev_allocate( blk_descr_unify_t* blocks, size
 	blk_descr_multidev_t* multidev_blocks = (blk_descr_multidev_t*)blocks;
 	blk_descr_multidev_t* block_file = &multidev_blocks[index];
 
-	blk_descr_multidev_init( block_file, (rangelist_ex_t*)arg );
+	blk_descr_multidev_init( block_file, (struct list_head*)arg );
 
 	return (blk_descr_unify_t*)block_file;
 }
