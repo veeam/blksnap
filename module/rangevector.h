@@ -13,48 +13,21 @@ typedef struct rangevector_el_s
 
 typedef struct rangevector_s
 {
-	bool use_lock;
 	struct list_head ranges_head;
 	atomic_t blocks_cnt;
 
 	struct rw_semaphore lock;
 }rangevector_t;
 
-void rangevector_init( rangevector_t* rangevector, bool use_lock );
+void rangevector_init( rangevector_t* rangevector);
 
 void rangevector_done( rangevector_t* rangevector );
 
 void rangevector_cleanup( rangevector_t* rangevector );
 
 int rangevector_add( rangevector_t* rangevector, struct blk_range* rg );
+
 void rangevector_sort( rangevector_t* rangevector );
-
-int rangevector_v2p( rangevector_t* rangevector, sector_t virt_offset, sector_t virt_length, sector_t* p_phys_offset, sector_t* p_phys_length );
-
-int rangevector_at( rangevector_t* rangevector, size_t inx, struct blk_range* range );
-
-sector_t rangevector_length( rangevector_t* rangevector );
-
-
-#define RANGEVECTOR_READ_LOCK( rangevector )\
-if ((rangevector)->use_lock){\
-	down_read( &(rangevector)->lock );\
-}
-
-#define RANGEVECTOR_READ_UNLOCK( rangevector )\
-if ((rangevector)->use_lock){\
-	up_read( &(rangevector)->lock );\
-}
-
-#define RANGEVECTOR_WRITE_LOCK( rangevector )\
-if ((rangevector)->use_lock){\
-	down_write( &(rangevector)->lock );\
-}
-
-#define RANGEVECTOR_WRITE_UNLOCK( rangevector )\
-if ((rangevector)->use_lock){\
-	up_write( &(rangevector)->lock );\
-}
 
 #define RANGEVECTOR_FOREACH_EL_BEGIN( rangevector, el )  \
 { \

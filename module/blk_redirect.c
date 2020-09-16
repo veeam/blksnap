@@ -360,7 +360,7 @@ int blk_dev_redirect_read_zeroed(blk_redirect_bio_t* rq_redir, struct block_devi
 
 	BUG_ON( NULL == zero_sectors );
 
-	RANGEVECTOR_READ_LOCK( zero_sectors );
+	down_read( &zero_sectors->lock );
 	RANGEVECTOR_FOREACH_EL_BEGIN( zero_sectors, el )
 	{
 		struct blk_range* first_zero_range;
@@ -413,7 +413,7 @@ int blk_dev_redirect_read_zeroed(blk_redirect_bio_t* rq_redir, struct block_devi
 		};
 	}
 	RANGEVECTOR_FOREACH_EL_END( );
-	RANGEVECTOR_READ_UNLOCK( zero_sectors );
+	up_read( &zero_sectors->lock );
 	if ((blk_ofs_count - ofs) > 0)
 		res = blk_dev_redirect_part( rq_redir, READ, blk_dev, rq_pos + blk_ofs_start + ofs, blk_ofs_start + ofs, blk_ofs_count - ofs );
 	return res;

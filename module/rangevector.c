@@ -3,12 +3,9 @@
 
 #define SECTION "ranges	"
 
-void rangevector_init( rangevector_t* rangevector, bool use_lock )
+void rangevector_init( rangevector_t* rangevector )
 {
-	rangevector->use_lock = use_lock;
-
-	if (rangevector->use_lock)
-		init_rwsem( &rangevector->lock );
+	init_rwsem( &rangevector->lock );
 
 	INIT_LIST_HEAD( &rangevector->ranges_head );
 
@@ -36,7 +33,7 @@ int rangevector_add( rangevector_t* rangevector, struct blk_range* rg )
 {
 	int res = SUCCESS;
 
-	RANGEVECTOR_WRITE_LOCK( rangevector );
+	down_write( &rangevector->lock );
 	do{
 		rangevector_el_t* el = NULL;
 
@@ -67,64 +64,9 @@ int rangevector_add( rangevector_t* rangevector, struct blk_range* rg )
 			atomic_inc( &el->cnt );
 		}
 	} while (false);
-	RANGEVECTOR_WRITE_UNLOCK( rangevector );
+	up_write( &rangevector->lock );
 
 	return res;
-}
-
-int rangevector_v2p( rangevector_t* rangevector, sector_t virt_offset, sector_t virt_length, sector_t* p_phys_offset, sector_t* p_phys_length )
-{
-	int result = -ENODATA;
-	sector_t virt_left = 0;
-	sector_t virt_right = 0;
-	rangevector_el_t* el;
-
-	RANGEVECTOR_READ_LOCK( rangevector );
-	RANGEVECTOR_FOREACH_EL_BEGIN( rangevector, el )
-	{
-		size_t inx = 0;
-		size_t limit = (size_t)atomic_read( &el->cnt );
-
-		for (inx = 0; inx < limit; ++inx){
-			struct blk_range* range = &el->ranges[inx];
-
-			virt_right = virt_left + range->cnt;
-			if ((virt_offset >= virt_left) && (virt_offset < virt_right)){
-				*p_phys_offset = range->ofs + (virt_offset - virt_left);
-				*p_phys_length = min( virt_length, virt_right - virt_offset );
-
-				result = SUCCESS;
-				break;
-			}
-			virt_left = virt_right;
-		}
-	}
-	RANGEVECTOR_FOREACH_EL_END( );
-	RANGEVECTOR_READ_UNLOCK( rangevector )
-	return result;
-}
-
-int rangevector_at( rangevector_t* rangevector, size_t inx, struct blk_range* range )
-{
-	int result = -ENODATA;
-	size_t curr_inx = 0;
-	rangevector_el_t* el;
-	RANGEVECTOR_READ_LOCK( rangevector );
-	RANGEVECTOR_FOREACH_EL_BEGIN( rangevector, el )
-	{
-		size_t el_cnt = atomic_read( &el->cnt );
-
-		if ((curr_inx <= inx) &&  (inx < (curr_inx + el_cnt))){
-			range->ofs = el->ranges[inx - curr_inx].ofs;
-			range->cnt = el->ranges[inx - curr_inx].cnt;
-			result = SUCCESS;
-			break;
-		}
-		curr_inx += el_cnt;
-	}
-	RANGEVECTOR_FOREACH_EL_END( );
-	RANGEVECTOR_READ_UNLOCK( rangevector )
-	return result;
 }
 
 void rangevector_sort( rangevector_t* rangevector )
@@ -134,7 +76,7 @@ void rangevector_sort( rangevector_t* rangevector )
 	size_t swap_count = 0;
 	size_t ranges_count = rangevector_cnt( rangevector );
 
-	RANGEVECTOR_WRITE_LOCK( rangevector );
+	down_write( &rangevector->lock );
 	do{
 		struct blk_range* prange = NULL;
 		struct blk_range* prange_prev = NULL;
@@ -163,38 +105,38 @@ void rangevector_sort( rangevector_t* rangevector )
 		}
 		RANGEVECTOR_FOREACH_END( );
 	} while (changed);
-	RANGEVECTOR_WRITE_UNLOCK( rangevector );
+	up_write( &rangevector->lock );
 
 	log_tr_sz( "Sort zero ranges count=", ranges_count );
 	log_tr_sz( "Swap count=", swap_count );
 }
-
+/*
 sector_t rangevector_length( rangevector_t* rangevector )
 {
 	struct blk_range* prange = NULL;
 	sector_t length_sect = 0;
-	RANGEVECTOR_READ_LOCK( rangevector );
+	down_read( &rangevector->lock );
 	RANGEVECTOR_FOREACH_BEGIN( rangevector, prange )
 	{
 		length_sect += prange->cnt;
 	}
 	RANGEVECTOR_FOREACH_END( );
-	RANGEVECTOR_READ_UNLOCK( rangevector );
+	up_read( &rangevector->lock );
 	return length_sect;
 }
-
+*/
 size_t rangevector_cnt( rangevector_t* rangevector )
 {
 	size_t cnt = 0;
 	rangevector_el_t* el;
 
-	RANGEVECTOR_READ_LOCK( rangevector );
+	down_read( &rangevector->lock );
 	RANGEVECTOR_FOREACH_EL_BEGIN( rangevector, el )
 	{
 		cnt += (size_t)atomic_read( &el->cnt );
 	}
 	RANGEVECTOR_FOREACH_EL_END( );
-	RANGEVECTOR_READ_UNLOCK( rangevector );
+	up_read( &rangevector->lock );
 	return cnt;
 }
 

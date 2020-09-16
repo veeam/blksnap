@@ -153,7 +153,7 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 
 	mutex_init(&snapstore_device->store_block_map_locker);
 
-	rangevector_init(&snapstore_device->zero_sectors, true);
+	rangevector_init(&snapstore_device->zero_sectors);
 
 	while (1){ //failover with snapstore block size increment
 		blk_descr_array_index_t blocks_count;
@@ -313,8 +313,7 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 	sector_t blk_ofs_count = 0;		 //device range length
 
 	struct blk_range rq_range;
-	rangevector_t* zero_sectors = NULL;
-	zero_sectors = &snapstore_device->zero_sectors;
+	rangevector_t* zero_sectors = &snapstore_device->zero_sectors;
 
 	if (snapstore_device_is_corrupted( snapstore_device ))
 		return -ENODATA;
