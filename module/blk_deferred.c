@@ -261,7 +261,7 @@ sector_t blk_deferred_submit_pages(
 ){
 	sector_t process_sect = 0;
 
-	do{
+	do {
 		sector_t portion_sect = _blk_deferred_submit_pages( blk_dev, dio_req, direction, arr_ofs + process_sect, arr, ofs_sector + process_sect, size_sector - process_sect );
 		if (portion_sect == 0){
 			log_err_format( "Failed to submit defer IO pages. Only [%lld] sectors processed", process_sect );
@@ -304,17 +304,20 @@ blk_deferred_request_t* blk_deferred_request_new( void )
 bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, blk_descr_array_index_t block_index )
 {
 	bool result = false;
-	if (!list_empty( &dio_req->dios )){
-		struct list_head* _list_head;
-		list_for_each( _list_head, &dio_req->dios ){
-			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
+	struct list_head* _list_head;
 
-			if (dio->blk_index == block_index){
-				result = true;
-				break;
-			}
+	if (list_empty( &dio_req->dios ))
+		return result;
+
+	list_for_each( _list_head, &dio_req->dios ) {
+		blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
+
+		if (dio->blk_index == block_index){
+			result = true;
+			break;
 		}
 	}
+
 	return result;
 }
 
@@ -374,28 +377,26 @@ int blk_deferred_request_wait( blk_deferred_request_t* dio_req )
 int blk_deferred_request_read_original( struct block_device* original_blk_dev, blk_deferred_request_t* dio_copy_req )
 {
 	int res = -ENODATA;
+	struct list_head* _list_head;
 
 	blk_deferred_request_waiting_skip( dio_copy_req );
 
-	if (!list_empty( &dio_copy_req->dios )){
-		struct list_head* _list_head;
-		list_for_each( _list_head, &dio_copy_req->dios ){
-			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
+	if (list_empty( &dio_copy_req->dios ))
+		return res;
 
-			sector_t page_array_ofs = 0;
-			sector_t ofs = dio->sect.ofs;
-			sector_t cnt = dio->sect.cnt;
+	list_for_each( _list_head, &dio_copy_req->dios ) {
+		blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
 
-			if (cnt != blk_deferred_submit_pages( original_blk_dev, dio_copy_req, READ, page_array_ofs, dio->buff, ofs, cnt )){
-				log_err_sect( "Failed to submit reading defer IO request. ofs=", dio->sect.ofs );
-				res = -EIO;
-				break;
-			}
-			else
-				res = SUCCESS;
+		sector_t ofs = dio->sect.ofs;
+		sector_t cnt = dio->sect.cnt;
 
-			page_array_ofs += cnt;
+		if (cnt != blk_deferred_submit_pages( original_blk_dev, dio_copy_req, READ, 0, dio->buff, ofs, cnt )){
+			log_err_sect( "Failed to submit reading defer IO request. ofs=", dio->sect.ofs );
+			res = -EIO;
+			break;
 		}
+		else
+			res = SUCCESS;
 	}
 
 	if (res == SUCCESS)
@@ -407,43 +408,40 @@ int blk_deferred_request_read_original( struct block_device* original_blk_dev, b
 int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_request_t* dio_copy_req )
 {
 	int res = SUCCESS;
+	struct list_head* _dio_list_head;
+	struct list_head* _rangelist_head;
 
 	blk_deferred_request_waiting_skip( dio_copy_req );
 
-	if (!list_empty( &dio_copy_req->dios )){
-		struct list_head* _dio_list_head;
-		list_for_each( _dio_list_head, &dio_copy_req->dios ){
-			blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
+	if (list_empty( &dio_copy_req->dios ))
+		return res;
 
-			struct blk_range* rg;
-			sector_t page_array_ofs = 0;
-			blk_descr_file_t* blk_descr = (blk_descr_file_t*)dio->blk_descr;
+	list_for_each( _dio_list_head, &dio_copy_req->dios ){
+		blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
+		sector_t page_array_ofs = 0;
+		blk_descr_file_t* blk_descr = (blk_descr_file_t*)dio->blk_descr;
 
-			//BUG_ON( NULL == dio );
-			//BUG_ON( NULL == dio->blk_descr );
+		//BUG_ON( NULL == dio );
+		//BUG_ON( NULL == dio->blk_descr );
+		list_for_each( _rangelist_head, &blk_descr->rangelist ) {
+			sector_t process_sect;
+			blk_range_link_t *range_link = list_entry( _rangelist_head, blk_range_link_t, link );
 
-			if (!list_empty( &blk_descr->rangelist )) {
-				struct list_head* _rangelist_head;
-
-				list_for_each( _rangelist_head, &blk_descr->rangelist ) {
-					sector_t process_sect;
-					blk_range_link_t *range_link = list_entry( _rangelist_head, blk_range_link_t, link );
-
-					//BUG_ON( NULL == dio->buff );
-					process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->buff, rg->ofs, rg->cnt );
-					if (range_link->rg.cnt != process_sect){
-						log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
-						res = -EIO;
-						break;
-					}
-					page_array_ofs += range_link->rg.cnt;
-				}
-			}
-
-			if (res != SUCCESS)
+			//BUG_ON( NULL == dio->buff );
+			process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->buff, range_link->rg.ofs, range_link->rg.cnt );
+			if (range_link->rg.cnt != process_sect){
+				log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
+				res = -EIO;
 				break;
+			}
+			page_array_ofs += range_link->rg.cnt;
 		}
+
+
+		if (res != SUCCESS)
+			break;
 	}
+
 
 	if (res != SUCCESS)
 		return res;
@@ -456,42 +454,40 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 {
 	int res = SUCCESS;
+	struct list_head* _dio_list_head;
+	struct list_head* _ranges_list_head;
 
 	blk_deferred_request_waiting_skip( dio_copy_req );
 
-	if (!list_empty( &dio_copy_req->dios )){
-		struct list_head* _dio_list_head;
-		list_for_each( _dio_list_head, &dio_copy_req->dios ){
-			blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
-			sector_t page_array_ofs = 0;
-			blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)dio->blk_descr;
+	if (list_empty( &dio_copy_req->dios ))
+		return res;
 
-			//BUG_ON( NULL == dio );
-			//BUG_ON( NULL == dio->blk_descr );
+	list_for_each( _dio_list_head, &dio_copy_req->dios ){
+		blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
+		sector_t page_array_ofs = 0;
+		blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)dio->blk_descr;
 
-			if (!list_empty( &blk_descr->rangelist)) {
-				struct list_head* _ranges_list_head;
+		//BUG_ON( NULL == dio );
+		//BUG_ON( NULL == dio->blk_descr );
+		list_for_each( _ranges_list_head, &blk_descr->rangelist ) {
+			sector_t process_sect;
+			blk_range_link_ex_t* range_link = list_entry( _ranges_list_head, blk_range_link_ex_t, link );
 
-				list_for_each( _ranges_list_head, &blk_descr->rangelist ) {
-					sector_t process_sect;
-					blk_range_link_ex_t* range_link = list_entry( _ranges_list_head, blk_range_link_ex_t, link );
-
-					//BUG_ON( NULL == dio->buff );
-					process_sect = blk_deferred_submit_pages( range_link->blk_dev, dio_copy_req,
-						WRITE, page_array_ofs, dio->buff, range_link->rg.ofs, range_link->rg.cnt );
-					if (range_link->rg.cnt != process_sect){
-						log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
-						res = -EIO;
-						break;
-					}
-					page_array_ofs += range_link->rg.cnt;
-				}
-			}
-
-			if (res != SUCCESS)
+			//BUG_ON( NULL == dio->buff );
+			process_sect = blk_deferred_submit_pages( range_link->blk_dev, dio_copy_req,
+				WRITE, page_array_ofs, dio->buff, range_link->rg.ofs, range_link->rg.cnt );
+			if (range_link->rg.cnt != process_sect){
+				log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
+				res = -EIO;
 				break;
+			}
+			page_array_ofs += range_link->rg.cnt;
 		}
+
+		if (res != SUCCESS)
+			break;
 	}
+
 
 	if (res != SUCCESS)
 		return res;
