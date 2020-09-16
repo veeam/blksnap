@@ -11,13 +11,15 @@ void blk_descr_multidev_init( blk_descr_multidev_t* blk_descr, struct list_head*
 {
 	blk_descr_unify_init( &blk_descr->unify );
 
-	memcpy(&blk_descr->rangelist, rangelist, sizeof(struct list_head));
+	INIT_LIST_HEAD(&blk_descr->rangelist);
+	list_replace(&blk_descr->rangelist, rangelist);
 }
 
 void blk_descr_multidev_done( blk_descr_multidev_t* blk_descr )
 {
 	while (!list_empty( &blk_descr->rangelist )) {
-		blk_range_link_ex_t *rangelist = list_entry( blk_descr->rangelist.next, blk_range_link_ex_t, link );
+		blk_range_link_ex_t *rangelist = list_entry( blk_descr->rangelist.next,
+			blk_range_link_ex_t, link );
 
 		list_del( &rangelist->link );
 		kfree( rangelist );
@@ -47,18 +49,18 @@ static
 blk_descr_unify_t* _blk_descr_multidev_allocate( blk_descr_unify_t* blocks, size_t index, void* arg )
 {
 	blk_descr_multidev_t* multidev_blocks = (blk_descr_multidev_t*)blocks;
-	blk_descr_multidev_t* block_file = &multidev_blocks[index];
+	blk_descr_multidev_t* blk_descr = &multidev_blocks[index];
 
-	blk_descr_multidev_init( block_file, (struct list_head*)arg );
+	blk_descr_multidev_init( blk_descr, (struct list_head*)arg );
 
-	return (blk_descr_unify_t*)block_file;
+	return (blk_descr_unify_t*)blk_descr;
 }
 
 int blk_descr_multidev_pool_add( blk_descr_pool_t* pool, struct list_head* rangelist )
 {
-	blk_descr_multidev_t* blk_descr;
+	blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)blk_descr_pool_alloc( pool,
+		sizeof( blk_descr_multidev_t ), _blk_descr_multidev_allocate, (void*)rangelist );
 
-	blk_descr = (blk_descr_multidev_t*)blk_descr_pool_alloc( pool, sizeof( blk_descr_multidev_t ), _blk_descr_multidev_allocate, (void*)rangelist );
 	if (blk_descr == NULL){
 		log_err( "Failed to allocate block descriptor" );
 		return -ENOMEM;
