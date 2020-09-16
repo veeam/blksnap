@@ -69,10 +69,6 @@ int blk_descr_file_pool_add( blk_descr_pool_t* pool, struct list_head* rangelist
 
 blk_descr_file_t* blk_descr_file_pool_take( blk_descr_pool_t* pool )
 {
-	blk_descr_file_t* blk_descriptor = (blk_descr_file_t*)blk_descr_pool_take( pool,
-		sizeof( blk_descr_file_t ) );
-
-	INIT_LIST_HEAD( &blk_descriptor->rangelist );
-	return blk_descriptor;
+	return (blk_descr_file_t*)blk_descr_pool_take( pool, sizeof( blk_descr_file_t ) );
 }
 
