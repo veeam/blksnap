@@ -188,10 +188,6 @@ struct ioctl_collect_shapshot_images_s{
 };
 #define IOCTL_COLLECT_SNAPSHOT_IMAGES _IOW(VEEAM_SNAP, 0x30, struct ioctl_collect_shapshot_images_s)
 
-//////////////////////////////////////////////////////////////////////////
-// debug and support
-#define IOCTL_PRINTSTATE _IO(VEEAM_SNAP, 0x80)
-
 #pragma pack(pop)
 
 // commands for character device interface

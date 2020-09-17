@@ -580,21 +580,6 @@ int ioctl_collect_snapimages( unsigned long arg )
 	return status;
 }
 
-
-int ioctl_printstate( unsigned long arg )
-{
-	log_tr( "--------------------------------------------------------------------------" );
-	log_tr( "state:" );
-	log_tr_format( "version: %d.%d.%d.%d.", version.major, version.minor, version.revision, version.build );
-
-	page_arrays_print_state( );
-
-	log_tr( "--------------------------------------------------------------------------" );
-
-	return SUCCESS;
-}
-
-
 typedef int (veeam_ioctl_t)(unsigned long arg);
 typedef struct veeam_ioctl_table_s {
 	unsigned int cmd;
@@ -624,10 +609,7 @@ static veeam_ioctl_table_t veeam_ioctl_table[] =
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	{ (IOCTL_SNAPSTORE_FILE_MULTIDEV), ioctl_snapstore_file_multidev },
 #endif
-
-
 	{ (IOCTL_COLLECT_SNAPSHOT_IMAGES), ioctl_collect_snapimages },
-	{ (IOCTL_PRINTSTATE), ioctl_printstate },
 	{ 0, NULL }
 };
 

@@ -177,9 +177,6 @@ int __init veeamsnap_init(void)
 		log_tr_d("Limited change_tracking_block_size_pow: ", g_param_change_tracking_block_size_pow);
 	}
 
-
-	page_arrays_init( );
-
 	do{
 		log_tr("Registering reboot notification");
 
