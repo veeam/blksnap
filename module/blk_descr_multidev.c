@@ -5,7 +5,7 @@
 #define SECTION "blk_descr "
 #include "log_format.h"
 
-static void list_assign( struct list_head *dst, struct list_head *src )
+static inline void list_assign( struct list_head *dst, struct list_head *src )
 {
 	dst->next = src->next;
 	dst->prev = src->prev;

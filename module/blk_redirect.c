@@ -350,75 +350,52 @@ int blk_dev_redirect_read_zeroed(blk_redirect_bio_t* rq_redir, struct block_devi
 	rangevector_t* zero_sectors )
 {
 	int res = SUCCESS;
-	sector_t current_portion;
+	struct blk_range_tree_node *range_node;
+
 	sector_t ofs = 0;
 
-	rangevector_el_t* el = NULL;
-
-	sector_t from_sect;
-	sector_t to_sect;
+	sector_t from = rq_pos + blk_ofs_start;
+	sector_t to = rq_pos + blk_ofs_start + blk_ofs_count -1;
 
 	BUG_ON( NULL == zero_sectors );
 
 	down_read( &zero_sectors->lock );
-	RANGEVECTOR_FOREACH_EL_BEGIN( zero_sectors, el )
-	{
-		struct blk_range* first_zero_range;
-		struct blk_range* last_zero_range;
-		size_t limit;
+	range_node = blk_range_rb_iter_first(&zero_sectors->root, from, to);
+	while (range_node) {
+		struct blk_range* zero_range = &range_node->range;
+		sector_t current_portion;
 
-		limit = (size_t)atomic_read( &el->cnt );
-		if (limit <= 0)
-			continue;
+		if (zero_range->ofs > rq_pos + blk_ofs_start + ofs){
+			sector_t pre_zero_cnt = zero_range->ofs - (rq_pos + blk_ofs_start + ofs);
 
-		first_zero_range = &el->ranges[0];
-		last_zero_range = &el->ranges[limit - 1];
+			res = blk_dev_redirect_part( rq_redir, READ, blk_dev,
+				rq_pos + blk_ofs_start + ofs, blk_ofs_start + ofs, pre_zero_cnt );
+			if (res != SUCCESS)
+				break;
 
-		from_sect = (rq_pos + blk_ofs_start + ofs);
-		to_sect = (rq_pos + blk_ofs_start + blk_ofs_count);
-
-		if ((last_zero_range->ofs + last_zero_range->cnt) <= from_sect){
-			continue;
+			ofs += pre_zero_cnt;
 		}
 
-		if (first_zero_range->ofs >= to_sect){
+		current_portion = min_t( sector_t, zero_range->cnt, blk_ofs_count - ofs );
+
+		res = blk_dev_redirect_zeroed_part( rq_redir, blk_ofs_start + ofs, current_portion );
+		if (res != SUCCESS)
 			break;
-		}
 
-		while (from_sect < to_sect){
-			struct blk_range* zero_range;
-			zero_range = rangevector_el_find_first_hit( el, from_sect, to_sect );
-			if (zero_range == NULL)
-				break;
+		ofs += current_portion;
 
-			if (zero_range->ofs > rq_pos + blk_ofs_start + ofs){
-				sector_t pre_zero_cnt = zero_range->ofs - (rq_pos + blk_ofs_start + ofs);
-
-				res = blk_dev_redirect_part( rq_redir, READ, blk_dev, rq_pos + blk_ofs_start + ofs, blk_ofs_start + ofs, pre_zero_cnt );
-				if (res != SUCCESS){
-					break;
-				}
-				ofs += pre_zero_cnt;
-			}
-
-			current_portion = min_t( sector_t, zero_range->cnt, blk_ofs_count - ofs );
-
-			res = blk_dev_redirect_zeroed_part( rq_redir, blk_ofs_start + ofs, current_portion );
-			if (res != SUCCESS){
-				break;
-			}
-			ofs += current_portion;
-
-			from_sect = (rq_pos + blk_ofs_start + ofs);
-		};
+		range_node = blk_range_rb_iter_next(range_node, from, to);
 	}
-	RANGEVECTOR_FOREACH_EL_END( );
 	up_read( &zero_sectors->lock );
-	if ((blk_ofs_count - ofs) > 0)
-		res = blk_dev_redirect_part( rq_redir, READ, blk_dev, rq_pos + blk_ofs_start + ofs, blk_ofs_start + ofs, blk_ofs_count - ofs );
-	return res;
-}
 
+	if (res == SUCCESS)
+		if ((blk_ofs_count - ofs) > 0)
+			res = blk_dev_redirect_part( rq_redir, READ, blk_dev,
+				rq_pos + blk_ofs_start + ofs, blk_ofs_start + ofs, blk_ofs_count - ofs );
+
+	return res;
+
+}
 void blk_redirect_complete( blk_redirect_bio_t* rq_redir, int res )
 {
 	rq_redir->complete_cb( rq_redir->complete_param, rq_redir->bio, res );

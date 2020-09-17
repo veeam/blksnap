@@ -325,35 +325,6 @@ int snapstore_add_memory( uuid_t* id, unsigned long long sz )
 	return res;
 }
 
-int zerosectors_add_ranges( rangevector_t* zero_sectors, page_array_t* ranges, size_t ranges_cnt )
-{
-	if ((ranges == NULL) || (ranges_cnt == 0))
-		return -EINVAL;
-
-	{
-		unsigned int inx = 0;
-
-		for (inx = 0; inx < ranges_cnt; ++inx){
-			int res = SUCCESS;
-
-			struct blk_range range;
-			struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
-
-			range.ofs = (sector_t)to_sectors( ioctl_range->left );
-			range.cnt = (blkcnt_t)to_sectors( ioctl_range->right ) - range.ofs;
-
-			res = rangevector_add( zero_sectors, &range );
-			if (res != SUCCESS){
-				log_err( "Failed to add range to zero sectors" );
-				return res;
-			}
-		}
-		rangevector_sort( zero_sectors );
-	}
-	return SUCCESS;
-}
-
-static
 int rangelist_add( struct list_head *rglist, struct blk_range* rg )
 {
 	blk_range_link_t* range_link = kzalloc( sizeof( blk_range_link_t ), GFP_KERNEL );
@@ -374,6 +345,7 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 {
 	int res = SUCCESS;
 	snapstore_t* snapstore = NULL;
+	snapstore_device_t* snapstore_device = NULL;
 	sector_t current_blk_size = 0;
 	LIST_HEAD( blk_rangelist );
 	size_t inx;
@@ -393,6 +365,8 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 		log_err( "Unable to add file to snapstore: snapstore file was not initialized");
 		return -EFAULT;
 	}
+
+	snapstore_device = snapstore_device_find_by_dev_id( snapstore->file->blk_dev_id ); //for zeroed
 
 	for (inx = 0; inx < ranges_cnt; ++inx) {
 		size_t blocks_count = 0;
@@ -417,6 +391,16 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 				log_err( "Unable to add file to snapstore: cannot add range to rangelist" );
 				break;
 			}
+
+			//zero sectors logic
+			if (snapstore_device != NULL) {
+				res = rangevector_add(&snapstore_device->zero_sectors, &rg);
+				if (res != SUCCESS){
+					log_err( "Unable to add file to snapstore: cannot add range to zero_sectors tree" );
+					break;
+				}
+			}
+
 			current_blk_size += rg.cnt;
 
 			if (current_blk_size == snapstore_block_size()){//allocate  block
@@ -435,22 +419,10 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 		}
 		if (res != SUCCESS)
 			break;
-
-		//log_traceln_sz( "blocks_count=", blocks_count );
 	}
 
 	if ((res == SUCCESS) && (current_blk_size != 0))
 		log_warn( "Snapstore portion was not ordered by Copy-on-Write block size" );
-
-	if ((res == SUCCESS) && (snapstore->file != NULL)){
-		snapstore_device_t* snapstore_device = snapstore_device_find_by_dev_id( snapstore->file->blk_dev_id );
-		if (snapstore_device != NULL){
-			res = zerosectors_add_ranges( &snapstore_device->zero_sectors, ranges, ranges_cnt );
-			if (res != SUCCESS){
-				log_err( "Failed to add file ranges to zeroed sectors set" );
-			}
-		}
-	}
 
 	return res;
 }
@@ -531,6 +503,11 @@ int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_
 				log_err( "Unable to add file to snapstore: failed to add range to rangelist" );
 				break;
 			}
+
+			/*
+			 * zero sectors logic is not implemented to multidevice snapstore
+			 */
+
 			current_blk_size += rg.cnt;
 
 			if (current_blk_size == snapstore_block_size()){//allocate  block
