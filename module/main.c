@@ -16,7 +16,6 @@
 #include "snapshot.h"
 #include "tracker.h"
 #include "tracking.h"
-#include "sparse_bitmap.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -198,9 +197,6 @@ int __init veeamsnap_init(void)
 		if ((result = blk_deferred_bioset_create( )) != SUCCESS)
 			break;
 
-		if ((result = sparsebitmap_init( )) != SUCCESS)
-			break;
-
 		if ((result = snapimage_init( )) != SUCCESS)
 			break;
 
@@ -243,8 +239,6 @@ void __exit veeamsnap_exit(void)
 	BUG_ON(result);
 
 	snapimage_done( );
-
-	sparsebitmap_done( );
 
 	blk_deferred_bioset_free( );
 	blk_deferred_done( );
