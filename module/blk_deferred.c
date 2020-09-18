@@ -72,16 +72,27 @@ void blk_deferred_request_deadlocked( blk_deferred_request_t* dio_req )
 
 void blk_deferred_free( blk_deferred_t* dio )
 {
-	if (dio->buff != NULL){
-		page_array_free( dio->buff );
-		dio->buff = NULL;
+	size_t inx = 0;
+
+	if (dio->page_array != NULL) {
+		while (NULL != dio->page_array[inx] ) {
+			__free_page(dio->page_array[inx]);
+			dio->page_array[inx] = NULL;
+
+			++inx;
+		}
+
+		kfree( dio->page_array );
+		dio->page_array = NULL;
 	}
 	kfree( dio );
 }
 
 blk_deferred_t* blk_deferred_alloc( unsigned long block_index, blk_descr_unify_t* blk_descr )
 {
-	bool success = false;
+	size_t inx;
+	size_t page_count;
+
 	blk_deferred_t* dio = kmalloc( sizeof( blk_deferred_t ), GFP_NOIO );
 	if (dio == NULL)
 		return NULL;
@@ -94,22 +105,22 @@ blk_deferred_t* blk_deferred_alloc( unsigned long block_index, blk_descr_unify_t
 	dio->sect.ofs = block_index << snapstore_block_shift();
 	dio->sect.cnt = snapstore_block_size();
 
-	do{
-		int page_count = snapstore_block_size() / (PAGE_SIZE / SECTOR_SIZE);
-
-		dio->buff = page_array_alloc( page_count, GFP_NOIO );
-		if (dio->buff == NULL)
-			break;
-
-		success = true;
-	} while (false);
-
-
-	if (!success){
+	page_count = snapstore_block_size() / (PAGE_SIZE / SECTOR_SIZE);
+	dio->page_array = kzalloc((page_count + 1) * sizeof(struct page *), GFP_NOIO); //empty pointer on the end
+	if (NULL == dio->page_array){
 		log_err_format( "Failed to allocate defer IO block [%ld]", block_index );
 
 		blk_deferred_free( dio );
-		dio = NULL;
+		return NULL;
+	}
+
+	for (inx=0; inx < page_count; inx++ ) {
+		dio->page_array[inx] = alloc_page(GFP_NOIO);
+		if (NULL == dio->page_array[inx]) {
+			log_err( "Failed to allocate page" );
+			blk_deferred_free( dio );
+			return NULL;
+		}
 	}
 
 	return dio;
@@ -172,13 +183,12 @@ void blk_deferred_bio_endio( struct bio *bio )
 	bio_put( bio );
 }
 
-
 sector_t _blk_deferred_submit_pages(
 	struct block_device* blk_dev,
 	blk_deferred_request_t* dio_req,
 	int direction,
 	sector_t arr_ofs,
-	page_array_t* arr,
+	struct page **page_array,
 	sector_t ofs_sector,
 	sector_t size_sector
 ){
@@ -210,12 +220,10 @@ sector_t _blk_deferred_submit_pages(
 	bio->bi_iter.bi_sector = ofs_sector;
 
 	{//add first
-		struct page* page;
 		sector_t unordered = arr_ofs & ((PAGE_SIZE / SECTOR_SIZE) - 1);
 		sector_t bvec_len_sect = min_t( sector_t, ((PAGE_SIZE / SECTOR_SIZE) - unordered), size_sector );
+		struct page* page = page_array[page_inx];
 
-		BUG_ON( (page_inx > arr->pg_cnt) );
-		page = arr->pg[page_inx].page;
 		if (0 == bio_add_page( bio, page, (unsigned int)from_sectors( bvec_len_sect ), (unsigned int)from_sectors( unordered ) )){
 			bio_put( bio );
 			return 0;
@@ -224,13 +232,12 @@ sector_t _blk_deferred_submit_pages(
 		process_sect += bvec_len_sect;
 	}
 
-	while ((process_sect < size_sector) && (page_inx < arr->pg_cnt))
+	while (process_sect < size_sector)
 	{
-		struct page* page;
 		sector_t bvec_len_sect = min_t( sector_t, (PAGE_SIZE / SECTOR_SIZE), (size_sector - process_sect) );
+		struct page* page = page_array[page_inx];
 
-		BUG_ON( (page_inx > arr->pg_cnt));
-		page = arr->pg[page_inx].page;
+		BUG_ON(NULL == page);
 		if (0 == bio_add_page( bio, page, (unsigned int)from_sectors( bvec_len_sect ), 0 ))
 			break;
 
@@ -253,14 +260,14 @@ sector_t blk_deferred_submit_pages(
 	blk_deferred_request_t* dio_req,
 	int direction,
 	sector_t arr_ofs,
-	page_array_t* arr,
+	struct page **page_array,
 	sector_t ofs_sector,
 	sector_t size_sector
 ){
 	sector_t process_sect = 0;
 
 	do {
-		sector_t portion_sect = _blk_deferred_submit_pages( blk_dev, dio_req, direction, arr_ofs + process_sect, arr, ofs_sector + process_sect, size_sector - process_sect );
+		sector_t portion_sect = _blk_deferred_submit_pages( blk_dev, dio_req, direction, arr_ofs + process_sect, page_array, ofs_sector + process_sect, size_sector - process_sect );
 		if (portion_sect == 0){
 			log_err_format( "Failed to submit defer IO pages. Only [%lld] sectors processed", process_sect );
 			break;
@@ -271,12 +278,22 @@ sector_t blk_deferred_submit_pages(
 	return process_sect;
 }
 
-
-void blk_deferred_memcpy_read( char* databuff, blk_deferred_request_t* dio_req, page_array_t* arr, sector_t arr_ofs, sector_t size_sector )
+void blk_deferred_memcpy_read( char* databuff, blk_deferred_request_t* dio_req, struct page **page_array, sector_t arr_ofs, sector_t size_sector )
 {
-	sector_t sect_inx;
-	for (sect_inx = 0; sect_inx < size_sector; ++sect_inx){
-		memcpy( page_get_sector( arr, sect_inx + arr_ofs ), databuff + (sect_inx<<SECTOR_SHIFT), SECTOR_SIZE );
+	size_t prev_pg_inx = 0;
+	void *addr = NULL;
+	sector_t sect_inx = 0;
+
+	for ( ; sect_inx < size_sector; ++sect_inx) {
+		size_t pg_inx = (arr_ofs + sect_inx) >> (PAGE_SHIFT - SECTOR_SHIFT);
+		size_t pg_ofs = (size_t)from_sectors( (arr_ofs + sect_inx) & ((1 << (PAGE_SHIFT - SECTOR_SHIFT)) - 1) );
+
+		if ( (prev_pg_inx != pg_inx) || (NULL == addr) ) {
+			addr = page_address(page_array[pg_inx]);
+			prev_pg_inx = pg_inx;
+		}
+
+		memcpy( addr + pg_ofs, databuff + (sect_inx<<SECTOR_SHIFT), SECTOR_SIZE );
 	}
 	blk_deferred_complete( dio_req, size_sector, SUCCESS );
 }
@@ -388,7 +405,7 @@ int blk_deferred_request_read_original( struct block_device* original_blk_dev, b
 		sector_t ofs = dio->sect.ofs;
 		sector_t cnt = dio->sect.cnt;
 
-		if (cnt != blk_deferred_submit_pages( original_blk_dev, dio_copy_req, READ, 0, dio->buff, ofs, cnt )){
+		if (cnt != blk_deferred_submit_pages( original_blk_dev, dio_copy_req, READ, 0, dio->page_array, ofs, cnt )){
 			log_err_sect( "Failed to submit reading defer IO request. ofs=", dio->sect.ofs );
 			res = -EIO;
 			break;
@@ -422,8 +439,8 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 			sector_t process_sect;
 			blk_range_link_t *range_link = list_entry( _rangelist_head, blk_range_link_t, link );
 
-			//BUG_ON( NULL == dio->buff );
-			process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->buff, range_link->rg.ofs, range_link->rg.cnt );
+			//BUG_ON( NULL == dio->page_array );
+			process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->page_array, range_link->rg.ofs, range_link->rg.cnt );
 			if (range_link->rg.cnt != process_sect){
 				log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
 				res = -EIO;
@@ -466,7 +483,7 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 			blk_range_link_ex_t* range_link = list_entry( _ranges_list_head, blk_range_link_ex_t, link );
 
 			process_sect = blk_deferred_submit_pages( range_link->blk_dev, dio_copy_req,
-				WRITE, page_array_ofs, dio->buff, range_link->rg.ofs, range_link->rg.cnt );
+				WRITE, page_array_ofs, dio->page_array, range_link->rg.ofs, range_link->rg.cnt );
 			if (range_link->rg.cnt != process_sect){
 				log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
 				res = -EIO;
@@ -488,6 +505,39 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 }
 #endif
 
+
+static
+size_t _store_pages( void* dst, size_t arr_ofs, struct page **page_array, size_t length )
+{
+	size_t page_inx = arr_ofs / PAGE_SIZE;
+
+	size_t processed_len = 0;
+	void* src;
+
+	{//first
+		size_t unordered = arr_ofs & (PAGE_SIZE - 1);
+		size_t page_len = min_t( size_t, ( PAGE_SIZE - unordered ), length );
+
+		src = page_address(page_array[page_inx]);
+		memcpy( dst + processed_len, src + unordered, page_len );
+
+		++page_inx;
+		processed_len += page_len;
+	}
+	while ( (processed_len < length) && (NULL != page_array[page_inx]) )
+	{
+		size_t page_len = min_t( size_t, PAGE_SIZE, (length - processed_len) );
+
+		src = page_address(page_array[page_inx]);
+		memcpy( dst + processed_len, src, page_len );
+
+		++page_inx;
+		processed_len += page_len;
+	}
+
+	return processed_len;
+}
+
 int blk_deffered_request_store_mem( blk_deferred_request_t* dio_copy_req )
 {
 	int res = SUCCESS;
@@ -499,7 +549,7 @@ int blk_deffered_request_store_mem( blk_deferred_request_t* dio_copy_req )
 			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
 			blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)dio->blk_descr;
 
-			size_t portion = page_array_pages2mem( blk_descr->buff, 0, dio->buff, (snapstore_block_size() * SECTOR_SIZE) );
+			size_t portion = _store_pages( blk_descr->buff, 0, dio->page_array, (snapstore_block_size() * SECTOR_SIZE) );
 			if (unlikely( portion != (snapstore_block_size() * SECTOR_SIZE) )){
 				res = -EIO;
 				break;

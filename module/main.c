@@ -5,7 +5,6 @@
 #include "ctrl_pipe.h"
 #include "ctrl_sysfs.h"
 
-#include "blk_direct.h"
 #include "blk_redirect.h"
 #include "blk_deferred.h"
 #include "snapimage.h"
@@ -189,8 +188,7 @@ int __init veeamsnap_init(void)
 		}
 		log_tr_format("Module major [%d]", veeamsnap_major);
 
-		if ((result = blk_direct_bioset_create( )) != SUCCESS)
-			break;
+
 		if ((result = blk_redirect_bioset_create( )) != SUCCESS)
 			break;
 
@@ -244,7 +242,6 @@ void __exit veeamsnap_exit(void)
 	blk_deferred_done( );
 
 	blk_redirect_bioset_free( );
-	blk_direct_bioset_free( );
 
 	unregister_chrdev(veeamsnap_major, MODULE_NAME);
 

@@ -1,5 +1,4 @@
 #pragma once
-#include "page_array.h"
 #include "sector.h"
 #include "blk_descr_file.h"
 #include "blk_descr_mem.h"
@@ -17,7 +16,7 @@ typedef struct blk_deferred_s
 
 	struct blk_range sect;
 
-	page_array_t* buff;
+	struct page **page_array; //null pointer on tail
 }blk_deferred_t;
 
 typedef struct blk_deferred_request_s
@@ -40,9 +39,9 @@ void blk_deferred_bio_endio( struct bio *bio );
 
 void blk_deferred_complete( blk_deferred_request_t* dio_req, sector_t portion_sect_cnt, int result );
 
-sector_t blk_deferred_submit_pages( struct block_device* blk_dev, blk_deferred_request_t* dio_req, int direction, sector_t arr_ofs, page_array_t* arr, sector_t ofs_sector, sector_t size_sector );
+sector_t blk_deferred_submit_pages( struct block_device* blk_dev, blk_deferred_request_t* dio_req, int direction, sector_t arr_ofs, struct page **page_array, sector_t ofs_sector, sector_t size_sector );
 
-void blk_deferred_memcpy_read( char* databuff, blk_deferred_request_t* dio_req, page_array_t* arr, sector_t arr_ofs, sector_t size_sector );
+void blk_deferred_memcpy_read( char* databuff, blk_deferred_request_t* dio_req, struct page **page_array, sector_t arr_ofs, sector_t size_sector );
 
 
 blk_deferred_request_t* blk_deferred_request_new( void );

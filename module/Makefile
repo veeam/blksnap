@@ -4,7 +4,6 @@ blk-snap-y += blk_descr_file.o
 blk-snap-y += blk_descr_mem.o
 blk-snap-y += blk_descr_multidev.o
 blk-snap-y += blk_descr_pool.o
-blk-snap-y += blk_direct.o
 blk-snap-y += blk_redirect.o
 blk-snap-y += blk_util.o
 blk-snap-y += cbt_map.o

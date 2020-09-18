@@ -3,7 +3,6 @@
 
 #include "tracker.h"
 #include "blk_util.h"
-#include "blk_direct.h"
 #include "defer_io.h"
 
 #define SECTION "tracking  "
@@ -20,8 +19,7 @@ bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
 	bio_get(bio);
 
 	if (SUCCESS == tracker_find_by_queue(bio->bi_disk, bio->bi_partno, &tracker)) {
-		if ((bio->bi_end_io != blk_direct_bio_endio) &&
-			(bio->bi_end_io != blk_redirect_bio_endio) &&
+		if ((bio->bi_end_io != blk_redirect_bio_endio) &&
 			(bio->bi_end_io != blk_deferred_bio_endio)) {
 
 			if (tracker->is_unfreezable)

@@ -1,7 +1,6 @@
 #include "common.h"
 #include "blk_util.h"
 #include "blk_redirect.h"
-#include "blk_direct.h"
 
 #define SECTION "blk       "
 #include "log_format.h"

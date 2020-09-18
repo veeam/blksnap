@@ -17,8 +17,6 @@ typedef struct page_array_s
 page_array_t* page_array_alloc( size_t count, int gfp_opt );
 void page_array_free( page_array_t* arr );
 
-size_t page_array_pages2mem( void* dst_buffer, size_t arr_ofs, page_array_t* arr, size_t length );
-
 size_t page_array_page2user( char __user* dst_user_buffer, size_t arr_ofs, page_array_t* arr, size_t length );
 size_t page_array_user2page( const char __user* src_user_buffer, size_t arr_ofs, page_array_t* arr, size_t length );
 

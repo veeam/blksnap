@@ -9,7 +9,7 @@
 #include "shared_resource.h"
 #include "blk_redirect.h"
 #include "ctrl_pipe.h"
-
+#include "page_array.h"
 
 typedef struct snapstore_s
 {

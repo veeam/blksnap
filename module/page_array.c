@@ -47,35 +47,6 @@ void page_array_free( page_array_t* arr )
 	kfree( arr );
 }
 
-size_t page_array_pages2mem( void* dst, size_t arr_ofs, page_array_t* arr, size_t length )
-{
-	int page_inx = arr_ofs / PAGE_SIZE;
-	size_t processed_len = 0;
-	void* src;
-	{//first
-		size_t unordered = arr_ofs & (PAGE_SIZE - 1);
-		size_t page_len = min_t( size_t, ( PAGE_SIZE - unordered ), length );
-
-		src = arr->pg[page_inx].addr;
-		memcpy( dst + processed_len, src + unordered, page_len );
-
-		++page_inx;
-		processed_len += page_len;
-	}
-	while ((processed_len < length) && (page_inx < arr->pg_cnt))
-	{
-		size_t page_len = min_t( size_t, PAGE_SIZE, (length - processed_len) );
-
-		src = arr->pg[page_inx].addr;
-		memcpy( dst + processed_len, src, page_len );
-
-		++page_inx;
-		processed_len += page_len;
-	}
-
-	return processed_len;
-}
-
 size_t page_array_page2user( char __user* dst_user, size_t arr_ofs, page_array_t* arr, size_t length )
 {
 	size_t left_data_length;
