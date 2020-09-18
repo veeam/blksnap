@@ -4,6 +4,7 @@
 #include "blk_deferred.h"
 #include "blk_redirect.h"
 #include "snapstore.h"
+#include <linux/xarray.h>
 
 typedef struct snapstore_device_s
 {
@@ -14,7 +15,7 @@ typedef struct snapstore_device_s
 
 	struct block_device* orig_blk_dev;
 
-	blk_descr_array_t store_block_map; // map block index to read block offset
+	struct xarray store_block_map;	// map block index to read block offset
 	struct mutex store_block_map_locker;
 
 	rangevector_t zero_sectors;

@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
 blk-snap-y += blk_deferred.o
-blk-snap-y += blk_descr_array.o
 blk-snap-y += blk_descr_file.o
 blk-snap-y += blk_descr_mem.o
 blk-snap-y += blk_descr_multidev.o

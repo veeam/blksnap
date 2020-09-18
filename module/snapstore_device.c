@@ -88,7 +88,7 @@ void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 {
 	log_tr("Destroy snapstore device");
 
-	blk_descr_array_done( &snapstore_device->store_block_map );
+	xa_destroy(&snapstore_device->store_block_map);
 
 	if (snapstore_device->orig_blk_dev != NULL)
 		blk_dev_close( snapstore_device->orig_blk_dev );
@@ -155,33 +155,7 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 
 	rangevector_init(&snapstore_device->zero_sectors);
 
-	while (1){ //failover with snapstore block size increment
-		blk_descr_array_index_t blocks_count;
-
-		sector_t sect_cnt = blk_dev_get_capacity(snapstore_device->orig_blk_dev);
-		if (sect_cnt & snapstore_block_mask())
-			sect_cnt += snapstore_block_size();
-		blocks_count = (blk_descr_array_index_t)(sect_cnt >> snapstore_block_shift());
-
-		res = blk_descr_array_init(&snapstore_device->store_block_map, 0, blocks_count);
-		if (res == SUCCESS)
-			break;
-
-		log_err_format("Failed to initialize block description array, %lu blocks needed", blocks_count);
-
-		res = inc_snapstore_block_size_pow();
-		if (res != SUCCESS){
-			log_err("Cannot increment block size");
-			break;
-		}
-
-		log_warn_format("Snapstore block size increased to %lld sectors", snapstore_block_size());
-	}
-	if (res != SUCCESS){
-		log_err("Unable to create snapstore device");
-		_snapstore_device_destroy(snapstore_device);
-		return res;
-	}
+	xa_init(&snapstore_device->store_block_map);
 
 	snapstore_device->snapstore = snapstore_get(snapstore);
 
@@ -194,20 +168,7 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 	return SUCCESS;
 }
 
-bool _snapstore_device_is_block_stored( snapstore_device_t* snapstore_device, blk_descr_array_index_t block_index )
-{
-	blk_descr_array_el_t blk_descr;
-	int res = blk_descr_array_get( &snapstore_device->store_block_map, block_index, &blk_descr );
-	if (res == SUCCESS)
-		return true;
-	if (res == -ENODATA)
-		return false;
-
-	log_err_ld( "Snapstore device error: failed to get block description for block #", block_index );
-	return false;
-}
-
-int snapstore_device_add_request( snapstore_device_t* snapstore_device, blk_descr_array_index_t block_index, blk_deferred_request_t** dio_copy_req )
+int snapstore_device_add_request( snapstore_device_t* snapstore_device, unsigned long block_index, blk_deferred_request_t** dio_copy_req )
 {
 	int res = SUCCESS;
 	blk_descr_unify_t* blk_descr = NULL;
@@ -220,9 +181,8 @@ int snapstore_device_add_request( snapstore_device_t* snapstore_device, blk_desc
 		return -ENODATA;
 	}
 
-	res = blk_descr_array_set( &snapstore_device->store_block_map, block_index, blk_descr );
+	res = xa_err(xa_store( &snapstore_device->store_block_map, block_index, blk_descr, GFP_NOIO ));
 	if (res != SUCCESS){
-		//blk_descr_write_unlock( blk_descr );
 		log_err_d( "Unable to add block to defer IO request: failed to set block descriptor to descriptors array. errno=", res );
 		return res;
 	}
@@ -268,16 +228,14 @@ int snapstore_device_add_request( snapstore_device_t* snapstore_device, blk_desc
 int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, struct blk_range* copy_range, blk_deferred_request_t** dio_copy_req )
 {
 	int res = SUCCESS;
-	blk_descr_array_index_t inx = 0;
-	blk_descr_array_index_t first = (blk_descr_array_index_t)(copy_range->ofs >> snapstore_block_shift());
-	blk_descr_array_index_t last = (blk_descr_array_index_t)((copy_range->ofs + copy_range->cnt - 1) >> snapstore_block_shift());
+	unsigned long inx = 0;
+	unsigned long first = (unsigned long)(copy_range->ofs >> snapstore_block_shift());
+	unsigned long last = (unsigned long)((copy_range->ofs + copy_range->cnt - 1) >> snapstore_block_shift());
 
 	for (inx = first; inx <= last; inx++){
-		if (_snapstore_device_is_block_stored( snapstore_device, inx ))
-		{
+		if (NULL != xa_load(&snapstore_device->store_block_map, block_index)) {
 			//log_tr_sz( "Already stored block # ", inx );
-		}else{
-
+		} else {
 			res = snapstore_device_add_request( snapstore_device, inx, dio_copy_req );
 			if ( res != SUCCESS){
 				log_err_d( "Failed to create copy defer IO request. errno=", res );
@@ -305,9 +263,9 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 {
 	int res = SUCCESS;
 
-	blk_descr_array_index_t block_index;
-	blk_descr_array_index_t block_index_last;
-	blk_descr_array_index_t block_index_first;
+	unsigned long block_index;
+	unsigned long block_index_last;
+	unsigned long block_index_first;
 
 	sector_t blk_ofs_start = 0;		 //device range start
 	sector_t blk_ofs_count = 0;		 //device range length
@@ -328,37 +286,26 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 		return SUCCESS;
 	}
 
-	block_index_first = (blk_descr_array_index_t)(rq_range.ofs >> snapstore_block_shift());
-	block_index_last = (blk_descr_array_index_t)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
+	block_index_first = (unsigned long)(rq_range.ofs >> snapstore_block_shift());
+	block_index_last = (unsigned long)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
 
 	_snapstore_device_descr_write_lock( snapstore_device );
 	for (block_index = block_index_first; block_index <= block_index_last; ++block_index){
-		int status;
 		blk_descr_unify_t* blk_descr = NULL;
 
 		blk_ofs_count = min_t( sector_t,
 			(((sector_t)(block_index + 1)) << snapstore_block_shift()) - (rq_range.ofs + blk_ofs_start),
 			rq_range.cnt - blk_ofs_start );
 
-		status = blk_descr_array_get( &snapstore_device->store_block_map, block_index, &blk_descr );
-		if (SUCCESS != status){
-			if (-ENODATA == status)
-				blk_descr = NULL;
-			else{
-				res = status;
-				log_err( "Unable to read from snapstore device: failed to get snapstore block" );
-				break;
-			}
-		}
-		if (blk_descr ){
+		blk_descr = (blk_descr_unify_t*)xa_load(&snapstore_device->store_block_map, block_index);
+		if (blk_descr) {
 			//push snapstore read
 			res = snapstore_redirect_read( rq_redir, snapstore_device->snapstore, blk_descr, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 			if (res != SUCCESS){
 				log_err( "Failed to read from snapstore device" );
 				break;
 			}
-		}
-		else{
+		} else {
 
 			//device read with zeroing
 			if (zero_sectors)
@@ -434,9 +381,9 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 {
 	int res = SUCCESS;
 
-	blk_descr_array_index_t block_index;
-	blk_descr_array_index_t block_index_last;
-	blk_descr_array_index_t block_index_first;
+	unsigned long block_index;
+	unsigned long block_index_last;
+	unsigned long block_index_first;
 
 	sector_t blk_ofs_start = 0;		 //device range start
 	sector_t blk_ofs_count = 0;		 //device range length
@@ -463,28 +410,18 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 	// do copy to snapstore previously
 	res = _snapstore_device_copy_on_write( snapstore_device, &rq_range );
 
-	block_index_first = (blk_descr_array_index_t)(rq_range.ofs >> snapstore_block_shift());
-	block_index_last = (blk_descr_array_index_t)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
+	block_index_first = (unsigned long)(rq_range.ofs >> snapstore_block_shift());
+	block_index_last = (unsigned long)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
 
 	_snapstore_device_descr_write_lock(snapstore_device);
 	for (block_index = block_index_first; block_index <= block_index_last; ++block_index){
-		int status;
 		blk_descr_unify_t* blk_descr = NULL;
 
 		blk_ofs_count = min_t( sector_t,
 			(((sector_t)(block_index + 1)) << snapstore_block_shift()) - (rq_range.ofs + blk_ofs_start),
 			rq_range.cnt - blk_ofs_start );
 
-		status = blk_descr_array_get( &snapstore_device->store_block_map, block_index, &blk_descr );
-		if (SUCCESS != status){
-			if (-ENODATA == status)
-				blk_descr = NULL;
-			else{
-				res = status;
-				log_err( "Unable to write from snapstore device: failed to get snapstore block descriptor" );
-				break;
-			}
-		}
+		blk_descr = (blk_descr_unify_t*)xa_load(&snapstore_device->store_block_map, block_index);
 		if (blk_descr == NULL){
 			log_err( "Unable to write from snapstore device: invalid snapstore block descriptor" );
 			res = -EIO;

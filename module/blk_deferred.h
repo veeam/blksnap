@@ -4,7 +4,6 @@
 #include "blk_descr_file.h"
 #include "blk_descr_mem.h"
 #include "blk_descr_multidev.h"
-#include "blk_descr_array.h"
 
 #define DEFER_IO_DIO_REQUEST_LENGTH 250
 #define DEFER_IO_DIO_REQUEST_SECTORS_COUNT (10*1024*1024/SECTOR_SIZE)
@@ -13,8 +12,8 @@ typedef struct blk_deferred_s
 {
 	struct list_head link;
 
-	blk_descr_array_index_t blk_index; //for writing to snapstore
-	blk_descr_unify_t* blk_descr;	//for writing to snapstore - blk_descr_file_t or blk_descr_mem_t
+	unsigned long blk_index;
+	blk_descr_unify_t* blk_descr;
 
 	struct blk_range sect;
 
@@ -34,7 +33,7 @@ typedef struct blk_deferred_request_s
 
 void blk_deferred_done( void );
 
-blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_descr_unify_t* blk_descr );
+blk_deferred_t* blk_deferred_alloc( unsigned long block_index, blk_descr_unify_t* blk_descr );
 void blk_deferred_free( blk_deferred_t* dio );
 
 void blk_deferred_bio_endio( struct bio *bio );
@@ -48,7 +47,7 @@ void blk_deferred_memcpy_read( char* databuff, blk_deferred_request_t* dio_req, 
 
 blk_deferred_request_t* blk_deferred_request_new( void );
 
-bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, blk_descr_array_index_t block_index );
+bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, unsigned long block_index );
 
 int  blk_deferred_request_add( blk_deferred_request_t* dio_req, blk_deferred_t* dio );
 void blk_deferred_request_free( blk_deferred_request_t* dio_req );

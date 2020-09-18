@@ -4,10 +4,8 @@
 #include "snapstore.h"
 #include "snapstore_blk.h"
 
-
 #define SECTION "blk       "
 #include "log_format.h"
-
 
 struct bio_set g_BlkDeferredBioset = { 0 };
 #define BlkDeferredBioset &g_BlkDeferredBioset
@@ -81,7 +79,7 @@ void blk_deferred_free( blk_deferred_t* dio )
 	kfree( dio );
 }
 
-blk_deferred_t* blk_deferred_alloc( blk_descr_array_index_t block_index, blk_descr_unify_t* blk_descr )
+blk_deferred_t* blk_deferred_alloc( unsigned long block_index, blk_descr_unify_t* blk_descr )
 {
 	bool success = false;
 	blk_deferred_t* dio = kmalloc( sizeof( blk_deferred_t ), GFP_NOIO );
@@ -301,7 +299,7 @@ blk_deferred_request_t* blk_deferred_request_new( void )
 	return dio_req;
 }
 
-bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, blk_descr_array_index_t block_index )
+bool blk_deferred_request_already_added( blk_deferred_request_t* dio_req, unsigned long block_index )
 {
 	bool result = false;
 	struct list_head* _list_head;
