@@ -233,7 +233,7 @@ int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, str
 	unsigned long last = (unsigned long)((copy_range->ofs + copy_range->cnt - 1) >> snapstore_block_shift());
 
 	for (inx = first; inx <= last; inx++){
-		if (NULL != xa_load(&snapstore_device->store_block_map, block_index)) {
+		if (NULL != xa_load(&snapstore_device->store_block_map, inx)) {
 			//log_tr_sz( "Already stored block # ", inx );
 		} else {
 			res = snapstore_device_add_request( snapstore_device, inx, dio_copy_req );
