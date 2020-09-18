@@ -51,10 +51,7 @@ int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree,
 	if (size_mod)
 		cbt_map->map_size++;
 
-	
-	page_cnt = cbt_map->map_size >> PAGE_SHIFT;
-	if (cbt_map->map_size & (PAGE_SIZE - 1))
-		++page_cnt;
+	page_cnt = page_count_calc(cbt_map->map_size);
 
 	cbt_map->read_map = page_array_alloc( page_cnt, GFP_KERNEL );
 	if (cbt_map->read_map != NULL)
@@ -63,7 +60,7 @@ int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree,
 	cbt_map->write_map = page_array_alloc( page_cnt, GFP_KERNEL );
 	if (cbt_map->write_map != NULL)
 		page_array_memset( cbt_map->write_map, 0 );
-	
+
 	if ((cbt_map->read_map == NULL) || (cbt_map->write_map == NULL)){
 		log_err_sz( "Cannot allocate CBT map. map_size=", cbt_map->map_size );
 		return -ENOMEM;
@@ -73,7 +70,7 @@ int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree,
 	cbt_map->snap_number_active = 1;
 	generate_random_uuid( cbt_map->generationId.b );
 	cbt_map->active = true;
-	
+
 	cbt_map->state_changed_sectors = 0;
 	cbt_map->state_dirty_sectors = 0;
 
@@ -230,7 +227,7 @@ void cbt_print_state(cbt_map_t* cbt_map)
 {
 	log_tr("");
 	log_tr("CBT map state:");
-	
+
 	log_tr_sz("sect_in_block_degree=", cbt_map->sect_in_block_degree);
 	log_tr_sect("device_capacity=", cbt_map->device_capacity);
 	log_tr_sz("map_size=", cbt_map->map_size);
