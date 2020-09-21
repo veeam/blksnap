@@ -88,7 +88,7 @@ void blk_deferred_free( blk_deferred_t* dio )
 	kfree( dio );
 }
 
-blk_deferred_t* blk_deferred_alloc( unsigned long block_index, blk_descr_unify_t* blk_descr )
+blk_deferred_t* blk_deferred_alloc( unsigned long block_index, union blk_descr_unify blk_descr )
 {
 	size_t inx;
 	size_t page_count;
@@ -432,7 +432,7 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 	list_for_each( _dio_list_head, &dio_copy_req->dios ){
 		blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
 		sector_t page_array_ofs = 0;
-		blk_descr_file_t* blk_descr = (blk_descr_file_t*)dio->blk_descr;
+		struct blk_descr_file *blk_descr = dio->blk_descr.file;
 
 		BUG_ON(list_empty( &blk_descr->rangelist ));
 		list_for_each( _rangelist_head, &blk_descr->rangelist ) {
@@ -475,7 +475,7 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 	list_for_each( _dio_list_head, &dio_copy_req->dios ){
 		blk_deferred_t* dio = list_entry( _dio_list_head, blk_deferred_t, link );
 		sector_t page_array_ofs = 0;
-		blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)dio->blk_descr;
+		struct blk_descr_multidev* blk_descr = dio->blk_descr.multidev;
 
 		BUG_ON(list_empty(&blk_descr->rangelist));
 		list_for_each( _ranges_list_head, &blk_descr->rangelist ) {
@@ -547,7 +547,7 @@ int blk_deffered_request_store_mem( blk_deferred_request_t* dio_copy_req )
 		struct list_head* _list_head;
 		list_for_each( _list_head, &dio_copy_req->dios ){
 			blk_deferred_t* dio = list_entry( _list_head, blk_deferred_t, link );
-			blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)dio->blk_descr;
+			struct blk_descr_mem *blk_descr = dio->blk_descr.mem;
 
 			size_t portion = _store_pages( blk_descr->buff, 0, dio->page_array, (snapstore_block_size() * SECTOR_SIZE) );
 			if (unlikely( portion != (snapstore_block_size() * SECTOR_SIZE) )){

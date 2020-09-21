@@ -12,7 +12,7 @@ typedef struct blk_deferred_s
 	struct list_head link;
 
 	unsigned long blk_index;
-	blk_descr_unify_t* blk_descr;
+	union blk_descr_unify blk_descr;
 
 	struct blk_range sect;
 
@@ -32,7 +32,7 @@ typedef struct blk_deferred_request_s
 
 void blk_deferred_done( void );
 
-blk_deferred_t* blk_deferred_alloc( unsigned long block_index, blk_descr_unify_t* blk_descr );
+blk_deferred_t* blk_deferred_alloc( unsigned long block_index, union blk_descr_unify blk_descr );
 void blk_deferred_free( blk_deferred_t* dio );
 
 void blk_deferred_bio_endio( struct bio *bio );

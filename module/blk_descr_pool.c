@@ -45,7 +45,7 @@ static void _pool_el_free( pool_el_t* el )
 		kfree( el );
 }
 
-void blk_descr_pool_init( blk_descr_pool_t* pool, size_t available_blocks )
+void blk_descr_pool_init( blk_descr_pool_t* pool, size_t available_blocks)
 {
 	mutex_init(&pool->lock);
 
@@ -71,7 +71,7 @@ void blk_descr_pool_done( blk_descr_pool_t* pool, blk_descr_cleanup_t blocks_cle
 
 		pool->total_cnt -= el->used_cnt;
 
-		blocks_cleanup( el->blocks, el->used_cnt );
+		blocks_cleanup( el->descr_array, el->used_cnt );
 
 		_pool_el_free( el );
 
@@ -79,9 +79,9 @@ void blk_descr_pool_done( blk_descr_pool_t* pool, blk_descr_cleanup_t blocks_cle
 	mutex_unlock(&pool->lock);
 }
 
-blk_descr_unify_t* blk_descr_pool_alloc( blk_descr_pool_t* pool, size_t blk_descr_size, blk_descr_allocate_cb block_alloc, void* arg )
+union blk_descr_unify blk_descr_pool_alloc( blk_descr_pool_t* pool, size_t blk_descr_size, blk_descr_allocate_cb block_alloc, void* arg )
 {
-	blk_descr_unify_t* blk_descr = NULL;
+	union blk_descr_unify blk_descr = {NULL};
 
 	mutex_lock(&pool->lock);
 	do{
@@ -103,7 +103,7 @@ blk_descr_unify_t* blk_descr_pool_alloc( blk_descr_pool_t* pool, size_t blk_desc
 			++pool->blocks_cnt;
 		}
 
-		blk_descr = block_alloc( el->blocks, el->used_cnt, arg );
+		blk_descr = block_alloc( el->descr_array, el->used_cnt, arg );
 
 		++el->used_cnt;
 		++pool->total_cnt;
@@ -125,28 +125,28 @@ if (!list_empty( &(pool)->head )){ \
 	} \
 }
 
-static blk_descr_unify_t* __blk_descr_pool_at( blk_descr_pool_t* pool, size_t blk_descr_size, size_t index )
+static union blk_descr_unify __blk_descr_pool_at( blk_descr_pool_t* pool, size_t blk_descr_size, size_t index )
 {
-	void* bkl_descr = NULL;
+	union blk_descr_unify bkl_descr = {NULL};
 	size_t curr_inx = 0;
 	pool_el_t* el;
 
 	_FOREACH_EL_BEGIN( pool, el )
 	{
 		if ((index >= curr_inx) && (index < (curr_inx + el->used_cnt))){
-			bkl_descr = (void*)(el->blocks) + (index - curr_inx) * blk_descr_size;
+			bkl_descr.ptr = el->descr_array + (index - curr_inx) * blk_descr_size;
 			break;
 		}
 		curr_inx += el->used_cnt;
 	}
 	_FOREACH_EL_END( );
 
-	return (blk_descr_unify_t*)bkl_descr;
+	return bkl_descr;
 }
 
-blk_descr_unify_t* blk_descr_pool_take( blk_descr_pool_t* pool, size_t blk_descr_size )
+union blk_descr_unify blk_descr_pool_take( blk_descr_pool_t* pool, size_t blk_descr_size )
 {
-	blk_descr_unify_t* result = NULL;
+	union blk_descr_unify result = {NULL};
 	mutex_lock(&pool->lock);
 	do{
 		if (pool->take_cnt >= pool->total_cnt){
@@ -155,7 +155,7 @@ blk_descr_unify_t* blk_descr_pool_take( blk_descr_pool_t* pool, size_t blk_descr
 		}
 
 		result = __blk_descr_pool_at(pool, blk_descr_size, pool->take_cnt);
-		if (result == NULL){
+		if (result.ptr == NULL){
 			log_err_format("Unable to get block descriptor: not enough descriptors. Already took %ld, total %ld", pool->take_cnt, pool->total_cnt);
 			break;
 		}

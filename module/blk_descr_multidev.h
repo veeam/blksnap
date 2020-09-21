@@ -3,15 +3,12 @@
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
 #include "sector.h"
-#include "blk_descr_unify.h"
 #include "blk_descr_pool.h"
 
-typedef struct blk_descr_multidev_s
+struct blk_descr_multidev
 {
-	blk_descr_unify_t unify;
-
 	struct list_head rangelist;
-}blk_descr_multidev_t;
+};
 
 typedef struct blk_range_link_ex_s
 {
@@ -26,6 +23,6 @@ void blk_descr_multidev_pool_done( blk_descr_pool_t* pool );
 
 
 int blk_descr_multidev_pool_add( blk_descr_pool_t* pool, struct list_head* rangelist ); //allocate new empty block
-blk_descr_multidev_t* blk_descr_multidev_pool_take( blk_descr_pool_t* pool ); //take empty
+union blk_descr_unify blk_descr_multidev_pool_take( blk_descr_pool_t* pool ); //take empty
 
 #endif //CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV

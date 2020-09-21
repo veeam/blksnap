@@ -548,21 +548,21 @@ void snapstore_order_border( struct blk_range* in, struct blk_range* out )
 		out->cnt += (snapstore_block_size() - unorder.cnt);
 }
 
-blk_descr_unify_t* snapstore_get_empty_block( snapstore_t* snapstore )
+union blk_descr_unify snapstore_get_empty_block( snapstore_t* snapstore )
 {
-	blk_descr_unify_t* result = NULL;
+	union blk_descr_unify result = {NULL};
 
 	if (snapstore->overflowed)
-		return NULL;
+		return result;
 
 	if (snapstore->file != NULL)
-		result = (blk_descr_unify_t*)blk_descr_file_pool_take( &snapstore->file->pool );
+		result = blk_descr_file_pool_take( &snapstore->file->pool );
 	else if (snapstore->multidev != NULL)
-		result = (blk_descr_unify_t*)blk_descr_multidev_pool_take( &snapstore->multidev->pool );
+		result = blk_descr_multidev_pool_take( &snapstore->multidev->pool );
 	else if (snapstore->mem != NULL)
-		result = (blk_descr_unify_t*)blk_descr_mem_pool_take( &snapstore->mem->pool );
+		result = blk_descr_mem_pool_take( &snapstore->mem->pool );
 
-	if (NULL == result){
+	if (NULL == result.ptr){
 		if (snapstore->ctrl_pipe){
 			sector_t fill_status;
 			_snapstore_check_halffill( snapstore, &fill_status );
@@ -617,7 +617,7 @@ int snapstore_request_store( snapstore_t* snapstore, blk_deferred_request_t* dio
 	return res;
 }
 
-int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
+int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, union blk_descr_unify blk_descr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
 {
 	int res = SUCCESS;
 	sector_t current_ofs = 0;
@@ -625,12 +625,10 @@ int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstor
 
 
 	if (snapstore->file) {
-		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
-
-		if (!list_empty( &blk_descr->rangelist )) {
+		if (!list_empty( &blk_descr.file->rangelist )) {
 			struct list_head* _list_head;
 
-			list_for_each( _list_head, &blk_descr->rangelist ) {
+			list_for_each( _list_head, &blk_descr.file->rangelist ) {
 				blk_range_link_t* range_link = list_entry( _list_head, blk_range_link_t, link );
 
 
@@ -658,12 +656,10 @@ int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstor
 	}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore->multidev) {
-		blk_descr_multidev_t* blk_descr = (blk_descr_multidev_t*)blk_descr_ptr;
-
-		if (!list_empty( &blk_descr->rangelist )) {
+		if (!list_empty( &blk_descr.multidev->rangelist )) {
 			struct list_head* _list_head;
 
-			list_for_each( _list_head, &blk_descr->rangelist ) {
+			list_for_each( _list_head, &blk_descr.multidev->rangelist ) {
 				blk_range_link_ex_t* range_link = list_entry( _list_head, blk_range_link_ex_t, link );
 
 				if (current_ofs >= rq_count)
@@ -690,9 +686,7 @@ int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstor
 	}
 #endif
 	else if (snapstore->mem){
-		blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)blk_descr_ptr;
-
-		res = blk_dev_redirect_memcpy_part( rq_redir, READ, blk_descr->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
+		res = blk_dev_redirect_memcpy_part( rq_redir, READ, blk_descr.mem->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
 		if (res != SUCCESS){
 			log_err( "Failed to read from snapstore memory" );
 		}else
@@ -708,7 +702,7 @@ int snapstore_redirect_read( blk_redirect_bio_t* rq_redir, snapstore_t* snapstor
 	return res;
 }
 
-int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, blk_descr_unify_t* blk_descr_ptr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
+int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapstore, union blk_descr_unify blk_descr, sector_t target_pos, sector_t rq_ofs, sector_t rq_count )
 {
 	int res = SUCCESS;
 	sector_t current_ofs = 0;
@@ -718,12 +712,10 @@ int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapsto
 	BUG_ON( NULL == snapstore );
 
 	if (snapstore->file){
-		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
-
-		if (!list_empty( &blk_descr->rangelist )){
+		if (!list_empty( &blk_descr.file->rangelist )){
 			struct list_head* _list_head;
 
-			list_for_each( _list_head, &blk_descr->rangelist ) {
+			list_for_each( _list_head, &blk_descr.file->rangelist ) {
 				blk_range_link_t* range_link = list_entry( _list_head, blk_range_link_t, link );
 
 				if (current_ofs >= rq_count)
@@ -750,12 +742,10 @@ int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapsto
 	}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore->multidev) {
-		blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_ptr;
-
-		if (!list_empty( &blk_descr->rangelist )) {
+		if (!list_empty( &blk_descr.multidev->rangelist )) {
 			struct list_head* _list_head;
 
-			list_for_each( _list_head, &blk_descr->rangelist ) {
+			list_for_each( _list_head, &blk_descr.multidev->rangelist ) {
 				blk_range_link_ex_t* range_link = list_entry( _list_head, blk_range_link_ex_t, link );
 
 				if (current_ofs >= rq_count)
@@ -781,10 +771,8 @@ int snapstore_redirect_write( blk_redirect_bio_t* rq_redir, snapstore_t* snapsto
 	}
 #endif
 	else if (snapstore->mem){
-		blk_descr_mem_t* blk_descr = (blk_descr_mem_t*)blk_descr_ptr;
-
 		res = blk_dev_redirect_memcpy_part( rq_redir, WRITE,
-			blk_descr->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
+			blk_descr.mem->buff + (size_t)from_sectors( block_ofs ), rq_ofs, rq_count );
 		if (res != SUCCESS){
 			log_err( "Failed to write to snapstore memory" );
 		}

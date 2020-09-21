@@ -4,7 +4,8 @@
 #define SECTION "blk_descr "
 #include "log_format.h"
 
-static inline void list_assign( struct list_head *dst, struct list_head *src )
+static inline
+void list_assign( struct list_head *dst, struct list_head *src )
 {
 	dst->next = src->next;
 	dst->prev = src->prev;
@@ -13,14 +14,14 @@ static inline void list_assign( struct list_head *dst, struct list_head *src )
 	src->prev->next = dst;
 }
 
-void blk_descr_file_init( blk_descr_file_t* blk_descr, struct list_head *rangelist )
+static inline
+void blk_descr_file_init( struct blk_descr_file *blk_descr, struct list_head *rangelist )
 {
-	blk_descr_unify_init( &blk_descr->unify );
-
 	list_assign( &blk_descr->rangelist, rangelist);
 }
 
-void blk_descr_file_done( blk_descr_file_t* blk_descr )
+static inline
+void blk_descr_file_done( struct blk_descr_file *blk_descr )
 {
 	while (!list_empty( &blk_descr->rangelist )) {
 		blk_range_link_t *range_link = list_entry( blk_descr->rangelist.next,
@@ -36,10 +37,10 @@ void blk_descr_file_pool_init( blk_descr_pool_t* pool )
 	blk_descr_pool_init( pool, 0 );
 }
 
-void _blk_descr_file_cleanup(blk_descr_unify_t* blocks, size_t count)
+void _blk_descr_file_cleanup(void* descr_array, size_t count)
 {
 	size_t inx;
-	blk_descr_file_t* file_blocks = (blk_descr_file_t*)blocks;
+	struct blk_descr_file *file_blocks = descr_array;
 
 	for (inx = 0; inx < count; ++inx)
 		blk_descr_file_done( file_blocks + inx );
@@ -51,22 +52,24 @@ void blk_descr_file_pool_done( blk_descr_pool_t* pool )
 }
 
 static
-blk_descr_unify_t* _blk_descr_file_allocate( blk_descr_unify_t* blocks, size_t index, void* arg )
+union blk_descr_unify _blk_descr_file_allocate( void* descr_array, size_t index, void* arg )
 {
-	blk_descr_file_t* file_blocks = (blk_descr_file_t*)blocks;
-	blk_descr_file_t* blk_descr = &file_blocks[index];
+	union blk_descr_unify blk_descr;
+	struct blk_descr_file *file_blocks = descr_array;
 
-	blk_descr_file_init( blk_descr, (struct list_head*)arg );
+	blk_descr.file = &file_blocks[index];
 
-	return (blk_descr_unify_t*)blk_descr;
+	blk_descr_file_init( blk_descr.file, (struct list_head*)arg );
+
+	return blk_descr;
 }
 
 int blk_descr_file_pool_add( blk_descr_pool_t* pool, struct list_head* rangelist )
 {
-	blk_descr_file_t* blk_descr = (blk_descr_file_t*)blk_descr_pool_alloc( pool,
-		sizeof( blk_descr_file_t ), _blk_descr_file_allocate, (void*)rangelist );
+	union blk_descr_unify blk_descr = blk_descr_pool_alloc( pool,
+		sizeof( struct blk_descr_file ), _blk_descr_file_allocate, (void*)rangelist );
 
-	if (NULL == blk_descr){
+	if (NULL == blk_descr.ptr){
 		log_err( "Failed to allocate block descriptor" );
 		return -ENOMEM;
 	}
@@ -74,8 +77,8 @@ int blk_descr_file_pool_add( blk_descr_pool_t* pool, struct list_head* rangelist
 	return SUCCESS;
 }
 
-blk_descr_file_t* blk_descr_file_pool_take( blk_descr_pool_t* pool )
+union blk_descr_unify blk_descr_file_pool_take( blk_descr_pool_t* pool )
 {
-	return (blk_descr_file_t*)blk_descr_pool_take( pool, sizeof( blk_descr_file_t ) );
+	return blk_descr_pool_take( pool, sizeof( struct blk_descr_file ) );
 }
 
