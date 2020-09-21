@@ -9,7 +9,7 @@
 #include "shared_resource.h"
 #include "blk_redirect.h"
 #include "ctrl_pipe.h"
-#include "page_array.h"
+#include "big_buffer.h"
 
 typedef struct snapstore_s
 {
@@ -51,9 +51,9 @@ static inline void snapstore_put( snapstore_t* snapstore )
 int snapstore_stretch_initiate( uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe, sector_t empty_limit );
 
 int snapstore_add_memory(uuid_t* id, unsigned long long sz);
-int snapstore_add_file(uuid_t* id, page_array_t* ranges, size_t ranges_cnt);
+int snapstore_add_file(uuid_t* id, struct big_buffer *ranges, size_t ranges_cnt);
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt);
+int snapstore_add_multidev(uuid_t* id, dev_t dev_id, struct big_buffer *ranges, size_t ranges_cnt);
 #endif
 
 void snapstore_order_border( struct blk_range* in, struct blk_range* out );

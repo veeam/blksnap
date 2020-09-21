@@ -7,8 +7,8 @@
 #include "snapstore.h"
 #include "snapimage.h"
 #include "tracker.h"
-#include "page_array.h"
 #include "blk_deferred.h"
+#include "big_buffer.h"
 
 #include <linux/module.h>
 #include <linux/poll.h>
@@ -424,7 +424,7 @@ int ioctl_snapstore_file( unsigned long arg )
 {
 	int res = SUCCESS;
 	struct ioctl_snapstore_file_add_s param;
-	page_array_t* ranges = NULL;//struct ioctl_range_s* ranges = NULL;
+	struct big_buffer *ranges = NULL;
 	size_t ranges_buffer_size;
 
 	if (0 != copy_from_user( &param, (void*)arg, sizeof( struct ioctl_snapstore_file_add_s ) )){
@@ -434,7 +434,7 @@ int ioctl_snapstore_file( unsigned long arg )
 
 	ranges_buffer_size = sizeof( struct ioctl_range_s ) * param.range_count;
 
-	ranges = page_array_alloc( page_count_calc( ranges_buffer_size ), GFP_KERNEL );
+	ranges = big_buffer_alloc( ranges_buffer_size, GFP_KERNEL );
 	if (NULL == ranges){
 		log_err_format( "Unable to add file to snapstore: cannot allocate [%ld] bytes", ranges_buffer_size );
 		return -ENOMEM;
@@ -444,7 +444,7 @@ int ioctl_snapstore_file( unsigned long arg )
 		uuid_t* id = (uuid_t*)(param.id);
 		size_t ranges_cnt = (size_t)param.range_count;
 
-		if (ranges_buffer_size != page_array_user2page( (void*)param.ranges, 0, ranges, ranges_buffer_size ) ){
+		if (ranges_buffer_size != big_buffer_copy_from_user( (void*)param.ranges, 0, ranges, ranges_buffer_size ) ){
 			log_err( "Unable to add file to snapstore: invalid user buffer for parameters." );
 			res = -ENODATA;
 			break;
@@ -452,7 +452,7 @@ int ioctl_snapstore_file( unsigned long arg )
 
 		res = snapstore_add_file( id, ranges, ranges_cnt );
 	}while (false);
-	page_array_free( ranges );
+	big_buffer_free( ranges );
 
 	return res;
 }
@@ -498,7 +498,7 @@ int ioctl_snapstore_file_multidev( unsigned long arg )
 	{
 	int res = SUCCESS;
 	struct ioctl_snapstore_file_add_multidev_s param;
-	page_array_t* ranges = NULL;//struct ioctl_range_s* ranges = NULL;
+	struct big_buffer *ranges = NULL;//struct ioctl_range_s* ranges = NULL;
 	size_t ranges_buffer_size;
 
 	if (0 != copy_from_user( &param, (void*)arg, sizeof( struct ioctl_snapstore_file_add_multidev_s ) )){
@@ -508,7 +508,7 @@ int ioctl_snapstore_file_multidev( unsigned long arg )
 
 	ranges_buffer_size = sizeof( struct ioctl_range_s ) * param.range_count;
 
-	ranges = page_array_alloc( page_count_calc( ranges_buffer_size ), GFP_KERNEL );
+	ranges = big_buffer_alloc( ranges_buffer_size, GFP_KERNEL );
 	if (NULL == ranges){
 		log_err_format( "Unable to add file to multidev snapstore: cannot allocate [%ld] bytes", ranges_buffer_size );
 		return -ENOMEM;
@@ -519,7 +519,7 @@ int ioctl_snapstore_file_multidev( unsigned long arg )
 		dev_t snapstore_device = MKDEV( param.dev_id.major, param.dev_id.minor );
 		size_t ranges_cnt = (size_t)param.range_count;
 
-		if (ranges_buffer_size != page_array_user2page( (void*)param.ranges, 0, ranges, ranges_buffer_size )){
+		if (ranges_buffer_size != big_buffer_copy_from_user( (void*)param.ranges, 0, ranges, ranges_buffer_size )){
 			log_err( "Unable to add file to snapstore: invalid user buffer for parameters." );
 			res = -ENODATA;
 			break;
@@ -527,7 +527,7 @@ int ioctl_snapstore_file_multidev( unsigned long arg )
 
 		res = snapstore_add_multidev( id, snapstore_device, ranges, ranges_cnt );
 	} while (false);
-	page_array_free( ranges );
+	big_buffer_free( ranges );
 
 	return res;
 }

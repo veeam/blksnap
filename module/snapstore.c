@@ -2,6 +2,7 @@
 #include "snapstore.h"
 #include "snapstore_device.h"
 #include "snapstore_blk.h"
+#include "big_buffer.h"
 
 #define SECTION "snapstore "
 #include "log_format.h"
@@ -341,7 +342,7 @@ int rangelist_add( struct list_head *rglist, struct blk_range* rg )
 	return SUCCESS;
 }
 
-int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
+int snapstore_add_file( uuid_t* id, struct big_buffer *ranges, size_t ranges_cnt )
 {
 	int res = SUCCESS;
 	snapstore_t* snapstore = NULL;
@@ -373,7 +374,13 @@ int snapstore_add_file( uuid_t* id, page_array_t* ranges, size_t ranges_cnt )
 		sector_t range_offset = 0;
 
 		struct blk_range range;
-		struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
+		struct ioctl_range_s* ioctl_range = (struct ioctl_range_s*)big_buffer_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
+
+		if (NULL == ioctl_range) {
+			log_err("Invalid count of ranges");
+			res = -ENODATA;
+			break;
+		}
 
 		range.ofs = (sector_t)to_sectors( ioctl_range->left );
 		range.cnt = (blkcnt_t)to_sectors( ioctl_range->right ) - range.ofs;
@@ -446,7 +453,7 @@ int rangelist_ex_add( struct list_head *list, struct blk_range* rg, struct block
 	return SUCCESS;
 }
 
-int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_t ranges_cnt)
+int snapstore_add_multidev(uuid_t* id, dev_t dev_id, struct big_buffer *ranges, size_t ranges_cnt)
 {
 	int res = SUCCESS;
 	snapstore_t* snapstore = NULL;
@@ -475,7 +482,13 @@ int snapstore_add_multidev(uuid_t* id, dev_t dev_id, page_array_t* ranges, size_
 		sector_t range_offset = 0;
 		struct blk_range range;
 
-		struct ioctl_range_s* data = (struct ioctl_range_s*)page_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
+		struct ioctl_range_s* data = (struct ioctl_range_s*)big_buffer_get_element( ranges, inx, sizeof( struct ioctl_range_s ) );
+
+		if (NULL == data) {
+			log_err("Invalid count of ranges");
+			res = -ENODATA;
+			break;
+		}
 
 		range.ofs = (sector_t)to_sectors( data->left );
 		range.cnt = (blkcnt_t)to_sectors( data->right ) - range.ofs;

@@ -183,6 +183,16 @@ void blk_deferred_bio_endio( struct bio *bio )
 	bio_put( bio );
 }
 
+static inline
+size_t _page_count_calculate( sector_t size_sector )
+{
+	size_t page_count = size_sector / (PAGE_SIZE / SECTOR_SIZE);
+
+	if (unlikely( size_sector & ((PAGE_SIZE / SECTOR_SIZE) - 1) ))
+		page_count += 1;
+	return page_count;
+}
+
 sector_t _blk_deferred_submit_pages(
 	struct block_device* blk_dev,
 	blk_deferred_request_t* dio_req,
@@ -198,7 +208,7 @@ sector_t _blk_deferred_submit_pages(
 	int page_inx = arr_ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
 	sector_t process_sect = 0;
 
-	nr_iovecs = page_count_calc_sectors( ofs_sector, size_sector );
+	nr_iovecs = _page_count_calculate( size_sector );
 
 	while (NULL == (bio = _blk_deferred_bio_alloc( nr_iovecs ))){
 		//log_tr_d( "Failed to allocate bio for defer IO. nr_iovecs=", nr_iovecs );
@@ -207,7 +217,7 @@ sector_t _blk_deferred_submit_pages(
 		if (size_sector == 0){
 			return 0;
 		}
-		nr_iovecs = page_count_calc_sectors( ofs_sector, size_sector );
+		nr_iovecs = _page_count_calculate( size_sector );
 	}
 
 	bio_set_dev(bio, blk_dev);

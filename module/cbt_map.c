@@ -19,12 +19,14 @@ static inline void _cbt_map_unlock( cbt_map_t* cbt_map )
 	spin_unlock( &cbt_map->locker );
 }
 
-static inline page_array_t* _get_writable( cbt_map_t* cbt_map )
+static inline
+struct big_buffer* _get_writable( cbt_map_t* cbt_map )
 {
 	return cbt_map->write_map;
 }
 
-static inline page_array_t* _get_readable( cbt_map_t* cbt_map )
+static inline
+struct big_buffer* _get_readable( cbt_map_t* cbt_map )
 {
 	return cbt_map->read_map;
 }
@@ -39,7 +41,7 @@ void cbt_map_destroy_cb( void* this_resource )
 
 int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree, sector_t device_capacity )
 {
-	size_t page_cnt;
+
 	sector_t size_mod;
 	cbt_map->sect_in_block_degree = cbt_sect_in_block_degree;
 	cbt_map->device_capacity = device_capacity;
@@ -51,15 +53,13 @@ int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree,
 	if (size_mod)
 		cbt_map->map_size++;
 
-	page_cnt = page_count_calc(cbt_map->map_size);
-
-	cbt_map->read_map = page_array_alloc( page_cnt, GFP_KERNEL );
+	cbt_map->read_map = big_buffer_alloc( cbt_map->map_size, GFP_KERNEL);
 	if (cbt_map->read_map != NULL)
-		page_array_memset( cbt_map->read_map, 0 );
+		big_buffer_memset( cbt_map->read_map, 0 );
 
-	cbt_map->write_map = page_array_alloc( page_cnt, GFP_KERNEL );
+	cbt_map->write_map = big_buffer_alloc( cbt_map->map_size, GFP_KERNEL );
 	if (cbt_map->write_map != NULL)
-		page_array_memset( cbt_map->write_map, 0 );
+		big_buffer_memset( cbt_map->write_map, 0 );
 
 	if ((cbt_map->read_map == NULL) || (cbt_map->write_map == NULL)){
 		log_err_sz( "Cannot allocate CBT map. map_size=", cbt_map->map_size );
@@ -80,12 +80,12 @@ int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree,
 void cbt_map_deallocate( cbt_map_t* cbt_map )
 {
 	if (cbt_map->read_map != NULL){
-		page_array_free( cbt_map->read_map );
+		big_buffer_free( cbt_map->read_map );
 		cbt_map->read_map = NULL;
 	}
 
 	if (cbt_map->write_map != NULL){
-		page_array_free( cbt_map->write_map );
+		big_buffer_free( cbt_map->write_map );
 		cbt_map->write_map = NULL;
 	}
 
@@ -131,7 +131,7 @@ void cbt_map_switch( cbt_map_t* cbt_map )
 	log_tr( "CBT map switch" );
 	_cbt_map_lock( cbt_map );
 
-	page_array_memcpy( _get_readable( cbt_map ), _get_writable( cbt_map ) );
+	big_buffer_memcpy( _get_readable( cbt_map ), _get_writable( cbt_map ) );
 
 	cbt_map->snap_number_previous = cbt_map->snap_number_active;
 	++cbt_map->snap_number_active;
@@ -139,7 +139,7 @@ void cbt_map_switch( cbt_map_t* cbt_map )
 
 		cbt_map->snap_number_active = 1;
 
-		page_array_memset( _get_writable( cbt_map ), 0 );
+		big_buffer_memset( _get_writable( cbt_map ), 0 );
 
 		generate_random_uuid( cbt_map->generationId.b );
 
@@ -148,7 +148,7 @@ void cbt_map_switch( cbt_map_t* cbt_map )
 	_cbt_map_unlock( cbt_map );
 }
 
-int _cbt_map_set( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector_cnt, u8 snap_number, page_array_t* map )
+int _cbt_map_set( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector_cnt, u8 snap_number, struct big_buffer* map )
 {
 	int res = SUCCESS;
 	size_t cbt_block;
@@ -158,10 +158,10 @@ int _cbt_map_set( cbt_map_t* cbt_map, sector_t sector_start, sector_t sector_cnt
 	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last; ++cbt_block){
 		if (cbt_block < cbt_map->map_size){
 			u8 num;
-			res = page_array_byte_get( map, cbt_block, &num );
+			res = big_buffer_byte_get( map, cbt_block, &num );
 			if (SUCCESS == res){
 				if (num < snap_number){
-					res = page_array_byte_set( map, cbt_block, snap_number );
+					res = big_buffer_byte_set( map, cbt_block, snap_number );
 				}
 			}
 		}
@@ -212,7 +212,7 @@ size_t cbt_map_read_to_user( cbt_map_t* cbt_map, void __user* user_buff, size_t 
 	size_t left_size;
 	size_t real_size = min((cbt_map->map_size - offset), size);
 
-	left_size = real_size - page_array_page2user(user_buff, offset, _get_readable(cbt_map), real_size);
+	left_size = real_size - big_buffer_copy_to_user(user_buff, offset, _get_readable(cbt_map), real_size);
 	if (left_size == 0)
 		readed = real_size;
 	else{

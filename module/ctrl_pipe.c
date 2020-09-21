@@ -3,6 +3,7 @@
 #include "version.h"
 #include "blk-snap-ctl.h"
 #include "snapstore.h"
+#include "big_buffer.h"
 
 #include <linux/poll.h>
 #include <linux/uuid.h>
@@ -304,7 +305,7 @@ ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *bu
 {
 	int result = SUCCESS;
 	ssize_t processed = 0;
-	page_array_t* ranges = NULL;
+	struct big_buffer *ranges = NULL;
 
 	do{
 		uuid_t unique_id;
@@ -343,13 +344,13 @@ ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *bu
 			log_err_sz( "Unable to get all ranges: invalid ctrl pipe next portion command. length=", length );
 			break;
 		}
-		ranges = page_array_alloc( page_count_calc( ranges_buffer_size ), GFP_KERNEL );
+		ranges = big_buffer_alloc( ranges_buffer_size, GFP_KERNEL );
 		if (ranges == NULL){
 			log_err( "Unable to allocate page array buffer: failed to process next portion command." );
 			processed = -ENOMEM;
 			break;
 		}
-		if (ranges_buffer_size != page_array_user2page( buffer + processed, 0, ranges, ranges_buffer_size )){
+		if (ranges_buffer_size != big_buffer_copy_from_user( buffer + processed, 0, ranges, ranges_buffer_size )){
 			log_err( "Unable to process next portion command: invalid user buffer for parameters." );
 			processed = -EINVAL;
 			break;
@@ -367,7 +368,7 @@ ssize_t ctrl_pipe_command_next_portion( ctrl_pipe_t* pipe, const char __user *bu
 		}
 	} while (false);
 	if (ranges)
-		page_array_free( ranges );
+		big_buffer_free( ranges );
 
 	if (result == SUCCESS)
 		//log_traceln_sz( "processed=", processed );
@@ -379,7 +380,7 @@ ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char _
 		{
 	int result = SUCCESS;
 	ssize_t processed = 0;
-	page_array_t* ranges = NULL;
+	struct big_buffer *ranges = NULL;
 
 	do{
 		uuid_t unique_id;
@@ -439,13 +440,13 @@ ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char _
 			log_err_sz( "Unable to get all ranges: invalid ctrl pipe next portion command.  length=", length );
 			break;
 		}
-		ranges = page_array_alloc( page_count_calc( ranges_buffer_size ), GFP_KERNEL );
+		ranges = big_buffer_alloc( ranges_buffer_size, GFP_KERNEL );
 		if (ranges == NULL){
 			log_err( "Unable to process next portion command: failed to allocate page array buffer" );
 			processed = -ENOMEM;
 			break;
 		}
-		if (ranges_buffer_size != page_array_user2page( buffer + processed, 0, ranges, ranges_buffer_size )){
+		if (ranges_buffer_size != big_buffer_copy_from_user( buffer + processed, 0, ranges, ranges_buffer_size )){
 			log_err( "Unable to process next portion command: invalid user buffer from parameters." );
 			processed = -EINVAL;
 			break;
@@ -463,7 +464,7 @@ ssize_t ctrl_pipe_command_next_portion_multidev( ctrl_pipe_t* pipe, const char _
 		}
 	} while (false);
 	if (ranges)
-		page_array_free( ranges );
+		big_buffer_free( ranges );
 
 	if (result == SUCCESS)
 		//log_traceln_sz( "processed=", processed );

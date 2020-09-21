@@ -1,6 +1,6 @@
 #pragma once
 
-#include "page_array.h"
+#include "big_buffer.h"
 #include "shared_resource.h"
 #include <linux/uuid.h>
 
@@ -14,8 +14,8 @@ typedef struct cbt_map_s
 	sector_t device_capacity;
 	size_t   map_size;
 
-	page_array_t*  read_map;
-	page_array_t*  write_map;
+	struct big_buffer *read_map;
+	struct big_buffer *write_map;
 
 	volatile unsigned long snap_number_active;
 	volatile unsigned long snap_number_previous;
@@ -27,7 +27,7 @@ typedef struct cbt_map_s
 
 	sector_t state_changed_sectors;
 	sector_t state_dirty_sectors;
-	
+
 }cbt_map_t;
 
 cbt_map_t* cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t device_capacity);
