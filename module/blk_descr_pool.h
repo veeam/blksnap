@@ -30,7 +30,7 @@ typedef struct  pool_el_s
 	size_t used_cnt; // used blocks
 	size_t capacity; // blocks array capacity
 
-	void* descr_array[0];
+	u8 descr_array[0];
 }pool_el_t;
 
 void blk_descr_pool_init( blk_descr_pool_t* pool, size_t available_blocks);
