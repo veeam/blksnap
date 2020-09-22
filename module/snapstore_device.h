@@ -10,7 +10,7 @@
 typedef struct snapstore_device_s
 {
 	struct list_head link;
-	struct kref shared;
+	struct kref refcount;
 
 	dev_t dev_id;
 	snapstore_t* snapstore;

@@ -7,7 +7,7 @@ typedef struct ctrl_pipe_s
 {
 	struct list_head link;
 
-	struct kref sharing_header; 
+	struct kref refcount; 
 
 	wait_queue_head_t readq;
 

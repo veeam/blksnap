@@ -14,7 +14,7 @@ typedef struct defer_io_queue
 
 typedef struct defer_io_s
 {
-	struct kref sharing_header;
+	struct kref refcount;
 
 	wait_queue_head_t queue_add_event;
 

@@ -34,7 +34,7 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s* p_cbt_info, int* p_c
 int tracker_capture_snapshot( snapshot_t* p_snapshot );
 int tracker_release_snapshot( snapshot_t* p_snapshot );
 
-void tracker_cbt_start(tracker_t* tracker, unsigned long long snapshot_id, cbt_map_t* cbt_map);
+void tracker_cbt_start(tracker_t* tracker, unsigned long long snapshot_id);
 
 int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cbt_block_size_degree, cbt_map_t* cbt_map, tracker_t** ptracker);
 int tracker_remove( tracker_t* tracker );

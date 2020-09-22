@@ -44,7 +44,7 @@ void ctrl_pipe_done( void )
 static
 void ctrl_pipe_release_cb( struct kref* kref )
 {
-	ctrl_pipe_t* pipe = container_of(kref, ctrl_pipe_t, sharing_header);
+	ctrl_pipe_t* pipe = container_of(kref, ctrl_pipe_t, refcount);
 
 	down_write( &ctl_pipes_lock );
 	list_del( &pipe->link );
@@ -57,9 +57,8 @@ void ctrl_pipe_release_cb( struct kref* kref )
 
 ctrl_pipe_t* ctrl_pipe_get_resource( ctrl_pipe_t* pipe )
 {
-	BUG_ON(NULL == pipe);
-
-	kref_get(&pipe->sharing_header);
+	if (pipe)
+		kref_get(&pipe->refcount);
 
 	return pipe;
 }
@@ -67,7 +66,7 @@ ctrl_pipe_t* ctrl_pipe_get_resource( ctrl_pipe_t* pipe )
 void ctrl_pipe_put_resource( ctrl_pipe_t* pipe )
 {
 	if (pipe)
-		kref_put(&pipe->sharing_header, ctrl_pipe_release_cb);
+		kref_put(&pipe->refcount, ctrl_pipe_release_cb);
 }
 
 ctrl_pipe_t* ctrl_pipe_new( void )
@@ -90,7 +89,7 @@ ctrl_pipe_t* ctrl_pipe_new( void )
 	}
 	spin_lock_init( &pipe->cmd_to_user_lock );
 
-	kref_init(&pipe->sharing_header);
+	kref_init(&pipe->refcount);
 
 	init_waitqueue_head( &pipe->readq );
 

@@ -109,16 +109,15 @@ void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 static
 void snapstore_device_free_cb( struct kref *kref )
 {
-	snapstore_device_t* snapstore_device = container_of(kref, snapstore_device_t, shared);
+	snapstore_device_t* snapstore_device = container_of(kref, snapstore_device_t, refcount);
 
 	_snapstore_device_destroy( snapstore_device );
 }
 
 snapstore_device_t* snapstore_device_get_resource( snapstore_device_t* snapstore_device )
 {
-	BUG_ON(NULL == snapstore_device);
-
-	kref_get( &snapstore_device->shared );
+	if (snapstore_device)
+		kref_get( &snapstore_device->refcount );
 
 	return snapstore_device;
 };
@@ -126,7 +125,7 @@ snapstore_device_t* snapstore_device_get_resource( snapstore_device_t* snapstore
 void snapstore_device_put_resource( snapstore_device_t* snapstore_device )
 {
 	if (snapstore_device)
-		kref_put( &snapstore_device->shared, snapstore_device_free_cb );
+		kref_put( &snapstore_device->refcount, snapstore_device_free_cb );
 };
 
 int snapstore_device_cleanup( uuid_t* id )
@@ -161,7 +160,7 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 		return res;
 	}
 
-	kref_init( &snapstore_device->shared );
+	kref_init( &snapstore_device->refcount );
 
 	snapstore_device->snapstore = NULL;
 	snapstore_device->err_code = SUCCESS;
@@ -179,8 +178,6 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 	down_write( &snapstore_devices_lock );
 	list_add_tail( &snapstore_device->link, &snapstore_devices );
 	up_write( &snapstore_devices_lock );
-
-	snapstore_device_get_resource(snapstore_device);
 
 	return SUCCESS;
 }

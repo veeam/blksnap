@@ -79,7 +79,7 @@ int ctrl_open(struct inode *inode, struct file *fl)
 	if(false == try_module_get( THIS_MODULE ))
 		return -EINVAL;
 
-	fl->private_data = (void*)ctrl_pipe_get_resource( ctrl_pipe_new( ) );
+	fl->private_data = (void*)ctrl_pipe_new( );
 	if (fl->private_data == NULL){
 		log_err( "Failed to open ctrl file" );
 		return -ENOMEM;

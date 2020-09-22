@@ -110,10 +110,9 @@ int tracker_enum_cbt_info( int max_count, struct cbt_info_s* p_cbt_info, int* p_
 	return result;
 }
 
-void tracker_cbt_start(tracker_t* tracker, unsigned long long snapshot_id, cbt_map_t* cbt_map)
+void tracker_cbt_start(tracker_t* tracker, unsigned long long snapshot_id)
 {
 	tracker_snapshot_id_set(tracker, snapshot_id);
-	tracker->cbt_map = cbt_map_get_resource(cbt_map);
 }
 
 int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cbt_block_size_degree, cbt_map_t* cbt_map, tracker_t** ptracker)
@@ -152,25 +151,27 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 			(unsigned long long)blk_dev_get_capacity(tracker->target_dev));
 
 
-		if (cbt_map == NULL) {
-			cbt_map = cbt_map_create(cbt_block_size_degree-SECTOR_SHIFT, blk_dev_get_capacity(tracker->target_dev));
-			if (cbt_map == NULL){
+		if (cbt_map)
+			tracker->cbt_map = cbt_map_get_resource(cbt_map);
+		else {
+			tracker->cbt_map = cbt_map_create(cbt_block_size_degree-SECTOR_SHIFT, blk_dev_get_capacity(tracker->target_dev));
+			if (tracker->cbt_map == NULL) {
 				result = -ENOMEM;
 				break;
 			}
 		}
 
-		tracker_cbt_start(tracker, snapshot_id, cbt_map);
+		tracker_cbt_start(tracker, snapshot_id);
 
 		result = blk_freeze_bdev( tracker->original_dev_id, tracker->target_dev, &superblock );
-		if (result != SUCCESS){
+		if (result != SUCCESS) {
 			tracker->is_unfreezable = true;
 			break;
 		}
 
 		superblock = blk_thaw_bdev( tracker->original_dev_id, tracker->target_dev, superblock );
 
-	}while(false);
+	} while(false);
 
 	if (SUCCESS ==result){
 		*ptracker = tracker;
@@ -307,24 +308,22 @@ void tracker_cbt_bitmap_unlock( tracker_t* tracker )
 int _tracker_capture_snapshot( tracker_t* tracker )
 {
 	int result = SUCCESS;
-	defer_io_t* defer_io = NULL;
 
-	result = defer_io_create( tracker->original_dev_id, tracker->target_dev, &defer_io );
+	result = defer_io_create( tracker->original_dev_id, tracker->target_dev, &tracker->defer_io );
 	if (result != SUCCESS){
 		log_err( "Failed to create defer IO processor" );
-	}else{
-		tracker->defer_io = defer_io_get_resource( defer_io );
+		return result;
+	}
+	
+	atomic_set( &tracker->is_captured, true );
 
-		atomic_set( &tracker->is_captured, true );
+	if (tracker->cbt_map != NULL){
+		cbt_map_write_lock( tracker->cbt_map );
+		cbt_map_switch( tracker->cbt_map );
+		cbt_map_write_unlock( tracker->cbt_map );
 
-		if (tracker->cbt_map != NULL){
-			cbt_map_write_lock( tracker->cbt_map );
-			cbt_map_switch( tracker->cbt_map );
-			cbt_map_write_unlock( tracker->cbt_map );
-
-			log_tr_format( "Snapshot captured for device [%d:%d]. New snap number %ld",
-				MAJOR( tracker->original_dev_id ), MINOR( tracker->original_dev_id ), tracker->cbt_map->snap_number_active );
-		}
+		log_tr_format( "Snapshot captured for device [%d:%d]. New snap number %ld",
+			MAJOR( tracker->original_dev_id ), MINOR( tracker->original_dev_id ), tracker->cbt_map->snap_number_active );
 	}
 
 	return result;

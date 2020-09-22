@@ -14,7 +14,7 @@
 typedef struct snapstore_s
 {
 	struct list_head link;
-	struct kref shared;
+	struct kref refcount;
 
 	uuid_t id;
 

@@ -105,39 +105,36 @@ cbt_map_t* cbt_map_create( unsigned int cbt_sect_in_block_degree, sector_t devic
 	if (cbt_map == NULL)
 		return NULL;
 
-	if (SUCCESS == cbt_map_allocate( cbt_map, cbt_sect_in_block_degree, device_capacity )){
-		_cbt_map_init_lock( cbt_map );
-
-		init_rwsem( &cbt_map->rw_lock );
-
-		kref_init(&cbt_map->sharing_header);
-
-		return cbt_map;
-	}
-	else{
+	if (SUCCESS != cbt_map_allocate( cbt_map, cbt_sect_in_block_degree, device_capacity )) {
 		cbt_map_destroy(cbt_map);
 		return NULL;
 	}
+	_cbt_map_init_lock( cbt_map );
+
+	init_rwsem( &cbt_map->rw_lock );
+
+	kref_init(&cbt_map->refcount);
+
+	return cbt_map;
 }
 
 void cbt_map_destroy_cb( struct kref *kref )
 {
-	cbt_map_destroy( container_of(kref, cbt_map_t, sharing_header) );
+	cbt_map_destroy( container_of(kref, cbt_map_t, refcount) );
 }
 
 cbt_map_t* cbt_map_get_resource( cbt_map_t* cbt_map )
 {
-	BUG_ON(cbt_map == NULL);
+	if (cbt_map)
+		kref_get( &cbt_map->refcount );
 
-	kref_get( &cbt_map->sharing_header );
-	
 	return cbt_map;
 }
 
 void cbt_map_put_resource( cbt_map_t* cbt_map )
 {
-	if (cbt_map != NULL)
-		kref_put( &cbt_map->sharing_header, cbt_map_destroy_cb );
+	if (cbt_map)
+		kref_put( &cbt_map->refcount, cbt_map_destroy_cb );
 }
 
 void cbt_map_switch( cbt_map_t* cbt_map )

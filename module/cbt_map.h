@@ -6,8 +6,7 @@
 
 typedef struct cbt_map_s
 {
-	//shared_resource_t sharing_header;
-	struct kref sharing_header;
+	struct kref refcount;
 
 	spinlock_t locker;
 

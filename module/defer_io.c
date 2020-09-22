@@ -270,14 +270,13 @@ void _defer_io_destroy( defer_io_t* defer_io )
 static
 void defer_io_destroy_cb(struct kref *kref)
 {
-	_defer_io_destroy(container_of(kref, defer_io_t, sharing_header));
+	_defer_io_destroy(container_of(kref, defer_io_t, refcount));
 }
 
 defer_io_t* defer_io_get_resource( defer_io_t* defer_io )
 {
-	BUG_ON(NULL == defer_io);
-
-	kref_get( &defer_io->sharing_header );
+	if(defer_io) 
+		kref_get( &defer_io->refcount );
 
 	return defer_io;
 }
@@ -285,7 +284,7 @@ defer_io_t* defer_io_get_resource( defer_io_t* defer_io )
 void defer_io_put_resource( defer_io_t* defer_io )
 {
 	if (defer_io)
-		kref_put( &defer_io->sharing_header, defer_io_destroy_cb);
+		kref_put( &defer_io->refcount, defer_io_destroy_cb);
 }
 
 int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp_defer_io )
@@ -312,7 +311,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 	defer_io->original_dev_id = dev_id;
 	defer_io->original_blk_dev = blk_dev;
 
-	kref_init( &defer_io->sharing_header );
+	kref_init( &defer_io->refcount );
 
 	defer_io_queue_init(&defer_io->dio_queue);
 

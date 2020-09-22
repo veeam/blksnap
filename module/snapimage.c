@@ -497,8 +497,7 @@ static inline void _snapimage_free( snapimage_t* image )
 int snapimage_create( dev_t original_dev )
 {
 	int res = SUCCESS;
-	defer_io_t*	defer_io = NULL;
-	cbt_map_t* cbt_map = NULL;
+	tracker_t* tracker = NULL;
 	snapimage_t* image = NULL;
 	struct gendisk *disk = NULL;
 	int minor;
@@ -512,15 +511,10 @@ int snapimage_create( dev_t original_dev )
 		return res;
 	}
 
-	{
-		tracker_t* tracker = NULL;
-		res = tracker_find_by_dev_id( original_dev, &tracker );
-		if (res != SUCCESS){
-			log_err_dev_t( "Unable to create snapshot image: cannot find tracker for device ", original_dev );
-			return res;
-		}
-		defer_io = tracker->defer_io;
-		cbt_map = tracker->cbt_map;
+	res = tracker_find_by_dev_id( original_dev, &tracker );
+	if (res != SUCCESS){
+		log_err_dev_t( "Unable to create snapshot image: cannot find tracker for device ", original_dev );
+		return res;
 	}
 
 	image = kzalloc( sizeof(snapimage_t), GFP_KERNEL);
@@ -547,8 +541,8 @@ int snapimage_create( dev_t original_dev )
 
 		image->capacity = original_dev_info.count_sect;
 
-		image->defer_io = defer_io_get_resource( defer_io );
-		image->cbt_map = cbt_map_get_resource( cbt_map );
+		image->defer_io = defer_io_get_resource( tracker->defer_io );
+		image->cbt_map = cbt_map_get_resource( tracker->cbt_map );
 		image->original_dev = original_dev;
 
 		image->image_dev = MKDEV( g_snapimage_major, minor );

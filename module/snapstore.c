@@ -64,16 +64,15 @@ void _snapstore_destroy( snapstore_t* snapstore )
 static
 void _snapstore_destroy_cb( struct kref *kref )
 {
-	snapstore_t* snapstore = container_of(kref, snapstore_t, shared);
+	snapstore_t* snapstore = container_of(kref, snapstore_t, refcount);
 	
 	_snapstore_destroy(snapstore);
 }
 
 snapstore_t* snapstore_get( snapstore_t* snapstore )
 {
-	BUG_ON(NULL == snapstore);
-
-	kref_get( &snapstore->shared );
+	if(snapstore)
+		kref_get( &snapstore->refcount );
 
 	return snapstore;
 };
@@ -81,7 +80,7 @@ snapstore_t* snapstore_get( snapstore_t* snapstore )
 void snapstore_put( snapstore_t* snapstore )
 {
 	if (snapstore)
-		kref_put( &snapstore->shared, _snapstore_destroy_cb );
+		kref_put( &snapstore->refcount, _snapstore_destroy_cb );
 };
 
 void snapstore_done( )
@@ -155,9 +154,8 @@ int snapstore_create( uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, siz
 	list_add_tail(&snapstores, &snapstore->link);
 	up_write(&snapstores_lock);
 
-	kref_init( &snapstore->shared );
+	kref_init( &snapstore->refcount );
 
-	snapstore_get( snapstore );
 	for (dev_id_inx = 0; dev_id_inx < dev_id_set_length; ++dev_id_inx){
 		res = snapstore_device_create( dev_id_set[dev_id_inx], snapstore );
 		if (res != SUCCESS)
@@ -215,9 +213,8 @@ int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_l
 	list_add_tail( &snapstore->link, &snapstores );
 	up_write(&snapstores_lock);
 
-	kref_init( &snapstore->shared );
+	kref_init( &snapstore->refcount );
 
-	snapstore_get( snapstore );
 	for (dev_id_inx = 0; dev_id_inx < dev_id_set_length; ++dev_id_inx){
 		res = snapstore_device_create( dev_id_set[dev_id_inx], snapstore );
 		if (res != SUCCESS)

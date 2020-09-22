@@ -73,12 +73,11 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
 			tracker_snapshot_id_set(tracker, snapshot_id);
 
 		if (NULL == tracker->cbt_map){
-			cbt_map_t* cbt_map = cbt_map_create((cbt_block_size_degree-SECTOR_SHIFT), blk_dev_get_capacity(tracker->target_dev));
-			if (cbt_map == NULL){
+			tracker->cbt_map = cbt_map_create((cbt_block_size_degree-SECTOR_SHIFT), blk_dev_get_capacity(tracker->target_dev));
+			if (tracker->cbt_map == NULL)
 				result = -ENOMEM;
-			}
-			else{
-				tracker_cbt_start(tracker, snapshot_id, cbt_map);
+			else {
+				tracker_cbt_start(tracker, snapshot_id);
 				result = -EALREADY;
 			}
 		}
