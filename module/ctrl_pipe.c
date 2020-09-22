@@ -41,11 +41,11 @@ void ctrl_pipe_done( void )
 		pr_err( "Unable to perform ctrl pipes cleanup: container is not empty\n" );
 }
 
-void ctrl_pipe_release_cb( void* resource )
+static
+void ctrl_pipe_release_cb( struct kref* kref )
 {
-	ctrl_pipe_t* pipe = (ctrl_pipe_t*)resource;
+	ctrl_pipe_t* pipe = container_of(kref, ctrl_pipe_t, sharing_header);
 
-	//log_tr( "Ctrl pipe release" );
 	down_write( &ctl_pipes_lock );
 	list_del( &pipe->link );
 	up_write( &ctl_pipes_lock );
@@ -53,6 +53,21 @@ void ctrl_pipe_release_cb( void* resource )
 	kfifo_free(&pipe->cmd_to_user);
 
 	kfree( pipe );
+}
+
+ctrl_pipe_t* ctrl_pipe_get_resource( ctrl_pipe_t* pipe )
+{
+	BUG_ON(NULL == pipe);
+
+	kref_get(&pipe->sharing_header);
+
+	return pipe;
+}
+
+void ctrl_pipe_put_resource( ctrl_pipe_t* pipe )
+{
+	if (pipe)
+		kref_put(&pipe->sharing_header, ctrl_pipe_release_cb);
 }
 
 ctrl_pipe_t* ctrl_pipe_new( void )
@@ -75,7 +90,8 @@ ctrl_pipe_t* ctrl_pipe_new( void )
 	}
 	spin_lock_init( &pipe->cmd_to_user_lock );
 
-	shared_resource_init( &pipe->sharing_header, pipe, ctrl_pipe_release_cb );
+	kref_init(&pipe->sharing_header);
+
 	init_waitqueue_head( &pipe->readq );
 
 	down_write( &ctl_pipes_lock );

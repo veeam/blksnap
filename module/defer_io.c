@@ -251,10 +251,9 @@ int defer_io_work_thread( void* p )
 	return SUCCESS;
 }
 
-void _defer_io_destroy( void* this_resource )
+static
+void _defer_io_destroy( defer_io_t* defer_io )
 {
-	defer_io_t* defer_io = (defer_io_t*)this_resource;
-
 	if (NULL == defer_io)
 		return;
 
@@ -268,6 +267,26 @@ void _defer_io_destroy( void* this_resource )
 	log_tr("Defer IO processor was destroyed");
 }
 
+static
+void defer_io_destroy_cb(struct kref *kref)
+{
+	_defer_io_destroy(container_of(kref, defer_io_t, sharing_header));
+}
+
+defer_io_t* defer_io_get_resource( defer_io_t* defer_io )
+{
+	BUG_ON(NULL == defer_io);
+
+	kref_get( &defer_io->sharing_header );
+
+	return defer_io;
+}
+
+void defer_io_put_resource( defer_io_t* defer_io )
+{
+	if (defer_io)
+		kref_put( &defer_io->sharing_header, defer_io_destroy_cb);
+}
 
 int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp_defer_io )
 {
@@ -293,7 +312,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 	defer_io->original_dev_id = dev_id;
 	defer_io->original_blk_dev = blk_dev;
 
-	shared_resource_init( &defer_io->sharing_header, defer_io, _defer_io_destroy );
+	kref_init( &defer_io->sharing_header );
 
 	defer_io_queue_init(&defer_io->dio_queue);
 
@@ -309,6 +328,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 		log_err_d( "Unable to create defer IO processor: failed to create thread. errno=", res );
 
 		_defer_io_destroy( defer_io );
+		defer_io = NULL;
 		*pp_defer_io = NULL;
 
 		return res;

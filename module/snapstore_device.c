@@ -84,6 +84,7 @@ snapstore_device_t* _snapstore_device_get_by_snapstore_id( uuid_t* id )
 	return result;
 }
 
+static
 void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 {
 	log_tr("Destroy snapstore device");
@@ -105,12 +106,28 @@ void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 	kfree( snapstore_device );
 }
 
-void snapstore_device_free_cb( void* resource )
+static
+void snapstore_device_free_cb( struct kref *kref )
 {
-	snapstore_device_t* snapstore_device = (snapstore_device_t*)resource;
+	snapstore_device_t* snapstore_device = container_of(kref, snapstore_device_t, shared);
 
 	_snapstore_device_destroy( snapstore_device );
 }
+
+snapstore_device_t* snapstore_device_get_resource( snapstore_device_t* snapstore_device )
+{
+	BUG_ON(NULL == snapstore_device);
+
+	kref_get( &snapstore_device->shared );
+
+	return snapstore_device;
+};
+
+void snapstore_device_put_resource( snapstore_device_t* snapstore_device )
+{
+	if (snapstore_device)
+		kref_put( &snapstore_device->shared, snapstore_device_free_cb );
+};
 
 int snapstore_device_cleanup( uuid_t* id )
 {
@@ -144,7 +161,7 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 		return res;
 	}
 
-	shared_resource_init( &snapstore_device->shared, snapstore_device, snapstore_device_free_cb );
+	kref_init( &snapstore_device->shared );
 
 	snapstore_device->snapstore = NULL;
 	snapstore_device->err_code = SUCCESS;

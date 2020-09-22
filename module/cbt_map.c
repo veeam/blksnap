@@ -31,14 +31,6 @@ struct big_buffer* _get_readable( cbt_map_t* cbt_map )
 	return cbt_map->read_map;
 }
 
-void cbt_map_destroy( cbt_map_t* cbt_map );
-
-void cbt_map_destroy_cb( void* this_resource )
-{
-	cbt_map_t* cbt_map = (cbt_map_t*)this_resource;
-	cbt_map_destroy( cbt_map );
-}
-
 int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree, sector_t device_capacity )
 {
 
@@ -92,6 +84,17 @@ void cbt_map_deallocate( cbt_map_t* cbt_map )
 	cbt_map->active = false;
 }
 
+static
+void cbt_map_destroy( cbt_map_t* cbt_map )
+{
+	log_tr( "CBT map destroy" );
+	if (cbt_map != NULL){
+		cbt_map_deallocate( cbt_map );
+
+		kfree( cbt_map );
+	}
+}
+
 cbt_map_t* cbt_map_create( unsigned int cbt_sect_in_block_degree, sector_t device_capacity )
 {
 	cbt_map_t* cbt_map = NULL;
@@ -107,7 +110,8 @@ cbt_map_t* cbt_map_create( unsigned int cbt_sect_in_block_degree, sector_t devic
 
 		init_rwsem( &cbt_map->rw_lock );
 
-		shared_resource_init( &cbt_map->sharing_header, cbt_map, cbt_map_destroy_cb );
+		kref_init(&cbt_map->sharing_header);
+
 		return cbt_map;
 	}
 	else{
@@ -116,14 +120,24 @@ cbt_map_t* cbt_map_create( unsigned int cbt_sect_in_block_degree, sector_t devic
 	}
 }
 
-void cbt_map_destroy( cbt_map_t* cbt_map )
+void cbt_map_destroy_cb( struct kref *kref )
 {
-	log_tr( "CBT map destroy" );
-	if (cbt_map != NULL){
-		cbt_map_deallocate( cbt_map );
+	cbt_map_destroy( container_of(kref, cbt_map_t, sharing_header) );
+}
 
-		kfree( cbt_map );
-	}
+cbt_map_t* cbt_map_get_resource( cbt_map_t* cbt_map )
+{
+	BUG_ON(cbt_map == NULL);
+
+	kref_get( &cbt_map->sharing_header );
+	
+	return cbt_map;
+}
+
+void cbt_map_put_resource( cbt_map_t* cbt_map )
+{
+	if (cbt_map != NULL)
+		kref_put( &cbt_map->sharing_header, cbt_map_destroy_cb );
 }
 
 void cbt_map_switch( cbt_map_t* cbt_map )
@@ -221,26 +235,4 @@ size_t cbt_map_read_to_user( cbt_map_t* cbt_map, void __user* user_buff, size_t 
 	}
 
 	return readed;
-}
-
-void cbt_print_state(cbt_map_t* cbt_map)
-{
-	log_tr("");
-	log_tr("CBT map state:");
-
-	log_tr_sz("sect_in_block_degree=", cbt_map->sect_in_block_degree);
-	log_tr_sect("device_capacity=", cbt_map->device_capacity);
-	log_tr_sz("map_size=", cbt_map->map_size);
-
-	log_tr_ld("snap_number_active=", cbt_map->snap_number_active);
-	log_tr_ld("snap_number_previous=", cbt_map->snap_number_previous);
-	log_tr_uuid("generationId=", &cbt_map->generationId);
-
-	if (cbt_map->active)
-		log_tr("is active");
-	else
-		log_tr("is NOT active");
-
-	log_tr_sect("changed sectors=", cbt_map->state_changed_sectors);
-	log_tr_sect("dirty sectors=", cbt_map->state_dirty_sectors);
 }

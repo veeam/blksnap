@@ -13,6 +13,7 @@ DECLARE_RWSEM(snapstores_lock);
 bool _snapstore_check_halffill( snapstore_t* snapstore, sector_t* fill_status )
 {
 	blk_descr_pool_t* pool = NULL;
+
 	if (snapstore->file)
 		pool = &snapstore->file->pool;
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
@@ -24,7 +25,7 @@ bool _snapstore_check_halffill( snapstore_t* snapstore, sector_t* fill_status )
 
 	if (pool)
 		return blk_descr_pool_check_halffill( pool, snapstore->empty_limit, fill_status );
-	else
+	
 	return false;
 }
 
@@ -35,6 +36,10 @@ void _snapstore_destroy( snapstore_t* snapstore )
 	log_tr_uuid( "Destroy snapstore with id=", (&snapstore->id) );
 
 	_snapstore_check_halffill( snapstore, &fill_status );
+
+	down_write(&snapstores_lock);
+	list_del(&snapstore->link);
+	up_write(&snapstores_lock);	
 
 	if (snapstore->mem != NULL)
 		snapstore_mem_destroy( snapstore->mem );
@@ -56,16 +61,28 @@ void _snapstore_destroy( snapstore_t* snapstore )
 	kfree(snapstore);
 }
 
-void _snapstore_destroy_cb( void* resource )
+static
+void _snapstore_destroy_cb( struct kref *kref )
 {
-	snapstore_t* snapstore = (snapstore_t*)resource;
-
-	down_write(&snapstores_lock);
-	list_del(&snapstore->link);
-	up_write(&snapstores_lock);
-
+	snapstore_t* snapstore = container_of(kref, snapstore_t, shared);
+	
 	_snapstore_destroy(snapstore);
 }
+
+snapstore_t* snapstore_get( snapstore_t* snapstore )
+{
+	BUG_ON(NULL == snapstore);
+
+	kref_get( &snapstore->shared );
+
+	return snapstore;
+};
+
+void snapstore_put( snapstore_t* snapstore )
+{
+	if (snapstore)
+		kref_put( &snapstore->shared, _snapstore_destroy_cb );
+};
 
 void snapstore_done( )
 {
@@ -138,7 +155,7 @@ int snapstore_create( uuid_t* id, dev_t snapstore_dev_id, dev_t* dev_id_set, siz
 	list_add_tail(&snapstores, &snapstore->link);
 	up_write(&snapstores_lock);
 
-	shared_resource_init( &snapstore->shared, snapstore, _snapstore_destroy_cb );
+	kref_init( &snapstore->shared );
 
 	snapstore_get( snapstore );
 	for (dev_id_inx = 0; dev_id_inx < dev_id_set_length; ++dev_id_inx){
@@ -198,7 +215,7 @@ int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_l
 	list_add_tail( &snapstore->link, &snapstores );
 	up_write(&snapstores_lock);
 
-	shared_resource_init( &snapstore->shared, snapstore, _snapstore_destroy_cb );
+	kref_init( &snapstore->shared );
 
 	snapstore_get( snapstore );
 	for (dev_id_inx = 0; dev_id_inx < dev_id_set_length; ++dev_id_inx){

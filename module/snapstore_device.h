@@ -5,11 +5,13 @@
 #include "blk_redirect.h"
 #include "snapstore.h"
 #include <linux/xarray.h>
+#include <linux/kref.h>
 
 typedef struct snapstore_device_s
 {
 	struct list_head link;
-	shared_resource_t shared;
+	struct kref shared;
+
 	dev_t dev_id;
 	snapstore_t* snapstore;
 
@@ -27,18 +29,12 @@ typedef struct snapstore_device_s
 
 void snapstore_device_done( void );
 
-static inline snapstore_device_t* snapstore_device_get_resource( snapstore_device_t* snapstore_device )
-{
-	return (snapstore_device_t*)shared_resource_get( &snapstore_device->shared );
-};
-static inline void snapstore_device_put_resource( snapstore_device_t* snapstore_device )
-{
-	shared_resource_put( &snapstore_device->shared );
-};
+snapstore_device_t* snapstore_device_get_resource( snapstore_device_t* snapstore_device );
+void snapstore_device_put_resource( snapstore_device_t* snapstore_device );
+
 snapstore_device_t* snapstore_device_find_by_dev_id( dev_t dev_id );
 
 int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore );
-
 
 int snapstore_device_cleanup( uuid_t* id );
 

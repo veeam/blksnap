@@ -1,12 +1,12 @@
 #pragma once
 
 #include <linux/uuid.h>
+#include <linux/kref.h>
 #include "blk-snap-ctl.h"
 #include "rangevector.h"
 #include "snapstore_mem.h"
 #include "snapstore_file.h"
 #include "snapstore_multidev.h"
-#include "shared_resource.h"
 #include "blk_redirect.h"
 #include "ctrl_pipe.h"
 #include "big_buffer.h"
@@ -14,7 +14,8 @@
 typedef struct snapstore_s
 {
 	struct list_head link;
-	shared_resource_t shared;
+	struct kref shared;
+
 	uuid_t id;
 
 	snapstore_mem_t* mem;
@@ -39,14 +40,8 @@ int snapstore_create_multidev(uuid_t* id, dev_t* dev_id_set, size_t dev_id_set_l
 #endif
 int snapstore_cleanup(uuid_t* id, u64* filled_bytes);
 
-static inline snapstore_t* snapstore_get( snapstore_t* snapstore )
-{
-	return (snapstore_t*)shared_resource_get( &snapstore->shared );
-};
-static inline void snapstore_put( snapstore_t* snapstore )
-{
-	shared_resource_put( &snapstore->shared );
-};
+snapstore_t* snapstore_get( snapstore_t* snapstore );
+void snapstore_put( snapstore_t* snapstore );
 
 int snapstore_stretch_initiate( uuid_t* unique_id, ctrl_pipe_t* ctrl_pipe, sector_t empty_limit );
 
