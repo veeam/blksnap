@@ -1,7 +1,6 @@
 #include "common.h"
+#include <linux/mm.h>
 #include "big_buffer.h"
-
-#define SECTION "big_buffer"
 
 static inline
 size_t page_count_calc( size_t buffer_size )
@@ -24,7 +23,7 @@ struct big_buffer * big_buffer_alloc( size_t buffer_size, int gfp_opt )
 
 	bbuff = kzalloc(sizeof(struct big_buffer) + count * sizeof(void*), gfp_opt);
 	if (NULL == bbuff){
-		log_err( "Failed to allocate big_buffer buffer" );
+		pr_err( "Failed to allocate big_buffer buffer\n" );
 		return NULL;
 	}
 
@@ -32,7 +31,7 @@ struct big_buffer * big_buffer_alloc( size_t buffer_size, int gfp_opt )
 	for (inx = 0; inx < bbuff->pg_cnt; ++inx){
 		struct page* pg = alloc_page( gfp_opt );
 		if (NULL == pg){
-			log_err( "Failed to allocate page" );
+			pr_err( "Failed to allocate page\n" );
 			res = -ENOMEM;
 			break;
 		}
@@ -72,7 +71,7 @@ size_t big_buffer_copy_to_user( char __user* dst_user, size_t offset, struct big
 
 		left_data_length = copy_to_user( dst_user + processed_len, bbuff->pg[page_inx]  + unordered, page_len );
 		if (0 != left_data_length){
-			log_err( "Failed to copy data from big_buffer to user buffer" );
+			pr_err( "Failed to copy data from big_buffer to user buffer\n" );
 			return processed_len;
 		}
 
@@ -85,7 +84,7 @@ size_t big_buffer_copy_to_user( char __user* dst_user, size_t offset, struct big
 
 		left_data_length = copy_to_user( dst_user + processed_len, bbuff->pg[page_inx], page_len );
 		if (0 != left_data_length){
-			log_err( "Failed to copy data from big_buffer to user buffer" );
+			pr_err( "Failed to copy data from big_buffer to user buffer\n" );
 			break;
 		}
 
@@ -108,7 +107,7 @@ size_t big_buffer_copy_from_user( const char __user* src_user, size_t offset, st
 
 		left_data_length = copy_from_user( bbuff->pg[page_inx] + unordered, src_user + processed_len, page_len );
 		if (0 != left_data_length){
-			log_err( "Failed to copy data from big_buffer to user buffer" );
+			pr_err( "Failed to copy data from user buffer to big_buffer\n" );
 			return processed_len;
 		}
 
@@ -121,7 +120,7 @@ size_t big_buffer_copy_from_user( const char __user* src_user, size_t offset, st
 
 		left_data_length = copy_from_user( bbuff->pg[page_inx], src_user + processed_len, page_len );
 		if (0 != left_data_length){
-			log_err( "Failed to copy data from big_buffer to user buffer" );
+			pr_err( "Failed to copy data from user buffer to big_buffer\n" );
 			break;
 		}
 

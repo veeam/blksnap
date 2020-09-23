@@ -5,9 +5,6 @@
 #include "blk_util.h"
 #include "defer_io.h"
 
-#define SECTION "tracking  "
-#include "log_format.h"
-
 /**
  * tracking_submit_bio() - Intercept bio by block io layer filter
  */
@@ -63,11 +60,11 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
 	int result = SUCCESS;
 	tracker_t* tracker = NULL;
 
-	log_tr_format( "Adding device [%d:%d] under tracking", MAJOR(dev_id), MINOR(dev_id) );
+	pr_info( "Adding device [%d:%d] under tracking\n", MAJOR(dev_id), MINOR(dev_id) );
 
 	result = tracker_find_by_dev_id( dev_id, &tracker );
-	if (SUCCESS == result){
-		log_tr_format( "Device [%d:%d] is already tracked", MAJOR( dev_id ), MINOR( dev_id ) );
+	if (SUCCESS == result) {
+		pr_info( "Device [%d:%d] is already tracked\n", MAJOR( dev_id ), MINOR( dev_id ) );
 
 		if ((snapshot_id != 0ull) && (tracker_snapshot_id_get(tracker) == 0ull))
 			tracker_snapshot_id_set(tracker, snapshot_id);
@@ -80,38 +77,35 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
 				tracker_cbt_start(tracker, snapshot_id);
 				result = -EALREADY;
 			}
-		}
-		else{
+		} else {
 			bool reset_needed = false;
 			if (!tracker->cbt_map->active){
 				reset_needed = true;
-				log_warn( "Nonactive CBT table detected. CBT fault" );
+				pr_warn( "Nonactive CBT table detected. CBT fault\n" );
 			}
 
 			if (tracker->cbt_map->device_capacity != blk_dev_get_capacity( tracker->target_dev )){
 				reset_needed = true;
-				log_warn( "Device resize detected. CBT fault" );
+				pr_warn( "Device resize detected. CBT fault\n" );
 			}
 
 			if (reset_needed)
 			{
 				result = tracker_remove( tracker );
 				if (SUCCESS != result){
-					log_err_d( "Failed to remove tracker. errno=", result );
+					pr_err( "Failed to remove tracker. errno=%d\n", result );
 				}
 				else{
 					result = tracker_create(snapshot_id, dev_id, cbt_block_size_degree, NULL, &tracker);
 					if (SUCCESS != result){
-						log_err_d( "Failed to create tracker. errno=", result );
+						pr_err( "Failed to create tracker. errno=%d\n", result );
 					}
 				}
 			}
 			if (result == SUCCESS)
 				result = -EALREADY;
 		}
-	}
-	else if (-ENODATA == result)
-	{
+	} else if (-ENODATA == result) {
 		struct block_device* target_dev = NULL;
 		do {//check space already under tracking
 
@@ -121,35 +115,35 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
 
 			if (SUCCESS == tracker_find_by_queue(target_dev->bd_disk, target_dev->bd_partno, &tracker)) {
 				result = -EALREADY;
-				log_err("Tracker queue already exist.");
+				pr_err("Tracker queue already exist.\n");
 				break;
 			}
 
 			result = tracker_create(snapshot_id, dev_id, cbt_block_size_degree, NULL, &tracker);
 			if (SUCCESS != result)
-				log_err_d("Failed to create tracker. errno=", result);
+				pr_err("Failed to create tracker. errno=%d\n", result);
 			else
 			{
 				char dev_name[BDEVNAME_SIZE + 1];
 				memset(dev_name, 0, BDEVNAME_SIZE + 1);
 				if (bdevname(target_dev, dev_name))
-					log_tr_s("Add to tracking device ", dev_name);
+					pr_info("Add to tracking device %s\n", dev_name);
 
 				if (target_dev->bd_super){
-					log_tr_s("fs id: ", target_dev->bd_super->s_id);
+					pr_info("fs id: %s\n", target_dev->bd_super->s_id);
 				}
 				else
-					log_tr("fs not found");
+					pr_info("Filesystem not found\n");
 			}
 		} while (false);
 
 		if (target_dev)
 			blk_dev_close(target_dev);
-	}
-	else
-		log_err_format( "Unable to add device [%d:%d] under tracking: invalid trackers container. errno=%d",
-			MAJOR( dev_id ), MINOR( dev_id ), result );
 
+	} else {
+		pr_err("Unable to add device [%d:%d] under tracking\n", MAJOR( dev_id ), MINOR( dev_id ));
+		pr_err("Invalid trackers container. errno=%d\n", result );
+	}
 
 	return result;
 }
@@ -159,7 +153,7 @@ int tracking_remove( dev_t dev_id )
 	int result = SUCCESS;
 	tracker_t* tracker = NULL;
 
-	log_tr_format( "Removing device [%d:%d] from tracking", MAJOR(dev_id), MINOR(dev_id) );
+	pr_info( "Removing device [%d:%d] from tracking\n", MAJOR(dev_id), MINOR(dev_id) );
 
 	result = tracker_find_by_dev_id(dev_id, &tracker);
 	if ( SUCCESS == result ){
@@ -168,16 +162,18 @@ int tracking_remove( dev_t dev_id )
 			if (SUCCESS == result)
 				tracker = NULL;
 			else
-				log_err_d("Unable to remove device from tracking: failed to remove tracker. errno=", result);
+				pr_err("Unable to remove device from tracking: failed to remove tracker. errno=%d\n", result);
 		}
 		else{
-			log_err_format("Unable to remove device from tracking: snapshot [0x%llx] is created ", tracker_snapshot_id_get(tracker));
+			pr_err("Unable to remove device from tracking: snapshot [0x%llx] is created\n",
+				tracker_snapshot_id_get(tracker));
 			result = -EBUSY;
 		}
 	}else if (-ENODATA == result)
-		log_err_format( "Unable to remove device [%d:%d] from tracking: tracker not found", MAJOR(dev_id), MINOR(dev_id) );
+		pr_err( "Unable to remove device [%d:%d] from tracking: tracker not found\n",
+			MAJOR(dev_id), MINOR(dev_id) );
 	else
-		log_err_format( "Unable to remove device [%d:%d] from tracking: invalid trackers container. errno=",
+		pr_err( "Unable to remove device [%d:%d] from tracking: invalid trackers container. errno=%d\n",
 			MAJOR( dev_id ), MINOR( dev_id ), result );
 
 	return result;
@@ -189,13 +185,13 @@ int tracking_collect( int max_count, struct cbt_info_s* p_cbt_info, int* p_count
 	int res = tracker_enum_cbt_info( max_count, p_cbt_info, p_count );
 
 	if (res == SUCCESS)
-		log_tr_format("%d devices found under tracking", *p_count);
+		pr_info("%d devices found under tracking\n", *p_count);
 	else if (res == -ENODATA){
-		log_tr( "There are no devices under tracking" );
+		pr_info( "There are no devices under tracking\n" );
 		*p_count = 0;
 		res = SUCCESS;
 	}else
-		log_err_d( "Failed to collect devices under tracking. errno=", res );
+		pr_err( "Failed to collect devices under tracking. errno=%d", res );
 
 	return res;
 }
@@ -208,17 +204,21 @@ int tracking_read_cbt_bitmap( dev_t dev_id, unsigned int offset, size_t length, 
 
 	result = tracker_find_by_dev_id(dev_id, &tracker);
 	if ( SUCCESS == result ){
-		if (atomic_read( &tracker->is_captured )){
+		if (atomic_read( &tracker->is_captured ))
 			result = cbt_map_read_to_user( tracker->cbt_map, user_buff, offset, length );
-		}
-		else{
-			log_err_format( "Unable to read CBT bitmap for device [%d:%d]: device is not captured by snapshot", MAJOR(dev_id), MINOR(dev_id) );
+		else {
+			pr_err( "Unable to read CBT bitmap for device [%d:%d]: ",
+				MAJOR(dev_id), MINOR(dev_id) );
+			pr_err( "device is not captured by snapshot\n");
 			result = -EPERM;
 		}
-	}else if (-ENODATA == result)
-		log_err_format( "Unable to read CBT bitmap for device [%d:%d]: device not found", MAJOR( dev_id ), MINOR( dev_id ) );
+	}else if (-ENODATA == result) {
+		pr_err( "Unable to read CBT bitmap for device [%d:%d]: ",
+			MAJOR( dev_id ), MINOR( dev_id ) );
+		pr_err("device not found\n");
+	}
 	else
-		log_err_d( "Failed to find devices under tracking. errno=", result );
+		pr_err("Failed to find devices under tracking. errno=%d", result );
 
 	return result;
 }

@@ -2,10 +2,6 @@
 #include "blk_descr_pool.h"
 #include "snapstore_blk.h"
 
-#define SECTION "blk_descr "
-#include "log_format.h"
-
-
 static void * kmalloc_huge( size_t max_size, size_t min_size, gfp_t flags, size_t* p_allocated_size )
 {
 	void * ptr = NULL;
@@ -17,10 +13,10 @@ static void * kmalloc_huge( size_t max_size, size_t min_size, gfp_t flags, size_
 			*p_allocated_size = max_size;
 			return ptr;
 		}
-		log_err_sz( "Failed to allocate buffer size=", max_size );
+		pr_err( "Failed to allocate buffer size=%lu\n", max_size );
 		max_size = max_size >> 1;
 	} while (max_size >= min_size);
-	log_err( "Failed to allocate buffer." );
+	pr_err( "Failed to allocate buffer." );
 	return NULL;
 }
 
@@ -150,13 +146,13 @@ union blk_descr_unify blk_descr_pool_take( blk_descr_pool_t* pool, size_t blk_de
 	mutex_lock(&pool->lock);
 	do{
 		if (pool->take_cnt >= pool->total_cnt){
-			log_err_format("Unable to get block descriptor: not enough descriptors. Already took %ld, total %ld", pool->take_cnt, pool->total_cnt);
+			pr_err("Unable to get block descriptor: not enough descriptors. Already took %ld, total %ld\n", pool->take_cnt, pool->total_cnt);
 			break;
 		}
 
 		result = __blk_descr_pool_at(pool, blk_descr_size, pool->take_cnt);
 		if (result.ptr == NULL){
-			log_err_format("Unable to get block descriptor: not enough descriptors. Already took %ld, total %ld", pool->take_cnt, pool->total_cnt);
+			pr_err("Unable to get block descriptor: not enough descriptors. Already took %ld, total %ld\n", pool->take_cnt, pool->total_cnt);
 			break;
 		}
 

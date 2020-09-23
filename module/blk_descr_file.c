@@ -1,9 +1,6 @@
 #include "common.h"
 #include "blk_descr_file.h"
 
-#define SECTION "blk_descr "
-#include "log_format.h"
-
 static inline
 void list_assign( struct list_head *dst, struct list_head *src )
 {
@@ -70,7 +67,7 @@ int blk_descr_file_pool_add( blk_descr_pool_t* pool, struct list_head* rangelist
 		sizeof( struct blk_descr_file ), _blk_descr_file_allocate, (void*)rangelist );
 
 	if (NULL == blk_descr.ptr){
-		log_err( "Failed to allocate block descriptor" );
+		pr_err( "Failed to allocate block descriptor\n" );
 		return -ENOMEM;
 	}
 

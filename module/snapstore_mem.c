@@ -2,9 +2,6 @@
 #include "snapstore_mem.h"
 #include "snapstore_blk.h"
 
-#define SECTION "snapstore "
-#include "log_format.h"
-
 typedef struct buffer_el_s{
 	struct list_head link;
 	void* buff;
@@ -62,8 +59,8 @@ void* snapstore_mem_get_block( snapstore_mem_t* mem )
 	buffer_el_t* buffer_el;
 
 	if (mem->blocks_allocated >= mem->blocks_limit){
-		log_err("Unable to get block from snapstore in memory.");
-		log_err_format( "Block limit is reached, allocated %ld, limit %ld",
+		pr_err("Unable to get block from snapstore in memory\n");
+		pr_err("Block limit is reached, allocated %ld, limit %ld\n",
 			mem->blocks_allocated, mem->blocks_limit );
 		return NULL;
 	}
@@ -84,9 +81,8 @@ void* snapstore_mem_get_block( snapstore_mem_t* mem )
 	}
 
 	++mem->blocks_allocated;
-	if (0 == (mem->blocks_allocated & 0x7F)){
-		log_tr_format( "%d MiB was allocated", mem->blocks_allocated );
-	}
+	if (0 == (mem->blocks_allocated & 0x7F))
+		pr_info( "%ld MiB was allocated\n", mem->blocks_allocated );
 
 	mutex_lock( &mem->blocks_lock );
 	list_add_tail( &buffer_el->link, &mem->blocks);

@@ -53,7 +53,7 @@ int blk_descr_mem_pool_add( blk_descr_pool_t* pool, void* buffer )
 		sizeof( struct blk_descr_mem ), blk_descr_mem_alloc, buffer );
 
 	if (NULL == blk_descr.ptr) {
-		log_err( "Failed to allocate block descriptor" );
+		pr_err( "Failed to allocate block descriptor\n" );
 		return -ENOMEM;
 	}
 

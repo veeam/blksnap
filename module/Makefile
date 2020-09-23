@@ -11,7 +11,6 @@ blk-snap-y += ctrl_fops.o
 blk-snap-y += ctrl_pipe.o
 blk-snap-y += ctrl_sysfs.o
 blk-snap-y += defer_io.o
-blk-snap-y += log.o
 blk-snap-y += main.o
 blk-snap-y += big_buffer.o
 blk-snap-y += rangevector.o

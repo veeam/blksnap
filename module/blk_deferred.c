@@ -4,12 +4,8 @@
 #include "snapstore.h"
 #include "snapstore_blk.h"
 
-#define SECTION "blk       "
-#include "log_format.h"
-
 struct bio_set g_BlkDeferredBioset = { 0 };
 #define BlkDeferredBioset &g_BlkDeferredBioset
-
 
 typedef struct dio_bio_complete_s{
 	blk_deferred_request_t* dio_req;
@@ -50,7 +46,7 @@ void blk_deferred_done( void )
 			if (dio_locked->dio_req->sect_len == atomic64_read( &dio_locked->dio_req->sect_processed ))
 				blk_deferred_request_free( dio_locked->dio_req );
 			else
-				log_err( "Locked defer IO is still in memory" );
+				pr_err( "Locked defer IO is still in memory\n" );
 
 			kfree(dio_locked);
 		}
@@ -67,7 +63,7 @@ void blk_deferred_request_deadlocked( blk_deferred_request_t* dio_req )
 	list_add_tail( &dio_locked->link, &dio_deadlocked_list);
 	write_unlock(&dio_deadlocked_list_lock);
 
-	log_warn( "Deadlock with defer IO" );
+	pr_warn( "Deadlock with defer IO\n" );
 }
 
 void blk_deferred_free( blk_deferred_t* dio )
@@ -108,7 +104,7 @@ blk_deferred_t* blk_deferred_alloc( unsigned long block_index, union blk_descr_u
 	page_count = snapstore_block_size() / (PAGE_SIZE / SECTOR_SIZE);
 	dio->page_array = kzalloc((page_count + 1) * sizeof(struct page *), GFP_NOIO); //empty pointer on the end
 	if (NULL == dio->page_array){
-		log_err_format( "Failed to allocate defer IO block [%ld]", block_index );
+		pr_err( "Failed to allocate defer IO block [%ld]\n", block_index );
 
 		blk_deferred_free( dio );
 		return NULL;
@@ -117,7 +113,7 @@ blk_deferred_t* blk_deferred_alloc( unsigned long block_index, union blk_descr_u
 	for (inx=0; inx < page_count; inx++ ) {
 		dio->page_array[inx] = alloc_page(GFP_NOIO);
 		if (NULL == dio->page_array[inx]) {
-			log_err( "Failed to allocate page" );
+			pr_err( "Failed to allocate page\n" );
 			blk_deferred_free( dio );
 			return NULL;
 		}
@@ -159,7 +155,7 @@ void blk_deferred_complete( blk_deferred_request_t* dio_req, sector_t portion_se
 
 	if (result != SUCCESS){
 		dio_req->result = result;
-		log_err_d( "Failed to process defer IO request. errno=", result );
+		pr_err( "Failed to process defer IO request. errno=%d\n", result );
 	}
 }
 
@@ -210,13 +206,11 @@ sector_t _blk_deferred_submit_pages(
 
 	nr_iovecs = _page_count_calculate( size_sector );
 
-	while (NULL == (bio = _blk_deferred_bio_alloc( nr_iovecs ))){
-		//log_tr_d( "Failed to allocate bio for defer IO. nr_iovecs=", nr_iovecs );
-
+	while (NULL == (bio = _blk_deferred_bio_alloc( nr_iovecs ))) {
 		size_sector = (size_sector >> 1) & ~((PAGE_SIZE / SECTOR_SIZE) - 1);
-		if (size_sector == 0){
+		if (size_sector == 0)
 			return 0;
-		}
+
 		nr_iovecs = _page_count_calculate( size_sector );
 	}
 
@@ -264,7 +258,6 @@ sector_t _blk_deferred_submit_pages(
 	return process_sect;
 }
 
-
 sector_t blk_deferred_submit_pages(
 	struct block_device* blk_dev,
 	blk_deferred_request_t* dio_req,
@@ -279,7 +272,7 @@ sector_t blk_deferred_submit_pages(
 	do {
 		sector_t portion_sect = _blk_deferred_submit_pages( blk_dev, dio_req, direction, arr_ofs + process_sect, page_array, ofs_sector + process_sect, size_sector - process_sect );
 		if (portion_sect == 0){
-			log_err_format( "Failed to submit defer IO pages. Only [%lld] sectors processed", process_sect );
+			pr_err( "Failed to submit defer IO pages. Only [%lld] sectors processed\n", process_sect );
 			break;
 		}
 		process_sect += portion_sect;
@@ -378,20 +371,11 @@ int blk_deferred_request_wait( blk_deferred_request_t* dio_req )
 {
 	u64 start_jiffies = get_jiffies_64( );
 	u64 current_jiffies;
-	//wait_for_completion_io_timeout
 
-	//if (0 == wait_for_completion_timeout( &dio_req->complete, (HZ * 30) )){
-	while (0 == wait_for_completion_timeout( &dio_req->complete, (HZ * 1) )){
-		//log_warnln( "Defer IO request timeout" );
-		//log_err_sect( "sect_len=", dio_req->sect_len );
-		//log_err_sect( "sect_processed=", atomic64_read( &dio_req->sect_processed ) );
-		//return -EFAULT;
-
+	while (0 == wait_for_completion_timeout( &dio_req->complete, (HZ * 1) )) {
 		current_jiffies = get_jiffies_64( );
-		if (jiffies_to_msecs( current_jiffies - start_jiffies ) > 60 * 1000){
-			log_warn( "Defer IO request timeout" );
-			//log_err_sect( "sect_processed=", atomic64_read( &dio_req->sect_processed ) );
-			//log_err_sect( "sect_len=", dio_req->sect_len );
+		if (jiffies_to_msecs( current_jiffies - start_jiffies ) > 60 * 1000) {
+			pr_warn( "Defer IO request timeout\n" );
 			return -EDEADLK;
 		}
 	}
@@ -416,7 +400,7 @@ int blk_deferred_request_read_original( struct block_device* original_blk_dev, b
 		sector_t cnt = dio->sect.cnt;
 
 		if (cnt != blk_deferred_submit_pages( original_blk_dev, dio_copy_req, READ, 0, dio->page_array, ofs, cnt )){
-			log_err_sect( "Failed to submit reading defer IO request. ofs=", dio->sect.ofs );
+			pr_err( "Failed to submit reading defer IO request. offset=%lld\n", dio->sect.ofs );
 			res = -EIO;
 			break;
 		}
@@ -452,7 +436,7 @@ int blk_deferred_request_store_file( struct block_device* blk_dev, blk_deferred_
 			//BUG_ON( NULL == dio->page_array );
 			process_sect = blk_deferred_submit_pages( blk_dev, dio_copy_req, WRITE, page_array_ofs, dio->page_array, range_link->rg.ofs, range_link->rg.cnt );
 			if (range_link->rg.cnt != process_sect){
-				log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
+				pr_err( "Failed to submit defer IO request for storing. ofs=%lld\n", dio->sect.ofs );
 				res = -EIO;
 				break;
 			}
@@ -495,7 +479,7 @@ int blk_deferred_request_store_multidev( blk_deferred_request_t* dio_copy_req )
 			process_sect = blk_deferred_submit_pages( range_link->blk_dev, dio_copy_req,
 				WRITE, page_array_ofs, dio->page_array, range_link->rg.ofs, range_link->rg.cnt );
 			if (range_link->rg.cnt != process_sect){
-				log_err_sect( "Failed to submit defer IO request for storing. ofs=", dio->sect.ofs );
+				pr_err( "Failed to submit defer IO request for storing. ofs=%lld\n", dio->sect.ofs );
 				res = -EIO;
 				break;
 			}

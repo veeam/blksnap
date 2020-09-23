@@ -2,15 +2,13 @@
 #include "snapstore_file.h"
 #include "blk_util.h"
 
-#define SECTION "snapstore "
-#include "log_format.h"
-
 int snapstore_file_create( dev_t dev_id, snapstore_file_t** pfile )
 {
 	int res = SUCCESS;
 	snapstore_file_t* file;
 
-	log_tr_dev_t("Single device file snapstore was created on device ", dev_id);
+	pr_err("Single device file snapstore was created on device [%d:%d]\n",
+		MAJOR(dev_id), MINOR(dev_id));
 
 	file = kzalloc( sizeof( snapstore_file_t ), GFP_KERNEL );
 	if (file == NULL)
@@ -19,14 +17,15 @@ int snapstore_file_create( dev_t dev_id, snapstore_file_t** pfile )
 	res = blk_dev_open( dev_id, &file->blk_dev );
 	if (res != SUCCESS){
 		kfree( file );
-		log_err_format( "Unable to create snapstore file: failed to open device [%d:%d]. errno=", MAJOR( dev_id ), MINOR( dev_id ), res );
+		pr_err( "Unable to create snapstore file: failed to open device [%d:%d]. errno=%d",
+			MAJOR( dev_id ), MINOR( dev_id ), res );
 		return res;
 	}
 	{
 		struct request_queue *q = bdev_get_queue(file->blk_dev);
 
-		log_tr_d("snapstore device logical block size ", q->limits.logical_block_size);
-		log_tr_d("snapstore device physical block size ", q->limits.physical_block_size);
+		pr_err("snapstore device logical block size %d\n", q->limits.logical_block_size);
+		pr_err("snapstore device physical block size %d\n", q->limits.physical_block_size);
 	}
 
 	file->blk_dev_id = dev_id;

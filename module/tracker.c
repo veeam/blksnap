@@ -1,8 +1,6 @@
 #include "common.h"
 #include "tracker.h"
 #include "blk_util.h"
-#define SECTION "tracker   "
-#include "log_format.h"
 
 LIST_HEAD(trackers);
 DEFINE_RWLOCK(trackers_lock);
@@ -115,6 +113,51 @@ void tracker_cbt_start(tracker_t* tracker, unsigned long long snapshot_id)
 	tracker_snapshot_id_set(tracker, snapshot_id);
 }
 
+static
+struct super_block* blk_thaw_bdev( dev_t dev_id, struct block_device* device, struct super_block* superblock )
+{
+	if (NULL == superblock)
+		return NULL;
+	
+	if (SUCCESS == thaw_bdev( device, superblock ))
+		pr_info( "Device [%d:%d] was unfrozen\n", MAJOR( dev_id ), MINOR( dev_id ) );
+	else
+		pr_err( "Failed to unfreeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id) );
+
+	return NULL;
+}
+
+static
+int blk_freeze_bdev( dev_t dev_id, struct block_device* device, struct super_block** psuperblock )
+{
+	struct super_block* superblock;
+
+	if (device->bd_super == NULL){
+		pr_warn("Unable to freeze device [%d:%d]: no superblock was found\n", MAJOR(dev_id), MINOR(dev_id));
+		return SUCCESS;
+	}
+
+	superblock = freeze_bdev(device);
+	if (IS_ERR_OR_NULL(superblock)) {
+		int errcode;
+		pr_err("Failed to freeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id) );
+
+		if (NULL == superblock)
+			errcode = -ENODEV;
+		else {
+			errcode = PTR_ERR(superblock);
+			pr_err("Error code: %d\n", errcode);
+		}
+		return errcode;
+	}
+
+	pr_info("Device [%d:%d] was frozen\n", MAJOR(dev_id), MINOR(dev_id));
+	*psuperblock = superblock;
+
+	return SUCCESS;
+}
+
+
 int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cbt_block_size_degree, cbt_map_t* cbt_map, tracker_t** ptracker)
 {
 	int result = SUCCESS;
@@ -146,7 +189,7 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 	do{
 		struct super_block* superblock = NULL;
 
-		log_tr_format( "Create tracker for device [%d:%d]. Capacity 0x%llx sectors",
+		pr_info( "Create tracker for device [%d:%d]. Capacity 0x%llx sectors\n",
 			MAJOR( tracker->original_dev_id ), MINOR( tracker->original_dev_id ),
 			(unsigned long long)blk_dev_get_capacity(tracker->target_dev));
 
@@ -178,13 +221,14 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 	}else{
 		int remove_status;
 
-		log_err_dev_t( "Failed to create tracker for device ", tracker->original_dev_id );
+		pr_err( "Failed to create tracker for device [%d:%d]\n", 
+			MAJOR(tracker->original_dev_id), MINOR(tracker->original_dev_id) );
 
 		remove_status = tracker_remove(tracker);
 		if ((SUCCESS == remove_status) || (-ENODEV == remove_status))
 			tracker = NULL;
 		else
-			log_err_d( "Failed to perfrom tracker cleanup. errno=", (0 - remove_status) );
+			pr_err( "Failed to perfrom tracker cleanup. errno=%d\n", (0 - remove_status) );
 		}
 
 	return result;
@@ -240,7 +284,7 @@ void tracker_remove_all(void )
 {
 	tracker_t* tracker;
 
-	log_tr("Removing all devices from tracking");
+	pr_info("Removing all devices from tracking\n");
 
 	do {
 		tracker = NULL;
@@ -257,7 +301,7 @@ void tracker_remove_all(void )
 			int status = _tracker_remove( tracker );
 
 			if (status != SUCCESS)
-				log_err_format( "Failed to remove device [%d:%d] from tracking. errno=%d",
+				pr_err( "Failed to remove device [%d:%d] from tracking. errno=%d\n",
 					MAJOR( tracker->original_dev_id ),
 					MINOR( tracker->original_dev_id ),
 					0 - status );
@@ -273,13 +317,13 @@ void tracker_cbt_bitmap_set( tracker_t* tracker, sector_t sector, sector_t secto
 		return;
 
 	if (tracker->cbt_map->device_capacity != blk_dev_get_capacity(tracker->target_dev)){
-		log_warn("Device resize detected");
+		pr_warn("Device resize detected\n");
 		tracker->cbt_map->active = false;
 		return;
 	}
 
 	if (SUCCESS != cbt_map_set(tracker->cbt_map, sector, sector_cnt)){ //cbt corrupt
-		log_warn( "CBT fault detected" );
+		pr_warn( "CBT fault detected\n" );
 		tracker->cbt_map->active = false;
 		return;
 	}
@@ -311,7 +355,7 @@ int _tracker_capture_snapshot( tracker_t* tracker )
 
 	result = defer_io_create( tracker->original_dev_id, tracker->target_dev, &tracker->defer_io );
 	if (result != SUCCESS){
-		log_err( "Failed to create defer IO processor" );
+		pr_err( "Failed to create defer IO processor\n" );
 		return result;
 	}
 	
@@ -322,7 +366,7 @@ int _tracker_capture_snapshot( tracker_t* tracker )
 		cbt_map_switch( tracker->cbt_map );
 		cbt_map_write_unlock( tracker->cbt_map );
 
-		log_tr_format( "Snapshot captured for device [%d:%d]. New snap number %ld",
+		pr_info( "Snapshot captured for device [%d:%d]. New snap number %ld\n",
 			MAJOR( tracker->original_dev_id ), MINOR( tracker->original_dev_id ), tracker->cbt_map->snap_number_active );
 	}
 
@@ -342,7 +386,8 @@ int tracker_capture_snapshot( snapshot_t* snapshot )
 
 		result = tracker_find_by_dev_id( dev_id, &tracker );
 		if (result != SUCCESS){
-			log_err_dev_t( "Unable to capture snapshot: cannot find device ", dev_id );
+			pr_err( "Unable to capture snapshot: cannot find device [%d:%d]\n", 
+				MAJOR(dev_id), MINOR(dev_id) );
 			break;
 		}
 
@@ -354,7 +399,8 @@ int tracker_capture_snapshot( snapshot_t* snapshot )
 		{
 			result = _tracker_capture_snapshot( tracker );
 			if (result != SUCCESS)
-				log_err_dev_t( "Failed to capture snapshot for device ", dev_id );
+				pr_err( "Failed to capture snapshot for device [%d:%d]\n", 
+					MAJOR(dev_id), MINOR(dev_id) );
 		}
 		if (tracker->is_unfreezable)
 			up_write(&tracker->unfreezable_lock);
@@ -370,12 +416,14 @@ int tracker_capture_snapshot( snapshot_t* snapshot )
 
 		result = tracker_find_by_dev_id( dev_id, &p_tracker );
 		if (result != SUCCESS){
-			log_err_dev_t("Unable to capture snapshot: cannot find device ", dev_id);
+			pr_err("Unable to capture snapshot: cannot find device [%d:%d]\n", 
+				MAJOR(dev_id), MINOR(dev_id) );
 			continue;
 		}
 
-		if (snapstore_device_is_corrupted( p_tracker->defer_io->snapstore_device )){
-			log_err_format( "Unable to freeze devices [%d:%d]: snapshot data is corrupted", MAJOR(dev_id), MINOR(dev_id) );
+		if (snapstore_device_is_corrupted( p_tracker->defer_io->snapstore_device )) {
+			pr_err( "Unable to freeze devices [%d:%d]: snapshot data is corrupted\n",
+				MAJOR(dev_id), MINOR(dev_id) );
 			result = -EDEADLK;
 			break;
 		}
@@ -383,11 +431,11 @@ int tracker_capture_snapshot( snapshot_t* snapshot )
 
 	if (result != SUCCESS){
 		int status;
-		log_err_d( "Failed to capture snapshot. errno=", result );
+		pr_err( "Failed to capture snapshot. errno=%d\n", result );
 
 		status = tracker_release_snapshot( snapshot );
 		if (status != SUCCESS)
-			log_err_d( "Failed to perfrom snapshot cleanup. errno= ", status );
+			pr_err( "Failed to perfrom snapshot cleanup. errno=%d\n", status );
 	}
 	return result;
 }
@@ -424,7 +472,7 @@ int tracker_release_snapshot( snapshot_t* snapshot )
 {
 	int result = SUCCESS;
 	int inx = 0;
-	log_tr_format( "Release snapshot [0x%llx]", snapshot->id );
+	pr_info( "Release snapshot [0x%llx]\n", snapshot->id );
 
 	for (; inx < snapshot->dev_id_set_size; ++inx){
 		int status;
@@ -434,14 +482,17 @@ int tracker_release_snapshot( snapshot_t* snapshot )
 		status = tracker_find_by_dev_id( dev, &p_tracker );
 		if (status == SUCCESS){
 			status = _tracker_release_snapshot( p_tracker );
-			if (status != SUCCESS){
-				log_err_dev_t( "Failed to release snapshot for device ", dev );
+			if (status != SUCCESS) {
+				pr_err( "Failed to release snapshot for device [%d:%d]\n", 
+					MAJOR(dev), MINOR(dev) );
+
 				result = status;
 				break;
 			}
 		}
 		else
-			log_err_dev_t( "Unable to release snapshot: cannot find tracker for device ", dev );
+			pr_err( "Unable to release snapshot: cannot find tracker for device [%d:%d]\n", 
+				MAJOR(dev), MINOR(dev) );
 	}
 
 	return result;

@@ -4,9 +4,6 @@
 #include "snapimage.h"
 #include "tracking.h"
 
-#define SECTION "snapshot  "
-#include "log_format.h"
-
 LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
 
@@ -15,7 +12,7 @@ void _snapshot_destroy( snapshot_t* p_snapshot );
 void snapshot_Done( void )
 {
 	snapshot_t* snap;
-	log_tr( "Removing all snapshots" );
+	pr_info( "Removing all snapshots\n" );
 
 	do {
 		snap = NULL;
@@ -40,7 +37,7 @@ int _snapshot_New( dev_t* p_dev, int count, snapshot_t** pp_snapshot )
 
 	p_snapshot = (snapshot_t*)kzalloc( sizeof(snapshot_t), GFP_KERNEL );
 	if (NULL == p_snapshot){
-		log_err( "Unable to create snapshot: failed to allocate memory for snapshot structure" );
+		pr_err( "Unable to create snapshot: failed to allocate memory for snapshot structure\n" );
 		return -ENOMEM;
 	}
 	INIT_LIST_HEAD( &p_snapshot->link );
@@ -51,7 +48,7 @@ int _snapshot_New( dev_t* p_dev, int count, snapshot_t** pp_snapshot )
 	if (NULL == snap_set) {
 		kfree(p_snapshot);
 
-		log_err( "Unable to create snapshot: faile to allocate memory for snapshot map" );
+		pr_err( "Unable to create snapshot: faile to allocate memory for snapshot map\n" );
 		return -ENOMEM;
 	}
 	memcpy( snap_set, p_dev, sizeof( dev_t ) * count );
@@ -76,9 +73,11 @@ int _snapshot_remove_device( dev_t dev_id )
 	result = tracker_find_by_dev_id( dev_id, &tracker );
 	if (result != SUCCESS){
 		if (result == -ENODEV)
-			log_err_dev_t( "Cannot find device by device id=", dev_id );
+			pr_err( "Cannot find device by device id=[%d:%d]\n", 
+				MAJOR(dev_id), MINOR(dev_id) );
 		else
-			log_err_dev_t( "Failed to find device by device id=", dev_id );
+			pr_err( "Failed to find device by device id=[%d:%d]\n", 
+				MAJOR(dev_id), MINOR(dev_id) );
 		return SUCCESS;
 	}
 
@@ -87,7 +86,8 @@ int _snapshot_remove_device( dev_t dev_id )
 
 	tracker_snapshot_id_set(tracker, 0ull);
 
-	log_tr_format( "Device [%d:%d] successfully removed from snapshot", MAJOR( dev_id ), MINOR( dev_id ) );
+	pr_info( "Device [%d:%d] successfully removed from snapshot\n",
+		MAJOR( dev_id ), MINOR( dev_id ) );
 	return SUCCESS;
 }
 
@@ -98,7 +98,8 @@ void _snapshot_cleanup( snapshot_t* snapshot )
 	for (; inx < snapshot->dev_id_set_size; ++inx){
 		int result = _snapshot_remove_device( snapshot->dev_id_set[inx] );
 		if (result != SUCCESS)
-			log_err_format( "Failed to remove device [%d:%d] from snapshot", snapshot->dev_id_set[inx] );
+			pr_err( "Failed to remove device [%d:%d] from snapshot\n",
+				MAJOR(snapshot->dev_id_set[inx]), MINOR(snapshot->dev_id_set[inx]) );
 	}
 
 	if (snapshot->dev_id_set != NULL)
@@ -112,14 +113,14 @@ int snapshot_Create( dev_t* dev_id_set, unsigned int dev_id_set_size, unsigned i
 	int result = SUCCESS;
 	unsigned int inx = 0;
 
-	log_tr( "Create snapshot for devices:" );
+	pr_info( "Create snapshot for devices:\n" );
 	for (inx = 0; inx < dev_id_set_size; ++inx){
 		dev_t dev_id = dev_id_set[inx];
-		log_tr_format( "\t%d:%d", MAJOR( dev_id ), MINOR( dev_id ) );
+		pr_info( "\t%d:%d\n", MAJOR( dev_id ), MINOR( dev_id ) );
 	}
 	result = _snapshot_New( dev_id_set, dev_id_set_size, &snapshot );
 	if (result != SUCCESS){
-		log_err( "Unable to create snapshot: failed to allocate snapshot structure" );
+		pr_err( "Unable to create snapshot: failed to allocate snapshot structure\n" );
 		return result;
 	}
 	do{
@@ -132,7 +133,7 @@ int snapshot_Create( dev_t* dev_id_set, unsigned int dev_id_set_size, unsigned i
 			if (result == -EALREADY)
 				result = SUCCESS;
 			else if (result != SUCCESS){
-				log_err_format( "Unable to create snapshot: failed to add device [%d:%d] to snapshot tracking",
+				pr_err( "Unable to create snapshot: failed to add device [%d:%d] to snapshot tracking\n",
 					MAJOR( dev_id ), MINOR( dev_id ) );
 				break;
 			}
@@ -143,24 +144,24 @@ int snapshot_Create( dev_t* dev_id_set, unsigned int dev_id_set_size, unsigned i
 
 		result = tracker_capture_snapshot( snapshot );
 		if (SUCCESS != result){
-			log_err_format( "Unable to create snapshot: failed to capture snapshot [0x%llx]", snapshot->id );
+			pr_err( "Unable to create snapshot: failed to capture snapshot [0x%llx]\n", snapshot->id );
 			break;
 		}
 
 		result = snapimage_create_for( snapshot->dev_id_set, snapshot->dev_id_set_size );
 		if (result != SUCCESS){
-			log_err( "Unable to create snapshot: failed to create snapshot image devices" );
+			pr_err( "Unable to create snapshot: failed to create snapshot image devices\n" );
 
 			tracker_release_snapshot( snapshot );
 			break;
 		}
 
 		*psnapshot_id = snapshot->id;
-		log_tr_format( "Snapshot [0x%llx] was created", snapshot->id );
+		pr_info( "Snapshot [0x%llx] was created\n", snapshot->id );
 	} while (false);
 
 	if (SUCCESS != result) {
-		log_tr_format( "Snapshot [0x%llx] cleanup", snapshot->id );
+		pr_info( "Snapshot [0x%llx] cleanup\n", snapshot->id );
 
 		down_write( &snapshots_lock );
 		list_del( &snapshot->link );
@@ -182,7 +183,7 @@ void _snapshot_destroy( snapshot_t* snapshot )
 
 	result = tracker_release_snapshot( snapshot );
 	if (result != SUCCESS){
-		log_err_format( "Failed to release snapshot [0x%llx]", snapshot->id );
+		pr_err( "Failed to release snapshot [0x%llx]\n", snapshot->id );
 	}
 
 	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx){
@@ -196,7 +197,7 @@ int snapshot_Destroy( unsigned long long snapshot_id )
 {
 	snapshot_t* snapshot = NULL;
 
-	log_tr_format( "Destroy snapshot [0x%llx]", snapshot_id );
+	pr_info( "Destroy snapshot [0x%llx]\n", snapshot_id );
 
 	down_read( &snapshots_lock );
 	if ( !list_empty(&snapshots) ) {
@@ -215,7 +216,7 @@ int snapshot_Destroy( unsigned long long snapshot_id )
 	up_read( &snapshots_lock );
 
 	if (NULL == snapshot) {
-		log_err_format( "Unable to destroy snapshot [0x%llx]: cannot find snapshot by id", snapshot_id );
+		pr_err( "Unable to destroy snapshot [0x%llx]: cannot find snapshot by id\n", snapshot_id );
 		return -ENODEV;
 	}
 	

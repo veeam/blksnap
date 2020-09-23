@@ -48,10 +48,6 @@ bool snapstore_device_is_corrupted( snapstore_device_t* snapstore_device );
 void snapstore_device_set_corrupted( snapstore_device_t* snapstore_device, int err_code );
 int snapstore_device_errno( dev_t dev_id, int* p_err_code );
 
-void snapstore_device_print_state( snapstore_device_t* snapstore_device );
-
-
-
 static inline void _snapstore_device_descr_read_lock( snapstore_device_t* snapstore_device )
 {
 	//down_read( &snapstore_device->store_block_map_locker );

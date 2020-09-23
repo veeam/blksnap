@@ -4,15 +4,12 @@
 #include "snapstore_multidev.h"
 #include "blk_util.h"
 
-#define SECTION "snapstore "
-#include "log_format.h"
-
 int snapstore_multidev_create( snapstore_multidev_t** p_multidev )
 {
 	int res = SUCCESS;
 	snapstore_multidev_t* multidev;
 
-	log_tr( "Multidevice file snapstore create" );
+	pr_info( "Multidevice file snapstore create\n" );
 
 	multidev = kzalloc( sizeof( snapstore_multidev_t ), GFP_KERNEL );
 	if (multidev == NULL)
@@ -46,7 +43,10 @@ void snapstore_multidev_destroy( snapstore_multidev_t* multidev )
 
 		if (el) {
 			blk_dev_close( el->blk_dev );
-			log_tr_dev_t( "Close device for multidevice snapstore ", el->dev_id);
+
+			pr_info( "Close device for multidevice snapstore [%d:%d]\n",
+				MAJOR(el->dev_id), MINOR(el->dev_id));
+
 			kfree( el );
 		}
 	} while(el);
@@ -87,8 +87,8 @@ struct block_device* snapstore_multidev_get_device( snapstore_multidev_t* multid
 
 	res = blk_dev_open( dev_id, &blk_dev );
 	if (res != SUCCESS){
-		log_err("Unable to add device to snapstore multidevice file");
-		log_err_format( "Failed to open [%d:%d]. errno=", MAJOR( dev_id ), MINOR( dev_id ), res );
+		pr_err("Unable to add device to snapstore multidevice file\n");
+		pr_err("Failed to open [%d:%d]. errno=%d", MAJOR( dev_id ), MINOR( dev_id ), res);
 		return NULL;
 	}
 

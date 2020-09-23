@@ -19,10 +19,6 @@
 #include <linux/init.h>
 #include <linux/module.h>
 
-
-#define SECTION "main      "
-#include "log_format.h"
-
 #include <linux/notifier.h>
 #include <linux/blk-filter.h>
 #define VEEAMSNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
@@ -34,8 +30,8 @@ static int g_param_zerosnapdata = 0;		/*rudiment */
 static int g_param_debuglogging = 0;		/*rudiment */
 static unsigned int g_param_fixflags = 0;   /*rudiment */
 
-static char* g_logdir = NULL;
-static unsigned long g_param_logmaxsize = 15*1024*1024;
+static char* g_logdir = NULL;				/*rudiment */
+static unsigned long g_param_logmaxsize = 15*1024*1024; /*rudiment */
 
 static int g_param_snapstore_block_size_pow = 14;
 static int g_param_change_tracking_block_size_pow = 18;
@@ -45,7 +41,6 @@ int get_debuglogging( void )
 {
 	return g_param_debuglogging;
 }
-
 
 int get_snapstore_block_size_pow(void)
 {
@@ -76,15 +71,15 @@ blk_qc_t filter_submit_original_bio(struct bio *bio);
 
 static void filter_disk_add(struct gendisk *disk)
 {
-	log_tr_format("new disk [%s] in system", disk->disk_name);
+	pr_info("new disk [%s] in system\n", disk->disk_name);
 }
 static void filter_disk_del(struct gendisk *disk)
 {
-	log_tr_format("del disk [%s] from system", disk->disk_name);
+	pr_info("del disk [%s] from system\n", disk->disk_name);
 }
 static void filter_disk_release(struct gendisk *disk)
 {
-	log_tr_format("release disk [%s] from system", disk->disk_name);
+	pr_info("release disk [%s] from system\n", disk->disk_name);
 }
 static blk_qc_t filter_submit_bio(struct bio *bio)
 {
@@ -129,9 +124,6 @@ static struct file_operations ctrl_fops = {
 
 static void blk_snap_syscore_shutdown(void)
 {
-	//stop logging thread. In this time it is not needed
-	logging_done();
-
 	tracker_remove_all();
 }
 
@@ -147,46 +139,45 @@ int __init veeamsnap_init(void)
 {
 	int result = SUCCESS;
 
-	logging_init( g_logdir, g_param_logmaxsize );
-	log_tr( "================================================================================" );
-	log_tr( "Loading" );
-	log_tr_s( "Version: ", FILEVER_STR );
+	pr_info( "================================================================================\n" );
+	pr_info( "Loading\n" );
+	pr_info( "Version: %s\n", FILEVER_STR );
 
-	log_tr_d("snapstore_block_size_pow: ", g_param_snapstore_block_size_pow);
-	log_tr_d("change_tracking_block_size_pow: ", g_param_change_tracking_block_size_pow);
-	log_tr_s("logdir: ", g_logdir);
-	log_tr_ld("logmaxsize: ", g_param_logmaxsize);
+	pr_info("snapstore_block_size_pow: %d\n", g_param_snapstore_block_size_pow);
+	pr_info("change_tracking_block_size_pow: %d\n", g_param_change_tracking_block_size_pow);
+	pr_info("logdir: %s\n", g_logdir);
+	pr_info("logmaxsize: %ld\n", g_param_logmaxsize);
 
 	if (g_param_snapstore_block_size_pow > 23){
 		g_param_snapstore_block_size_pow = 23;
-		log_tr_d("Limited snapstore_block_size_pow: ", g_param_snapstore_block_size_pow);
+		pr_info("Limited snapstore_block_size_pow: %d\n", g_param_snapstore_block_size_pow);
 	}
 	else if (g_param_snapstore_block_size_pow < 12){
 		g_param_snapstore_block_size_pow = 12;
-		log_tr_d("Limited snapstore_block_size_pow: ", g_param_snapstore_block_size_pow);
+		pr_info("Limited snapstore_block_size_pow: %d\n", g_param_snapstore_block_size_pow);
 	}
 
 	if (g_param_change_tracking_block_size_pow > 23){
 		g_param_change_tracking_block_size_pow = 23;
-		log_tr_d("Limited change_tracking_block_size_pow: ", g_param_change_tracking_block_size_pow);
+		pr_info("Limited change_tracking_block_size_pow: %d\n", g_param_change_tracking_block_size_pow);
 	}
 	else if (g_param_change_tracking_block_size_pow < 12){
 		g_param_change_tracking_block_size_pow = 12;
-		log_tr_d("Limited change_tracking_block_size_pow: ", g_param_change_tracking_block_size_pow);
+		pr_info("Limited change_tracking_block_size_pow: %d\n", g_param_change_tracking_block_size_pow);
 	}
 
 	do{
-		log_tr("Registering reboot notification");
+		pr_info("Registering reboot notification\n");
 
 		register_syscore_ops(&blk_snap_syscore_ops);
 
 		veeamsnap_major = register_chrdev(0, MODULE_NAME, &ctrl_fops);
 		if (veeamsnap_major < 0) {
-			log_err_d("Failed to register a character device. errno=", veeamsnap_major);
+			pr_err("Failed to register a character device. errno=%d\n", veeamsnap_major);
 			result = veeamsnap_major;
 			break;
 		}
-		log_tr_format("Module major [%d]", veeamsnap_major);
+		pr_info("Module major [%d]\n", veeamsnap_major);
 
 
 		if ((result = blk_redirect_bioset_create( )) != SUCCESS)
@@ -199,16 +190,16 @@ int __init veeamsnap_init(void)
 			break;
 
 		if ((result = ctrl_sysfs_init(&veeamsnap_device)) != SUCCESS){
-			log_err("Failed to initialize sysfs attributes");
+			pr_err("Failed to initialize sysfs attributes\n");
 			break;
 		}
 
 		if ((result = blk_filter_register(&g_filter)) != SUCCESS) {
 			const char* exist_filter = blk_filter_check_altitude(g_filter.altitude);
 			if (exist_filter)
-				log_err_format("Block io layer filter [%s] already exist on altitude [%d]", exist_filter, g_filter.altitude);
+				pr_err("Block io layer filter [%s] already exist on altitude [%ld]\n", exist_filter, g_filter.altitude);
 
-			log_err("Failed to register block io layer filter");
+			pr_err("Failed to register block io layer filter\n");
 			break;
 		}
 
@@ -220,7 +211,7 @@ int __init veeamsnap_init(void)
 void __exit veeamsnap_exit(void)
 {
 	int result;
-	log_tr("Unloading module");
+	pr_info("Unloading module\n");
 
 	unregister_syscore_ops(&blk_snap_syscore_ops);
 
@@ -246,8 +237,6 @@ void __exit veeamsnap_exit(void)
 	unregister_chrdev(veeamsnap_major, MODULE_NAME);
 
 	ctrl_done( );
-
-	logging_done( );
 }
 
 module_init(veeamsnap_init);

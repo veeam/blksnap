@@ -6,9 +6,6 @@
 
 #include <linux/kthread.h>
 
-#define SECTION "defer_io  "
-#include "log_format.h"
-
 #define VEEAMIMAGE_THROTTLE_TIMEOUT ( 1*HZ )	//delay 1 sec
 //#define VEEAMIMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )	//delay 10 ms
 
@@ -165,7 +162,7 @@ int _defer_io_copy_prepare( defer_io_t* defer_io, defer_io_queue_t* queue_in_pro
 				copy_range.cnt = bio_sectors(dio_orig_req->bio);
 				res = snapstore_device_prepare_requests(defer_io->snapstore_device, &copy_range, dio_copy_req);
 				if (res != SUCCESS){
-					log_err_d( "Unable to execute Copy On Write algorithm: failed to add ranges to copy to snapstore request. errno=", res );
+					pr_err( "Unable to execute Copy On Write algorithm: failed to add ranges to copy to snapstore request. errno=%d\n", res );
 					break;
 				}
 
@@ -186,14 +183,15 @@ int defer_io_work_thread( void* p )
 	defer_io_queue_init( &queue_in_process );
 
 	defer_io = defer_io_get_resource((defer_io_t*)p);
-	log_tr_format("Defer IO thread for original device [%d:%d] started", MAJOR(defer_io->original_dev_id), MINOR(defer_io->original_dev_id));
+	pr_info("Defer IO thread for original device [%d:%d] started\n", 
+		MAJOR(defer_io->original_dev_id), MINOR(defer_io->original_dev_id));
 
 	while (!kthread_should_stop( ) || !defer_io_queue_empty( defer_io->dio_queue )){
 
 		if (defer_io_queue_empty( defer_io->dio_queue )){
 			int res = wait_event_interruptible_timeout( defer_io->queue_add_event, (!defer_io_queue_empty( defer_io->dio_queue )), VEEAMIMAGE_THROTTLE_TIMEOUT );
 			if (-ERESTARTSYS == res)
-				log_err( "Signal received in defer IO thread. Waiting for completion with code ERESTARTSYS" );
+				pr_err( "Signal received in defer IO thread. Waiting for completion with code ERESTARTSYS\n" );
 		}
 
 		if (!defer_io_queue_empty( defer_io->dio_queue )){
@@ -205,7 +203,7 @@ int defer_io_work_thread( void* p )
 			do{
 				dio_copy_result = _defer_io_copy_prepare( defer_io, &queue_in_process, &dio_copy_req );
 				if (dio_copy_result != SUCCESS){
-					log_err_d( "Unable to process defer IO request: failed to prepare copy request", dio_copy_result );
+					pr_err("Unable to process defer IO request: failed to prepare copy request. erro=%d\n", dio_copy_result );
 					break;
 				}
 				if (NULL == dio_copy_req)
@@ -213,12 +211,12 @@ int defer_io_work_thread( void* p )
 
 				dio_copy_result = blk_deferred_request_read_original( defer_io->original_blk_dev, dio_copy_req );
 				if (dio_copy_result != SUCCESS){
-					log_err_d( "Unable to process defer IO request: failed to read data to copy request. errno=", dio_copy_result );
+					pr_err( "Unable to process defer IO request: failed to read data to copy request. errno=%d\n", dio_copy_result );
 					break;
 				}
 				dio_copy_result = snapstore_device_store( defer_io->snapstore_device, dio_copy_req );
 				if (dio_copy_result != SUCCESS){
-					log_err_d( "Unable to process defer IO request: failed to write data from copy request. errno=", dio_copy_result );
+					pr_err( "Unable to process defer IO request: failed to write data from copy request. errno=%d\n", dio_copy_result );
 					break;
 				}
 
@@ -246,7 +244,8 @@ int defer_io_work_thread( void* p )
 	//waiting for all sent request complete
 	_defer_io_finish( defer_io, &defer_io->dio_queue );
 
-	log_tr_format( "Defer IO thread for original device [%d:%d] completed", MAJOR( defer_io->original_dev_id ), MINOR( defer_io->original_dev_id ) );
+	pr_info( "Defer IO thread for original device [%d:%d] completed\n",
+		MAJOR( defer_io->original_dev_id ), MINOR( defer_io->original_dev_id ) );
 	defer_io_put_resource(defer_io);
 	return SUCCESS;
 }
@@ -264,7 +263,7 @@ void _defer_io_destroy( defer_io_t* defer_io )
 		snapstore_device_put_resource(defer_io->snapstore_device);
 
 	kfree(defer_io);
-	log_tr("Defer IO processor was destroyed");
+	pr_info("Defer IO processor was destroyed\n");
 }
 
 static
@@ -293,7 +292,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 	defer_io_t* defer_io = NULL;
 	snapstore_device_t* snapstore_device;
 
-	log_tr_dev_t( "Defer IO processor was created for device ", dev_id );
+	pr_info("Defer IO processor was created for device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
 
 	defer_io = kzalloc( sizeof( defer_io_t ), GFP_KERNEL );
 	if (defer_io == NULL)
@@ -301,7 +300,8 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 
 	snapstore_device = snapstore_device_find_by_dev_id( dev_id );
 	if (NULL == snapstore_device){
-		log_err_dev_t( "Unable to create defer IO processor: failed to initialize snapshot data for device ", dev_id );
+		pr_err( "Unable to create defer IO processor: failed to initialize snapshot data for device [%d:%d]\n",
+			MAJOR(dev_id), MINOR(dev_id) );
 
 		kfree(defer_io);
 		return -ENODATA;
@@ -324,7 +324,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 	defer_io->dio_thread = kthread_create( defer_io_work_thread, (void *)defer_io, "veeamdeferio%d:%d", MAJOR( dev_id ), MINOR( dev_id ) );
 	if (IS_ERR( defer_io->dio_thread )) {
 		res = PTR_ERR( defer_io->dio_thread );
-		log_err_d( "Unable to create defer IO processor: failed to create thread. errno=", res );
+		pr_err( "Unable to create defer IO processor: failed to create thread. errno=%d\n", res );
 
 		_defer_io_destroy( defer_io );
 		defer_io = NULL;
@@ -336,7 +336,7 @@ int defer_io_create( dev_t dev_id, struct block_device* blk_dev, defer_io_t** pp
 	wake_up_process( defer_io->dio_thread );
 
 	*pp_defer_io = defer_io;
-	log_tr( "Defer IO processor was created" );
+	pr_info( "Defer IO processor was created\n" );
 
 	return SUCCESS;
 }
@@ -346,16 +346,16 @@ int defer_io_stop( defer_io_t* defer_io )
 {
 	int res = SUCCESS;
 
-	log_tr_dev_t( "Defer IO thread for the device stopped ", defer_io->original_dev_id );
+	pr_info( "Defer IO thread for the device stopped [%d:%d]\n",
+		MAJOR(defer_io->original_dev_id), MINOR(defer_io->original_dev_id));
 
 	if (defer_io->dio_thread != NULL){
 		struct task_struct* dio_thread = defer_io->dio_thread;
 		defer_io->dio_thread = NULL;
 
 		res = kthread_stop( dio_thread );//stopping and waiting.
-		if (res != SUCCESS){
-			log_err_d( "Failed to stop defer IO thread. errno=", res );
-		}
+		if (res != SUCCESS)
+			pr_err( "Failed to stop defer IO thread. errno=%d\n", res );
 	}
 
 	return res;

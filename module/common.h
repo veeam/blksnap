@@ -12,8 +12,6 @@
 #include <linux/list.h>
 #include <asm/atomic.h>
 
-#include "log.h"
-
 #ifndef SUCCESS
 #define SUCCESS 0
 #endif

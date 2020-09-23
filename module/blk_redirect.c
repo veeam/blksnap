@@ -2,9 +2,6 @@
 #include "blk_util.h"
 #include "blk_redirect.h"
 
-#define SECTION "blk       "
-#include "log_format.h"
-
 #define bio_vec_sectors(bv) (bv.bv_len >> SECTOR_SHIFT)
 
 struct bio_set g_BlkRedirectBioset = { 0 };
@@ -30,7 +27,7 @@ void blk_redirect_bio_endio( struct bio *bb )
 			err = -EIO;
 
 		if (err != SUCCESS){
-			log_err_d( "Failed to process redirect IO request. errno=", 0 - err );
+			pr_err( "Failed to process redirect IO request. errno=%d\n", 0 - err );
 
 			if (rq_redir->err == SUCCESS)
 				rq_redir->err = err;
@@ -143,7 +140,7 @@ int _blk_dev_redirect_part_fast( blk_redirect_bio_t* rq_redir, int direction, st
 __reprocess_bv:
 		if (new_bio == NULL){
 			while (NULL == (new_bio = _blk_dev_redirect_bio_alloc( nr_iovecs, rq_redir ))){
-				log_err( "Unable to allocate new bio for redirect IO." );
+				pr_err( "Unable to allocate new bio for redirect IO.\n" );
 				res = -ENOMEM;
 				goto __fail_out;
 			}
@@ -168,7 +165,7 @@ __reprocess_bv:
 
 			res = bio_endio_list_push( rq_redir, new_bio );
 			if (res != SUCCESS){
-				log_tr( "Failed to add bio into bio_endio_list" );
+				pr_err( "Failed to add bio into bio_endio_list\n" );
 				goto __fail_out;
 			}
 
@@ -185,7 +182,7 @@ __reprocess_bv:
 	if (new_bio != NULL){
 		res = bio_endio_list_push( rq_redir, new_bio );
 		if (res != SUCCESS){
-			log_tr( "Failed to add bio into bio_endio_list" );
+			pr_err( "Failed to add bio into bio_endio_list\n" );
 			goto __fail_out;
 		}
 
@@ -207,7 +204,7 @@ __fail_out:
 
 	bio_endio_list_cleanup( bio_endio_rec );
 
-	log_err_format( "Failed to process part of redirect IO request. rq_ofs=%lld, rq_count=%lld", rq_ofs, rq_count );
+	pr_err( "Failed to process part of redirect IO request. rq_ofs=%lld, rq_count=%lld\n", rq_ofs, rq_count );
 	return res;
 }
 

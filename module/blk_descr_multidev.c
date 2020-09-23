@@ -2,9 +2,6 @@
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 #include "blk_descr_multidev.h"
 
-#define SECTION "blk_descr "
-#include "log_format.h"
-
 static inline
 void list_assign( struct list_head *dst, struct list_head *src )
 {
@@ -72,7 +69,7 @@ int blk_descr_multidev_pool_add( blk_descr_pool_t* pool, struct list_head* range
 		sizeof( struct blk_descr_multidev ), blk_descr_multidev_allocate, (void*)rangelist );
 
 	if (NULL == blk_descr.ptr){
-		log_err( "Failed to allocate block descriptor" );
+		pr_err( "Failed to allocate block descriptor\n" );
 		return -ENOMEM;
 	}
 

@@ -4,9 +4,6 @@
 #include "snapstore_blk.h"
 #include "blk_util.h"
 
-#define SECTION "snapstore "
-#include "log_format.h"
-
 int inc_snapstore_block_size_pow(void);
 
 LIST_HEAD(snapstore_devices);
@@ -87,7 +84,7 @@ snapstore_device_t* _snapstore_device_get_by_snapstore_id( uuid_t* id )
 static
 void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 {
-	log_tr("Destroy snapstore device");
+	pr_info("Destroy snapstore device\n");
 
 	xa_destroy(&snapstore_device->store_block_map);
 
@@ -97,7 +94,7 @@ void _snapstore_device_destroy( snapstore_device_t* snapstore_device )
 	rangevector_done( &snapstore_device->zero_sectors );
 
 	if (snapstore_device->snapstore){
-		log_tr_uuid("Snapstore uuid ", (&snapstore_device->snapstore->id));
+		pr_info("Snapstore uuid %pUB\n", &snapstore_device->snapstore->id);
 
 		snapstore_put( snapstore_device->snapstore );
 		snapstore_device->snapstore = NULL;
@@ -134,7 +131,8 @@ int snapstore_device_cleanup( uuid_t* id )
 	snapstore_device_t* snapstore_device = NULL;
 
 	while (NULL != (snapstore_device = _snapstore_device_get_by_snapstore_id( id ))){
-		log_tr_dev_t( "Cleanup snapstore device for device ", snapstore_device->dev_id );
+		pr_info( "Cleanup snapstore device for device [%d:%d]\n",
+			MAJOR(snapstore_device->dev_id), MINOR(snapstore_device->dev_id));
 
 		snapstore_device_put_resource( snapstore_device );
 	}
@@ -156,7 +154,8 @@ int snapstore_device_create( dev_t dev_id, snapstore_t* snapstore )
 	if (res != SUCCESS) {
 		kfree(snapstore_device);
 
-		log_err_dev_t( "Unable to create snapstore device: failed to open original device ", dev_id );
+		pr_err( "Unable to create snapstore device: failed to open original device [%d:%d]\n", 
+			MAJOR(dev_id), MINOR(dev_id) );
 		return res;
 	}
 
@@ -191,20 +190,20 @@ int snapstore_device_add_request( snapstore_device_t* snapstore_device, unsigned
 
 	blk_descr = snapstore_get_empty_block( snapstore_device->snapstore );
 	if (blk_descr.ptr == NULL){
-		log_err( "Unable to add block to defer IO request: failed to allocate next block" );
+		pr_err( "Unable to add block to defer IO request: failed to allocate next block\n" );
 		return -ENODATA;
 	}
 
 	res = xa_err(xa_store( &snapstore_device->store_block_map, block_index, blk_descr.ptr, GFP_NOIO ));
 	if (res != SUCCESS){
-		log_err_d( "Unable to add block to defer IO request: failed to set block descriptor to descriptors array. errno=", res );
+		pr_err( "Unable to add block to defer IO request: failed to set block descriptor to descriptors array. errno=%d\n", res );
 		return res;
 	}
 
 	if (*dio_copy_req == NULL){
 		*dio_copy_req = blk_deferred_request_new( );
 		if (*dio_copy_req == NULL){
-			log_err( "Unable to add block to defer IO request: failed to allocate defer IO request" );
+			pr_err( "Unable to add block to defer IO request: failed to allocate defer IO request\n" );
 			return -ENOMEM;
 
 		}
@@ -214,15 +213,14 @@ int snapstore_device_add_request( snapstore_device_t* snapstore_device, unsigned
 	do{
 		dio = blk_deferred_alloc( block_index, blk_descr );
 		if (dio == NULL){
-			log_err( "Unabled to add block to defer IO request: failed to allocate defer IO" );
+			pr_err( "Unabled to add block to defer IO request: failed to allocate defer IO\n" );
 			res = -ENOMEM;
 			break;
 		}
 
 		res = blk_deferred_request_add( *dio_copy_req, dio );
-		if (res != SUCCESS){
-			log_err( "Unable to add block to defer IO request: failed to add defer IO to request" );
-		}
+		if (res != SUCCESS)
+			pr_err( "Unable to add block to defer IO request: failed to add defer IO to request\n" );
 	} while (false);
 
 	if (res != SUCCESS){
@@ -248,11 +246,11 @@ int snapstore_device_prepare_requests( snapstore_device_t* snapstore_device, str
 
 	for (inx = first; inx <= last; inx++){
 		if (NULL != xa_load(&snapstore_device->store_block_map, inx)) {
-			//log_tr_sz( "Already stored block # ", inx );
+			//Already stored block
 		} else {
 			res = snapstore_device_add_request( snapstore_device, inx, dio_copy_req );
 			if ( res != SUCCESS){
-				log_err_d( "Failed to create copy defer IO request. errno=", res );
+				pr_err( "Failed to create copy defer IO request. errno=%d\n", res );
 				break;
 			}
 		}
@@ -294,7 +292,8 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 	rq_range.ofs = rq_redir->bio->bi_iter.bi_sector;
 
 	if (!bio_has_data( rq_redir->bio )){
-		log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_redir->bio->bi_flags );
+		pr_warn( "Empty bio was found during reading from snapstore device. flags=%u\n",
+			rq_redir->bio->bi_flags );
 
 		blk_redirect_complete( rq_redir, SUCCESS );
 		return SUCCESS;
@@ -316,7 +315,7 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 			//push snapstore read
 			res = snapstore_redirect_read( rq_redir, snapstore_device->snapstore, blk_descr, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 			if (res != SUCCESS){
-				log_err( "Failed to read from snapstore device" );
+				pr_err( "Failed to read from snapstore device\n" );
 				break;
 			}
 		} else {
@@ -327,7 +326,8 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 				res = blk_dev_redirect_part( rq_redir, READ, snapstore_device->orig_blk_dev, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 
 			if (res != SUCCESS){
-				log_err_dev_t( "Failed to redirect read request to the original device ", snapstore_device->dev_id );
+				pr_err( "Failed to redirect read request to the original device [%d:%d]\n", 
+					MAJOR(snapstore_device->dev_id), MINOR(snapstore_device->dev_id) );
 				break;
 			}
 		}
@@ -342,8 +342,8 @@ int snapstore_device_read( snapstore_device_t* snapstore_device, blk_redirect_bi
 			blk_redirect_complete( rq_redir, res );
 	}
 	else{
-		log_err_d( "Failed to read from snapstore device. errno=", res );
-		log_err_format( "Position %lld sector, length %lld sectors", rq_range.ofs, rq_range.cnt );
+		pr_err( "Failed to read from snapstore device. errno=%d\n", res );
+		pr_err( "Position %lld sector, length %lld sectors\n", rq_range.ofs, rq_range.cnt );
 	}
 	_snapstore_device_descr_write_unlock(snapstore_device);
 
@@ -359,7 +359,7 @@ int _snapstore_device_copy_on_write( snapstore_device_t* snapstore_device, struc
 	do{
 		res = snapstore_device_prepare_requests( snapstore_device, rq_range, &dio_copy_req );
 		if (res != SUCCESS){
-			log_err_d( "Failed to create defer IO request for range. errno=", res );
+			pr_err( "Failed to create defer IO request for range. errno=%d\n", res );
 			break;
 		}
 
@@ -368,12 +368,12 @@ int _snapstore_device_copy_on_write( snapstore_device_t* snapstore_device, struc
 
 		res = blk_deferred_request_read_original( snapstore_device->orig_blk_dev, dio_copy_req );
 		if (res != SUCCESS){
-			log_err_d( "Failed to read data from the original device. errno=", res );
+			pr_err( "Failed to read data from the original device. errno=%d\n", res );
 			break;
 		}
 		res = snapstore_device_store( snapstore_device, dio_copy_req );
 		if (res != SUCCESS){
-			log_err_d( "Failed to write data to snapstore. errno=", res );
+			pr_err( "Failed to write data to snapstore. errno=%d\n", res );
 			break;
 		}
 	} while (false);
@@ -414,7 +414,8 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 	rq_range.ofs = rq_redir->bio->bi_iter.bi_sector;
 
 	if (!bio_has_data( rq_redir->bio )){
-		log_warn_sz( "Empty bio was found during reading from snapstore device. flags=", rq_redir->bio->bi_flags );
+		pr_warn( "Empty bio was found during reading from snapstore device. flags=%u\n",
+			rq_redir->bio->bi_flags );
 
 		blk_redirect_complete( rq_redir, SUCCESS );
 		return SUCCESS;
@@ -436,14 +437,14 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 
 		blk_descr = (union blk_descr_unify)xa_load(&snapstore_device->store_block_map, block_index);
 		if (blk_descr.ptr == NULL){
-			log_err( "Unable to write from snapstore device: invalid snapstore block descriptor" );
+			pr_err( "Unable to write from snapstore device: invalid snapstore block descriptor\n" );
 			res = -EIO;
 			break;
 		}
 
 		res = snapstore_redirect_write( rq_redir, snapstore_device->snapstore, blk_descr, rq_range.ofs + blk_ofs_start, blk_ofs_start, blk_ofs_count );
 		if (res != SUCCESS){
-			log_err( "Unable to write from snapstore device: failed to redirect write request to snapstore" );
+			pr_err( "Unable to write from snapstore device: failed to redirect write request to snapstore\n" );
 			break;
 		}
 
@@ -458,8 +459,8 @@ int snapstore_device_write( snapstore_device_t* snapstore_device, blk_redirect_b
 		}
 	}
 	else{
-		log_err_d( "Failed to write from snapstore device. errno=", res );
-		log_err_format( "Position %lld sector, length %lld sectors", rq_range.ofs, rq_range.cnt );
+		pr_err( "Failed to write from snapstore device. errno=%d\n", res );
+		pr_err( "Position %lld sector, length %lld sectors\n", rq_range.ofs, rq_range.cnt );
 
 		snapstore_device_set_corrupted( snapstore_device, res );
 	}
@@ -473,9 +474,10 @@ bool snapstore_device_is_corrupted( snapstore_device_t* snapstore_device )
 		return true;
 
 	if (snapstore_device->corrupted){
-		if (0 == atomic_read( &snapstore_device->req_failed_cnt )){
-			log_err_dev_t( "Snapshot device is corrupted for ", snapstore_device->dev_id );
-		}
+		if (0 == atomic_read( &snapstore_device->req_failed_cnt ))
+			pr_err( "Snapshot device is corrupted for [%d:%d]\n", 
+				MAJOR(snapstore_device->dev_id), MINOR(snapstore_device->dev_id) );
+
 		atomic_inc( &snapstore_device->req_failed_cnt );
 		return true;
 	}
@@ -490,18 +492,8 @@ void snapstore_device_set_corrupted( snapstore_device_t* snapstore_device, int e
 		snapstore_device->corrupted = true;
 		snapstore_device->err_code = abs(err_code);
 
-		log_err_dev_t( "Set snapshot device is corrupted for ", snapstore_device->dev_id );
-	}
-}
-
-void snapstore_device_print_state( snapstore_device_t* snapstore_device )
-{
-	log_tr( "" );
-	log_tr_dev_t( "Snapstore device state for device ", snapstore_device->dev_id );
-
-	if (snapstore_device->corrupted){
-		log_tr( "Corrupted");
-		log_tr_d( "Failed request count: ", atomic_read( &snapstore_device->req_failed_cnt ) );
+		pr_err( "Set snapshot device is corrupted for [%d:%d]\n", 
+			MAJOR(snapstore_device->dev_id), MINOR(snapstore_device->dev_id) );
 	}
 }
 
