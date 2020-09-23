@@ -37,12 +37,7 @@ void blk_deferred_free( blk_deferred_t* dio );
 
 void blk_deferred_bio_endio( struct bio *bio );
 
-void blk_deferred_complete( blk_deferred_request_t* dio_req, sector_t portion_sect_cnt, int result );
-
 sector_t blk_deferred_submit_pages( struct block_device* blk_dev, blk_deferred_request_t* dio_req, int direction, sector_t arr_ofs, struct page **page_array, sector_t ofs_sector, sector_t size_sector );
-
-void blk_deferred_memcpy_read( char* databuff, blk_deferred_request_t* dio_req, struct page **page_array, sector_t arr_ofs, sector_t size_sector );
-
 
 blk_deferred_request_t* blk_deferred_request_new( void );
 

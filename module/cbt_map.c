@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-cbt_map"
+#endif
+
 #include "cbt_map.h"
 
 int cbt_map_allocate( cbt_map_t* cbt_map, unsigned int cbt_sect_in_block_degree, sector_t device_capacity )

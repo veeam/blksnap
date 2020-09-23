@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-defer_io"
+#endif
+
 #include "defer_io.h"
 #include "blk_deferred.h"
 #include "tracker.h"

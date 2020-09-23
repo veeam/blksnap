@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-blk_descr"
+#endif
+
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 #include "blk_descr_multidev.h"
 

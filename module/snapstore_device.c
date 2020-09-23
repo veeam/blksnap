@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-snapstore"
+#endif
+
 #include "snapstore_device.h"
 #include "snapstore.h"
 #include "snapstore_blk.h"

@@ -1,6 +1,10 @@
 #include "common.h"
-#include "tracking.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-tracking"
+#endif
 
+#include "tracking.h"
 #include "tracker.h"
 #include "blk_util.h"
 #include "defer_io.h"

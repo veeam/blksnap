@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-ctrl"
+#endif
+
 #include "blk-snap-ctl.h"
 #include "ctrl_fops.h"
 #include "version.h"

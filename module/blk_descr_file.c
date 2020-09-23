@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-blk_descr"
+#endif
+
 #include "blk_descr_file.h"
 
 static inline

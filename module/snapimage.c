@@ -1,5 +1,10 @@
 #include "common.h"
 
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-snapimage"
+#endif
+
 #include "snapimage.h"
 #include "blk_util.h"
 #include "defer_io.h"

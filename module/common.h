@@ -1,5 +1,9 @@
-#ifndef STDAFX_H_
-#define STDAFX_H_
+#ifndef COMMON_H_
+#define COMMON_H_
+
+#define MODSECTION ""
+
+#define pr_fmt(fmt) KBUILD_MODNAME MODSECTION ": " fmt
 
 #include <linux/version.h> /*rudiment - needed for using KERNEL_VERSION */
 
@@ -16,4 +20,4 @@
 #define SUCCESS 0
 #endif
 
-#endif /* STDAFX_H_ */
+#endif /* COMMON_H_ */

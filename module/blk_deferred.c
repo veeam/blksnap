@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-deferred"
+#endif
+
 #include "blk_deferred.h"
 #include "blk_util.h"
 #include "snapstore.h"
@@ -144,7 +149,7 @@ struct bio* _blk_deferred_bio_alloc( int nr_iovecs )
 }
 
 
-
+static
 void blk_deferred_complete( blk_deferred_request_t* dio_req, sector_t portion_sect_cnt, int result )
 {
 	atomic64_add( portion_sect_cnt, &dio_req->sect_processed );
@@ -279,26 +284,6 @@ sector_t blk_deferred_submit_pages(
 	} while (process_sect < size_sector);
 
 	return process_sect;
-}
-
-void blk_deferred_memcpy_read( char* databuff, blk_deferred_request_t* dio_req, struct page **page_array, sector_t arr_ofs, sector_t size_sector )
-{
-	size_t prev_pg_inx = 0;
-	void *addr = NULL;
-	sector_t sect_inx = 0;
-
-	for ( ; sect_inx < size_sector; ++sect_inx) {
-		size_t pg_inx = (arr_ofs + sect_inx) >> (PAGE_SHIFT - SECTOR_SHIFT);
-		size_t pg_ofs = (size_t)from_sectors( (arr_ofs + sect_inx) & ((1 << (PAGE_SHIFT - SECTOR_SHIFT)) - 1) );
-
-		if ( (prev_pg_inx != pg_inx) || (NULL == addr) ) {
-			addr = page_address(page_array[pg_inx]);
-			prev_pg_inx = pg_inx;
-		}
-
-		memcpy( addr + pg_ofs, databuff + (sect_inx<<SECTOR_SHIFT), SECTOR_SIZE );
-	}
-	blk_deferred_complete( dio_req, size_sector, SUCCESS );
 }
 
 blk_deferred_request_t* blk_deferred_request_new( void )

@@ -1,4 +1,9 @@
 #include "common.h"
+#ifdef MODSECTION
+#undef MODSECTION
+#define MODSECTION "-snapshot"
+#endif
+
 #include "snapshot.h"
 #include "tracker.h"
 #include "snapimage.h"
