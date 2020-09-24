@@ -144,7 +144,7 @@ ssize_t ctrl_pipe_write(ctrl_pipe_t *pipe, const char __user *buffer, size_t len
 		processed += sizeof(unsigned int);
 		//+4
 		switch (command) {
-		case VEEAMSNAP_CHARCMD_INITIATE: {
+		case BLK_SNAP_CHARCMD_INITIATE: {
 			ssize_t res = ctrl_pipe_command_initiate(pipe, buffer + processed,
 								 length - processed);
 			if (res >= 0)
@@ -152,7 +152,7 @@ ssize_t ctrl_pipe_write(ctrl_pipe_t *pipe, const char __user *buffer, size_t len
 			else
 				processed = res;
 		} break;
-		case VEEAMSNAP_CHARCMD_NEXT_PORTION: {
+		case BLK_SNAP_CHARCMD_NEXT_PORTION: {
 			ssize_t res = ctrl_pipe_command_next_portion(pipe, buffer + processed,
 								     length - processed);
 			if (res >= 0)
@@ -161,7 +161,7 @@ ssize_t ctrl_pipe_write(ctrl_pipe_t *pipe, const char __user *buffer, size_t len
 				processed = res;
 		} break;
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-		case VEEAMSNAP_CHARCMD_NEXT_PORTION_MULTIDEV: {
+		case BLK_SNAP_CHARCMD_NEXT_PORTION_MULTIDEV: {
 			ssize_t res = ctrl_pipe_command_next_portion_multidev(
 				pipe, buffer + processed, length - processed);
 			if (res >= 0)
@@ -507,7 +507,7 @@ void ctrl_pipe_request_acknowledge(ctrl_pipe_t *pipe, unsigned int result)
 {
 	unsigned int cmd[2];
 
-	cmd[0] = VEEAMSNAP_CHARCMD_ACKNOWLEDGE;
+	cmd[0] = BLK_SNAP_CHARCMD_ACKNOWLEDGE;
 	cmd[1] = result;
 
 	ctrl_pipe_push_request(pipe, cmd, 2);
@@ -519,7 +519,7 @@ void ctrl_pipe_request_halffill(ctrl_pipe_t *pipe, unsigned long long filled_sta
 
 	pr_err("Snapstore is half-full\n");
 
-	cmd[0] = (unsigned int)VEEAMSNAP_CHARCMD_HALFFILL;
+	cmd[0] = (unsigned int)BLK_SNAP_CHARCMD_HALFFILL;
 	cmd[1] = (unsigned int)(filled_status & 0xFFFFffff); //lo
 	cmd[2] = (unsigned int)(filled_status >> 32);
 
@@ -533,7 +533,7 @@ void ctrl_pipe_request_overflow(ctrl_pipe_t *pipe, unsigned int error_code,
 
 	pr_err("Snapstore overflow\n");
 
-	cmd[0] = (unsigned int)VEEAMSNAP_CHARCMD_OVERFLOW;
+	cmd[0] = (unsigned int)BLK_SNAP_CHARCMD_OVERFLOW;
 	cmd[1] = error_code;
 	cmd[2] = (unsigned int)(filled_status & 0xFFFFffff); //lo
 	cmd[3] = (unsigned int)(filled_status >> 32);
@@ -547,7 +547,7 @@ void ctrl_pipe_request_terminate(ctrl_pipe_t *pipe, unsigned long long filled_st
 
 	pr_err("Snapstore termination\n");
 
-	cmd[0] = (unsigned int)VEEAMSNAP_CHARCMD_TERMINATE;
+	cmd[0] = (unsigned int)BLK_SNAP_CHARCMD_TERMINATE;
 	cmd[1] = (unsigned int)(filled_status & 0xFFFFffff); //lo
 	cmd[2] = (unsigned int)(filled_status >> 32);
 
@@ -560,7 +560,7 @@ void ctrl_pipe_request_invalid(ctrl_pipe_t *pipe)
 
 	pr_err("Ctrl pipe received invalid command\n");
 
-	cmd[0] = VEEAMSNAP_CHARCMD_INVALID;
+	cmd[0] = BLK_SNAP_CHARCMD_INVALID;
 
 	ctrl_pipe_push_request(pipe, cmd, 1);
 }

@@ -34,7 +34,7 @@ struct snap_store *stretch_create_snap_store(struct snap_stretch_store_ctx* stre
     if (params == NULL)
         return NULL;
 
-    params->cmd = VEEAMSNAP_CHARCMD_INITIATE;
+    params->cmd = BLK_SNAP_CHARCMD_INITIATE;
 
     generate_random(params->id, SNAP_ID_LENGTH);
     params->limits = limit;
@@ -53,7 +53,7 @@ struct snap_store *stretch_create_snap_store(struct snap_stretch_store_ctx* stre
     if (res != structSize)
     {
         stretch_ctx->error = errno;
-        //@todo we need set error str: Failed to call VEEAMSNAP_CHARCMD_INITIATE
+        //@todo we need set error str: Failed to call BLK_SNAP_CHARCMD_INITIATE
         return NULL;
     }
 
@@ -85,7 +85,7 @@ int stretch_add_space(struct snap_stretch_store_ctx* stretch_ctx, struct snap_ra
     //@todo use malloc?
     struct stretch_space_portion_params* params = alloca(struct_size);
 
-    params->cmd = VEEAMSNAP_CHARCMD_NEXT_PORTION;
+    params->cmd = BLK_SNAP_CHARCMD_NEXT_PORTION;
     memcpy(params->id, stretch_ctx->snap_store->id, SNAP_ID_LENGTH);
 
     params->range_count = space->count;
@@ -126,7 +126,7 @@ int read_response(struct snap_ctx* snapCtx, int timeout, struct stretch_response
 int read_ack(struct snap_ctx* snapCtx, int timeout)
 {
     struct stretch_response response;
-    if (read_response(snapCtx, timeout, &response) != VEEAMSNAP_CHARCMD_ACKNOWLEDGE)
+    if (read_response(snapCtx, timeout, &response) != BLK_SNAP_CHARCMD_ACKNOWLEDGE)
         return -1; //@todo we need set error: Failed to read ack in init_snap_store
 
     return ((struct acknowledgeResponse*)response.buffer)->status;
@@ -150,17 +150,17 @@ int stretch_run_maintenance_loop(struct snap_stretch_store_ctx* stretch_ctx)
         }
 
         int res = 0;
-        if (cmd == VEEAMSNAP_CHARCMD_HALFFILL)
+        if (cmd == BLK_SNAP_CHARCMD_HALFFILL)
         {
             struct halfFill_response* half_fill = (struct halfFill_response*)response.buffer;
             res = process_half_fill_response(stretch_ctx, half_fill);
         }
-        else if (cmd == VEEAMSNAP_CHARCMD_OVERFLOW)
+        else if (cmd == BLK_SNAP_CHARCMD_OVERFLOW)
         {
             struct overflow_response* overflow = (struct overflow_response*)response.buffer;
             res = process_overflow_response(stretch_ctx, overflow);
         }
-        else if (cmd == VEEAMSNAP_CHARCMD_TERMINATE)
+        else if (cmd == BLK_SNAP_CHARCMD_TERMINATE)
         {
             struct terminate_response* terminate = (struct terminate_response*)response.buffer;
             process_terminate(stretch_ctx, terminate);

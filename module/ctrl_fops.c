@@ -107,9 +107,9 @@ int ioctl_compatibility_flags(unsigned long arg)
 	struct ioctl_compatibility_flags_s param;
 
 	param.flags = 0;
-	param.flags |= VEEAMSNAP_COMPATIBILITY_SNAPSTORE;
+	param.flags |= BLK_SNAP_COMPATIBILITY_SNAPSTORE;
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-	param.flags |= VEEAMSNAP_COMPATIBILITY_MULTIDEV;
+	param.flags |= BLK_SNAP_COMPATIBILITY_MULTIDEV;
 #endif
 
 	if (0 != copy_to_user((void *)arg, &param, sizeof(struct ioctl_compatibility_flags_s))) {
@@ -595,13 +595,13 @@ int ioctl_collect_snapimages(unsigned long arg)
 	return status;
 }
 
-typedef int(veeam_ioctl_t)(unsigned long arg);
-typedef struct veeam_ioctl_table_s {
+typedef int(blk_snap_ioctl_t)(unsigned long arg);
+typedef struct blk_snap_ioctl_table_s {
 	unsigned int cmd;
-	veeam_ioctl_t *fn;
-} veeam_ioctl_table_t;
+	blk_snap_ioctl_t *fn;
+} blk_snap_ioctl_table_t;
 
-static veeam_ioctl_table_t veeam_ioctl_table[] = {
+static blk_snap_ioctl_table_t blk_snap_ioctl_table[] = {
 	{ (IOCTL_COMPATIBILITY_FLAGS), ioctl_compatibility_flags },
 	{ (IOCTL_GETVERSION), ioctl_get_version },
 
@@ -632,9 +632,9 @@ long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	long status = -ENOTTY;
 	size_t inx = 0;
 
-	while (veeam_ioctl_table[inx].cmd != 0) {
-		if (veeam_ioctl_table[inx].cmd == cmd) {
-			status = veeam_ioctl_table[inx].fn(arg);
+	while (blk_snap_ioctl_table[inx].cmd != 0) {
+		if (blk_snap_ioctl_table[inx].cmd == cmd) {
+			status = blk_snap_ioctl_table[inx].fn(arg);
 			break;
 		}
 		++inx;

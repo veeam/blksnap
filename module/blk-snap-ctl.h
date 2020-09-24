@@ -7,20 +7,20 @@
 
 #define MAX_TRACKING_DEVICE_COUNT 256
 
-#define VEEAM_SNAP 0x56730000 // 'sV' <-> "Vs"
+#define BLK_SNAP 0x56730000 // 'sV' <-> "Vs"
 
 #pragma pack(push, 1)
 //////////////////////////////////////////////////////////////////////////
 // version
 
-#define VEEAMSNAP_COMPATIBILITY_SNAPSTORE 0x0000000000000001ull /* rudiment */
-//#define VEEAMSNAP_COMPATIBILITY_BTRFS	 0x0000000000000002ull /* rudiment */
-#define VEEAMSNAP_COMPATIBILITY_MULTIDEV 0x0000000000000004ull
+#define BLK_SNAP_COMPATIBILITY_SNAPSTORE 0x0000000000000001ull /* rudiment */
+//#define BLK_SNAP_COMPATIBILITY_BTRFS	 0x0000000000000002ull /* rudiment */
+#define BLK_SNAP_COMPATIBILITY_MULTIDEV 0x0000000000000004ull
 
 struct ioctl_compatibility_flags_s {
 	unsigned long long flags;
 };
-#define IOCTL_COMPATIBILITY_FLAGS _IOW(VEEAM_SNAP, 0, struct ioctl_compatibility_flags_s)
+#define IOCTL_COMPATIBILITY_FLAGS _IOW(BLK_SNAP, 0, struct ioctl_compatibility_flags_s)
 
 struct ioctl_getversion_s {
 	unsigned short major;
@@ -28,7 +28,7 @@ struct ioctl_getversion_s {
 	unsigned short revision;
 	unsigned short build;
 };
-#define IOCTL_GETVERSION _IOW(VEEAM_SNAP, 1, struct ioctl_getversion_s)
+#define IOCTL_GETVERSION _IOW(BLK_SNAP, 1, struct ioctl_getversion_s)
 
 //////////////////////////////////////////////////////////////////////////
 // tracking
@@ -36,9 +36,9 @@ struct ioctl_dev_id_s {
 	int major;
 	int minor;
 };
-#define IOCTL_TRACKING_ADD _IOW(VEEAM_SNAP, 2, struct ioctl_dev_id_s)
+#define IOCTL_TRACKING_ADD _IOW(BLK_SNAP, 2, struct ioctl_dev_id_s)
 
-#define IOCTL_TRACKING_REMOVE _IOW(VEEAM_SNAP, 3, struct ioctl_dev_id_s)
+#define IOCTL_TRACKING_REMOVE _IOW(BLK_SNAP, 3, struct ioctl_dev_id_s)
 
 struct cbt_info_s {
 	struct ioctl_dev_id_s dev_id;
@@ -54,9 +54,9 @@ struct ioctl_tracking_collect_s {
 		unsigned long long ull_cbt_info;
 	};
 };
-#define IOCTL_TRACKING_COLLECT _IOW(VEEAM_SNAP, 4, struct ioctl_tracking_collect_s)
+#define IOCTL_TRACKING_COLLECT _IOW(BLK_SNAP, 4, struct ioctl_tracking_collect_s)
 
-#define IOCTL_TRACKING_BLOCK_SIZE _IOW(VEEAM_SNAP, 5, unsigned int)
+#define IOCTL_TRACKING_BLOCK_SIZE _IOW(BLK_SNAP, 5, unsigned int)
 
 struct ioctl_tracking_read_cbt_bitmap_s {
 	struct ioctl_dev_id_s dev_id;
@@ -67,7 +67,7 @@ struct ioctl_tracking_read_cbt_bitmap_s {
 		unsigned long long ull_buff;
 	};
 };
-#define IOCTL_TRACKING_READ_CBT_BITMAP _IOR(VEEAM_SNAP, 6, struct ioctl_tracking_read_cbt_bitmap_s)
+#define IOCTL_TRACKING_READ_CBT_BITMAP _IOR(BLK_SNAP, 6, struct ioctl_tracking_read_cbt_bitmap_s)
 
 struct block_range_s {
 	unsigned long long ofs; //sectors
@@ -83,7 +83,7 @@ struct ioctl_tracking_mark_dirty_blocks_s {
 	};
 };
 #define IOCTL_TRACKING_MARK_DIRTY_BLOCKS                                                           \
-	_IOR(VEEAM_SNAP, 7, struct ioctl_tracking_mark_dirty_blocks_s)
+	_IOR(BLK_SNAP, 7, struct ioctl_tracking_mark_dirty_blocks_s)
 //////////////////////////////////////////////////////////////////////////
 // snapshot
 
@@ -95,15 +95,15 @@ struct ioctl_snapshot_create_s {
 		unsigned long long ull_dev_id;
 	};
 };
-#define IOCTL_SNAPSHOT_CREATE _IOW(VEEAM_SNAP, 0x10, struct ioctl_snapshot_create_s)
+#define IOCTL_SNAPSHOT_CREATE _IOW(BLK_SNAP, 0x10, struct ioctl_snapshot_create_s)
 
-#define IOCTL_SNAPSHOT_DESTROY _IOR(VEEAM_SNAP, 0x11, unsigned long long)
+#define IOCTL_SNAPSHOT_DESTROY _IOR(BLK_SNAP, 0x11, unsigned long long)
 
 struct ioctl_snapshot_errno_s {
 	struct ioctl_dev_id_s dev_id;
 	int err_code;
 };
-#define IOCTL_SNAPSHOT_ERRNO _IOW(VEEAM_SNAP, 0x12, struct ioctl_snapshot_errno_s)
+#define IOCTL_SNAPSHOT_ERRNO _IOW(BLK_SNAP, 0x12, struct ioctl_snapshot_errno_s)
 
 struct ioctl_range_s {
 	unsigned long long left;
@@ -121,7 +121,7 @@ struct ioctl_snapstore_create_s {
 		unsigned long long ull_dev_id;
 	};
 };
-#define IOCTL_SNAPSTORE_CREATE _IOR(VEEAM_SNAP, 0x28, struct ioctl_snapstore_create_s)
+#define IOCTL_SNAPSTORE_CREATE _IOR(BLK_SNAP, 0x28, struct ioctl_snapstore_create_s)
 
 struct ioctl_snapstore_file_add_s {
 	unsigned char id[16];
@@ -131,19 +131,19 @@ struct ioctl_snapstore_file_add_s {
 		unsigned long long ull_ranges;
 	};
 };
-#define IOCTL_SNAPSTORE_FILE _IOR(VEEAM_SNAP, 0x29, struct ioctl_snapstore_file_add_s)
+#define IOCTL_SNAPSTORE_FILE _IOR(BLK_SNAP, 0x29, struct ioctl_snapstore_file_add_s)
 
 struct ioctl_snapstore_memory_limit_s {
 	unsigned char id[16];
 	unsigned long long size;
 };
-#define IOCTL_SNAPSTORE_MEMORY _IOR(VEEAM_SNAP, 0x2A, struct ioctl_snapstore_memory_limit_s)
+#define IOCTL_SNAPSTORE_MEMORY _IOR(BLK_SNAP, 0x2A, struct ioctl_snapstore_memory_limit_s)
 
 struct ioctl_snapstore_cleanup_s {
 	unsigned char id[16];
 	unsigned long long filled_bytes;
 };
-#define IOCTL_SNAPSTORE_CLEANUP _IOW(VEEAM_SNAP, 0x2B, struct ioctl_snapstore_cleanup_s)
+#define IOCTL_SNAPSTORE_CLEANUP _IOW(BLK_SNAP, 0x2B, struct ioctl_snapstore_cleanup_s)
 
 struct ioctl_snapstore_file_add_multidev_s {
 	unsigned char id[16];
@@ -155,7 +155,7 @@ struct ioctl_snapstore_file_add_multidev_s {
 	};
 };
 #define IOCTL_SNAPSTORE_FILE_MULTIDEV                                                              \
-	_IOR(VEEAM_SNAP, 0x2C, struct ioctl_snapstore_file_add_multidev_s)
+	_IOR(BLK_SNAP, 0x2C, struct ioctl_snapstore_file_add_multidev_s)
 //////////////////////////////////////////////////////////////////////////
 // collect snapshot images
 
@@ -171,19 +171,19 @@ struct ioctl_collect_shapshot_images_s {
 		unsigned long long ull_image_info;
 	};
 };
-#define IOCTL_COLLECT_SNAPSHOT_IMAGES _IOW(VEEAM_SNAP, 0x30, struct ioctl_collect_shapshot_images_s)
+#define IOCTL_COLLECT_SNAPSHOT_IMAGES _IOW(BLK_SNAP, 0x30, struct ioctl_collect_shapshot_images_s)
 
 #pragma pack(pop)
 
 // commands for character device interface
-#define VEEAMSNAP_CHARCMD_UNDEFINED 0x00
-#define VEEAMSNAP_CHARCMD_ACKNOWLEDGE 0x01
-#define VEEAMSNAP_CHARCMD_INVALID 0xFF
+#define BLK_SNAP_CHARCMD_UNDEFINED 0x00
+#define BLK_SNAP_CHARCMD_ACKNOWLEDGE 0x01
+#define BLK_SNAP_CHARCMD_INVALID 0xFF
 // to module commands
-#define VEEAMSNAP_CHARCMD_INITIATE 0x21
-#define VEEAMSNAP_CHARCMD_NEXT_PORTION 0x22
-#define VEEAMSNAP_CHARCMD_NEXT_PORTION_MULTIDEV 0x23
+#define BLK_SNAP_CHARCMD_INITIATE 0x21
+#define BLK_SNAP_CHARCMD_NEXT_PORTION 0x22
+#define BLK_SNAP_CHARCMD_NEXT_PORTION_MULTIDEV 0x23
 // from module commands
-#define VEEAMSNAP_CHARCMD_HALFFILL 0x41
-#define VEEAMSNAP_CHARCMD_OVERFLOW 0x42
-#define VEEAMSNAP_CHARCMD_TERMINATE 0x43
+#define BLK_SNAP_CHARCMD_HALFFILL 0x41
+#define BLK_SNAP_CHARCMD_OVERFLOW 0x42
+#define BLK_SNAP_CHARCMD_TERMINATE 0x43

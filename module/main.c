@@ -21,7 +21,7 @@
 
 #include <linux/notifier.h>
 #include <linux/blk-filter.h>
-#define VEEAMSNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
+#define BLK_SNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
 
 #include <linux/syscore_ops.h> //more modern method
 
@@ -57,11 +57,11 @@ int get_change_tracking_block_size_pow(void)
 	return g_param_change_tracking_block_size_pow;
 }
 
-static int veeamsnap_major = 0;
+static int blk_snap_major = 0;
 
-int get_veeamsnap_major(void)
+int get_blk_snap_major(void)
 {
-	return veeamsnap_major;
+	return blk_snap_major;
 }
 
 blk_qc_t filter_submit_original_bio(struct bio *bio);
@@ -94,7 +94,7 @@ static const struct blk_filter_ops g_filter_ops = { .disk_add = filter_disk_add,
 
 static struct blk_filter g_filter = { .name = MODULE_NAME,
 				      .ops = &g_filter_ops,
-				      .altitude = VEEAMSNAP_DEFAULT_ALTITUDE,
+				      .altitude = BLK_SNAP_DEFAULT_ALTITUDE,
 				      .blk_filter_ctx = NULL };
 
 blk_qc_t filter_submit_original_bio(struct bio *bio)
@@ -102,7 +102,7 @@ blk_qc_t filter_submit_original_bio(struct bio *bio)
 	return blk_filter_submit_bio_next(&g_filter, bio);
 }
 
-static struct device *veeamsnap_device = NULL;
+static struct device *blk_snap_device = NULL;
 
 static struct file_operations ctrl_fops = { .owner = THIS_MODULE,
 					    .read = ctrl_read,
@@ -124,7 +124,7 @@ struct syscore_ops blk_snap_syscore_ops = {
 	.shutdown = blk_snap_syscore_shutdown,
 };
 
-int __init veeamsnap_init(void)
+int __init blk_snap_init(void)
 {
 	int result = SUCCESS;
 
@@ -160,14 +160,14 @@ int __init veeamsnap_init(void)
 
 		register_syscore_ops(&blk_snap_syscore_ops);
 
-		veeamsnap_major = register_chrdev(0, MODULE_NAME, &ctrl_fops);
-		if (veeamsnap_major < 0) {
+		blk_snap_major = register_chrdev(0, MODULE_NAME, &ctrl_fops);
+		if (blk_snap_major < 0) {
 			pr_err("Failed to register a character device. errno=%d\n",
-			       veeamsnap_major);
-			result = veeamsnap_major;
+			       blk_snap_major);
+			result = blk_snap_major;
 			break;
 		}
-		pr_info("Module major [%d]\n", veeamsnap_major);
+		pr_info("Module major [%d]\n", blk_snap_major);
 
 		if ((result = blk_redirect_bioset_create()) != SUCCESS)
 			break;
@@ -178,7 +178,7 @@ int __init veeamsnap_init(void)
 		if ((result = snapimage_init()) != SUCCESS)
 			break;
 
-		if ((result = ctrl_sysfs_init(&veeamsnap_device)) != SUCCESS) {
+		if ((result = ctrl_sysfs_init(&blk_snap_device)) != SUCCESS) {
 			pr_err("Failed to initialize sysfs attributes\n");
 			break;
 		}
@@ -198,14 +198,14 @@ int __init veeamsnap_init(void)
 	return result;
 }
 
-void __exit veeamsnap_exit(void)
+void __exit blk_snap_exit(void)
 {
 	int result;
 	pr_info("Unloading module\n");
 
 	unregister_syscore_ops(&blk_snap_syscore_ops);
 
-	ctrl_sysfs_done(&veeamsnap_device);
+	ctrl_sysfs_done(&blk_snap_device);
 
 	snapshot_Done();
 
@@ -224,13 +224,13 @@ void __exit veeamsnap_exit(void)
 
 	blk_redirect_bioset_free();
 
-	unregister_chrdev(veeamsnap_major, MODULE_NAME);
+	unregister_chrdev(blk_snap_major, MODULE_NAME);
 
 	ctrl_done();
 }
 
-module_init(veeamsnap_init);
-module_exit(veeamsnap_exit);
+module_init(blk_snap_init);
+module_exit(blk_snap_exit);
 
 module_param_named(zerosnapdata, g_param_zerosnapdata, int, 0644);
 MODULE_PARM_DESC(zerosnapdata, "Zeroing snapshot data algorithm determine.");
@@ -256,7 +256,7 @@ MODULE_PARM_DESC(change_tracking_block_size_pow,
 module_param_named(fixflags, g_param_fixflags, uint, 0644);
 MODULE_PARM_DESC(fixflags, "Flags for known issues");
 
-MODULE_DESCRIPTION("Veeam Snapshot Kernel Module");
+MODULE_DESCRIPTION("Block Layer Snapshot Kernel Module");
 MODULE_VERSION(FILEVER_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");

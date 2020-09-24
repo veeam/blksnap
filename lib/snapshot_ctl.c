@@ -28,7 +28,6 @@ int snap_ctx_create(struct snap_ctx** ctx)
         return -1;
 
     (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
-//    (*ctx)->fd = open( "/dev/veeamsnap", O_RDWR );
     if ((*ctx)->fd == -1)
     {
         error = errno;

@@ -1,5 +1,5 @@
-#ifndef BLKSNAP_LIB_SNAPSHOT_CTL_H
-#define BLKSNAP_LIB_SNAPSHOT_CTL_H
+#ifndef BLK_SNAP_LIB_SNAPSHOT_CTL_H
+#define BLK_SNAP_LIB_SNAPSHOT_CTL_H
 
 #ifdef  __cplusplus
 extern "C" {
@@ -78,4 +78,4 @@ int snap_write(struct snap_ctx* ctx, void *buf, size_t length);
 }
 #endif
 
-#endif //BLKSNAP_LIB_SNAPSHOT_CTL_H
+#endif //BLK_SNAP_LIB_SNAPSHOT_CTL_H

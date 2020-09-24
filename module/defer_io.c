@@ -11,8 +11,8 @@
 
 #include <linux/kthread.h>
 
-#define VEEAMIMAGE_THROTTLE_TIMEOUT (1 * HZ) //delay 1 sec
-//#define VEEAMIMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )	//delay 10 ms
+#define BLK_IMAGE_THROTTLE_TIMEOUT (1 * HZ) //delay 1 sec
+//#define BLK_IMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )	//delay 10 ms
 
 blk_qc_t filter_submit_original_bio(struct bio *bio);
 
@@ -196,7 +196,7 @@ int defer_io_work_thread(void *p)
 			int res = wait_event_interruptible_timeout(
 				defer_io->queue_add_event,
 				(!defer_io_queue_empty(defer_io->dio_queue)),
-				VEEAMIMAGE_THROTTLE_TIMEOUT);
+				BLK_IMAGE_THROTTLE_TIMEOUT);
 			if (-ERESTARTSYS == res)
 				pr_err("Signal received in defer IO thread. Waiting for completion with code ERESTARTSYS\n");
 		}
@@ -333,7 +333,7 @@ int defer_io_create(dev_t dev_id, struct block_device *blk_dev, defer_io_t **pp_
 	init_waitqueue_head(&defer_io->queue_throttle_waiter);
 
 	defer_io->dio_thread = kthread_create(defer_io_work_thread, (void *)defer_io,
-					      "veeamdeferio%d:%d", MAJOR(dev_id), MINOR(dev_id));
+					      "blksnapdeferio%d:%d", MAJOR(dev_id), MINOR(dev_id));
 	if (IS_ERR(defer_io->dio_thread)) {
 		res = PTR_ERR(defer_io->dio_thread);
 		pr_err("Unable to create defer IO processor: failed to create thread. errno=%d\n",
