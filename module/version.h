@@ -1,5 +1,5 @@
-#ifndef VERSION_H_
-#define VERSION_H_
+/* SPDX-License-Identifier: GPL-2.0 */
+#pragma once
 
 // these values are sed'ed so they may be empty
 
@@ -11,5 +11,3 @@
 #define VERSION_STRING(maj, min, rev) _VERSION_STRING(maj, min, rev)
 
 #define FILEVER_STR VERSION_STRING(FILEVER_MAJOR, FILEVER_MINOR, FILEVER_REVISION)
-
-#endif /* VERSION_H_ */

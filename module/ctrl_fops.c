@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+#define BLK_SNAP_SECTION "-ctrl"
 #include "common.h"
-#ifdef MODSECTION
-#undef MODSECTION
-#define MODSECTION "-ctrl"
-#endif
-
 #include "blk-snap-ctl.h"
 #include "ctrl_fops.h"
 #include "version.h"
@@ -23,10 +20,10 @@ int get_change_tracking_block_size_pow(void);
 
 static atomic_t g_dev_open_cnt = ATOMIC_INIT(0);
 
-static struct ioctl_getversion_s version = { .major = FILEVER_MAJOR,
-					     .minor = FILEVER_MINOR,
-					     .revision = FILEVER_REVISION,
-					     .build = 0 };
+static struct ioctl_getversion_s g_version = { .major = FILEVER_MAJOR,
+					       .minor = FILEVER_MINOR,
+					       .revision = FILEVER_REVISION,
+					       .build = 0 };
 
 void ctrl_done(void)
 {
@@ -124,7 +121,7 @@ int ioctl_get_version(unsigned long arg)
 {
 	pr_info("Get version\n");
 
-	if (0 != copy_to_user((void *)arg, &version, sizeof(struct ioctl_getversion_s))) {
+	if (0 != copy_to_user((void *)arg, &g_version, sizeof(struct ioctl_getversion_s))) {
 		pr_err("Unable to get version: invalid user buffer\n");
 		return -ENODATA;
 	}

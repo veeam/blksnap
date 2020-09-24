@@ -1,9 +1,10 @@
-#ifndef COMMON_H_
-#define COMMON_H_
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+#pragma once
 
-#define MODSECTION ""
-
-#define pr_fmt(fmt) KBUILD_MODNAME MODSECTION ": " fmt
+#ifndef BLK_SNAP_SECTION
+#define BLK_SNAP_SECTION ""
+#endif
+#define pr_fmt(fmt) KBUILD_MODNAME BLK_SNAP_SECTION ": " fmt
 
 #include <linux/version.h> /*rudiment - needed for using KERNEL_VERSION */
 
@@ -19,5 +20,3 @@
 #ifndef SUCCESS
 #define SUCCESS 0
 #endif
-
-#endif /* COMMON_H_ */

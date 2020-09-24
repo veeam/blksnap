@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include "common.h"
 #include "version.h"
 #include "blk-snap-ctl.h"
@@ -128,14 +129,9 @@ int __init blk_snap_init(void)
 {
 	int result = SUCCESS;
 
-	pr_info("================================================================================\n");
 	pr_info("Loading\n");
-	pr_info("Version: %s\n", FILEVER_STR);
-
 	pr_info("snapstore_block_size_pow: %d\n", g_param_snapstore_block_size_pow);
 	pr_info("change_tracking_block_size_pow: %d\n", g_param_change_tracking_block_size_pow);
-	pr_info("logdir: %s\n", g_logdir);
-	pr_info("logmaxsize: %ld\n", g_param_logmaxsize);
 
 	if (g_param_snapstore_block_size_pow > 23) {
 		g_param_snapstore_block_size_pow = 23;

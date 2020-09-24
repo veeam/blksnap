@@ -1,4 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
+
 #include <linux/kref.h>
 #include <linux/wait.h>
 #include <linux/kfifo.h>

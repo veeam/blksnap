@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+#define BLK_SNAP_SECTION "-snapshot"
 #include "common.h"
-#ifdef MODSECTION
-#undef MODSECTION
-#define MODSECTION "-snapshot"
-#endif
-
 #include "snapshot.h"
 #include "tracker.h"
 #include "snapimage.h"

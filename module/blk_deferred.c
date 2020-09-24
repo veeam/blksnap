@@ -1,8 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+#define BLK_SNAP_SECTION "-deferred"
 #include "common.h"
-#ifdef MODSECTION
-#undef MODSECTION
-#define MODSECTION "-deferred"
-#endif
 
 #include "blk_deferred.h"
 #include "blk_util.h"

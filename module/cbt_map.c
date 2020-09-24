@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+#define BLK_SNAP_SECTION "-cbt_map"
 #include "common.h"
-#ifdef MODSECTION
-#undef MODSECTION
-#define MODSECTION "-cbt_map"
-#endif
-
 #include "cbt_map.h"
 
 int cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,

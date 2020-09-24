@@ -1,8 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+#define BLK_SNAP_SECTION "-snapstore"
 #include "common.h"
-#ifdef MODSECTION
-#undef MODSECTION
-#define MODSECTION "-snapstore"
-#endif
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 

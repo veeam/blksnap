@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
+#define BLK_SNAP_SECTION "-tracker"
 #include "common.h"
-#ifdef MODSECTION
-#undef MODSECTION
-#define MODSECTION "-tracker"
-#endif
-
 #include "tracker.h"
 #include "blk_util.h"
 

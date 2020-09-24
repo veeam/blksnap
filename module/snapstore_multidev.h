@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
