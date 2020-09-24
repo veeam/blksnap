@@ -15,7 +15,7 @@ void tracker_done(void)
 	tracker_remove_all();
 }
 
-int tracker_find_by_queue(struct gendisk *disk, u8 partno, tracker_t **ptracker)
+int tracker_find_by_queue(struct gendisk *disk, u8 partno, struct tracker **ptracker)
 {
 	int result = -ENODATA;
 
@@ -24,7 +24,7 @@ int tracker_find_by_queue(struct gendisk *disk, u8 partno, tracker_t **ptracker)
 		struct list_head *_head;
 
 		list_for_each (_head, &trackers) {
-			tracker_t *_tracker = list_entry(_head, tracker_t, link);
+			struct tracker *_tracker = list_entry(_head, struct tracker, link);
 
 			if ((disk == _tracker->target_dev->bd_disk) &&
 			    (partno == _tracker->target_dev->bd_partno)) {
@@ -41,7 +41,7 @@ int tracker_find_by_queue(struct gendisk *disk, u8 partno, tracker_t **ptracker)
 	return result;
 }
 
-int tracker_find_by_dev_id(dev_t dev_id, tracker_t **ptracker)
+int tracker_find_by_dev_id(dev_t dev_id, struct tracker **ptracker)
 {
 	int result = -ENODATA;
 
@@ -50,7 +50,7 @@ int tracker_find_by_dev_id(dev_t dev_id, tracker_t **ptracker)
 		struct list_head *_head;
 
 		list_for_each (_head, &trackers) {
-			tracker_t *_tracker = list_entry(_head, tracker_t, link);
+			struct tracker *_tracker = list_entry(_head, struct tracker, link);
 
 			if (_tracker->original_dev_id == dev_id) {
 				if (ptracker != NULL)
@@ -76,7 +76,7 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_c
 		struct list_head *_head;
 
 		list_for_each (_head, &trackers) {
-			tracker_t *tracker = list_entry(_head, tracker_t, link);
+			struct tracker *tracker = list_entry(_head, struct tracker, link);
 
 			if (count >= max_count) {
 				result = -ENOBUFS;
@@ -116,7 +116,7 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_c
 	return result;
 }
 
-void tracker_cbt_start(tracker_t *tracker, unsigned long long snapshot_id)
+void tracker_cbt_start(struct tracker *tracker, unsigned long long snapshot_id)
 {
 	tracker_snapshot_id_set(tracker, snapshot_id);
 }
@@ -167,14 +167,14 @@ static int blk_freeze_bdev(dev_t dev_id, struct block_device *device,
 }
 
 int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cbt_block_size_degree,
-		   cbt_map_t *cbt_map, tracker_t **ptracker)
+		   struct cbt_map *cbt_map, struct tracker **ptracker)
 {
 	int result = SUCCESS;
-	tracker_t *tracker = NULL;
+	struct tracker *tracker = NULL;
 
 	*ptracker = NULL;
 
-	tracker = kzalloc(sizeof(tracker_t), GFP_KERNEL);
+	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
 	if (NULL == tracker)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&tracker->link);
@@ -247,7 +247,7 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 	return result;
 }
 
-int _tracker_remove(tracker_t *tracker)
+int _tracker_remove(struct tracker *tracker)
 {
 	int result = SUCCESS;
 
@@ -280,7 +280,7 @@ int _tracker_remove(tracker_t *tracker)
 	return result;
 }
 
-int tracker_remove(tracker_t *tracker)
+int tracker_remove(struct tracker *tracker)
 {
 	int result = _tracker_remove(tracker);
 
@@ -295,7 +295,7 @@ int tracker_remove(tracker_t *tracker)
 
 void tracker_remove_all(void)
 {
-	tracker_t *tracker;
+	struct tracker *tracker;
 
 	pr_info("Removing all devices from tracking\n");
 
@@ -304,7 +304,7 @@ void tracker_remove_all(void)
 
 		write_lock(&trackers_lock);
 		if (!list_empty(&trackers)) {
-			tracker = list_entry(trackers.next, tracker_t, link);
+			tracker = list_entry(trackers.next, struct tracker, link);
 
 			list_del(&tracker->link);
 		}
@@ -323,7 +323,7 @@ void tracker_remove_all(void)
 	} while (tracker);
 }
 
-void tracker_cbt_bitmap_set(tracker_t *tracker, sector_t sector, sector_t sector_cnt)
+void tracker_cbt_bitmap_set(struct tracker *tracker, sector_t sector, sector_t sector_cnt)
 {
 	if (tracker->cbt_map == NULL)
 		return;
@@ -341,7 +341,7 @@ void tracker_cbt_bitmap_set(tracker_t *tracker, sector_t sector, sector_t sector
 	}
 }
 
-bool tracker_cbt_bitmap_lock(tracker_t *tracker)
+bool tracker_cbt_bitmap_lock(struct tracker *tracker)
 {
 	if (NULL == tracker->cbt_map)
 		return false;
@@ -355,13 +355,13 @@ bool tracker_cbt_bitmap_lock(tracker_t *tracker)
 	return true;
 }
 
-void tracker_cbt_bitmap_unlock(tracker_t *tracker)
+void tracker_cbt_bitmap_unlock(struct tracker *tracker)
 {
 	if (tracker->cbt_map)
 		cbt_map_read_unlock(tracker->cbt_map);
 }
 
-int _tracker_capture_snapshot(tracker_t *tracker)
+int _tracker_capture_snapshot(struct tracker *tracker)
 {
 	int result = SUCCESS;
 
@@ -386,15 +386,15 @@ int _tracker_capture_snapshot(tracker_t *tracker)
 	return result;
 }
 
-int tracker_capture_snapshot(snapshot_t *snapshot)
+int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 {
 	int result = SUCCESS;
 	int inx = 0;
 
-	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
+	for (inx = 0; inx < dev_id_set_size; ++inx) {
 		struct super_block *superblock = NULL;
-		tracker_t *tracker = NULL;
-		dev_t dev_id = snapshot->dev_id_set[inx];
+		struct tracker *tracker = NULL;
+		dev_t dev_id = dev_id_set[inx];
 
 		result = tracker_find_by_dev_id(dev_id, &tracker);
 		if (result != SUCCESS) {
@@ -422,9 +422,9 @@ int tracker_capture_snapshot(snapshot_t *snapshot)
 	if (result != SUCCESS)
 		return result;
 
-	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
-		tracker_t *p_tracker = NULL;
-		dev_t dev_id = snapshot->dev_id_set[inx];
+	for (inx = 0; inx < dev_id_set_size; ++inx) {
+		struct tracker *p_tracker = NULL;
+		dev_t dev_id = dev_id_set[inx];
 
 		result = tracker_find_by_dev_id(dev_id, &p_tracker);
 		if (result != SUCCESS) {
@@ -445,18 +445,18 @@ int tracker_capture_snapshot(snapshot_t *snapshot)
 		int status;
 		pr_err("Failed to capture snapshot. errno=%d\n", result);
 
-		status = tracker_release_snapshot(snapshot);
+		status = tracker_release_snapshot(dev_id_set, dev_id_set_size);
 		if (status != SUCCESS)
 			pr_err("Failed to perfrom snapshot cleanup. errno=%d\n", status);
 	}
 	return result;
 }
 
-int _tracker_release_snapshot(tracker_t *tracker)
+int _tracker_release_snapshot(struct tracker *tracker)
 {
 	int result = SUCCESS;
 	struct super_block *superblock = NULL;
-	defer_io_t *defer_io = tracker->defer_io;
+	struct defer_io *defer_io = tracker->defer_io;
 
 	if (tracker->is_unfreezable)
 		down_write(&tracker->unfreezable_lock);
@@ -480,16 +480,15 @@ int _tracker_release_snapshot(tracker_t *tracker)
 	return result;
 }
 
-int tracker_release_snapshot(snapshot_t *snapshot)
+int tracker_release_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 {
 	int result = SUCCESS;
 	int inx = 0;
-	pr_info("Release snapshot [0x%llx]\n", snapshot->id);
 
-	for (; inx < snapshot->dev_id_set_size; ++inx) {
+	for (; inx < dev_id_set_size; ++inx) {
 		int status;
-		tracker_t *p_tracker = NULL;
-		dev_t dev = snapshot->dev_id_set[inx];
+		struct tracker *p_tracker = NULL;
+		dev_t dev = dev_id_set[inx];
 
 		status = tracker_find_by_dev_id(dev, &p_tracker);
 		if (status == SUCCESS) {
@@ -509,12 +508,12 @@ int tracker_release_snapshot(snapshot_t *snapshot)
 	return result;
 }
 
-void tracker_snapshot_id_set(tracker_t *tracker, unsigned long long snapshot_id)
+void tracker_snapshot_id_set(struct tracker *tracker, unsigned long long snapshot_id)
 {
 	tracker->snapshot_id = snapshot_id;
 }
 
-unsigned long long tracker_snapshot_id_get(tracker_t *tracker)
+unsigned long long tracker_snapshot_id_get(struct tracker *tracker)
 {
 	return tracker->snapshot_id;
 }

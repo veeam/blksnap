@@ -15,7 +15,7 @@
 bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
 {
 	bool was_catched = false;
-	tracker_t *tracker = NULL;
+	struct tracker *tracker = NULL;
 
 	bio_get(bio);
 
@@ -61,7 +61,7 @@ bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
 int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long long snapshot_id)
 {
 	int result = SUCCESS;
-	tracker_t *tracker = NULL;
+	struct tracker *tracker = NULL;
 
 	pr_info("Adding device [%d:%d] under tracking\n", MAJOR(dev_id), MINOR(dev_id));
 
@@ -159,7 +159,7 @@ int tracking_add(dev_t dev_id, unsigned int cbt_block_size_degree, unsigned long
 int tracking_remove(dev_t dev_id)
 {
 	int result = SUCCESS;
-	tracker_t *tracker = NULL;
+	struct tracker *tracker = NULL;
 
 	pr_info("Removing device [%d:%d] from tracking\n", MAJOR(dev_id), MINOR(dev_id));
 
@@ -207,7 +207,7 @@ int tracking_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 			     void __user *user_buff)
 {
 	int result = SUCCESS;
-	tracker_t *tracker = NULL;
+	struct tracker *tracker = NULL;
 
 	result = tracker_find_by_dev_id(dev_id, &tracker);
 	if (SUCCESS == result) {

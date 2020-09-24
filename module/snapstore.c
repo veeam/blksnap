@@ -12,9 +12,9 @@
 LIST_HEAD(snapstores);
 DECLARE_RWSEM(snapstores_lock);
 
-bool _snapstore_check_halffill(snapstore_t *snapstore, sector_t *fill_status)
+bool _snapstore_check_halffill(struct snapstore *snapstore, sector_t *fill_status)
 {
-	blk_descr_pool_t *pool = NULL;
+	struct blk_descr_pool *pool = NULL;
 
 	if (snapstore->file)
 		pool = &snapstore->file->pool;
@@ -31,7 +31,7 @@ bool _snapstore_check_halffill(snapstore_t *snapstore, sector_t *fill_status)
 	return false;
 }
 
-void _snapstore_destroy(snapstore_t *snapstore)
+void _snapstore_destroy(struct snapstore *snapstore)
 {
 	sector_t fill_status;
 
@@ -51,7 +51,7 @@ void _snapstore_destroy(snapstore_t *snapstore)
 		snapstore_file_destroy(snapstore->file);
 
 	if (snapstore->ctrl_pipe) {
-		ctrl_pipe_t *pipe = snapstore->ctrl_pipe;
+		struct ctrl_pipe *pipe = snapstore->ctrl_pipe;
 		snapstore->ctrl_pipe = NULL;
 
 		ctrl_pipe_request_terminate(pipe, fill_status);
@@ -64,12 +64,12 @@ void _snapstore_destroy(snapstore_t *snapstore)
 
 static void _snapstore_destroy_cb(struct kref *kref)
 {
-	snapstore_t *snapstore = container_of(kref, snapstore_t, refcount);
+	struct snapstore *snapstore = container_of(kref, struct snapstore, refcount);
 
 	_snapstore_destroy(snapstore);
 }
 
-snapstore_t *snapstore_get(snapstore_t *snapstore)
+struct snapstore *snapstore_get(struct snapstore *snapstore)
 {
 	if (snapstore)
 		kref_get(&snapstore->refcount);
@@ -77,7 +77,7 @@ snapstore_t *snapstore_get(snapstore_t *snapstore)
 	return snapstore;
 };
 
-void snapstore_put(snapstore_t *snapstore)
+void snapstore_put(struct snapstore *snapstore)
 {
 	if (snapstore)
 		kref_put(&snapstore->refcount, _snapstore_destroy_cb);
@@ -100,12 +100,12 @@ int snapstore_create(uuid_t *id, dev_t snapstore_dev_id, dev_t *dev_id_set,
 {
 	int res = SUCCESS;
 	size_t dev_id_inx;
-	snapstore_t *snapstore = NULL;
+	struct snapstore *snapstore = NULL;
 
 	if (dev_id_set_length == 0)
 		return -EINVAL;
 
-	snapstore = kzalloc(sizeof(snapstore_t), GFP_KERNEL);
+	snapstore = kzalloc(sizeof(struct snapstore), GFP_KERNEL);
 	if (snapstore == NULL)
 		return -ENOMEM;
 
@@ -128,7 +128,7 @@ int snapstore_create(uuid_t *id, dev_t snapstore_dev_id, dev_t *dev_id_set,
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore_dev_id == 0xFFFFffff) {
-		snapstore_multidev_t *multidev = NULL;
+		struct snapstore_multidev *multidev = NULL;
 		res = snapstore_multidev_create(&multidev);
 		if (res != SUCCESS) {
 			kfree(snapstore);
@@ -140,7 +140,7 @@ int snapstore_create(uuid_t *id, dev_t snapstore_dev_id, dev_t *dev_id_set,
 	}
 #endif
 	else {
-		snapstore_file_t *file = NULL;
+		struct snapstore_file *file = NULL;
 		res = snapstore_file_create(snapstore_dev_id, &file);
 		if (res != SUCCESS) {
 			kfree(snapstore);
@@ -175,13 +175,13 @@ int snapstore_create_multidev(uuid_t *id, dev_t *dev_id_set, size_t dev_id_set_l
 {
 	int res = SUCCESS;
 	size_t dev_id_inx;
-	snapstore_t *snapstore = NULL;
-	snapstore_multidev_t *multidev = NULL;
+	struct snapstore *snapstore = NULL;
+	struct snapstore_multidev *multidev = NULL;
 
 	if (dev_id_set_length == 0)
 		return -EINVAL;
 
-	snapstore = kzalloc(sizeof(snapstore_t), GFP_KERNEL);
+	snapstore = kzalloc(sizeof(struct snapstore), GFP_KERNEL);
 	if (snapstore == NULL)
 		return -ENOMEM;
 
@@ -246,16 +246,16 @@ int snapstore_cleanup(uuid_t *id, u64 *filled_bytes)
 	return snapstore_device_cleanup(id);
 }
 
-snapstore_t *_snapstore_find(uuid_t *id)
+struct snapstore *_snapstore_find(uuid_t *id)
 {
-	snapstore_t *result = NULL;
+	struct snapstore *result = NULL;
 
 	down_read(&snapstores_lock);
 	if (!list_empty(&snapstores)) {
 		struct list_head *_head;
 
 		list_for_each (_head, &snapstores) {
-			snapstore_t *snapstore = list_entry(_head, snapstore_t, link);
+			struct snapstore *snapstore = list_entry(_head, struct snapstore, link);
 
 			if (uuid_equal(&snapstore->id, id)) {
 				result = snapstore;
@@ -268,9 +268,9 @@ snapstore_t *_snapstore_find(uuid_t *id)
 	return result;
 }
 
-int snapstore_stretch_initiate(uuid_t *unique_id, ctrl_pipe_t *ctrl_pipe, sector_t empty_limit)
+int snapstore_stretch_initiate(uuid_t *unique_id, struct ctrl_pipe *ctrl_pipe, sector_t empty_limit)
 {
-	snapstore_t *snapstore = _snapstore_find(unique_id);
+	struct snapstore *snapstore = _snapstore_find(unique_id);
 	if (NULL == snapstore) {
 		pr_err("Unable to initiate stretch snapstore: cannot find snapstore by uuid %pUB\n",
 		       unique_id);
@@ -286,7 +286,7 @@ int snapstore_stretch_initiate(uuid_t *unique_id, ctrl_pipe_t *ctrl_pipe, sector
 int snapstore_add_memory(uuid_t *id, unsigned long long sz)
 {
 	int res = SUCCESS;
-	snapstore_t *snapstore = NULL;
+	struct snapstore *snapstore = NULL;
 
 	pr_info("Adding %lld bytes to the snapstore\n", sz);
 
@@ -341,7 +341,7 @@ int snapstore_add_memory(uuid_t *id, unsigned long long sz)
 
 int rangelist_add(struct list_head *rglist, struct blk_range *rg)
 {
-	blk_range_link_t *range_link = kzalloc(sizeof(blk_range_link_t), GFP_KERNEL);
+	struct blk_range_link *range_link = kzalloc(sizeof(struct blk_range_link), GFP_KERNEL);
 	if (range_link == NULL)
 		return -ENOMEM;
 
@@ -358,8 +358,8 @@ int rangelist_add(struct list_head *rglist, struct blk_range *rg)
 int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 {
 	int res = SUCCESS;
-	snapstore_t *snapstore = NULL;
-	snapstore_device_t *snapstore_device = NULL;
+	struct snapstore *snapstore = NULL;
+	struct snapstore_device *snapstore_device = NULL;
 	sector_t current_blk_size = 0;
 	LIST_HEAD(blk_rangelist);
 	size_t inx;
@@ -455,7 +455,8 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 static int rangelist_ex_add(struct list_head *list, struct blk_range *rg,
 			    struct block_device *blk_dev)
 {
-	blk_range_link_ex_t *range_link = kzalloc(sizeof(blk_range_link_ex_t), GFP_KERNEL);
+	struct blk_range_link_ex *range_link =
+		kzalloc(sizeof(struct blk_range_link_ex), GFP_KERNEL);
 	if (range_link == NULL)
 		return -ENOMEM;
 
@@ -473,7 +474,7 @@ static int rangelist_ex_add(struct list_head *list, struct blk_range *rg,
 int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, size_t ranges_cnt)
 {
 	int res = SUCCESS;
-	snapstore_t *snapstore = NULL;
+	struct snapstore *snapstore = NULL;
 	sector_t current_blk_size = 0;
 	size_t inx;
 	LIST_HEAD(blk_rangelist);
@@ -580,7 +581,7 @@ void snapstore_order_border(struct blk_range *in, struct blk_range *out)
 		out->cnt += (snapstore_block_size() - unorder.cnt);
 }
 
-union blk_descr_unify snapstore_get_empty_block(snapstore_t *snapstore)
+union blk_descr_unify snapstore_get_empty_block(struct snapstore *snapstore)
 {
 	union blk_descr_unify result = { NULL };
 
@@ -609,7 +610,7 @@ union blk_descr_unify snapstore_get_empty_block(snapstore_t *snapstore)
 
 int snapstore_check_halffill(uuid_t *unique_id, sector_t *fill_status)
 {
-	snapstore_t *snapstore = _snapstore_find(unique_id);
+	struct snapstore *snapstore = _snapstore_find(unique_id);
 	if (NULL == snapstore) {
 		pr_err("Cannot find snapstore by uuid %pUB\n", unique_id);
 		return -ENODATA;
@@ -620,7 +621,7 @@ int snapstore_check_halffill(uuid_t *unique_id, sector_t *fill_status)
 	return SUCCESS;
 }
 
-int snapstore_request_store(snapstore_t *snapstore, blk_deferred_request_t *dio_copy_req)
+int snapstore_request_store(struct snapstore *snapstore, struct blk_deferred_request *dio_copy_req)
 {
 	int res = SUCCESS;
 
@@ -650,7 +651,7 @@ int snapstore_request_store(snapstore_t *snapstore, blk_deferred_request_t *dio_
 	return res;
 }
 
-int snapstore_redirect_read(blk_redirect_bio_t *rq_redir, snapstore_t *snapstore,
+int snapstore_redirect_read(struct blk_redirect_bio *rq_redir, struct snapstore *snapstore,
 			    union blk_descr_unify blk_descr, sector_t target_pos, sector_t rq_ofs,
 			    sector_t rq_count)
 {
@@ -663,8 +664,8 @@ int snapstore_redirect_read(blk_redirect_bio_t *rq_redir, snapstore_t *snapstore
 			struct list_head *_list_head;
 
 			list_for_each (_list_head, &blk_descr.file->rangelist) {
-				blk_range_link_t *range_link =
-					list_entry(_list_head, blk_range_link_t, link);
+				struct blk_range_link *range_link =
+					list_entry(_list_head, struct blk_range_link, link);
 
 				if (current_ofs >= rq_count)
 					break;
@@ -699,8 +700,8 @@ int snapstore_redirect_read(blk_redirect_bio_t *rq_redir, snapstore_t *snapstore
 			struct list_head *_list_head;
 
 			list_for_each (_list_head, &blk_descr.multidev->rangelist) {
-				blk_range_link_ex_t *range_link =
-					list_entry(_list_head, blk_range_link_ex_t, link);
+				struct blk_range_link_ex *range_link =
+					list_entry(_list_head, struct blk_range_link_ex, link);
 
 				if (current_ofs >= rq_count)
 					break;
@@ -750,7 +751,7 @@ int snapstore_redirect_read(blk_redirect_bio_t *rq_redir, snapstore_t *snapstore
 	return res;
 }
 
-int snapstore_redirect_write(blk_redirect_bio_t *rq_redir, snapstore_t *snapstore,
+int snapstore_redirect_write(struct blk_redirect_bio *rq_redir, struct snapstore *snapstore,
 			     union blk_descr_unify blk_descr, sector_t target_pos, sector_t rq_ofs,
 			     sector_t rq_count)
 {
@@ -766,8 +767,8 @@ int snapstore_redirect_write(blk_redirect_bio_t *rq_redir, snapstore_t *snapstor
 			struct list_head *_list_head;
 
 			list_for_each (_list_head, &blk_descr.file->rangelist) {
-				blk_range_link_t *range_link =
-					list_entry(_list_head, blk_range_link_t, link);
+				struct blk_range_link *range_link =
+					list_entry(_list_head, struct blk_range_link, link);
 
 				if (current_ofs >= rq_count)
 					break;
@@ -801,8 +802,8 @@ int snapstore_redirect_write(blk_redirect_bio_t *rq_redir, snapstore_t *snapstor
 			struct list_head *_list_head;
 
 			list_for_each (_list_head, &blk_descr.multidev->rangelist) {
-				blk_range_link_ex_t *range_link =
-					list_entry(_list_head, blk_range_link_ex_t, link);
+				struct blk_range_link_ex *range_link =
+					list_entry(_list_head, struct blk_range_link_ex, link);
 
 				if (current_ofs >= rq_count)
 					break;

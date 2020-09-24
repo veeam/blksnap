@@ -6,20 +6,20 @@ struct blk_descr_file {
 	struct list_head rangelist;
 };
 
-typedef struct blk_range_link_s {
+struct blk_range_link {
 	struct list_head link;
 	struct blk_range rg;
-} blk_range_link_t;
+};
 
-void blk_descr_file_pool_init(blk_descr_pool_t *pool);
-void blk_descr_file_pool_done(blk_descr_pool_t *pool);
+void blk_descr_file_pool_init(struct blk_descr_pool *pool);
+void blk_descr_file_pool_done(struct blk_descr_pool *pool);
 
 /* 
  * allocate new empty block in pool
  */
-int blk_descr_file_pool_add(blk_descr_pool_t *pool, struct list_head *rangelist);
+int blk_descr_file_pool_add(struct blk_descr_pool *pool, struct list_head *rangelist);
 
 /* 
  * take empty block from pool
  */
-union blk_descr_unify blk_descr_file_pool_take(blk_descr_pool_t *pool); 
+union blk_descr_unify blk_descr_file_pool_take(struct blk_descr_pool *pool);

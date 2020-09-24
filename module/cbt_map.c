@@ -6,7 +6,7 @@
 
 #include "cbt_map.h"
 
-int cbt_map_allocate(cbt_map_t *cbt_map, unsigned int cbt_sect_in_block_degree,
+int cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
 		     sector_t device_capacity)
 {
 	sector_t size_mod;
@@ -44,7 +44,7 @@ int cbt_map_allocate(cbt_map_t *cbt_map, unsigned int cbt_sect_in_block_degree,
 	return SUCCESS;
 }
 
-void cbt_map_deallocate(cbt_map_t *cbt_map)
+void cbt_map_deallocate(struct cbt_map *cbt_map)
 {
 	if (cbt_map->read_map != NULL) {
 		big_buffer_free(cbt_map->read_map);
@@ -59,7 +59,7 @@ void cbt_map_deallocate(cbt_map_t *cbt_map)
 	cbt_map->active = false;
 }
 
-static void cbt_map_destroy(cbt_map_t *cbt_map)
+static void cbt_map_destroy(struct cbt_map *cbt_map)
 {
 	pr_info("CBT map destroy\n");
 	if (cbt_map != NULL) {
@@ -69,13 +69,13 @@ static void cbt_map_destroy(cbt_map_t *cbt_map)
 	}
 }
 
-cbt_map_t *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t device_capacity)
+struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t device_capacity)
 {
-	cbt_map_t *cbt_map = NULL;
+	struct cbt_map *cbt_map = NULL;
 
 	pr_info("CBT map create\n");
 
-	cbt_map = (cbt_map_t *)kzalloc(sizeof(cbt_map_t), GFP_KERNEL);
+	cbt_map = (struct cbt_map *)kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
 	if (cbt_map == NULL)
 		return NULL;
 
@@ -94,10 +94,10 @@ cbt_map_t *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t device
 
 void cbt_map_destroy_cb(struct kref *kref)
 {
-	cbt_map_destroy(container_of(kref, cbt_map_t, refcount));
+	cbt_map_destroy(container_of(kref, struct cbt_map, refcount));
 }
 
-cbt_map_t *cbt_map_get_resource(cbt_map_t *cbt_map)
+struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map)
 {
 	if (cbt_map)
 		kref_get(&cbt_map->refcount);
@@ -105,13 +105,13 @@ cbt_map_t *cbt_map_get_resource(cbt_map_t *cbt_map)
 	return cbt_map;
 }
 
-void cbt_map_put_resource(cbt_map_t *cbt_map)
+void cbt_map_put_resource(struct cbt_map *cbt_map)
 {
 	if (cbt_map)
 		kref_put(&cbt_map->refcount, cbt_map_destroy_cb);
 }
 
-void cbt_map_switch(cbt_map_t *cbt_map)
+void cbt_map_switch(struct cbt_map *cbt_map)
 {
 	pr_info("CBT map switch\n");
 	spin_lock(&cbt_map->locker);
@@ -132,8 +132,8 @@ void cbt_map_switch(cbt_map_t *cbt_map)
 	spin_unlock(&cbt_map->locker);
 }
 
-int _cbt_map_set(cbt_map_t *cbt_map, sector_t sector_start, sector_t sector_cnt, u8 snap_number,
-		 struct big_buffer *map)
+int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt,
+		 u8 snap_number, struct big_buffer *map)
 {
 	int res = SUCCESS;
 	size_t cbt_block;
@@ -162,7 +162,7 @@ int _cbt_map_set(cbt_map_t *cbt_map, sector_t sector_start, sector_t sector_cnt,
 	return res;
 }
 
-int cbt_map_set(cbt_map_t *cbt_map, sector_t sector_start, sector_t sector_cnt)
+int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt)
 {
 	int res = SUCCESS;
 	spin_lock(&cbt_map->locker);
@@ -178,7 +178,7 @@ int cbt_map_set(cbt_map_t *cbt_map, sector_t sector_start, sector_t sector_cnt)
 	return res;
 }
 
-int cbt_map_set_both(cbt_map_t *cbt_map, sector_t sector_start, sector_t sector_cnt)
+int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt)
 {
 	int res = SUCCESS;
 	spin_lock(&cbt_map->locker);
@@ -195,7 +195,8 @@ int cbt_map_set_both(cbt_map_t *cbt_map, sector_t sector_start, sector_t sector_
 	return res;
 }
 
-size_t cbt_map_read_to_user(cbt_map_t *cbt_map, void __user *user_buff, size_t offset, size_t size)
+size_t cbt_map_read_to_user(struct cbt_map *cbt_map, void __user *user_buff, size_t offset,
+			    size_t size)
 {
 	size_t readed = 0;
 	size_t left_size;

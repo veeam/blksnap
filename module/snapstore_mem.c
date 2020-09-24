@@ -7,14 +7,14 @@
 #include "snapstore_mem.h"
 #include "snapstore_blk.h"
 
-typedef struct buffer_el_s {
+struct buffer_el {
 	struct list_head link;
 	void *buff;
-} buffer_el_t;
+};
 
-snapstore_mem_t *snapstore_mem_create(size_t available_blocks)
+struct snapstore_mem *snapstore_mem_create(size_t available_blocks)
 {
-	snapstore_mem_t *mem = kzalloc(sizeof(snapstore_mem_t), GFP_KERNEL);
+	struct snapstore_mem *mem = kzalloc(sizeof(struct snapstore_mem), GFP_KERNEL);
 
 	if (NULL == mem)
 		return NULL;
@@ -29,9 +29,9 @@ snapstore_mem_t *snapstore_mem_create(size_t available_blocks)
 	return mem;
 }
 
-void snapstore_mem_destroy(snapstore_mem_t *mem)
+void snapstore_mem_destroy(struct snapstore_mem *mem)
 {
-	buffer_el_t *buffer_el;
+	struct buffer_el *buffer_el;
 
 	if (NULL == mem)
 		return;
@@ -41,7 +41,7 @@ void snapstore_mem_destroy(snapstore_mem_t *mem)
 
 		mutex_lock(&mem->blocks_lock);
 		if (!list_empty(&mem->blocks)) {
-			buffer_el = list_entry(mem->blocks.next, buffer_el_t, link);
+			buffer_el = list_entry(mem->blocks.next, struct buffer_el, link);
 
 			list_del(&buffer_el->link);
 		}
@@ -58,9 +58,9 @@ void snapstore_mem_destroy(snapstore_mem_t *mem)
 	kfree(mem);
 }
 
-void *snapstore_mem_get_block(snapstore_mem_t *mem)
+void *snapstore_mem_get_block(struct snapstore_mem *mem)
 {
-	buffer_el_t *buffer_el;
+	struct buffer_el *buffer_el;
 
 	if (mem->blocks_allocated >= mem->blocks_limit) {
 		pr_err("Unable to get block from snapstore in memory\n");
@@ -69,7 +69,7 @@ void *snapstore_mem_get_block(snapstore_mem_t *mem)
 		return NULL;
 	}
 
-	buffer_el = kzalloc(sizeof(buffer_el_t), GFP_KERNEL);
+	buffer_el = kzalloc(sizeof(struct buffer_el), GFP_KERNEL);
 	if (buffer_el == NULL)
 		return NULL;
 	INIT_LIST_HEAD(&buffer_el->link);

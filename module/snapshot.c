@@ -12,18 +12,18 @@
 LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
 
-void _snapshot_destroy(snapshot_t *p_snapshot);
+void _snapshot_destroy(struct snapshot *p_snapshot);
 
 void snapshot_Done(void)
 {
-	snapshot_t *snap;
+	struct snapshot *snap;
 	pr_info("Removing all snapshots\n");
 
 	do {
 		snap = NULL;
 		down_write(&snapshots_lock);
 		if (!list_empty(&snapshots)) {
-			snapshot_t *snap = list_entry(snapshots.next, snapshot_t, link);
+			struct snapshot *snap = list_entry(snapshots.next, struct snapshot, link);
 
 			list_del(&snap->link);
 		}
@@ -35,12 +35,12 @@ void snapshot_Done(void)
 	} while (snap);
 }
 
-int _snapshot_New(dev_t *p_dev, int count, snapshot_t **pp_snapshot)
+int _snapshot_New(dev_t *p_dev, int count, struct snapshot **pp_snapshot)
 {
-	snapshot_t *p_snapshot = NULL;
+	struct snapshot *p_snapshot = NULL;
 	dev_t *snap_set = NULL;
 
-	p_snapshot = (snapshot_t *)kzalloc(sizeof(snapshot_t), GFP_KERNEL);
+	p_snapshot = (struct snapshot *)kzalloc(sizeof(struct snapshot), GFP_KERNEL);
 	if (NULL == p_snapshot) {
 		pr_err("Unable to create snapshot: failed to allocate memory for snapshot structure\n");
 		return -ENOMEM;
@@ -73,7 +73,7 @@ int _snapshot_New(dev_t *p_dev, int count, snapshot_t **pp_snapshot)
 int _snapshot_remove_device(dev_t dev_id)
 {
 	int result;
-	tracker_t *tracker = NULL;
+	struct tracker *tracker = NULL;
 
 	result = tracker_find_by_dev_id(dev_id, &tracker);
 	if (result != SUCCESS) {
@@ -96,7 +96,7 @@ int _snapshot_remove_device(dev_t dev_id)
 	return SUCCESS;
 }
 
-void _snapshot_cleanup(snapshot_t *snapshot)
+void _snapshot_cleanup(struct snapshot *snapshot)
 {
 	int inx = 0;
 
@@ -115,7 +115,7 @@ void _snapshot_cleanup(snapshot_t *snapshot)
 int snapshot_Create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		    unsigned int cbt_block_size_degree, unsigned long long *psnapshot_id)
 {
-	snapshot_t *snapshot = NULL;
+	struct snapshot *snapshot = NULL;
 	int result = SUCCESS;
 	unsigned int inx = 0;
 
@@ -138,7 +138,8 @@ int snapshot_Create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 			if (result == -EALREADY)
 				result = SUCCESS;
 			else if (result != SUCCESS) {
-				pr_err("Unable to create snapshot: failed to add device [%d:%d] to snapshot tracking\n",
+				pr_err("Unable to create snapshot\n");
+				pr_err("Failed to add device [%d:%d] to snapshot tracking\n",
 				       MAJOR(dev_id), MINOR(dev_id));
 				break;
 			}
@@ -146,7 +147,7 @@ int snapshot_Create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		if (result != SUCCESS)
 			break;
 
-		result = tracker_capture_snapshot(snapshot);
+		result = tracker_capture_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
 		if (SUCCESS != result) {
 			pr_err("Unable to create snapshot: failed to capture snapshot [0x%llx]\n",
 			       snapshot->id);
@@ -155,9 +156,10 @@ int snapshot_Create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 
 		result = snapimage_create_for(snapshot->dev_id_set, snapshot->dev_id_set_size);
 		if (result != SUCCESS) {
-			pr_err("Unable to create snapshot: failed to create snapshot image devices\n");
+			pr_err("Unable to create snapshot\n");
+			pr_err("Failed to create snapshot image devices\n");
 
-			tracker_release_snapshot(snapshot);
+			tracker_release_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
 			break;
 		}
 
@@ -177,30 +179,29 @@ int snapshot_Create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 	return result;
 }
 
-void _snapshot_destroy(snapshot_t *snapshot)
+void _snapshot_destroy(struct snapshot *snapshot)
 {
 	int result = SUCCESS;
 	size_t inx;
 
-	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
-		/*int res = */ snapimage_stop(snapshot->dev_id_set[inx]);
-	}
+	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx)
+		snapimage_stop(snapshot->dev_id_set[inx]);
 
-	result = tracker_release_snapshot(snapshot);
-	if (result != SUCCESS) {
+	pr_info("Release snapshot [0x%llx]\n", snapshot->id);
+
+	result = tracker_release_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
+	if (result != SUCCESS)
 		pr_err("Failed to release snapshot [0x%llx]\n", snapshot->id);
-	}
 
-	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
-		/*int res = */ snapimage_destroy(snapshot->dev_id_set[inx]);
-	}
+	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx)
+		snapimage_destroy(snapshot->dev_id_set[inx]);
 
 	_snapshot_cleanup(snapshot);
 }
 
 int snapshot_Destroy(unsigned long long snapshot_id)
 {
-	snapshot_t *snapshot = NULL;
+	struct snapshot *snapshot = NULL;
 
 	pr_info("Destroy snapshot [0x%llx]\n", snapshot_id);
 
@@ -209,7 +210,7 @@ int snapshot_Destroy(unsigned long long snapshot_id)
 		struct list_head *_head;
 
 		list_for_each (_head, &snapshots) {
-			snapshot_t *_snap = list_entry(_head, snapshot_t, link);
+			struct snapshot *_snap = list_entry(_head, struct snapshot, link);
 
 			if (_snap->id == snapshot_id) {
 				snapshot = _snap;

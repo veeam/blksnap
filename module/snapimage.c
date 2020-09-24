@@ -28,14 +28,14 @@ DECLARE_RWSEM(snap_images_lock);
 
 DECLARE_RWSEM(snap_image_destroy_lock);
 
-typedef struct snapimage_s {
+struct snapimage {
 	struct list_head link;
 
 	sector_t capacity;
 	dev_t original_dev;
 
-	defer_io_t *defer_io;
-	cbt_map_t *cbt_map;
+	struct defer_io *defer_io;
+	struct cbt_map *cbt_map;
 
 	dev_t image_dev;
 
@@ -44,7 +44,7 @@ typedef struct snapimage_s {
 
 	atomic_t own_cnt;
 
-	redirect_bio_queue_t image_queue;
+	struct redirect_bio_queue image_queue;
 
 	struct task_struct *rq_processor;
 
@@ -64,9 +64,9 @@ typedef struct snapimage_s {
 	struct mutex open_locker;
 	struct block_device *open_bdev;
 	volatile size_t open_cnt;
-} snapimage_t;
+};
 
-int _snapimage_destroy(snapimage_t *image);
+void _snapimage_destroy(struct snapimage *image);
 
 int _snapimage_open(struct block_device *bdev, fmode_t mode)
 {
@@ -81,7 +81,7 @@ int _snapimage_open(struct block_device *bdev, fmode_t mode)
 
 	down_read(&snap_image_destroy_lock);
 	do {
-		snapimage_t *image = bdev->bd_disk->private_data;
+		struct snapimage *image = bdev->bd_disk->private_data;
 		if (image == NULL) {
 			pr_err("Unable to open snapshot image: private data is not initialized. Block device object %p\n",
 			       bdev);
@@ -115,7 +115,7 @@ int _snapimage_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 
 	down_read(&snap_image_destroy_lock);
 	do {
-		snapimage_t *image = bdev->bd_disk->private_data;
+		struct snapimage *image = bdev->bd_disk->private_data;
 		if (image == NULL) {
 			pr_err("Unable to open snapshot image: private data is not initialized. Block device object %p\n",
 			       bdev);
@@ -158,7 +158,7 @@ void _snapimage_close(struct gendisk *disk, fmode_t mode)
 	if (disk->private_data != NULL) {
 		down_read(&snap_image_destroy_lock);
 		do {
-			snapimage_t *image = disk->private_data;
+			struct snapimage *image = disk->private_data;
 
 			mutex_lock(&image->open_locker);
 			{
@@ -180,7 +180,7 @@ int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned cmd, unsi
 	int res = -ENOTTY;
 	down_read(&snap_image_destroy_lock);
 	{
-		snapimage_t *image = bdev->bd_disk->private_data;
+		struct snapimage *image = bdev->bd_disk->private_data;
 
 		switch (cmd) {
 			/*
@@ -234,17 +234,18 @@ static struct block_device_operations g_snapimage_ops = {
 	.release = _snapimage_close,
 };
 
-static inline int _snapimage_request_read(snapimage_t *image, blk_redirect_bio_t *rq_redir)
+static inline int _snapimage_request_read(struct snapimage *image,
+					  struct blk_redirect_bio *rq_redir)
 {
-	snapstore_device_t *snapstore_device = image->defer_io->snapstore_device;
+	struct snapstore_device *snapstore_device = image->defer_io->snapstore_device;
 
 	return snapstore_device_read(snapstore_device, rq_redir);
 }
 
-int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_t *rq_redir)
+int _snapimage_request_write(struct snapimage *image, struct blk_redirect_bio *rq_redir)
 {
-	snapstore_device_t *snapstore_device;
-	cbt_map_t *cbt_map;
+	struct snapstore_device *snapstore_device;
+	struct cbt_map *cbt_map;
 	int res = SUCCESS;
 
 	BUG_ON(NULL == image->defer_io);
@@ -284,10 +285,10 @@ int _snapimage_request_write(snapimage_t *image, blk_redirect_bio_t *rq_redir)
 	return res;
 }
 
-void _snapimage_processing(snapimage_t *image)
+void _snapimage_processing(struct snapimage *image)
 {
 	int res = SUCCESS;
-	blk_redirect_bio_t *rq_redir;
+	struct blk_redirect_bio *rq_redir;
 
 	atomic64_inc(&image->state_inprocess);
 	rq_redir = redirect_bio_queue_get_first(&image->image_queue);
@@ -313,7 +314,7 @@ void _snapimage_processing(snapimage_t *image)
 		blk_redirect_complete(rq_redir, res);
 }
 
-int snapimage_processor_waiting(snapimage_t *image)
+int snapimage_processor_waiting(struct snapimage *image)
 {
 	int res = SUCCESS;
 
@@ -333,7 +334,7 @@ int snapimage_processor_waiting(snapimage_t *image)
 
 int snapimage_processor_thread(void *data)
 {
-	snapimage_t *image = data;
+	struct snapimage *image = data;
 
 	pr_info("Snapshot image thread for device [%d:%d] start\n", MAJOR(image->image_dev),
 		MINOR(image->image_dev));
@@ -379,7 +380,7 @@ static inline void _snapimage_bio_complete(struct bio *bio, int err)
 
 void _snapimage_bio_complete_cb(void *complete_param, struct bio *bio, int err)
 {
-	snapimage_t *image = (snapimage_t *)complete_param;
+	struct snapimage *image = (struct snapimage *)complete_param;
 
 	atomic64_inc(&image->state_processed);
 
@@ -392,7 +393,7 @@ void _snapimage_bio_complete_cb(void *complete_param, struct bio *bio, int err)
 	atomic_dec(&image->own_cnt);
 }
 
-int _snapimage_throttling(defer_io_t *defer_io)
+int _snapimage_throttling(struct defer_io *defer_io)
 {
 	return wait_event_interruptible(defer_io->queue_throttle_waiter,
 					redirect_bio_queue_empty(defer_io->dio_queue));
@@ -409,7 +410,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 
 	blk_qc_t result = SUCCESS;
 
-	snapimage_t *image = q->queuedata;
+	struct snapimage *image = q->queuedata;
 
 	if (unlikely(blk_mq_queue_stopped(q))) {
 		pr_info("Failed to make snapshot image request. Queue already is not active.");
@@ -422,7 +423,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 
 	atomic_inc(&image->own_cnt);
 	do {
-		blk_redirect_bio_t *rq_redir;
+		struct blk_redirect_bio *rq_redir;
 
 		if (false == atomic_read(&(image->image_queue.active_state))) {
 			_snapimage_bio_complete(bio, -ENODEV);
@@ -473,7 +474,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 	return result;
 }
 
-typedef struct blk_dev_info_s {
+struct blk_dev_info {
 	size_t blk_size;
 	sector_t start_sect;
 	sector_t count_sect;
@@ -481,10 +482,9 @@ typedef struct blk_dev_info_s {
 	unsigned int io_min;
 	unsigned int physical_block_size;
 	unsigned short logical_block_size;
+};
 
-} blk_dev_info_t;
-
-static int _blk_dev_get_info(struct block_device *blk_dev, blk_dev_info_t *pdev_info)
+static int _blk_dev_get_info(struct block_device *blk_dev, struct blk_dev_info *pdev_info)
 {
 	sector_t SectorStart;
 	sector_t SectorsCapacity;
@@ -515,7 +515,7 @@ static int _blk_dev_get_info(struct block_device *blk_dev, blk_dev_info_t *pdev_
 	return SUCCESS;
 }
 
-static int blk_dev_get_info(dev_t dev_id, blk_dev_info_t *pdev_info)
+static int blk_dev_get_info(dev_t dev_id, struct blk_dev_info *pdev_info)
 {
 	int result = SUCCESS;
 	struct block_device *blk_dev;
@@ -535,7 +535,7 @@ static int blk_dev_get_info(dev_t dev_id, blk_dev_info_t *pdev_info)
 	return result;
 }
 
-static inline void _snapimage_free(snapimage_t *image)
+static inline void _snapimage_free(struct snapimage *image)
 {
 	defer_io_put_resource(image->defer_io);
 	cbt_map_put_resource(image->cbt_map);
@@ -545,11 +545,11 @@ static inline void _snapimage_free(snapimage_t *image)
 int snapimage_create(dev_t original_dev)
 {
 	int res = SUCCESS;
-	tracker_t *tracker = NULL;
-	snapimage_t *image = NULL;
+	struct tracker *tracker = NULL;
+	struct snapimage *image = NULL;
 	struct gendisk *disk = NULL;
 	int minor;
-	blk_dev_info_t original_dev_info;
+	struct blk_dev_info original_dev_info;
 
 	pr_info("Create snapshot image for device [%d:%d]\n", MAJOR(original_dev),
 		MINOR(original_dev));
@@ -567,7 +567,7 @@ int snapimage_create(dev_t original_dev)
 		return res;
 	}
 
-	image = kzalloc(sizeof(snapimage_t), GFP_KERNEL);
+	image = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (image == NULL) {
 		pr_err("Failed to allocate snapshot image structure\n");
 		return -ENOMEM;
@@ -690,17 +690,16 @@ int snapimage_create(dev_t original_dev)
 		list_add_tail(&image->link, &snap_images);
 		up_write(&snap_images_lock);
 	} else {
-		res = _snapimage_destroy(image);
-		if (res == SUCCESS) {
-			_snapimage_free(image);
-			kfree(image);
-			image = NULL;
-		}
+		_snapimage_destroy(image);
+		_snapimage_free(image);
+
+		kfree(image);
+		image = NULL;
 	}
 	return res;
 }
 
-void _snapimage_stop(snapimage_t *image)
+void _snapimage_stop(struct snapimage *image)
 {
 	if (image->rq_processor != NULL) {
 		if (redirect_bio_queue_active(&image->image_queue, false)) {
@@ -724,7 +723,7 @@ void _snapimage_stop(snapimage_t *image)
 	}
 }
 
-int _snapimage_destroy(snapimage_t *image)
+void _snapimage_destroy(struct snapimage *image)
 {
 	if (image->rq_processor != NULL)
 		_snapimage_stop(image);
@@ -744,25 +743,22 @@ int _snapimage_destroy(snapimage_t *image)
 		disk->private_data = NULL;
 		put_disk(disk);
 	}
-	//redirect_bio_queue_done( &image->image_queue );
 
 	spin_lock(&g_snapimage_minors_lock);
 	bitmap_clear(g_snapimage_minors, MINOR(image->image_dev), (int)1);
 	spin_unlock(&g_snapimage_minors_lock);
-
-	return SUCCESS;
 }
 
-snapimage_t *snapimage_find(dev_t original_dev)
+struct snapimage *snapimage_find(dev_t original_dev)
 {
-	snapimage_t *image = NULL;
+	struct snapimage *image = NULL;
 
 	down_read(&snap_images_lock);
 	if (!list_empty(&snap_images)) {
 		struct list_head *_list_head;
 
 		list_for_each (_list_head, &snap_images) {
-			snapimage_t *_image = list_entry(_list_head, snapimage_t, link);
+			struct snapimage *_image = list_entry(_list_head, struct snapimage, link);
 
 			if (_image->original_dev == original_dev) {
 				image = _image;
@@ -775,33 +771,28 @@ snapimage_t *snapimage_find(dev_t original_dev)
 	return image;
 }
 
-int snapimage_stop(dev_t original_dev)
+void snapimage_stop(dev_t original_dev)
 {
-	int res = SUCCESS;
+	struct snapimage *image;
 
 	pr_info("Snapshot image processing stop for original device [%d:%d]\n", MAJOR(original_dev),
 		MINOR(original_dev));
 
 	down_read(&snap_image_destroy_lock);
-	{
-		snapimage_t *image = snapimage_find(original_dev);
 
-		if (image != NULL) {
-			_snapimage_stop(image);
-			res = SUCCESS;
-		} else {
-			pr_err("Snapshot image is not removed. errno=%d\n", res);
-			res = -ENODATA;
-		}
-	}
+	image = snapimage_find(original_dev);
+	if (image != NULL)
+		_snapimage_stop(image);
+	else
+		pr_err("Snapshot image [%d:%d] not found\n", MAJOR(original_dev),
+		       MINOR(original_dev));
+
 	up_read(&snap_image_destroy_lock);
-	return res;
 }
 
-int snapimage_destroy(dev_t original_dev)
+void snapimage_destroy(dev_t original_dev)
 {
-	int res = SUCCESS;
-	snapimage_t *image = NULL;
+	struct snapimage *image = NULL;
 
 	pr_info("Destroy snapshot image for device [%d:%d]\n", MAJOR(original_dev),
 		MINOR(original_dev));
@@ -811,7 +802,7 @@ int snapimage_destroy(dev_t original_dev)
 		struct list_head *_list_head;
 
 		list_for_each (_list_head, &snap_images) {
-			snapimage_t *_image = list_entry(_list_head, snapimage_t, link);
+			struct snapimage *_image = list_entry(_list_head, struct snapimage, link);
 
 			if (_image->original_dev == original_dev) {
 				image = _image;
@@ -824,38 +815,25 @@ int snapimage_destroy(dev_t original_dev)
 
 	if (image != NULL) {
 		down_write(&snap_image_destroy_lock);
-		res = _snapimage_destroy(image);
-		if (SUCCESS == res) {
-			_snapimage_free(image);
-			kfree(image);
-			image = NULL;
-			res = SUCCESS;
-		} else
-			pr_err("Failed to destroy snapshot image device. errno=%d\n", res);
+
+		_snapimage_destroy(image);
+		_snapimage_free(image);
+
+		kfree(image);
+		image = NULL;
 
 		up_write(&snap_image_destroy_lock);
-	} else {
-		pr_err("Snapshot image is not removed. errno=%d\n", res);
-		res = -ENODATA;
-	}
-
-	return res;
+	} else
+		pr_err("Snapshot image [%d:%d] not found\n", MAJOR(original_dev),
+		       MINOR(original_dev));
 }
 
-int snapimage_destroy_for(dev_t *p_dev, int count)
+void snapimage_destroy_for(dev_t *p_dev, int count)
 {
-	int res = SUCCESS;
 	int inx = 0;
 
-	for (; inx < count; ++inx) {
-		int local_res = snapimage_destroy(p_dev[inx]);
-		if (local_res != SUCCESS) {
-			pr_err("Failed to release snapshot image for original device [%d:%d]. errno=%d\n",
-			       MAJOR(p_dev[inx]), MINOR(p_dev[inx]), 0 - local_res);
-			res = local_res;
-		}
-	}
-	return res;
+	for (; inx < count; ++inx)
+		snapimage_destroy(p_dev[inx]);
 }
 
 int snapimage_create_for(dev_t *p_dev, int count)
@@ -899,17 +877,15 @@ int snapimage_init(void)
 	return res;
 }
 
-int snapimage_done(void)
+void snapimage_done(void)
 {
-	int res = SUCCESS;
-
 	down_write(&snap_image_destroy_lock);
 	while (true) {
-		snapimage_t *image = NULL;
+		struct snapimage *image = NULL;
 
 		down_write(&snap_images_lock);
 		if (!list_empty(&snap_images)) {
-			image = list_entry(snap_images.next, snapimage_t, link);
+			image = list_entry(snap_images.next, struct snapimage, link);
 
 			list_del(&image->link);
 		}
@@ -921,32 +897,26 @@ int snapimage_done(void)
 		pr_err("Snapshot image for device was unexpectedly removed [%d:%d]\n",
 		       MAJOR(image->original_dev), MINOR(image->original_dev));
 
-		res = _snapimage_destroy(image);
-		if (res) {
-			pr_err("Failed to perform snapshot images cleanup\n");
-			break;
-		}
-
+		_snapimage_destroy(image);
 		_snapimage_free(image);
+
 		kfree(image);
 		image = NULL;
 	}
 
-	if (res == SUCCESS) {
-		spin_lock(&g_snapimage_minors_lock);
-		bitmap_free(g_snapimage_minors);
-		g_snapimage_minors = NULL;
-		spin_unlock(&g_snapimage_minors_lock);
+	spin_lock(&g_snapimage_minors_lock);
+	bitmap_free(g_snapimage_minors);
+	g_snapimage_minors = NULL;
+	spin_unlock(&g_snapimage_minors_lock);
 
-		//BUG_ON(!list_empty(&snap_images))
-		if (!list_empty(&snap_images))
-			pr_err("Failed to release snapshot images container\n");
+	//BUG_ON(!list_empty(&snap_images))
+	if (!list_empty(&snap_images))
+		pr_err("Failed to release snapshot images container\n");
 
-		unregister_blkdev(g_snapimage_major, SNAP_IMAGE_NAME);
-		pr_info("Snapshot image block device [%d] was unregistered\n", g_snapimage_major);
-	}
+	unregister_blkdev(g_snapimage_major, SNAP_IMAGE_NAME);
+	pr_info("Snapshot image block device [%d] was unregistered\n", g_snapimage_major);
+
 	up_write(&snap_image_destroy_lock);
-	return res;
 }
 
 int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, int *p_real_count)
@@ -988,7 +958,8 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 			struct list_head *_list_head;
 
 			list_for_each (_list_head, &snap_images) {
-				snapimage_t *img = list_entry(_list_head, snapimage_t, link);
+				struct snapimage *img =
+					list_entry(_list_head, struct snapimage, link);
 
 				real_count++;
 
@@ -1033,7 +1004,7 @@ int snapimage_mark_dirty_blocks(dev_t image_dev_id, struct block_range_s *block_
 
 	down_read(&snap_image_destroy_lock);
 	do {
-		snapimage_t *image = snapimage_find(image_dev_id);
+		struct snapimage *image = snapimage_find(image_dev_id);
 
 		if (image == NULL) {
 			pr_err("Cannot find device [%d:%d]\n", MAJOR(image_dev_id),

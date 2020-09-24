@@ -18,7 +18,7 @@ static inline void blk_descr_mem_done(struct blk_descr_mem *blk_descr)
 	blk_descr->buff = NULL;
 }
 
-void blk_descr_mem_pool_init(blk_descr_pool_t *pool, size_t available_blocks)
+void blk_descr_mem_pool_init(struct blk_descr_pool *pool, size_t available_blocks)
 {
 	blk_descr_pool_init(pool, available_blocks);
 }
@@ -32,7 +32,7 @@ void blk_descr_mem_cleanup(void *descr_array, size_t count)
 		blk_descr_mem_done(mem_blocks + inx);
 }
 
-void blk_descr_mem_pool_done(blk_descr_pool_t *pool)
+void blk_descr_mem_pool_done(struct blk_descr_pool *pool)
 {
 	blk_descr_pool_done(pool, blk_descr_mem_cleanup);
 }
@@ -49,7 +49,7 @@ static union blk_descr_unify blk_descr_mem_alloc(void *descr_array, size_t index
 	return blk_descr;
 }
 
-int blk_descr_mem_pool_add(blk_descr_pool_t *pool, void *buffer)
+int blk_descr_mem_pool_add(struct blk_descr_pool *pool, void *buffer)
 {
 	union blk_descr_unify blk_descr = blk_descr_pool_alloc(pool, sizeof(struct blk_descr_mem),
 							       blk_descr_mem_alloc, buffer);
@@ -62,7 +62,7 @@ int blk_descr_mem_pool_add(blk_descr_pool_t *pool, void *buffer)
 	return SUCCESS;
 }
 
-union blk_descr_unify blk_descr_mem_pool_take(blk_descr_pool_t *pool)
+union blk_descr_unify blk_descr_mem_pool_take(struct blk_descr_pool *pool)
 {
 	return blk_descr_pool_take(pool, sizeof(struct blk_descr_mem));
 }

@@ -7,15 +7,15 @@
 #include "snapstore_file.h"
 #include "blk_util.h"
 
-int snapstore_file_create(dev_t dev_id, snapstore_file_t **pfile)
+int snapstore_file_create(dev_t dev_id, struct snapstore_file **pfile)
 {
 	int res = SUCCESS;
-	snapstore_file_t *file;
+	struct snapstore_file *file;
 
 	pr_err("Single device file snapstore was created on device [%d:%d]\n", MAJOR(dev_id),
 	       MINOR(dev_id));
 
-	file = kzalloc(sizeof(snapstore_file_t), GFP_KERNEL);
+	file = kzalloc(sizeof(struct snapstore_file), GFP_KERNEL);
 	if (file == NULL)
 		return -ENOMEM;
 
@@ -40,7 +40,7 @@ int snapstore_file_create(dev_t dev_id, snapstore_file_t **pfile)
 	return res;
 }
 
-void snapstore_file_destroy(snapstore_file_t *file)
+void snapstore_file_destroy(struct snapstore_file *file)
 {
 	if (file) {
 		blk_descr_file_pool_done(&file->pool);

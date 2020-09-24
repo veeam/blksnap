@@ -11,35 +11,27 @@ union blk_descr_unify {
 	struct blk_descr_multidev *multidev;
 };
 
-typedef struct blk_descr_pool_s {
+struct blk_descr_pool {
 	struct list_head head;
 	struct mutex lock;
 
-	size_t blocks_cnt; //count of pool_el_t
+	size_t blocks_cnt; //count of struct pool_el
 
 	volatile size_t total_cnt; ///total count of block descriptors
 	volatile size_t take_cnt; // take count of block descriptors
-} blk_descr_pool_t;
+};
 
-typedef struct pool_el_s {
-	struct list_head link;
+void blk_descr_pool_init(struct blk_descr_pool *pool, size_t available_blocks);
 
-	size_t used_cnt; // used blocks
-	size_t capacity; // blocks array capacity
+void blk_descr_pool_done(struct blk_descr_pool *pool,
+			 void (*blocks_cleanup_cb)(void *descr_array, size_t count));
 
-	u8 descr_array[0];
-} pool_el_t;
+union blk_descr_unify blk_descr_pool_alloc(
+	struct blk_descr_pool *pool, size_t blk_descr_size,
+	union blk_descr_unify (*block_alloc_cb)(void *descr_array, size_t index, void *arg),
+	void *arg);
 
-void blk_descr_pool_init(blk_descr_pool_t *pool, size_t available_blocks);
+union blk_descr_unify blk_descr_pool_take(struct blk_descr_pool *pool, size_t blk_descr_size);
 
-typedef void (*blk_descr_cleanup_t)(void *descr_array, size_t count);
-void blk_descr_pool_done(blk_descr_pool_t *pool, blk_descr_cleanup_t blocks_cleanup);
-
-typedef union blk_descr_unify (*blk_descr_allocate_cb)(void *descr_array, size_t index, void *arg);
-union blk_descr_unify blk_descr_pool_alloc(blk_descr_pool_t *pool, size_t blk_descr_size,
-					   blk_descr_allocate_cb block_alloc, void *arg);
-
-union blk_descr_unify blk_descr_pool_take(blk_descr_pool_t *pool, size_t blk_descr_size);
-
-bool blk_descr_pool_check_halffill(blk_descr_pool_t *pool, sector_t empty_limit,
+bool blk_descr_pool_check_halffill(struct blk_descr_pool *pool, sector_t empty_limit,
 				   sector_t *fill_status);

@@ -36,7 +36,7 @@ void ctrl_done(void)
 ssize_t ctrl_read(struct file *fl, char __user *buffer, size_t length, loff_t *offset)
 {
 	ssize_t bytes_read = 0;
-	ctrl_pipe_t *pipe = (ctrl_pipe_t *)fl->private_data;
+	struct ctrl_pipe *pipe = (struct ctrl_pipe *)fl->private_data;
 
 	bytes_read = ctrl_pipe_read(pipe, buffer, length);
 	if (bytes_read == 0)
@@ -50,7 +50,7 @@ ssize_t ctrl_write(struct file *fl, const char __user *buffer, size_t length, lo
 {
 	ssize_t bytes_wrote = 0;
 
-	ctrl_pipe_t *pipe = (ctrl_pipe_t *)fl->private_data;
+	struct ctrl_pipe *pipe = (struct ctrl_pipe *)fl->private_data;
 	if (NULL == pipe) {
 		pr_err("Unable to write into pipe: invalid pipe pointer\n");
 		bytes_wrote = -EINVAL;
@@ -62,7 +62,7 @@ ssize_t ctrl_write(struct file *fl, const char __user *buffer, size_t length, lo
 
 unsigned int ctrl_poll(struct file *fl, struct poll_table_struct *wait)
 {
-	ctrl_pipe_t *pipe = (ctrl_pipe_t *)fl->private_data;
+	struct ctrl_pipe *pipe = (struct ctrl_pipe *)fl->private_data;
 
 	return ctrl_pipe_poll(pipe);
 }
@@ -91,7 +91,7 @@ int ctrl_release(struct inode *inode, struct file *fl)
 
 	if (atomic_read(&g_dev_open_cnt) > 0) {
 		module_put(THIS_MODULE);
-		ctrl_pipe_put_resource((ctrl_pipe_t *)fl->private_data);
+		ctrl_pipe_put_resource((struct ctrl_pipe *)fl->private_data);
 
 		atomic_dec(&g_dev_open_cnt);
 	} else {
@@ -595,13 +595,12 @@ int ioctl_collect_snapimages(unsigned long arg)
 	return status;
 }
 
-typedef int(blk_snap_ioctl_t)(unsigned long arg);
-typedef struct blk_snap_ioctl_table_s {
+struct blk_snap_ioctl_table {
 	unsigned int cmd;
-	blk_snap_ioctl_t *fn;
-} blk_snap_ioctl_table_t;
+	int (*fn)(unsigned long arg);
+};
 
-static blk_snap_ioctl_table_t blk_snap_ioctl_table[] = {
+static struct blk_snap_ioctl_table blk_snap_ioctl_table[] = {
 	{ (IOCTL_COMPATIBILITY_FLAGS), ioctl_compatibility_flags },
 	{ (IOCTL_GETVERSION), ioctl_get_version },
 

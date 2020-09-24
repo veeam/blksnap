@@ -1,12 +1,12 @@
 #pragma once
 
-typedef struct snapshot_s {
+struct snapshot {
 	struct list_head link;
 	unsigned long long id;
 
-	dev_t *dev_id_set; //array
+	dev_t *dev_id_set; //array of assigned devices
 	int dev_id_set_size;
-} snapshot_t;
+};
 
 void snapshot_Done(void);
 

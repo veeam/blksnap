@@ -16,16 +16,15 @@
 
 blk_qc_t filter_submit_original_bio(struct bio *bio);
 
-typedef struct defer_io_original_request_s {
+struct defer_io_orig_rq {
 	struct list_head link;
-	defer_io_queue_t *queue;
+	struct defer_io_queue *queue;
 
 	struct bio *bio;
-	tracker_t *tracker;
+	struct tracker *tracker;
+};
 
-} defer_io_original_request_t;
-
-void defer_io_queue_init(defer_io_queue_t *queue)
+void defer_io_queue_init(struct defer_io_queue *queue)
 {
 	INIT_LIST_HEAD(&queue->list);
 
@@ -35,10 +34,9 @@ void defer_io_queue_init(defer_io_queue_t *queue)
 	atomic_set(&queue->active_state, true);
 }
 
-defer_io_original_request_t *defer_io_queue_new(defer_io_queue_t *queue)
+struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue *queue)
 {
-	defer_io_original_request_t *dio_rq =
-		kzalloc(sizeof(defer_io_original_request_t), GFP_NOIO);
+	struct defer_io_orig_rq *dio_rq = kzalloc(sizeof(struct defer_io_orig_rq), GFP_NOIO);
 
 	if (NULL == dio_rq)
 		return NULL;
@@ -49,13 +47,13 @@ defer_io_original_request_t *defer_io_queue_new(defer_io_queue_t *queue)
 	return dio_rq;
 }
 
-void defer_io_queue_free(defer_io_original_request_t *dio_rq)
+void defer_io_queue_free(struct defer_io_orig_rq *dio_rq)
 {
 	if (dio_rq)
 		kfree(dio_rq);
 }
 
-int defer_io_queue_push_back(defer_io_queue_t *queue, defer_io_original_request_t *dio_rq)
+int defer_io_queue_push_back(struct defer_io_queue *queue, struct defer_io_orig_rq *dio_rq)
 {
 	int res = SUCCESS;
 
@@ -73,14 +71,14 @@ int defer_io_queue_push_back(defer_io_queue_t *queue, defer_io_original_request_
 	return res;
 }
 
-defer_io_original_request_t *defer_io_queue_get_first(defer_io_queue_t *queue)
+struct defer_io_orig_rq *defer_io_queue_get_first(struct defer_io_queue *queue)
 {
-	defer_io_original_request_t *dio_rq = NULL;
+	struct defer_io_orig_rq *dio_rq = NULL;
 
 	spin_lock(&queue->lock);
 
 	if (!list_empty(&queue->list)) {
-		dio_rq = list_entry(queue->list.next, defer_io_original_request_t, link);
+		dio_rq = list_entry(queue->list.next, struct defer_io_orig_rq, link);
 		list_del(&dio_rq->link);
 		atomic_dec(&queue->in_queue_cnt);
 	}
@@ -90,7 +88,7 @@ defer_io_original_request_t *defer_io_queue_get_first(defer_io_queue_t *queue)
 	return dio_rq;
 }
 
-bool defer_io_queue_active(defer_io_queue_t *queue, bool state)
+bool defer_io_queue_active(struct defer_io_queue *queue, bool state)
 {
 	bool prev_state;
 
@@ -106,15 +104,15 @@ bool defer_io_queue_active(defer_io_queue_t *queue, bool state)
 
 #define defer_io_queue_empty(queue) (atomic_read(&(queue).in_queue_cnt) == 0)
 
-void _defer_io_finish(defer_io_t *defer_io, defer_io_queue_t *queue_in_progress)
+void _defer_io_finish(struct defer_io *defer_io, struct defer_io_queue *queue_in_progress)
 {
 	while (!defer_io_queue_empty(*queue_in_progress)) {
-		tracker_t *tracker = NULL;
+		struct tracker *tracker = NULL;
 		bool cbt_locked = false;
 		bool is_write_bio;
 		sector_t sectCount = 0;
 
-		defer_io_original_request_t *orig_req = defer_io_queue_get_first(queue_in_progress);
+		struct defer_io_orig_rq *orig_req = defer_io_queue_get_first(queue_in_progress);
 
 		is_write_bio = bio_data_dir(orig_req->bio) && bio_has_data(orig_req->bio);
 
@@ -138,8 +136,8 @@ void _defer_io_finish(defer_io_t *defer_io, defer_io_queue_t *queue_in_progress)
 	}
 }
 
-int _defer_io_copy_prepare(defer_io_t *defer_io, defer_io_queue_t *queue_in_process,
-			   blk_deferred_request_t **dio_copy_req)
+int _defer_io_copy_prepare(struct defer_io *defer_io, struct defer_io_queue *queue_in_process,
+			   struct blk_deferred_request **dio_copy_req)
 {
 	int res = SUCCESS;
 	int dios_count = 0;
@@ -149,9 +147,8 @@ int _defer_io_copy_prepare(defer_io_t *defer_io, defer_io_queue_t *queue_in_proc
 	while (!defer_io_queue_empty(defer_io->dio_queue) &&
 	       (dios_count < DEFER_IO_DIO_REQUEST_LENGTH) &&
 	       (dios_sectors_count < DEFER_IO_DIO_REQUEST_SECTORS_COUNT)) {
-		defer_io_original_request_t *dio_orig_req =
-			(defer_io_original_request_t *)defer_io_queue_get_first(
-				&defer_io->dio_queue);
+		struct defer_io_orig_rq *dio_orig_req =
+			(struct defer_io_orig_rq *)defer_io_queue_get_first(&defer_io->dio_queue);
 		atomic_dec(&defer_io->queue_filling_count);
 
 		defer_io_queue_push_back(queue_in_process, dio_orig_req);
@@ -181,13 +178,13 @@ int _defer_io_copy_prepare(defer_io_t *defer_io, defer_io_queue_t *queue_in_proc
 
 int defer_io_work_thread(void *p)
 {
-	defer_io_queue_t queue_in_process = { 0 };
-	defer_io_t *defer_io = NULL;
+	struct defer_io_queue queue_in_process = { 0 };
+	struct defer_io *defer_io = NULL;
 
 	//set_user_nice( current, -20 ); //MIN_NICE
 	defer_io_queue_init(&queue_in_process);
 
-	defer_io = defer_io_get_resource((defer_io_t *)p);
+	defer_io = defer_io_get_resource((struct defer_io *)p);
 	pr_info("Defer IO thread for original device [%d:%d] started\n",
 		MAJOR(defer_io->original_dev_id), MINOR(defer_io->original_dev_id));
 
@@ -203,9 +200,9 @@ int defer_io_work_thread(void *p)
 
 		if (!defer_io_queue_empty(defer_io->dio_queue)) {
 			int dio_copy_result = SUCCESS;
-			blk_deferred_request_t *dio_copy_req = NULL;
+			struct blk_deferred_request *dio_copy_req = NULL;
 
-			_snapstore_device_descr_read_lock(defer_io->snapstore_device);
+			mutex_lock(&defer_io->snapstore_device->store_block_map_locker);
 			do {
 				dio_copy_result = _defer_io_copy_prepare(
 					defer_io, &queue_in_process, &dio_copy_req);
@@ -233,10 +230,8 @@ int defer_io_work_thread(void *p)
 				}
 
 			} while (false);
-
 			_defer_io_finish(defer_io, &queue_in_process);
-
-			_snapstore_device_descr_read_unlock(defer_io->snapstore_device);
+			mutex_unlock(&defer_io->snapstore_device->store_block_map_locker);
 
 			if (dio_copy_req) {
 				if (dio_copy_result == -EDEADLK)
@@ -262,7 +257,7 @@ int defer_io_work_thread(void *p)
 	return SUCCESS;
 }
 
-static void _defer_io_destroy(defer_io_t *defer_io)
+static void _defer_io_destroy(struct defer_io *defer_io)
 {
 	if (NULL == defer_io)
 		return;
@@ -279,10 +274,10 @@ static void _defer_io_destroy(defer_io_t *defer_io)
 
 static void defer_io_destroy_cb(struct kref *kref)
 {
-	_defer_io_destroy(container_of(kref, defer_io_t, refcount));
+	_defer_io_destroy(container_of(kref, struct defer_io, refcount));
 }
 
-defer_io_t *defer_io_get_resource(defer_io_t *defer_io)
+struct defer_io *defer_io_get_resource(struct defer_io *defer_io)
 {
 	if (defer_io)
 		kref_get(&defer_io->refcount);
@@ -290,22 +285,22 @@ defer_io_t *defer_io_get_resource(defer_io_t *defer_io)
 	return defer_io;
 }
 
-void defer_io_put_resource(defer_io_t *defer_io)
+void defer_io_put_resource(struct defer_io *defer_io)
 {
 	if (defer_io)
 		kref_put(&defer_io->refcount, defer_io_destroy_cb);
 }
 
-int defer_io_create(dev_t dev_id, struct block_device *blk_dev, defer_io_t **pp_defer_io)
+int defer_io_create(dev_t dev_id, struct block_device *blk_dev, struct defer_io **pp_defer_io)
 {
 	int res = SUCCESS;
-	defer_io_t *defer_io = NULL;
-	snapstore_device_t *snapstore_device;
+	struct defer_io *defer_io = NULL;
+	struct snapstore_device *snapstore_device;
 
 	pr_info("Defer IO processor was created for device [%d:%d]\n", MAJOR(dev_id),
 		MINOR(dev_id));
 
-	defer_io = kzalloc(sizeof(defer_io_t), GFP_KERNEL);
+	defer_io = kzalloc(sizeof(struct defer_io), GFP_KERNEL);
 	if (defer_io == NULL)
 		return -ENOMEM;
 
@@ -354,7 +349,7 @@ int defer_io_create(dev_t dev_id, struct block_device *blk_dev, defer_io_t **pp_
 	return SUCCESS;
 }
 
-int defer_io_stop(defer_io_t *defer_io)
+int defer_io_stop(struct defer_io *defer_io)
 {
 	int res = SUCCESS;
 
@@ -373,9 +368,9 @@ int defer_io_stop(defer_io_t *defer_io)
 	return res;
 }
 
-int defer_io_redirect_bio(defer_io_t *defer_io, struct bio *bio, void *tracker)
+int defer_io_redirect_bio(struct defer_io *defer_io, struct bio *bio, void *tracker)
 {
-	defer_io_original_request_t *dio_orig_req;
+	struct defer_io_orig_rq *dio_orig_req;
 
 	if (snapstore_device_is_corrupted(defer_io->snapstore_device))
 		return -ENODATA;
@@ -386,7 +381,7 @@ int defer_io_redirect_bio(defer_io_t *defer_io, struct bio *bio, void *tracker)
 
 	bio_get(dio_orig_req->bio = bio);
 
-	dio_orig_req->tracker = (tracker_t *)tracker;
+	dio_orig_req->tracker = (struct tracker *)tracker;
 
 	if (SUCCESS != defer_io_queue_push_back(&defer_io->dio_queue, dio_orig_req)) {
 		defer_io_queue_free(dio_orig_req);

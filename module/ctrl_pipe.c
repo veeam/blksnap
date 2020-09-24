@@ -15,15 +15,17 @@
 
 #define CMD_TO_USER_FIFO_SIZE 1024
 
-ssize_t ctrl_pipe_command_initiate(ctrl_pipe_t *pipe, const char __user *buffer, size_t length);
-ssize_t ctrl_pipe_command_next_portion(ctrl_pipe_t *pipe, const char __user *buffer, size_t length);
+ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *buffer,
+				   size_t length);
+ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user *buffer,
+				       size_t length);
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-ssize_t ctrl_pipe_command_next_portion_multidev(ctrl_pipe_t *pipe, const char __user *buffer,
+ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe, const char __user *buffer,
 						size_t length);
 #endif
 
-void ctrl_pipe_request_acknowledge(ctrl_pipe_t *pipe, unsigned int result);
-void ctrl_pipe_request_invalid(ctrl_pipe_t *pipe);
+void ctrl_pipe_request_acknowledge(struct ctrl_pipe *pipe, unsigned int result);
+void ctrl_pipe_request_invalid(struct ctrl_pipe *pipe);
 
 LIST_HEAD(ctl_pipes);
 DECLARE_RWSEM(ctl_pipes_lock);
@@ -45,7 +47,7 @@ void ctrl_pipe_done(void)
 
 static void ctrl_pipe_release_cb(struct kref *kref)
 {
-	ctrl_pipe_t *pipe = container_of(kref, ctrl_pipe_t, refcount);
+	struct ctrl_pipe *pipe = container_of(kref, struct ctrl_pipe, refcount);
 
 	down_write(&ctl_pipes_lock);
 	list_del(&pipe->link);
@@ -56,7 +58,7 @@ static void ctrl_pipe_release_cb(struct kref *kref)
 	kfree(pipe);
 }
 
-ctrl_pipe_t *ctrl_pipe_get_resource(ctrl_pipe_t *pipe)
+struct ctrl_pipe *ctrl_pipe_get_resource(struct ctrl_pipe *pipe)
 {
 	if (pipe)
 		kref_get(&pipe->refcount);
@@ -64,16 +66,16 @@ ctrl_pipe_t *ctrl_pipe_get_resource(ctrl_pipe_t *pipe)
 	return pipe;
 }
 
-void ctrl_pipe_put_resource(ctrl_pipe_t *pipe)
+void ctrl_pipe_put_resource(struct ctrl_pipe *pipe)
 {
 	if (pipe)
 		kref_put(&pipe->refcount, ctrl_pipe_release_cb);
 }
 
-ctrl_pipe_t *ctrl_pipe_new(void)
+struct ctrl_pipe *ctrl_pipe_new(void)
 {
 	int ret;
-	ctrl_pipe_t *pipe = kmalloc(sizeof(ctrl_pipe_t), GFP_KERNEL);
+	struct ctrl_pipe *pipe = kmalloc(sizeof(struct ctrl_pipe), GFP_KERNEL);
 
 	if (NULL == pipe) {
 		pr_err("Failed to create new ctrl pipe: not enough memory\n");
@@ -100,7 +102,7 @@ ctrl_pipe_t *ctrl_pipe_new(void)
 	return pipe;
 }
 
-ssize_t ctrl_pipe_read(ctrl_pipe_t *pipe, char __user *buffer, size_t length)
+ssize_t ctrl_pipe_read(struct ctrl_pipe *pipe, char __user *buffer, size_t length)
 {
 	int ret;
 	unsigned int processed = 0;
@@ -124,7 +126,7 @@ ssize_t ctrl_pipe_read(ctrl_pipe_t *pipe, char __user *buffer, size_t length)
 	return (ssize_t)processed;
 }
 
-ssize_t ctrl_pipe_write(ctrl_pipe_t *pipe, const char __user *buffer, size_t length)
+ssize_t ctrl_pipe_write(struct ctrl_pipe *pipe, const char __user *buffer, size_t length)
 {
 	ssize_t processed = 0;
 
@@ -178,7 +180,7 @@ ssize_t ctrl_pipe_write(ctrl_pipe_t *pipe, const char __user *buffer, size_t len
 	return processed;
 }
 
-unsigned int ctrl_pipe_poll(ctrl_pipe_t *pipe)
+unsigned int ctrl_pipe_poll(struct ctrl_pipe *pipe)
 {
 	unsigned int mask = 0;
 
@@ -190,7 +192,7 @@ unsigned int ctrl_pipe_poll(ctrl_pipe_t *pipe)
 	return mask;
 }
 
-ssize_t ctrl_pipe_command_initiate(ctrl_pipe_t *pipe, const char __user *buffer, size_t length)
+ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *buffer, size_t length)
 {
 	int result = SUCCESS;
 	ssize_t processed = 0;
@@ -312,7 +314,8 @@ ssize_t ctrl_pipe_command_initiate(ctrl_pipe_t *pipe, const char __user *buffer,
 	return result;
 }
 
-ssize_t ctrl_pipe_command_next_portion(ctrl_pipe_t *pipe, const char __user *buffer, size_t length)
+ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user *buffer,
+				       size_t length)
 {
 	int result = SUCCESS;
 	ssize_t processed = 0;
@@ -389,7 +392,7 @@ ssize_t ctrl_pipe_command_next_portion(ctrl_pipe_t *pipe, const char __user *buf
 	return result;
 }
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-ssize_t ctrl_pipe_command_next_portion_multidev(ctrl_pipe_t *pipe, const char __user *buffer,
+ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe, const char __user *buffer,
 						size_t length)
 {
 	int result = SUCCESS;
@@ -495,7 +498,7 @@ ssize_t ctrl_pipe_command_next_portion_multidev(ctrl_pipe_t *pipe, const char __
 }
 #endif
 
-void ctrl_pipe_push_request(ctrl_pipe_t *pipe, unsigned int *cmd, size_t cmd_len)
+void ctrl_pipe_push_request(struct ctrl_pipe *pipe, unsigned int *cmd, size_t cmd_len)
 {
 	kfifo_in_spinlocked(&pipe->cmd_to_user, cmd, (cmd_len * sizeof(unsigned int)),
 			    &pipe->cmd_to_user_lock);
@@ -503,7 +506,7 @@ void ctrl_pipe_push_request(ctrl_pipe_t *pipe, unsigned int *cmd, size_t cmd_len
 	wake_up(&pipe->readq);
 }
 
-void ctrl_pipe_request_acknowledge(ctrl_pipe_t *pipe, unsigned int result)
+void ctrl_pipe_request_acknowledge(struct ctrl_pipe *pipe, unsigned int result)
 {
 	unsigned int cmd[2];
 
@@ -513,7 +516,7 @@ void ctrl_pipe_request_acknowledge(ctrl_pipe_t *pipe, unsigned int result)
 	ctrl_pipe_push_request(pipe, cmd, 2);
 }
 
-void ctrl_pipe_request_halffill(ctrl_pipe_t *pipe, unsigned long long filled_status)
+void ctrl_pipe_request_halffill(struct ctrl_pipe *pipe, unsigned long long filled_status)
 {
 	unsigned int cmd[3];
 
@@ -526,7 +529,7 @@ void ctrl_pipe_request_halffill(ctrl_pipe_t *pipe, unsigned long long filled_sta
 	ctrl_pipe_push_request(pipe, cmd, 3);
 }
 
-void ctrl_pipe_request_overflow(ctrl_pipe_t *pipe, unsigned int error_code,
+void ctrl_pipe_request_overflow(struct ctrl_pipe *pipe, unsigned int error_code,
 				unsigned long long filled_status)
 {
 	unsigned int cmd[4];
@@ -541,7 +544,7 @@ void ctrl_pipe_request_overflow(ctrl_pipe_t *pipe, unsigned int error_code,
 	ctrl_pipe_push_request(pipe, cmd, 4);
 }
 
-void ctrl_pipe_request_terminate(ctrl_pipe_t *pipe, unsigned long long filled_status)
+void ctrl_pipe_request_terminate(struct ctrl_pipe *pipe, unsigned long long filled_status)
 {
 	unsigned int cmd[3];
 
@@ -554,7 +557,7 @@ void ctrl_pipe_request_terminate(ctrl_pipe_t *pipe, unsigned long long filled_st
 	ctrl_pipe_push_request(pipe, cmd, 3);
 }
 
-void ctrl_pipe_request_invalid(ctrl_pipe_t *pipe)
+void ctrl_pipe_request_invalid(struct ctrl_pipe *pipe)
 {
 	unsigned int cmd[1];
 

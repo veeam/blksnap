@@ -19,14 +19,14 @@ static inline sector_t range_node_last(struct blk_range_tree_node *range_node)
 INTERVAL_TREE_DEFINE(struct blk_range_tree_node, _node, sector_t, _subtree_last, range_node_start,
 		     range_node_last, , blk_range_rb)
 
-void rangevector_init(rangevector_t *rangevector)
+void rangevector_init(struct rangevector *rangevector)
 {
 	init_rwsem(&rangevector->lock);
 
 	rangevector->root = RB_ROOT_CACHED;
 }
 
-void rangevector_done(rangevector_t *rangevector)
+void rangevector_done(struct rangevector *rangevector)
 {
 	struct rb_node *rb_node = NULL;
 	down_write(&rangevector->lock);
@@ -44,7 +44,7 @@ void rangevector_done(rangevector_t *rangevector)
 	up_write(&rangevector->lock);
 }
 
-int rangevector_add(rangevector_t *rangevector, struct blk_range *rg)
+int rangevector_add(struct rangevector *rangevector, struct blk_range *rg)
 {
 	struct blk_range_tree_node *range_node =
 		kzalloc(sizeof(struct blk_range_tree_node), GFP_KERNEL);

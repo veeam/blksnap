@@ -14,24 +14,24 @@ int inc_snapstore_block_size_pow(void);
 LIST_HEAD(snapstore_devices);
 DECLARE_RWSEM(snapstore_devices_lock);
 
-static inline void _snapstore_device_descr_write_lock(snapstore_device_t *snapstore_device)
+static inline void _snapstore_device_descr_write_lock(struct snapstore_device *snapstore_device)
 {
 	mutex_lock(&snapstore_device->store_block_map_locker);
 }
-static inline void _snapstore_device_descr_write_unlock(snapstore_device_t *snapstore_device)
+static inline void _snapstore_device_descr_write_unlock(struct snapstore_device *snapstore_device)
 {
 	mutex_unlock(&snapstore_device->store_block_map_locker);
 }
 
 void snapstore_device_done(void)
 {
-	snapstore_device_t *snapstore_device = NULL;
+	struct snapstore_device *snapstore_device = NULL;
 
 	do {
 		down_write(&snapstore_devices_lock);
 		if (!list_empty(&snapstore_devices)) {
 			snapstore_device =
-				list_entry(snapstore_devices.next, snapstore_device_t, link);
+				list_entry(snapstore_devices.next, struct snapstore_device, link);
 			list_del(&snapstore_device->link);
 		}
 		up_write(&snapstore_devices_lock);
@@ -41,17 +41,17 @@ void snapstore_device_done(void)
 	} while (snapstore_device);
 }
 
-snapstore_device_t *snapstore_device_find_by_dev_id(dev_t dev_id)
+struct snapstore_device *snapstore_device_find_by_dev_id(dev_t dev_id)
 {
-	snapstore_device_t *result = NULL;
+	struct snapstore_device *result = NULL;
 
 	down_read(&snapstore_devices_lock);
 	if (!list_empty(&snapstore_devices)) {
 		struct list_head *_head;
 
 		list_for_each (_head, &snapstore_devices) {
-			snapstore_device_t *snapstore_device =
-				list_entry(_head, snapstore_device_t, link);
+			struct snapstore_device *snapstore_device =
+				list_entry(_head, struct snapstore_device, link);
 
 			if (dev_id == snapstore_device->dev_id) {
 				result = snapstore_device;
@@ -64,17 +64,17 @@ snapstore_device_t *snapstore_device_find_by_dev_id(dev_t dev_id)
 	return result;
 }
 
-snapstore_device_t *_snapstore_device_get_by_snapstore_id(uuid_t *id)
+struct snapstore_device *_snapstore_device_get_by_snapstore_id(uuid_t *id)
 {
-	snapstore_device_t *result = NULL;
+	struct snapstore_device *result = NULL;
 
 	down_write(&snapstore_devices_lock);
 	if (!list_empty(&snapstore_devices)) {
 		struct list_head *_head;
 
 		list_for_each (_head, &snapstore_devices) {
-			snapstore_device_t *snapstore_device =
-				list_entry(_head, snapstore_device_t, link);
+			struct snapstore_device *snapstore_device =
+				list_entry(_head, struct snapstore_device, link);
 
 			if (uuid_equal(id, &snapstore_device->snapstore->id)) {
 				result = snapstore_device;
@@ -88,7 +88,7 @@ snapstore_device_t *_snapstore_device_get_by_snapstore_id(uuid_t *id)
 	return result;
 }
 
-static void _snapstore_device_destroy(snapstore_device_t *snapstore_device)
+static void _snapstore_device_destroy(struct snapstore_device *snapstore_device)
 {
 	pr_info("Destroy snapstore device\n");
 
@@ -111,12 +111,13 @@ static void _snapstore_device_destroy(snapstore_device_t *snapstore_device)
 
 static void snapstore_device_free_cb(struct kref *kref)
 {
-	snapstore_device_t *snapstore_device = container_of(kref, snapstore_device_t, refcount);
+	struct snapstore_device *snapstore_device =
+		container_of(kref, struct snapstore_device, refcount);
 
 	_snapstore_device_destroy(snapstore_device);
 }
 
-snapstore_device_t *snapstore_device_get_resource(snapstore_device_t *snapstore_device)
+struct snapstore_device *snapstore_device_get_resource(struct snapstore_device *snapstore_device)
 {
 	if (snapstore_device)
 		kref_get(&snapstore_device->refcount);
@@ -124,7 +125,7 @@ snapstore_device_t *snapstore_device_get_resource(snapstore_device_t *snapstore_
 	return snapstore_device;
 };
 
-void snapstore_device_put_resource(snapstore_device_t *snapstore_device)
+void snapstore_device_put_resource(struct snapstore_device *snapstore_device)
 {
 	if (snapstore_device)
 		kref_put(&snapstore_device->refcount, snapstore_device_free_cb);
@@ -133,7 +134,7 @@ void snapstore_device_put_resource(snapstore_device_t *snapstore_device)
 int snapstore_device_cleanup(uuid_t *id)
 {
 	int result = SUCCESS;
-	snapstore_device_t *snapstore_device = NULL;
+	struct snapstore_device *snapstore_device = NULL;
 
 	while (NULL != (snapstore_device = _snapstore_device_get_by_snapstore_id(id))) {
 		pr_info("Cleanup snapstore device for device [%d:%d]\n",
@@ -144,10 +145,11 @@ int snapstore_device_cleanup(uuid_t *id)
 	return result;
 }
 
-int snapstore_device_create(dev_t dev_id, snapstore_t *snapstore)
+int snapstore_device_create(dev_t dev_id, struct snapstore *snapstore)
 {
 	int res = SUCCESS;
-	snapstore_device_t *snapstore_device = kzalloc(sizeof(snapstore_device_t), GFP_KERNEL);
+	struct snapstore_device *snapstore_device =
+		kzalloc(sizeof(struct snapstore_device), GFP_KERNEL);
 
 	if (NULL == snapstore_device)
 		return -ENOMEM;
@@ -186,12 +188,13 @@ int snapstore_device_create(dev_t dev_id, snapstore_t *snapstore)
 	return SUCCESS;
 }
 
-int snapstore_device_add_request(snapstore_device_t *snapstore_device, unsigned long block_index,
-				 blk_deferred_request_t **dio_copy_req)
+int snapstore_device_add_request(struct snapstore_device *snapstore_device,
+				 unsigned long block_index,
+				 struct blk_deferred_request **dio_copy_req)
 {
 	int res = SUCCESS;
 	union blk_descr_unify blk_descr = { NULL };
-	blk_deferred_t *dio = NULL;
+	struct blk_deferred_io *dio = NULL;
 	bool req_new = false;
 
 	blk_descr = snapstore_get_empty_block(snapstore_device->snapstore);
@@ -244,9 +247,9 @@ int snapstore_device_add_request(snapstore_device_t *snapstore_device, unsigned 
 	return res;
 }
 
-int snapstore_device_prepare_requests(snapstore_device_t *snapstore_device,
+int snapstore_device_prepare_requests(struct snapstore_device *snapstore_device,
 				      struct blk_range *copy_range,
-				      blk_deferred_request_t **dio_copy_req)
+				      struct blk_deferred_request **dio_copy_req)
 {
 	int res = SUCCESS;
 	unsigned long inx = 0;
@@ -272,8 +275,8 @@ int snapstore_device_prepare_requests(snapstore_device_t *snapstore_device,
 	return res;
 }
 
-int snapstore_device_store(snapstore_device_t *snapstore_device,
-			   blk_deferred_request_t *dio_copy_req)
+int snapstore_device_store(struct snapstore_device *snapstore_device,
+			   struct blk_deferred_request *dio_copy_req)
 {
 	int res = snapstore_request_store(snapstore_device->snapstore, dio_copy_req);
 	if (res != SUCCESS)
@@ -282,7 +285,8 @@ int snapstore_device_store(snapstore_device_t *snapstore_device,
 	return res;
 }
 
-int snapstore_device_read(snapstore_device_t *snapstore_device, blk_redirect_bio_t *rq_redir)
+int snapstore_device_read(struct snapstore_device *snapstore_device,
+			  struct blk_redirect_bio *rq_redir)
 {
 	int res = SUCCESS;
 
@@ -294,7 +298,7 @@ int snapstore_device_read(snapstore_device_t *snapstore_device, blk_redirect_bio
 	sector_t blk_ofs_count = 0; //device range length
 
 	struct blk_range rq_range;
-	rangevector_t *zero_sectors = &snapstore_device->zero_sectors;
+	struct rangevector *zero_sectors = &snapstore_device->zero_sectors;
 
 	if (snapstore_device_is_corrupted(snapstore_device))
 		return -ENODATA;
@@ -372,13 +376,13 @@ int snapstore_device_read(snapstore_device_t *snapstore_device, blk_redirect_bio
 	return res;
 }
 
-int _snapstore_device_copy_on_write(snapstore_device_t *snapstore_device,
+int _snapstore_device_copy_on_write(struct snapstore_device *snapstore_device,
 				    struct blk_range *rq_range)
 {
 	int res = SUCCESS;
-	blk_deferred_request_t *dio_copy_req = NULL;
+	struct blk_deferred_request *dio_copy_req = NULL;
 
-	_snapstore_device_descr_read_lock(snapstore_device);
+	mutex_lock(&snapstore_device->store_block_map_locker);
 	do {
 		res = snapstore_device_prepare_requests(snapstore_device, rq_range, &dio_copy_req);
 		if (res != SUCCESS) {
@@ -395,13 +399,14 @@ int _snapstore_device_copy_on_write(snapstore_device_t *snapstore_device,
 			pr_err("Failed to read data from the original device. errno=%d\n", res);
 			break;
 		}
+
 		res = snapstore_device_store(snapstore_device, dio_copy_req);
 		if (res != SUCCESS) {
 			pr_err("Failed to write data to snapstore. errno=%d\n", res);
 			break;
 		}
 	} while (false);
-	_snapstore_device_descr_read_unlock(snapstore_device);
+	mutex_unlock(&snapstore_device->store_block_map_locker);
 
 	if (dio_copy_req) {
 		if (res == -EDEADLK)
@@ -413,7 +418,8 @@ int _snapstore_device_copy_on_write(snapstore_device_t *snapstore_device,
 	return res;
 }
 
-int snapstore_device_write(snapstore_device_t *snapstore_device, blk_redirect_bio_t *rq_redir)
+int snapstore_device_write(struct snapstore_device *snapstore_device,
+			   struct blk_redirect_bio *rq_redir)
 {
 	int res = SUCCESS;
 
@@ -494,7 +500,7 @@ int snapstore_device_write(snapstore_device_t *snapstore_device, blk_redirect_bi
 	return res;
 }
 
-bool snapstore_device_is_corrupted(snapstore_device_t *snapstore_device)
+bool snapstore_device_is_corrupted(struct snapstore_device *snapstore_device)
 {
 	if (snapstore_device == NULL)
 		return true;
@@ -511,7 +517,7 @@ bool snapstore_device_is_corrupted(snapstore_device_t *snapstore_device)
 	return false;
 }
 
-void snapstore_device_set_corrupted(snapstore_device_t *snapstore_device, int err_code)
+void snapstore_device_set_corrupted(struct snapstore_device *snapstore_device, int err_code)
 {
 	if (!snapstore_device->corrupted) {
 		atomic_set(&snapstore_device->req_failed_cnt, 0);
@@ -525,7 +531,7 @@ void snapstore_device_set_corrupted(snapstore_device_t *snapstore_device, int er
 
 int snapstore_device_errno(dev_t dev_id, int *p_err_code)
 {
-	snapstore_device_t *snapstore_device = snapstore_device_find_by_dev_id(dev_id);
+	struct snapstore_device *snapstore_device = snapstore_device_find_by_dev_id(dev_id);
 	if (snapstore_device == NULL)
 		return -ENODATA;
 

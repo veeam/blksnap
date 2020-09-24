@@ -2,18 +2,18 @@
 
 #include "blk_descr_mem.h"
 
-typedef struct snapstore_mem_s {
+struct snapstore_mem {
 	struct list_head blocks;
 	struct mutex blocks_lock;
 
 	size_t blocks_limit;
 	size_t blocks_allocated;
 
-	blk_descr_pool_t pool;
-} snapstore_mem_t;
+	struct blk_descr_pool pool;
+};
 
-snapstore_mem_t *snapstore_mem_create(size_t available_blocks);
+struct snapstore_mem *snapstore_mem_create(size_t available_blocks);
 
-void snapstore_mem_destroy(snapstore_mem_t *mem);
+void snapstore_mem_destroy(struct snapstore_mem *mem);
 
-void *snapstore_mem_get_block(snapstore_mem_t *mem);
+void *snapstore_mem_get_block(struct snapstore_mem *mem);

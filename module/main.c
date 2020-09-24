@@ -162,8 +162,7 @@ int __init blk_snap_init(void)
 
 		blk_snap_major = register_chrdev(0, MODULE_NAME, &ctrl_fops);
 		if (blk_snap_major < 0) {
-			pr_err("Failed to register a character device. errno=%d\n",
-			       blk_snap_major);
+			pr_err("Failed to register a character device. errno=%d\n", blk_snap_major);
 			result = blk_snap_major;
 			break;
 		}

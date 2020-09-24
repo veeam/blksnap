@@ -25,15 +25,15 @@ static inline void blk_descr_multidev_init(struct blk_descr_multidev *blk_descr,
 static inline void blk_descr_multidev_done(struct blk_descr_multidev *blk_descr)
 {
 	while (!list_empty(&blk_descr->rangelist)) {
-		blk_range_link_ex_t *rangelist =
-			list_entry(blk_descr->rangelist.next, blk_range_link_ex_t, link);
+		struct blk_range_link_ex *rangelist =
+			list_entry(blk_descr->rangelist.next, struct blk_range_link_ex, link);
 
 		list_del(&rangelist->link);
 		kfree(rangelist);
 	}
 }
 
-void blk_descr_multidev_pool_init(blk_descr_pool_t *pool)
+void blk_descr_multidev_pool_init(struct blk_descr_pool *pool)
 {
 	blk_descr_pool_init(pool, 0);
 }
@@ -47,7 +47,7 @@ static void blk_descr_multidev_cleanup(void *descr_array, size_t count)
 		blk_descr_multidev_done(descr_multidev + inx);
 }
 
-void blk_descr_multidev_pool_done(blk_descr_pool_t *pool)
+void blk_descr_multidev_pool_done(struct blk_descr_pool *pool)
 {
 	blk_descr_pool_done(pool, blk_descr_multidev_cleanup);
 }
@@ -64,7 +64,7 @@ static union blk_descr_unify blk_descr_multidev_allocate(void *descr_array, size
 	return blk_descr;
 }
 
-int blk_descr_multidev_pool_add(blk_descr_pool_t *pool, struct list_head *rangelist)
+int blk_descr_multidev_pool_add(struct blk_descr_pool *pool, struct list_head *rangelist)
 {
 	union blk_descr_unify blk_descr =
 		blk_descr_pool_alloc(pool, sizeof(struct blk_descr_multidev),
@@ -78,7 +78,7 @@ int blk_descr_multidev_pool_add(blk_descr_pool_t *pool, struct list_head *rangel
 	return SUCCESS;
 }
 
-union blk_descr_unify blk_descr_multidev_pool_take(blk_descr_pool_t *pool)
+union blk_descr_unify blk_descr_multidev_pool_take(struct blk_descr_pool *pool)
 {
 	return blk_descr_pool_take(pool, sizeof(struct blk_descr_multidev));
 }

@@ -12,16 +12,16 @@
 struct bio_set g_BlkDeferredBioset = { 0 };
 #define BlkDeferredBioset &g_BlkDeferredBioset
 
-typedef struct dio_bio_complete_s {
-	blk_deferred_request_t *dio_req;
+struct dio_bio_complete {
+	struct blk_deferred_request *dio_req;
 	sector_t bio_sect_len;
-} dio_bio_complete_t;
+};
 
-typedef struct dio_deadlocked_list_s {
+struct dio_deadlocked_list {
 	struct list_head link;
 
-	blk_deferred_request_t *dio_req;
-} dio_deadlocked_list_t;
+	struct blk_deferred_request *dio_req;
+};
 
 LIST_HEAD(dio_deadlocked_list);
 DEFINE_RWLOCK(dio_deadlocked_list_lock);
@@ -31,15 +31,15 @@ atomic64_t dio_free_count = ATOMIC64_INIT(0);
 
 void blk_deferred_done(void)
 {
-	dio_deadlocked_list_t *dio_locked;
+	struct dio_deadlocked_list *dio_locked;
 
 	do {
 		dio_locked = NULL;
 
 		write_lock(&dio_deadlocked_list_lock);
 		if (!list_empty(&dio_deadlocked_list)) {
-			dio_locked =
-				list_entry(dio_deadlocked_list.next, dio_deadlocked_list_t, link);
+			dio_locked = list_entry(dio_deadlocked_list.next,
+						struct dio_deadlocked_list, link);
 
 			list_del(&dio_locked->link);
 		}
@@ -57,9 +57,10 @@ void blk_deferred_done(void)
 	} while (dio_locked);
 }
 
-void blk_deferred_request_deadlocked(blk_deferred_request_t *dio_req)
+void blk_deferred_request_deadlocked(struct blk_deferred_request *dio_req)
 {
-	dio_deadlocked_list_t *dio_locked = kzalloc(sizeof(dio_deadlocked_list_t), GFP_KERNEL);
+	struct dio_deadlocked_list *dio_locked =
+		kzalloc(sizeof(struct dio_deadlocked_list), GFP_KERNEL);
 
 	dio_locked->dio_req = dio_req;
 
@@ -70,7 +71,7 @@ void blk_deferred_request_deadlocked(blk_deferred_request_t *dio_req)
 	pr_warn("Deadlock with defer IO\n");
 }
 
-void blk_deferred_free(blk_deferred_t *dio)
+void blk_deferred_free(struct blk_deferred_io *dio)
 {
 	size_t inx = 0;
 
@@ -88,12 +89,13 @@ void blk_deferred_free(blk_deferred_t *dio)
 	kfree(dio);
 }
 
-blk_deferred_t *blk_deferred_alloc(unsigned long block_index, union blk_descr_unify blk_descr)
+struct blk_deferred_io *blk_deferred_alloc(unsigned long block_index,
+					   union blk_descr_unify blk_descr)
 {
 	size_t inx;
 	size_t page_count;
 
-	blk_deferred_t *dio = kmalloc(sizeof(blk_deferred_t), GFP_NOIO);
+	struct blk_deferred_io *dio = kmalloc(sizeof(struct blk_deferred_io), GFP_NOIO);
 	if (dio == NULL)
 		return NULL;
 
@@ -129,7 +131,7 @@ blk_deferred_t *blk_deferred_alloc(unsigned long block_index, union blk_descr_un
 
 int blk_deferred_bioset_create(void)
 {
-	return bioset_init(BlkDeferredBioset, 64, sizeof(dio_bio_complete_t),
+	return bioset_init(BlkDeferredBioset, 64, sizeof(struct dio_bio_complete),
 			   BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
 }
 
@@ -143,12 +145,12 @@ struct bio *_blk_deferred_bio_alloc(int nr_iovecs)
 	struct bio *new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, BlkDeferredBioset);
 	if (new_bio) {
 		new_bio->bi_end_io = blk_deferred_bio_endio;
-		new_bio->bi_private = ((void *)new_bio) - sizeof(dio_bio_complete_t);
+		new_bio->bi_private = ((void *)new_bio) - sizeof(struct dio_bio_complete);
 	}
 	return new_bio;
 }
 
-static void blk_deferred_complete(blk_deferred_request_t *dio_req, sector_t portion_sect_cnt,
+static void blk_deferred_complete(struct blk_deferred_request *dio_req, sector_t portion_sect_cnt,
 				  int result)
 {
 	atomic64_add(portion_sect_cnt, &dio_req->sect_processed);
@@ -166,7 +168,7 @@ static void blk_deferred_complete(blk_deferred_request_t *dio_req, sector_t port
 void blk_deferred_bio_endio(struct bio *bio)
 {
 	int local_err;
-	dio_bio_complete_t *complete_param = (dio_bio_complete_t *)bio->bi_private;
+	struct dio_bio_complete *complete_param = (struct dio_bio_complete *)bio->bi_private;
 
 	if (complete_param == NULL) {
 		//bio already complete
@@ -193,9 +195,10 @@ static inline size_t _page_count_calculate(sector_t size_sector)
 	return page_count;
 }
 
-sector_t _blk_deferred_submit_pages(struct block_device *blk_dev, blk_deferred_request_t *dio_req,
-				    int direction, sector_t arr_ofs, struct page **page_array,
-				    sector_t ofs_sector, sector_t size_sector)
+sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
+				    struct blk_deferred_request *dio_req, int direction,
+				    sector_t arr_ofs, struct page **page_array, sector_t ofs_sector,
+				    sector_t size_sector)
 {
 	struct bio *bio = NULL;
 	int nr_iovecs;
@@ -249,17 +252,18 @@ sector_t _blk_deferred_submit_pages(struct block_device *blk_dev, blk_deferred_r
 		process_sect += bvec_len_sect;
 	}
 
-	((dio_bio_complete_t *)bio->bi_private)->dio_req = dio_req;
-	((dio_bio_complete_t *)bio->bi_private)->bio_sect_len = process_sect;
+	((struct dio_bio_complete *)bio->bi_private)->dio_req = dio_req;
+	((struct dio_bio_complete *)bio->bi_private)->bio_sect_len = process_sect;
 
 	submit_bio(bio);
 
 	return process_sect;
 }
 
-sector_t blk_deferred_submit_pages(struct block_device *blk_dev, blk_deferred_request_t *dio_req,
-				   int direction, sector_t arr_ofs, struct page **page_array,
-				   sector_t ofs_sector, sector_t size_sector)
+sector_t blk_deferred_submit_pages(struct block_device *blk_dev,
+				   struct blk_deferred_request *dio_req, int direction,
+				   sector_t arr_ofs, struct page **page_array, sector_t ofs_sector,
+				   sector_t size_sector)
 {
 	sector_t process_sect = 0;
 
@@ -278,11 +282,11 @@ sector_t blk_deferred_submit_pages(struct block_device *blk_dev, blk_deferred_re
 	return process_sect;
 }
 
-blk_deferred_request_t *blk_deferred_request_new(void)
+struct blk_deferred_request *blk_deferred_request_new(void)
 {
-	blk_deferred_request_t *dio_req = NULL;
+	struct blk_deferred_request *dio_req = NULL;
 
-	dio_req = kzalloc(sizeof(blk_deferred_request_t), GFP_NOIO);
+	dio_req = kzalloc(sizeof(struct blk_deferred_request), GFP_NOIO);
 	if (dio_req == NULL)
 		return NULL;
 
@@ -296,7 +300,8 @@ blk_deferred_request_t *blk_deferred_request_new(void)
 	return dio_req;
 }
 
-bool blk_deferred_request_already_added(blk_deferred_request_t *dio_req, unsigned long block_index)
+bool blk_deferred_request_already_added(struct blk_deferred_request *dio_req,
+					unsigned long block_index)
 {
 	bool result = false;
 	struct list_head *_list_head;
@@ -305,7 +310,7 @@ bool blk_deferred_request_already_added(blk_deferred_request_t *dio_req, unsigne
 		return result;
 
 	list_for_each (_list_head, &dio_req->dios) {
-		blk_deferred_t *dio = list_entry(_list_head, blk_deferred_t, link);
+		struct blk_deferred_io *dio = list_entry(_list_head, struct blk_deferred_io, link);
 
 		if (dio->blk_index == block_index) {
 			result = true;
@@ -316,7 +321,7 @@ bool blk_deferred_request_already_added(blk_deferred_request_t *dio_req, unsigne
 	return result;
 }
 
-int blk_deferred_request_add(blk_deferred_request_t *dio_req, blk_deferred_t *dio)
+int blk_deferred_request_add(struct blk_deferred_request *dio_req, struct blk_deferred_io *dio)
 {
 	list_add_tail(&dio->link, &dio_req->dios);
 	dio_req->sect_len += dio->sect.cnt;
@@ -324,11 +329,12 @@ int blk_deferred_request_add(blk_deferred_request_t *dio_req, blk_deferred_t *di
 	return SUCCESS;
 }
 
-void blk_deferred_request_free(blk_deferred_request_t *dio_req)
+void blk_deferred_request_free(struct blk_deferred_request *dio_req)
 {
 	if (dio_req != NULL) {
 		while (!list_empty(&dio_req->dios)) {
-			blk_deferred_t *dio = list_entry(dio_req->dios.next, blk_deferred_t, link);
+			struct blk_deferred_io *dio =
+				list_entry(dio_req->dios.next, struct blk_deferred_io, link);
 
 			list_del(&dio->link);
 
@@ -338,13 +344,13 @@ void blk_deferred_request_free(blk_deferred_request_t *dio_req)
 	}
 }
 
-void blk_deferred_request_waiting_skip(blk_deferred_request_t *dio_req)
+void blk_deferred_request_waiting_skip(struct blk_deferred_request *dio_req)
 {
 	init_completion(&dio_req->complete);
 	atomic64_set(&dio_req->sect_processed, 0);
 }
 
-int blk_deferred_request_wait(blk_deferred_request_t *dio_req)
+int blk_deferred_request_wait(struct blk_deferred_request *dio_req)
 {
 	u64 start_jiffies = get_jiffies_64();
 	u64 current_jiffies;
@@ -361,7 +367,7 @@ int blk_deferred_request_wait(blk_deferred_request_t *dio_req)
 }
 
 int blk_deferred_request_read_original(struct block_device *original_blk_dev,
-				       blk_deferred_request_t *dio_copy_req)
+				       struct blk_deferred_request *dio_copy_req)
 {
 	int res = -ENODATA;
 	struct list_head *_list_head;
@@ -372,7 +378,7 @@ int blk_deferred_request_read_original(struct block_device *original_blk_dev,
 		return res;
 
 	list_for_each (_list_head, &dio_copy_req->dios) {
-		blk_deferred_t *dio = list_entry(_list_head, blk_deferred_t, link);
+		struct blk_deferred_io *dio = list_entry(_list_head, struct blk_deferred_io, link);
 
 		sector_t ofs = dio->sect.ofs;
 		sector_t cnt = dio->sect.cnt;
@@ -394,7 +400,7 @@ int blk_deferred_request_read_original(struct block_device *original_blk_dev,
 }
 
 int blk_deferred_request_store_file(struct block_device *blk_dev,
-				    blk_deferred_request_t *dio_copy_req)
+				    struct blk_deferred_request *dio_copy_req)
 {
 	int res = SUCCESS;
 	struct list_head *_dio_list_head;
@@ -404,15 +410,16 @@ int blk_deferred_request_store_file(struct block_device *blk_dev,
 
 	BUG_ON(list_empty(&dio_copy_req->dios));
 	list_for_each (_dio_list_head, &dio_copy_req->dios) {
-		blk_deferred_t *dio = list_entry(_dio_list_head, blk_deferred_t, link);
+		struct blk_deferred_io *dio =
+			list_entry(_dio_list_head, struct blk_deferred_io, link);
 		sector_t page_array_ofs = 0;
 		struct blk_descr_file *blk_descr = dio->blk_descr.file;
 
 		BUG_ON(list_empty(&blk_descr->rangelist));
 		list_for_each (_rangelist_head, &blk_descr->rangelist) {
 			sector_t process_sect;
-			blk_range_link_t *range_link =
-				list_entry(_rangelist_head, blk_range_link_t, link);
+			struct blk_range_link *range_link =
+				list_entry(_rangelist_head, struct blk_range_link, link);
 
 			//BUG_ON( NULL == dio->page_array );
 			process_sect =
@@ -440,7 +447,7 @@ int blk_deferred_request_store_file(struct block_device *blk_dev,
 }
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-int blk_deferred_request_store_multidev(blk_deferred_request_t *dio_copy_req)
+int blk_deferred_request_store_multidev(struct blk_deferred_request *dio_copy_req)
 {
 	int res = SUCCESS;
 	struct list_head *_dio_list_head;
@@ -450,15 +457,16 @@ int blk_deferred_request_store_multidev(blk_deferred_request_t *dio_copy_req)
 
 	BUG_ON(list_empty(&dio_copy_req->dios));
 	list_for_each (_dio_list_head, &dio_copy_req->dios) {
-		blk_deferred_t *dio = list_entry(_dio_list_head, blk_deferred_t, link);
+		struct blk_deferred_io *dio =
+			list_entry(_dio_list_head, struct blk_deferred_io, link);
 		sector_t page_array_ofs = 0;
 		struct blk_descr_multidev *blk_descr = dio->blk_descr.multidev;
 
 		BUG_ON(list_empty(&blk_descr->rangelist));
 		list_for_each (_ranges_list_head, &blk_descr->rangelist) {
 			sector_t process_sect;
-			blk_range_link_ex_t *range_link =
-				list_entry(_ranges_list_head, blk_range_link_ex_t, link);
+			struct blk_range_link_ex *range_link =
+				list_entry(_ranges_list_head, struct blk_range_link_ex, link);
 
 			process_sect =
 				blk_deferred_submit_pages(range_link->blk_dev, dio_copy_req, WRITE,
@@ -515,7 +523,7 @@ static size_t _store_pages(void *dst, size_t arr_ofs, struct page **page_array, 
 	return processed_len;
 }
 
-int blk_deffered_request_store_mem(blk_deferred_request_t *dio_copy_req)
+int blk_deffered_request_store_mem(struct blk_deferred_request *dio_copy_req)
 {
 	int res = SUCCESS;
 	sector_t processed = 0;
@@ -523,7 +531,8 @@ int blk_deffered_request_store_mem(blk_deferred_request_t *dio_copy_req)
 	if (!list_empty(&dio_copy_req->dios)) {
 		struct list_head *_list_head;
 		list_for_each (_list_head, &dio_copy_req->dios) {
-			blk_deferred_t *dio = list_entry(_list_head, blk_deferred_t, link);
+			struct blk_deferred_io *dio =
+				list_entry(_list_head, struct blk_deferred_io, link);
 			struct blk_descr_mem *blk_descr = dio->blk_descr.mem;
 
 			size_t portion = _store_pages(blk_descr->buff, 0, dio->page_array,

@@ -42,8 +42,8 @@ int ctrl_sysfs_init(struct device **p_device)
 
 		{
 			struct device *dev =
-				device_create(blk_snap_class, NULL,
-					      MKDEV(get_blk_snap_major(), 0), NULL, MODULE_NAME);
+				device_create(blk_snap_class, NULL, MKDEV(get_blk_snap_major(), 0),
+					      NULL, MODULE_NAME);
 			if (IS_ERR(dev)) {
 				res = PTR_ERR(dev);
 				pr_err("Failed to create device, result=%d\n", res);

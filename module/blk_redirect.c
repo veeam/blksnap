@@ -23,7 +23,7 @@ void blk_redirect_bioset_free(void)
 
 void blk_redirect_bio_endio(struct bio *bb)
 {
-	blk_redirect_bio_t *rq_redir = (blk_redirect_bio_t *)bb->bi_private;
+	struct blk_redirect_bio *rq_redir = (struct blk_redirect_bio *)bb->bi_private;
 
 	if (rq_redir != NULL) {
 		int err = SUCCESS;
@@ -54,9 +54,10 @@ struct bio *_blk_dev_redirect_bio_alloc(int nr_iovecs, void *bi_private)
 	return new_bio;
 }
 
-blk_redirect_bio_list_t *_redirect_bio_allocate_list(struct bio *new_bio)
+struct blk_redirect_bio_list *_redirect_bio_allocate_list(struct bio *new_bio)
 {
-	blk_redirect_bio_list_t *next = kzalloc(sizeof(blk_redirect_bio_list_t), GFP_NOIO);
+	struct blk_redirect_bio_list *next =
+		kzalloc(sizeof(struct blk_redirect_bio_list), GFP_NOIO);
 	if (next) {
 		next->next = NULL;
 		next->this = new_bio;
@@ -64,9 +65,9 @@ blk_redirect_bio_list_t *_redirect_bio_allocate_list(struct bio *new_bio)
 	return next;
 }
 
-int bio_endio_list_push(blk_redirect_bio_t *rq_redir, struct bio *new_bio)
+int bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
 {
-	blk_redirect_bio_list_t *head;
+	struct blk_redirect_bio_list *head;
 
 	if (rq_redir->bio_list_head == NULL) {
 		if (NULL == (rq_redir->bio_list_head = _redirect_bio_allocate_list(new_bio)))
@@ -83,16 +84,16 @@ int bio_endio_list_push(blk_redirect_bio_t *rq_redir, struct bio *new_bio)
 	return SUCCESS;
 }
 
-void bio_endio_list_cleanup(blk_redirect_bio_list_t *curr)
+void bio_endio_list_cleanup(struct blk_redirect_bio_list *curr)
 {
 	while (curr != NULL) {
-		blk_redirect_bio_list_t *next = curr->next;
+		struct blk_redirect_bio_list *next = curr->next;
 		kfree(curr);
 		curr = next;
 	}
 }
 
-int _blk_dev_redirect_part_fast(blk_redirect_bio_t *rq_redir, int direction,
+int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction,
 				struct block_device *blk_dev, sector_t target_pos, sector_t rq_ofs,
 				sector_t rq_count)
 {
@@ -110,7 +111,7 @@ int _blk_dev_redirect_part_fast(blk_redirect_bio_t *rq_redir, int direction,
 	sector_t processed_sectors = 0;
 	int nr_iovecs;
 	unsigned int max_sect;
-	blk_redirect_bio_list_t *bio_endio_rec;
+	struct blk_redirect_bio_list *bio_endio_rec;
 
 	{
 		struct request_queue *q = bdev_get_queue(blk_dev);
@@ -217,8 +218,9 @@ __fail_out:
 	return res;
 }
 
-int blk_dev_redirect_part(blk_redirect_bio_t *rq_redir, int direction, struct block_device *blk_dev,
-			  sector_t target_pos, sector_t rq_ofs, sector_t rq_count)
+int blk_dev_redirect_part(struct blk_redirect_bio *rq_redir, int direction,
+			  struct block_device *blk_dev, sector_t target_pos, sector_t rq_ofs,
+			  sector_t rq_count)
 {
 	struct request_queue *q = bdev_get_queue(blk_dev);
 	sector_t logical_block_size_mask =
@@ -236,10 +238,10 @@ int blk_dev_redirect_part(blk_redirect_bio_t *rq_redir, int direction, struct bl
 	return -EFAULT;
 }
 
-void blk_dev_redirect_submit(blk_redirect_bio_t *rq_redir)
+void blk_dev_redirect_submit(struct blk_redirect_bio *rq_redir)
 {
-	blk_redirect_bio_list_t *head;
-	blk_redirect_bio_list_t *curr;
+	struct blk_redirect_bio_list *head;
+	struct blk_redirect_bio_list *curr;
 
 	head = curr = rq_redir->bio_list_head;
 	rq_redir->bio_list_head = NULL;
@@ -253,7 +255,7 @@ void blk_dev_redirect_submit(blk_redirect_bio_t *rq_redir)
 	bio_endio_list_cleanup(head);
 }
 
-int blk_dev_redirect_memcpy_part(blk_redirect_bio_t *rq_redir, int direction, void *buff,
+int blk_dev_redirect_memcpy_part(struct blk_redirect_bio *rq_redir, int direction, void *buff,
 				 sector_t rq_ofs, sector_t rq_count)
 {
 	struct bio_vec bvec;
@@ -305,7 +307,8 @@ int blk_dev_redirect_memcpy_part(blk_redirect_bio_t *rq_redir, int direction, vo
 	return SUCCESS;
 }
 
-int blk_dev_redirect_zeroed_part(blk_redirect_bio_t *rq_redir, sector_t rq_ofs, sector_t rq_count)
+int blk_dev_redirect_zeroed_part(struct blk_redirect_bio *rq_redir, sector_t rq_ofs,
+				 sector_t rq_count)
 {
 	struct bio_vec bvec;
 	struct bvec_iter iter;
@@ -351,9 +354,9 @@ int blk_dev_redirect_zeroed_part(blk_redirect_bio_t *rq_redir, sector_t rq_ofs, 
 	return SUCCESS;
 }
 
-int blk_dev_redirect_read_zeroed(blk_redirect_bio_t *rq_redir, struct block_device *blk_dev,
+int blk_dev_redirect_read_zeroed(struct blk_redirect_bio *rq_redir, struct block_device *blk_dev,
 				 sector_t rq_pos, sector_t blk_ofs_start, sector_t blk_ofs_count,
-				 rangevector_t *zero_sectors)
+				 struct rangevector *zero_sectors)
 {
 	int res = SUCCESS;
 	struct blk_range_tree_node *range_node;
@@ -403,13 +406,13 @@ int blk_dev_redirect_read_zeroed(blk_redirect_bio_t *rq_redir, struct block_devi
 
 	return res;
 }
-void blk_redirect_complete(blk_redirect_bio_t *rq_redir, int res)
+void blk_redirect_complete(struct blk_redirect_bio *rq_redir, int res)
 {
 	rq_redir->complete_cb(rq_redir->complete_param, rq_redir->bio, res);
 	redirect_bio_queue_free(rq_redir);
 }
 
-void redirect_bio_queue_init(redirect_bio_queue_t *queue)
+void redirect_bio_queue_init(struct redirect_bio_queue *queue)
 {
 	INIT_LIST_HEAD(&queue->list);
 
@@ -421,9 +424,9 @@ void redirect_bio_queue_init(redirect_bio_queue_t *queue)
 	atomic_set(&queue->active_state, true);
 }
 
-blk_redirect_bio_t *redirect_bio_queue_new(redirect_bio_queue_t *queue)
+struct blk_redirect_bio *redirect_bio_queue_new(struct redirect_bio_queue *queue)
 {
-	blk_redirect_bio_t *rq_redir = kzalloc(sizeof(blk_redirect_bio_t), GFP_NOIO);
+	struct blk_redirect_bio *rq_redir = kzalloc(sizeof(struct blk_redirect_bio), GFP_NOIO);
 
 	if (NULL == rq_redir)
 		return NULL;
@@ -436,7 +439,7 @@ blk_redirect_bio_t *redirect_bio_queue_new(redirect_bio_queue_t *queue)
 	return rq_redir;
 }
 
-void redirect_bio_queue_free(blk_redirect_bio_t *rq_redir)
+void redirect_bio_queue_free(struct blk_redirect_bio *rq_redir)
 {
 	if (rq_redir) {
 		if (rq_redir->queue)
@@ -446,7 +449,8 @@ void redirect_bio_queue_free(blk_redirect_bio_t *rq_redir)
 	}
 }
 
-int redirect_bio_queue_push_back(redirect_bio_queue_t *queue, blk_redirect_bio_t *rq_redir)
+int redirect_bio_queue_push_back(struct redirect_bio_queue *queue,
+				 struct blk_redirect_bio *rq_redir)
 {
 	int res = SUCCESS;
 
@@ -463,14 +467,14 @@ int redirect_bio_queue_push_back(redirect_bio_queue_t *queue, blk_redirect_bio_t
 	return res;
 }
 
-blk_redirect_bio_t *redirect_bio_queue_get_first(redirect_bio_queue_t *queue)
+struct blk_redirect_bio *redirect_bio_queue_get_first(struct redirect_bio_queue *queue)
 {
-	blk_redirect_bio_t *rq_redir = NULL;
+	struct blk_redirect_bio *rq_redir = NULL;
 
 	spin_lock(&queue->lock);
 
 	if (!list_empty(&queue->list)) {
-		rq_redir = list_entry(queue->list.next, blk_redirect_bio_t, link);
+		rq_redir = list_entry(queue->list.next, struct blk_redirect_bio, link);
 		list_del(&rq_redir->link);
 		atomic_dec(&queue->in_queue_cnt);
 	}
@@ -480,7 +484,7 @@ blk_redirect_bio_t *redirect_bio_queue_get_first(redirect_bio_queue_t *queue)
 	return rq_redir;
 }
 
-bool redirect_bio_queue_active(redirect_bio_queue_t *queue, bool state)
+bool redirect_bio_queue_active(struct redirect_bio_queue *queue, bool state)
 {
 	bool prev_state;
 

@@ -9,14 +9,21 @@
 #include "snapstore_multidev.h"
 #include "blk_util.h"
 
-int snapstore_multidev_create(snapstore_multidev_t **p_multidev)
+struct multidev_el {
+	struct list_head link;
+
+	dev_t dev_id;
+	struct block_device *blk_dev;
+};
+
+int snapstore_multidev_create(struct snapstore_multidev **p_multidev)
 {
 	int res = SUCCESS;
-	snapstore_multidev_t *multidev;
+	struct snapstore_multidev *multidev;
 
 	pr_info("Multidevice file snapstore create\n");
 
-	multidev = kzalloc(sizeof(snapstore_multidev_t), GFP_KERNEL);
+	multidev = kzalloc(sizeof(struct snapstore_multidev), GFP_KERNEL);
 	if (multidev == NULL)
 		return -ENOMEM;
 
@@ -29,9 +36,9 @@ int snapstore_multidev_create(snapstore_multidev_t **p_multidev)
 	return res;
 }
 
-void snapstore_multidev_destroy(snapstore_multidev_t *multidev)
+void snapstore_multidev_destroy(struct snapstore_multidev *multidev)
 {
-	multidev_el_t *el;
+	struct multidev_el *el;
 
 	//BUG_ON(NULL == multidev);
 	blk_descr_multidev_pool_done(&multidev->pool);
@@ -40,7 +47,7 @@ void snapstore_multidev_destroy(snapstore_multidev_t *multidev)
 		el = NULL;
 		spin_lock(&multidev->devicelist_lock);
 		if (!list_empty(&multidev->devicelist)) {
-			el = list_entry(multidev->devicelist.next, multidev_el_t, link);
+			el = list_entry(multidev->devicelist.next, struct multidev_el, link);
 
 			list_del(&el->link);
 		}
@@ -59,16 +66,16 @@ void snapstore_multidev_destroy(snapstore_multidev_t *multidev)
 	kfree(multidev);
 }
 
-multidev_el_t *snapstore_multidev_find(snapstore_multidev_t *multidev, dev_t dev_id)
+struct multidev_el *snapstore_multidev_find(struct snapstore_multidev *multidev, dev_t dev_id)
 {
-	multidev_el_t *el = NULL;
+	struct multidev_el *el = NULL;
 
 	spin_lock(&multidev->devicelist_lock);
 	if (!list_empty(&multidev->devicelist)) {
 		struct list_head *_head;
 
 		list_for_each (_head, &multidev->devicelist) {
-			multidev_el_t *_el = list_entry(_head, multidev_el_t, link);
+			struct multidev_el *_el = list_entry(_head, struct multidev_el, link);
 
 			if (_el->dev_id == dev_id) {
 				el = _el;
@@ -81,11 +88,12 @@ multidev_el_t *snapstore_multidev_find(snapstore_multidev_t *multidev, dev_t dev
 	return el;
 }
 
-struct block_device *snapstore_multidev_get_device(snapstore_multidev_t *multidev, dev_t dev_id)
+struct block_device *snapstore_multidev_get_device(struct snapstore_multidev *multidev,
+						   dev_t dev_id)
 {
 	int res;
 	struct block_device *blk_dev = NULL;
-	multidev_el_t *el = snapstore_multidev_find(multidev, dev_id);
+	struct multidev_el *el = snapstore_multidev_find(multidev, dev_id);
 
 	if (el)
 		return el->blk_dev;
@@ -97,7 +105,7 @@ struct block_device *snapstore_multidev_get_device(snapstore_multidev_t *multide
 		return NULL;
 	}
 
-	el = kzalloc(sizeof(multidev_el_t), GFP_KERNEL);
+	el = kzalloc(sizeof(struct multidev_el), GFP_KERNEL);
 	INIT_LIST_HEAD(&el->link);
 
 	el->blk_dev = blk_dev;
