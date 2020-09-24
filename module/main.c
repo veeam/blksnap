@@ -202,7 +202,7 @@ void __exit blk_snap_exit(void)
 
 	ctrl_sysfs_done(&blk_snap_device);
 
-	snapshot_Done();
+	snapshot_done();
 
 	snapstore_device_done();
 	snapstore_done();

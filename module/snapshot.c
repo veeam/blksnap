@@ -11,7 +11,7 @@ DECLARE_RWSEM(snapshots_lock);
 
 void _snapshot_destroy(struct snapshot *p_snapshot);
 
-void snapshot_Done(void)
+void snapshot_done(void)
 {
 	struct snapshot *snap;
 	pr_info("Removing all snapshots\n");
@@ -109,7 +109,7 @@ void _snapshot_cleanup(struct snapshot *snapshot)
 	kfree(snapshot);
 }
 
-int snapshot_Create(dev_t *dev_id_set, unsigned int dev_id_set_size,
+int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		    unsigned int cbt_block_size_degree, unsigned long long *psnapshot_id)
 {
 	struct snapshot *snapshot = NULL;
@@ -196,7 +196,7 @@ void _snapshot_destroy(struct snapshot *snapshot)
 	_snapshot_cleanup(snapshot);
 }
 
-int snapshot_Destroy(unsigned long long snapshot_id)
+int snapshot_destroy(unsigned long long snapshot_id)
 {
 	struct snapshot *snapshot = NULL;
 

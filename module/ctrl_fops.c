@@ -321,7 +321,7 @@ int ioctl_snapshot_create(unsigned long arg)
 		for (inx = 0; inx < param.count; ++inx)
 			p_dev[inx] = MKDEV(pk_dev_id[inx].major, pk_dev_id[inx].minor);
 
-		status = snapshot_Create(p_dev, param.count, get_change_tracking_block_size_pow(),
+		status = snapshot_create(p_dev, param.count, get_change_tracking_block_size_pow(),
 					 &param.snapshot_id);
 
 		kfree(p_dev);
@@ -351,7 +351,7 @@ int ioctl_snapshot_destroy(unsigned long arg)
 		return -ENODATA;
 	}
 
-	return snapshot_Destroy(param);
+	return snapshot_destroy(param);
 }
 //////////////////////////////////////////////////////////////////////////
 int ioctl_snapstore_create(unsigned long arg)

@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#include "sector.h"
-
 int get_snapstore_block_size_pow(void);
 
 static inline sector_t snapstore_block_shift(void)

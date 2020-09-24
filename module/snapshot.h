@@ -9,9 +9,9 @@ struct snapshot {
 	int dev_id_set_size;
 };
 
-void snapshot_Done(void);
+void snapshot_done(void);
 
-int snapshot_Create(dev_t *dev_id_set, unsigned int dev_id_set_size,
+int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		    unsigned int cbt_block_size_degree, unsigned long long *psnapshot_id);
 
-int snapshot_Destroy(unsigned long long snapshot_id);
+int snapshot_destroy(unsigned long long snapshot_id);

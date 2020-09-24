@@ -21,7 +21,9 @@ static struct class *blk_snap_class = NULL;
 
 int ctrl_sysfs_init(struct device **p_device)
 {
+	struct device *dev;
 	int res;
+
 	blk_snap_class = class_create(THIS_MODULE, MODULE_NAME);
 	if (IS_ERR(blk_snap_class)) {
 		res = PTR_ERR(blk_snap_class);
@@ -29,32 +31,30 @@ int ctrl_sysfs_init(struct device **p_device)
 		return res;
 	}
 
-	do {
-		pr_info("Create 'major' sysfs attribute\n");
-		res = class_create_file(blk_snap_class, &class_attr_major);
-		if (res != SUCCESS) {
-			pr_err("Failed to create 'major' sysfs file\n");
-			break;
-		}
 
-		{
-			struct device *dev =
-				device_create(blk_snap_class, NULL, MKDEV(get_blk_snap_major(), 0),
-					      NULL, MODULE_NAME);
-			if (IS_ERR(dev)) {
-				res = PTR_ERR(dev);
-				pr_err("Failed to create device, result=%d\n", res);
-				break;
-			}
-
-			*p_device = dev;
-		}
-	} while (false);
-
+	pr_info("Create 'major' sysfs attribute\n");
+	res = class_create_file(blk_snap_class, &class_attr_major);
 	if (res != SUCCESS) {
+		pr_err("Failed to create 'major' sysfs file\n");
+
 		class_destroy(blk_snap_class);
 		blk_snap_class = NULL;
+		return res;
 	}
+	
+	dev = device_create(blk_snap_class, NULL, MKDEV(get_blk_snap_major(), 0), NULL, 
+			    MODULE_NAME);
+	if (IS_ERR(dev)) {
+		res = PTR_ERR(dev);
+		pr_err("Failed to create device, errno=%d\n", res);
+
+		class_remove_file(blk_snap_class, &class_attr_major);
+		class_destroy(blk_snap_class);
+		blk_snap_class = NULL;
+		return res;
+	}
+
+	*p_device = dev;
 	return res;
 }
 
@@ -67,7 +67,6 @@ void ctrl_sysfs_done(struct device **p_device)
 
 	if (blk_snap_class != NULL) {
 		class_remove_file(blk_snap_class, &class_attr_major);
-
 		class_destroy(blk_snap_class);
 		blk_snap_class = NULL;
 	}

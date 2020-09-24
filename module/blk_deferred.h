@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#include "sector.h"
 #include "blk_descr_file.h"
 #include "blk_descr_mem.h"
 #include "blk_descr_multidev.h"

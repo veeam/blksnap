@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
 
-#include "sector.h"
 #include <linux/interval_tree_generic.h>
 
 struct blk_range_tree_node {

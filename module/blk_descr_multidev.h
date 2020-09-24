@@ -3,7 +3,6 @@
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 
-#include "sector.h"
 #include "blk_descr_pool.h"
 
 struct blk_descr_multidev {
