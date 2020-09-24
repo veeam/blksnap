@@ -23,21 +23,19 @@
 #include <linux/blk-filter.h>
 #define VEEAMSNAP_DEFAULT_ALTITUDE BLK_FILTER_ALTITUDE_MIN
 
-#include <linux/syscore_ops.h>	//more modern method
+#include <linux/syscore_ops.h> //more modern method
 
+static int g_param_zerosnapdata = 0; /*rudiment */
+static int g_param_debuglogging = 0; /*rudiment */
+static unsigned int g_param_fixflags = 0; /*rudiment */
 
-static int g_param_zerosnapdata = 0;		/*rudiment */
-static int g_param_debuglogging = 0;		/*rudiment */
-static unsigned int g_param_fixflags = 0;   /*rudiment */
-
-static char* g_logdir = NULL;				/*rudiment */
-static unsigned long g_param_logmaxsize = 15*1024*1024; /*rudiment */
+static char *g_logdir = NULL; /*rudiment */
+static unsigned long g_param_logmaxsize = 15 * 1024 * 1024; /*rudiment */
 
 static int g_param_snapstore_block_size_pow = 14;
 static int g_param_change_tracking_block_size_pow = 18;
 
-
-int get_debuglogging( void )
+int get_debuglogging(void)
 {
 	return g_param_debuglogging;
 }
@@ -66,7 +64,6 @@ int get_veeamsnap_major(void)
 	return veeamsnap_major;
 }
 
-
 blk_qc_t filter_submit_original_bio(struct bio *bio);
 
 static void filter_disk_add(struct gendisk *disk)
@@ -90,37 +87,30 @@ static blk_qc_t filter_submit_bio(struct bio *bio)
 		return filter_submit_original_bio(bio);
 }
 
-static const struct blk_filter_ops g_filter_ops = {
-	.disk_add = filter_disk_add,
-	.disk_del = filter_disk_del,
-	.disk_release = filter_disk_release,
-	.submit_bio = filter_submit_bio
-};
+static const struct blk_filter_ops g_filter_ops = { .disk_add = filter_disk_add,
+						    .disk_del = filter_disk_del,
+						    .disk_release = filter_disk_release,
+						    .submit_bio = filter_submit_bio };
 
-static struct blk_filter g_filter = {
-	.name = MODULE_NAME,
-	.ops = &g_filter_ops,
-	.altitude = VEEAMSNAP_DEFAULT_ALTITUDE,
-	.blk_filter_ctx = NULL
-};
+static struct blk_filter g_filter = { .name = MODULE_NAME,
+				      .ops = &g_filter_ops,
+				      .altitude = VEEAMSNAP_DEFAULT_ALTITUDE,
+				      .blk_filter_ctx = NULL };
 
 blk_qc_t filter_submit_original_bio(struct bio *bio)
 {
 	return blk_filter_submit_bio_next(&g_filter, bio);
 }
 
-static struct device* veeamsnap_device = NULL;
+static struct device *veeamsnap_device = NULL;
 
-static struct file_operations ctrl_fops = {
-	.owner  = THIS_MODULE,
-	.read   = ctrl_read,
-	.write  = ctrl_write,
-	.open   = ctrl_open,
-	.release= ctrl_release,
-	.poll   = ctrl_poll,
-	.unlocked_ioctl = ctrl_unlocked_ioctl
-};
-
+static struct file_operations ctrl_fops = { .owner = THIS_MODULE,
+					    .read = ctrl_read,
+					    .write = ctrl_write,
+					    .open = ctrl_open,
+					    .release = ctrl_release,
+					    .poll = ctrl_poll,
+					    .unlocked_ioctl = ctrl_unlocked_ioctl };
 
 static void blk_snap_syscore_shutdown(void)
 {
@@ -128,82 +118,82 @@ static void blk_snap_syscore_shutdown(void)
 }
 
 struct syscore_ops blk_snap_syscore_ops = {
-	.node = {0},
+	.node = { 0 },
 	.suspend = NULL,
 	.resume = NULL,
 	.shutdown = blk_snap_syscore_shutdown,
 };
 
-
 int __init veeamsnap_init(void)
 {
 	int result = SUCCESS;
 
-	pr_info( "================================================================================\n" );
-	pr_info( "Loading\n" );
-	pr_info( "Version: %s\n", FILEVER_STR );
+	pr_info("================================================================================\n");
+	pr_info("Loading\n");
+	pr_info("Version: %s\n", FILEVER_STR);
 
 	pr_info("snapstore_block_size_pow: %d\n", g_param_snapstore_block_size_pow);
 	pr_info("change_tracking_block_size_pow: %d\n", g_param_change_tracking_block_size_pow);
 	pr_info("logdir: %s\n", g_logdir);
 	pr_info("logmaxsize: %ld\n", g_param_logmaxsize);
 
-	if (g_param_snapstore_block_size_pow > 23){
+	if (g_param_snapstore_block_size_pow > 23) {
 		g_param_snapstore_block_size_pow = 23;
 		pr_info("Limited snapstore_block_size_pow: %d\n", g_param_snapstore_block_size_pow);
-	}
-	else if (g_param_snapstore_block_size_pow < 12){
+	} else if (g_param_snapstore_block_size_pow < 12) {
 		g_param_snapstore_block_size_pow = 12;
 		pr_info("Limited snapstore_block_size_pow: %d\n", g_param_snapstore_block_size_pow);
 	}
 
-	if (g_param_change_tracking_block_size_pow > 23){
+	if (g_param_change_tracking_block_size_pow > 23) {
 		g_param_change_tracking_block_size_pow = 23;
-		pr_info("Limited change_tracking_block_size_pow: %d\n", g_param_change_tracking_block_size_pow);
-	}
-	else if (g_param_change_tracking_block_size_pow < 12){
+		pr_info("Limited change_tracking_block_size_pow: %d\n",
+			g_param_change_tracking_block_size_pow);
+	} else if (g_param_change_tracking_block_size_pow < 12) {
 		g_param_change_tracking_block_size_pow = 12;
-		pr_info("Limited change_tracking_block_size_pow: %d\n", g_param_change_tracking_block_size_pow);
+		pr_info("Limited change_tracking_block_size_pow: %d\n",
+			g_param_change_tracking_block_size_pow);
 	}
 
-	do{
+	do {
 		pr_info("Registering reboot notification\n");
 
 		register_syscore_ops(&blk_snap_syscore_ops);
 
 		veeamsnap_major = register_chrdev(0, MODULE_NAME, &ctrl_fops);
 		if (veeamsnap_major < 0) {
-			pr_err("Failed to register a character device. errno=%d\n", veeamsnap_major);
+			pr_err("Failed to register a character device. errno=%d\n",
+			       veeamsnap_major);
 			result = veeamsnap_major;
 			break;
 		}
 		pr_info("Module major [%d]\n", veeamsnap_major);
 
-
-		if ((result = blk_redirect_bioset_create( )) != SUCCESS)
+		if ((result = blk_redirect_bioset_create()) != SUCCESS)
 			break;
 
-		if ((result = blk_deferred_bioset_create( )) != SUCCESS)
+		if ((result = blk_deferred_bioset_create()) != SUCCESS)
 			break;
 
-		if ((result = snapimage_init( )) != SUCCESS)
+		if ((result = snapimage_init()) != SUCCESS)
 			break;
 
-		if ((result = ctrl_sysfs_init(&veeamsnap_device)) != SUCCESS){
+		if ((result = ctrl_sysfs_init(&veeamsnap_device)) != SUCCESS) {
 			pr_err("Failed to initialize sysfs attributes\n");
 			break;
 		}
 
 		if ((result = blk_filter_register(&g_filter)) != SUCCESS) {
-			const char* exist_filter = blk_filter_check_altitude(g_filter.altitude);
+			const char *exist_filter = blk_filter_check_altitude(g_filter.altitude);
 			if (exist_filter)
-				pr_err("Block io layer filter [%s] already exist on altitude [%ld]\n", exist_filter, g_filter.altitude);
+				pr_err("Block io layer filter [%s] already exist on altitude [%ld]\n",
+				       exist_filter, g_filter.altitude);
 
 			pr_err("Failed to register block io layer filter\n");
 			break;
 		}
 
-	}while(false);
+	} while (false);
 
 	return result;
 }
@@ -217,49 +207,51 @@ void __exit veeamsnap_exit(void)
 
 	ctrl_sysfs_done(&veeamsnap_device);
 
-	snapshot_Done( );
+	snapshot_Done();
 
-	snapstore_device_done( );
-	snapstore_done( );
+	snapstore_device_done();
+	snapstore_done();
 
-	tracker_done( );
+	tracker_done();
 
 	result = blk_filter_unregister(&g_filter);
 	BUG_ON(result);
 
-	snapimage_done( );
+	snapimage_done();
 
-	blk_deferred_bioset_free( );
-	blk_deferred_done( );
+	blk_deferred_bioset_free();
+	blk_deferred_done();
 
-	blk_redirect_bioset_free( );
+	blk_redirect_bioset_free();
 
 	unregister_chrdev(veeamsnap_major, MODULE_NAME);
 
-	ctrl_done( );
+	ctrl_done();
 }
 
 module_init(veeamsnap_init);
 module_exit(veeamsnap_exit);
 
+module_param_named(zerosnapdata, g_param_zerosnapdata, int, 0644);
+MODULE_PARM_DESC(zerosnapdata, "Zeroing snapshot data algorithm determine.");
 
-module_param_named( zerosnapdata, g_param_zerosnapdata, int, 0644 );
-MODULE_PARM_DESC( zerosnapdata, "Zeroing snapshot data algorithm determine." );
-
-module_param_named( debuglogging, g_param_debuglogging, int, 0644 );
-MODULE_PARM_DESC( debuglogging, "Logging level switch." );
+module_param_named(debuglogging, g_param_debuglogging, int, 0644);
+MODULE_PARM_DESC(debuglogging, "Logging level switch.");
 
 module_param_named(logdir, g_logdir, charp, 0644);
-MODULE_PARM_DESC( logdir, "Directory for module logs." );
+MODULE_PARM_DESC(logdir, "Directory for module logs.");
 
-module_param_named( logmaxsize, g_param_logmaxsize, ulong, 0644 );
-MODULE_PARM_DESC( logmaxsize, "Maximum log file size." );
+module_param_named(logmaxsize, g_param_logmaxsize, ulong, 0644);
+MODULE_PARM_DESC(logmaxsize, "Maximum log file size.");
 
 module_param_named(snapstore_block_size_pow, g_param_snapstore_block_size_pow, int, 0644);
-MODULE_PARM_DESC(snapstore_block_size_pow, "Snapstore block size binary pow. 20 for 1MiB block size");
+MODULE_PARM_DESC(snapstore_block_size_pow,
+		 "Snapstore block size binary pow. 20 for 1MiB block size");
 
-module_param_named(change_tracking_block_size_pow, g_param_change_tracking_block_size_pow, int, 0644);
-MODULE_PARM_DESC(change_tracking_block_size_pow, "Change-tracking block size binary pow. 18 for 256 KiB block size");
+module_param_named(change_tracking_block_size_pow, g_param_change_tracking_block_size_pow, int,
+		   0644);
+MODULE_PARM_DESC(change_tracking_block_size_pow,
+		 "Change-tracking block size binary pow. 18 for 256 KiB block size");
 
 module_param_named(fixflags, g_param_fixflags, uint, 0644);
 MODULE_PARM_DESC(fixflags, "Flags for known issues");

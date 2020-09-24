@@ -3,15 +3,12 @@
 
 #define SECTION "ranges	"
 
-
-static inline
-sector_t range_node_start(struct blk_range_tree_node *range_node)
+static inline sector_t range_node_start(struct blk_range_tree_node *range_node)
 {
 	return range_node->range.ofs;
 }
 
-static inline
-sector_t range_node_last(struct blk_range_tree_node *range_node)
+static inline sector_t range_node_last(struct blk_range_tree_node *range_node)
 {
 	return range_node->range.ofs + range_node->range.cnt - 1;
 }
@@ -19,44 +16,46 @@ sector_t range_node_last(struct blk_range_tree_node *range_node)
 #pragma message("INTERVAL_TREE_DEFINE  is undefined")
 #endif
 
-INTERVAL_TREE_DEFINE(struct blk_range_tree_node, _node, sector_t, _subtree_last,
-	range_node_start, range_node_last, , blk_range_rb)
+INTERVAL_TREE_DEFINE(struct blk_range_tree_node, _node, sector_t, _subtree_last, range_node_start,
+		     range_node_last, , blk_range_rb)
 
-void rangevector_init( rangevector_t *rangevector )
+void rangevector_init(rangevector_t *rangevector)
 {
-	init_rwsem( &rangevector->lock );
+	init_rwsem(&rangevector->lock);
 
 	rangevector->root = RB_ROOT_CACHED;
 }
 
-void rangevector_done( rangevector_t *rangevector )
+void rangevector_done(rangevector_t *rangevector)
 {
 	struct rb_node *rb_node = NULL;
-	down_write( &rangevector->lock );
+	down_write(&rangevector->lock);
 
 	rb_node = rb_first_cached(&rangevector->root);
 	while (rb_node) {
-		struct blk_range_tree_node *range_node = (struct blk_range_tree_node *)rb_node; //container_of(rb_node, struct blk_range_tree_node, node);
+		struct blk_range_tree_node *range_node = (struct blk_range_tree_node *)
+			rb_node; //container_of(rb_node, struct blk_range_tree_node, node);
 
 		blk_range_rb_remove(range_node, &rangevector->root);
 		kfree(range_node);
 
 		rb_node = rb_first_cached(&rangevector->root);
 	}
-	up_write( &rangevector->lock );
+	up_write(&rangevector->lock);
 }
 
-int rangevector_add( rangevector_t *rangevector, struct blk_range* rg )
+int rangevector_add(rangevector_t *rangevector, struct blk_range *rg)
 {
-	struct blk_range_tree_node *range_node = kzalloc(sizeof(struct blk_range_tree_node), GFP_KERNEL);
+	struct blk_range_tree_node *range_node =
+		kzalloc(sizeof(struct blk_range_tree_node), GFP_KERNEL);
 	if (range_node)
 		return -ENOMEM;
 
 	range_node->range = *rg;
 
-	down_write( &rangevector->lock );
-	blk_range_rb_insert(range_node, &rangevector->root );
-	up_write( &rangevector->lock );
+	down_write(&rangevector->lock);
+	blk_range_rb_insert(range_node, &rangevector->root);
+	up_write(&rangevector->lock);
 
 	return SUCCESS;
 }
