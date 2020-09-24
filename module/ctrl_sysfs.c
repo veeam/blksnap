@@ -31,7 +31,6 @@ int ctrl_sysfs_init(struct device **p_device)
 		return res;
 	}
 
-
 	pr_info("Create 'major' sysfs attribute\n");
 	res = class_create_file(blk_snap_class, &class_attr_major);
 	if (res != SUCCESS) {
@@ -41,8 +40,8 @@ int ctrl_sysfs_init(struct device **p_device)
 		blk_snap_class = NULL;
 		return res;
 	}
-	
-	dev = device_create(blk_snap_class, NULL, MKDEV(get_blk_snap_major(), 0), NULL, 
+
+	dev = device_create(blk_snap_class, NULL, MKDEV(get_blk_snap_major(), 0), NULL,
 			    MODULE_NAME);
 	if (IS_ERR(dev)) {
 		res = PTR_ERR(dev);
