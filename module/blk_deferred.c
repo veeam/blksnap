@@ -146,10 +146,10 @@ struct bio *_blk_deferred_bio_alloc(int nr_iovecs)
 
 	if (new_bio == NULL)
 		return NULL;
-	
+
 	new_bio->bi_end_io = blk_deferred_bio_endio;
 	new_bio->bi_private = ((void *)new_bio) - sizeof(struct dio_bio_complete);
-	
+
 	return new_bio;
 }
 
@@ -455,13 +455,13 @@ int blk_deferred_request_store_file(struct block_device *blk_dev,
 static int _store_multidev(struct blk_deferred_request *dio_copy_req,
 			   struct blk_descr_multidev *blk_descr, struct page **page_array)
 {
-	struct list_head *_ranges_list_head;	
+	struct list_head *_ranges_list_head;
 	sector_t page_array_ofs = 0;
 
 	BUG_ON(list_empty(&blk_descr->rangelist));
 	list_for_each(_ranges_list_head, &blk_descr->rangelist) {
 		sector_t process_sect;
-		struct blk_range_link_ex *range_link; 
+		struct blk_range_link_ex *range_link;
 
 		range_link = list_entry(_ranges_list_head, struct blk_range_link_ex, link);
 		process_sect = blk_deferred_submit_pages(range_link->blk_dev, dio_copy_req, WRITE,

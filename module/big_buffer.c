@@ -38,7 +38,7 @@ struct big_buffer *big_buffer_alloc(size_t buffer_size, int gfp_opt)
 
 	if (res != SUCCESS) {
 		big_buffer_free(bbuff);
-		return NULL;		
+		return NULL;
 	}
 
 	return bbuff;
@@ -152,7 +152,7 @@ void *big_buffer_get_element(struct big_buffer *bbuff, size_t index, size_t size
 void big_buffer_memset(struct big_buffer *bbuff, int value)
 {
 	size_t inx;
-	
+
 	for (inx = 0; inx < bbuff->pg_cnt; ++inx)
 		memset(bbuff->pg[inx], value, PAGE_SIZE);
 }
