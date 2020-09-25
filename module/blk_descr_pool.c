@@ -70,7 +70,9 @@ void blk_descr_pool_done(struct blk_descr_pool *pool,
 {
 	mutex_lock(&pool->lock);
 	while (!list_empty(&pool->head)) {
-		struct pool_el *el = list_entry(pool->head.next, struct pool_el, link);
+		struct pool_el *el;
+
+		el = list_entry(pool->head.next, struct pool_el, link);
 		if (el == NULL)
 			break;
 
@@ -127,12 +129,12 @@ union blk_descr_unify blk_descr_pool_alloc(
 #define _FOREACH_EL_BEGIN(pool, el)                                                                \
 	if (!list_empty(&(pool)->head)) {                                                          \
 		struct list_head *_list_head;                                                      \
-		list_for_each(_list_head, &(pool)->head) {                                        \
-			el = list_entry(_list_head, struct pool_el, link);
+		list_for_each(_list_head, &(pool)->head) {                                         \
+			el = list_entry(_list_head, struct pool_el, link);                         \
 
 #define _FOREACH_EL_END()                                                                          \
+		}                                                                                  \
 	}                                                                                          \
-	}
 
 static union blk_descr_unify __blk_descr_pool_at(struct blk_descr_pool *pool, size_t blk_descr_size,
 						 size_t index)
@@ -157,6 +159,7 @@ static union blk_descr_unify __blk_descr_pool_at(struct blk_descr_pool *pool, si
 union blk_descr_unify blk_descr_pool_take(struct blk_descr_pool *pool, size_t blk_descr_size)
 {
 	union blk_descr_unify result = { NULL };
+
 	mutex_lock(&pool->lock);
 	do {
 		if (pool->take_cnt >= pool->total_cnt) {

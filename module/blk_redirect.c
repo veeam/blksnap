@@ -43,22 +43,29 @@ void blk_redirect_bio_endio(struct bio *bb)
 
 struct bio *_blk_dev_redirect_bio_alloc(int nr_iovecs, void *bi_private)
 {
-	struct bio *new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &g_BlkRedirectBioset);
-	if (new_bio) {
-		new_bio->bi_end_io = blk_redirect_bio_endio;
-		new_bio->bi_private = bi_private;
-	}
+	struct bio *new_bio;
+
+	new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &g_BlkRedirectBioset);
+	if (new_bio == NULL)
+		return NULL;
+
+	new_bio->bi_end_io = blk_redirect_bio_endio;
+	new_bio->bi_private = bi_private;
+
 	return new_bio;
 }
 
 struct blk_redirect_bio_list *_redirect_bio_allocate_list(struct bio *new_bio)
 {
-	struct blk_redirect_bio_list *next =
-		kzalloc(sizeof(struct blk_redirect_bio_list), GFP_NOIO);
-	if (next) {
-		next->next = NULL;
-		next->this = new_bio;
-	}
+	struct blk_redirect_bio_list *next;
+
+	next = kzalloc(sizeof(struct blk_redirect_bio_list), GFP_NOIO);
+	if (next == NULL)
+		return NULL;
+
+	next->next = NULL;
+	next->this = new_bio;
+
 	return next;
 }
 
@@ -76,8 +83,10 @@ int bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
 	while (head->next != NULL)
 		head = head->next;
 
-	if (NULL == (head->next = _redirect_bio_allocate_list(new_bio)))
+	head->next = _redirect_bio_allocate_list(new_bio);
+	if (head->next == NULL)
 		return -ENOMEM;
+
 	return SUCCESS;
 }
 
@@ -90,12 +99,20 @@ void bio_endio_list_cleanup(struct blk_redirect_bio_list *curr)
 	}
 }
 
-int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction,
-				struct block_device *blk_dev, sector_t target_pos, sector_t rq_ofs,
-				sector_t rq_count)
+static unsigned int get_max_sect(struct block_device *blk_dev)
 {
-	__label__ __fail_out;
-	__label__ __reprocess_bv;
+	struct request_queue *q = bdev_get_queue(blk_dev);
+
+	return min((unsigned int)(BIO_MAX_PAGES << (PAGE_SHIFT - SECTOR_SHIFT)),
+		   q->limits.max_sectors);
+}
+
+static int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction,
+				       struct block_device *blk_dev, sector_t target_pos,
+				       sector_t rq_ofs, sector_t rq_count)
+{
+	__label__ _fail_out;
+	__label__ _reprocess_bv;
 
 	int res = SUCCESS;
 
@@ -107,20 +124,16 @@ int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction
 	sector_t sect_ofs = 0;
 	sector_t processed_sectors = 0;
 	int nr_iovecs;
-	unsigned int max_sect;
 	struct blk_redirect_bio_list *bio_endio_rec;
 
-	{
-		struct request_queue *q = bdev_get_queue(blk_dev);
-		max_sect = min((unsigned int)(BIO_MAX_PAGES << (PAGE_SHIFT - SECTOR_SHIFT)),
-			       q->limits.max_sectors);
-	}
-
-	nr_iovecs = max_sect >> (PAGE_SHIFT - SECTOR_SHIFT);
+	nr_iovecs = get_max_sect(blk_dev) >> (PAGE_SHIFT - SECTOR_SHIFT);
 
 	bio_for_each_segment (bvec, rq_redir->bio, iter) {
 		sector_t bvec_ofs;
 		sector_t bvec_sectors;
+
+		unsigned int len;
+		unsigned int offset;
 
 		if ((sect_ofs + bio_vec_sectors(bvec)) <= rq_ofs) {
 			sect_ofs += bio_vec_sectors(bvec);
@@ -139,16 +152,16 @@ int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction
 
 		if (bvec_sectors == 0) {
 			res = -EIO;
-			goto __fail_out;
+			goto _fail_out;
 		}
 
-	__reprocess_bv:
+_reprocess_bv:
 		if (new_bio == NULL) {
-			while (NULL ==
-			       (new_bio = _blk_dev_redirect_bio_alloc(nr_iovecs, rq_redir))) {
+			new_bio = _blk_dev_redirect_bio_alloc(nr_iovecs, rq_redir);
+			while (new_bio == NULL) {
 				pr_err("Unable to allocate new bio for redirect IO.\n");
 				res = -ENOMEM;
-				goto __fail_out;
+				goto _fail_out;
 			}
 
 			bio_set_dev(new_bio, blk_dev);
@@ -162,24 +175,24 @@ int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction
 			new_bio->bi_iter.bi_sector = target_pos + processed_sectors;
 		}
 
-		if (0 == bio_add_page(new_bio, bvec.bv_page,
-				      (unsigned int)from_sectors(bvec_sectors),
-				      bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs))) {
+		len = (unsigned int)from_sectors(bvec_sectors);
+		offset = bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs);
+		if (unlikely(bio_add_page(new_bio, bvec.bv_page, len, offset) != len)) {
 			if (bio_sectors(new_bio) == 0) {
 				res = -EIO;
-				goto __fail_out;
+				goto _fail_out;
 			}
 
 			res = bio_endio_list_push(rq_redir, new_bio);
 			if (res != SUCCESS) {
 				pr_err("Failed to add bio into bio_endio_list\n");
-				goto __fail_out;
+				goto _fail_out;
 			}
 
 			atomic64_inc(&rq_redir->bio_count);
 			new_bio = NULL;
 
-			goto __reprocess_bv;
+			goto _reprocess_bv;
 		}
 		processed_sectors += bvec_sectors;
 
@@ -190,7 +203,7 @@ int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction
 		res = bio_endio_list_push(rq_redir, new_bio);
 		if (res != SUCCESS) {
 			pr_err("Failed to add bio into bio_endio_list\n");
-			goto __fail_out;
+			goto _fail_out;
 		}
 
 		atomic64_inc(&rq_redir->bio_count);
@@ -199,7 +212,7 @@ int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int direction
 
 	return SUCCESS;
 
-__fail_out:
+_fail_out:
 	bio_endio_rec = rq_redir->bio_list_head;
 	while (bio_endio_rec != NULL) {
 		if (bio_endio_rec->this != NULL)
@@ -261,7 +274,8 @@ int blk_dev_redirect_memcpy_part(struct blk_redirect_bio *rq_redir, int directio
 	sector_t sect_ofs = 0;
 	sector_t processed_sectors = 0;
 
-	bio_for_each_segment (bvec, rq_redir->bio, iter) {
+	bio_for_each_segment(bvec, rq_redir->bio, iter) {
+		void *mem;
 		sector_t bvec_ofs;
 		sector_t bvec_sectors;
 
@@ -269,32 +283,29 @@ int blk_dev_redirect_memcpy_part(struct blk_redirect_bio *rq_redir, int directio
 			sect_ofs += bio_vec_sectors(bvec);
 			continue;
 		}
-		if (sect_ofs >= (rq_ofs + rq_count)) {
+
+		if (sect_ofs >= (rq_ofs + rq_count))
 			break;
-		}
 
 		bvec_ofs = 0;
-		if (sect_ofs < rq_ofs) {
+		if (sect_ofs < rq_ofs)
 			bvec_ofs = rq_ofs - sect_ofs;
-		}
 
 		bvec_sectors = bio_vec_sectors(bvec) - bvec_ofs;
 		if (bvec_sectors > (rq_count - processed_sectors))
 			bvec_sectors = rq_count - processed_sectors;
 
-		{
-			void *mem = kmap_atomic(bvec.bv_page);
-			if (direction == READ) {
-				memcpy(mem + bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs),
-				       buff + (unsigned int)from_sectors(processed_sectors),
-				       (unsigned int)from_sectors(bvec_sectors));
-			} else {
-				memcpy(buff + (unsigned int)from_sectors(processed_sectors),
-				       mem + bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs),
-				       (unsigned int)from_sectors(bvec_sectors));
-			}
-			kunmap_atomic(mem);
+		mem = kmap_atomic(bvec.bv_page);
+		if (direction == READ) {
+			memcpy(mem + bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs),
+			       buff + (unsigned int)from_sectors(processed_sectors),
+			       (unsigned int)from_sectors(bvec_sectors));
+		} else {
+			memcpy(buff + (unsigned int)from_sectors(processed_sectors),
+			       mem + bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs),
+			       (unsigned int)from_sectors(bvec_sectors));
 		}
+		kunmap_atomic(mem);
 
 		processed_sectors += bvec_sectors;
 
@@ -313,7 +324,8 @@ int blk_dev_redirect_zeroed_part(struct blk_redirect_bio *rq_redir, sector_t rq_
 	sector_t sect_ofs = 0;
 	sector_t processed_sectors = 0;
 
-	bio_for_each_segment (bvec, rq_redir->bio, iter) {
+	bio_for_each_segment(bvec, rq_redir->bio, iter) {
+		void *mem;
 		sector_t bvec_ofs;
 		sector_t bvec_sectors;
 
@@ -321,27 +333,22 @@ int blk_dev_redirect_zeroed_part(struct blk_redirect_bio *rq_redir, sector_t rq_
 			sect_ofs += bio_vec_sectors(bvec);
 			continue;
 		}
-		if (sect_ofs >= (rq_ofs + rq_count)) {
+
+		if (sect_ofs >= (rq_ofs + rq_count))
 			break;
-		}
 
 		bvec_ofs = 0;
-		if (sect_ofs < rq_ofs) {
+		if (sect_ofs < rq_ofs)
 			bvec_ofs = rq_ofs - sect_ofs;
-		}
 
 		bvec_sectors = bio_vec_sectors(bvec) - bvec_ofs;
 		if (bvec_sectors > (rq_count - processed_sectors))
 			bvec_sectors = rq_count - processed_sectors;
 
-		{
-			void *mem = kmap_atomic(bvec.bv_page);
-
-			memset(mem + bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs), 0,
-			       (unsigned int)from_sectors(bvec_sectors));
-
-			kunmap_atomic(mem);
-		}
+		mem = kmap_atomic(bvec.bv_page);
+		memset(mem + bvec.bv_offset + (unsigned int)from_sectors(bvec_ofs), 0,
+		       (unsigned int)from_sectors(bvec_sectors));
+		kunmap_atomic(mem);
 
 		processed_sectors += bvec_sectors;
 

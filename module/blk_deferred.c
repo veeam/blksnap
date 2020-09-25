@@ -109,10 +109,7 @@ struct blk_deferred_io *blk_deferred_alloc(unsigned long block_index,
 	 * empty pointer on the end
 	 */
 	dio->page_array = kzalloc((page_count + 1) * sizeof(struct page *), GFP_NOIO);
-
 	if (dio->page_array == NULL) {
-		pr_err("Failed to allocate defer IO block [%ld]\n", block_index);
-
 		blk_deferred_free(dio);
 		return NULL;
 	}
@@ -394,8 +391,8 @@ int blk_deferred_request_read_original(struct block_device *original_blk_dev,
 			       dio->sect.ofs);
 			res = -EIO;
 			break;
-		} else
-			res = SUCCESS;
+		}
+		res = SUCCESS;
 	}
 
 	if (res == SUCCESS)
@@ -416,10 +413,10 @@ static int _store_file(struct block_device *blk_dev, struct blk_deferred_request
 		struct blk_range_link *range_link;
 		sector_t process_sect;
 
-		range_link= list_entry(_rangelist_head, struct blk_range_link, link);
+		range_link = list_entry(_rangelist_head, struct blk_range_link, link);
 		process_sect = blk_deferred_submit_pages(blk_dev, dio_copy_req, WRITE,
 							 page_array_ofs, page_array,
-						  	 range_link->rg.ofs, range_link->rg.cnt);
+							 range_link->rg.ofs, range_link->rg.cnt);
 		if (range_link->rg.cnt != process_sect) {
 			pr_err("Failed to submit defer IO request for storing\n");
 			return -EIO;
@@ -465,8 +462,8 @@ static int _store_multidev(struct blk_deferred_request *dio_copy_req,
 
 		range_link = list_entry(_ranges_list_head, struct blk_range_link_ex, link);
 		process_sect = blk_deferred_submit_pages(range_link->blk_dev, dio_copy_req, WRITE,
-						  	 page_array_ofs, page_array,
-						  	 range_link->rg.ofs, range_link->rg.cnt);
+							 page_array_ofs, page_array,
+							 range_link->rg.ofs, range_link->rg.cnt);
 		if (range_link->rg.cnt != process_sect) {
 			pr_err("Failed to submit defer IO request for storing\n");
 			return -EIO;
@@ -504,7 +501,7 @@ static size_t _store_pages(void *dst, struct page **page_array, size_t length)
 	size_t page_inx = 0;
 	size_t processed_len = 0;
 
-	while ((processed_len < length) && (NULL != page_array[page_inx])) {
+	while ((processed_len < length) && (page_array[page_inx] != NULL)) {
 		void *src;
 		size_t page_len = min_t(size_t, PAGE_SIZE, (length - processed_len));
 
@@ -525,6 +522,7 @@ int blk_deffered_request_store_mem(struct blk_deferred_request *dio_copy_req)
 
 	if (!list_empty(&dio_copy_req->dios)) {
 		struct list_head *_list_head;
+
 		list_for_each(_list_head, &dio_copy_req->dios) {
 			size_t length;
 			size_t portion;

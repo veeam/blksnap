@@ -128,6 +128,7 @@ ssize_t ctrl_pipe_write(struct ctrl_pipe *pipe, const char __user *buffer, size_
 	ssize_t processed = 0;
 
 	do {
+		unsigned long len;
 		unsigned int command;
 
 		if ((length - processed) < 4) {
@@ -135,7 +136,8 @@ ssize_t ctrl_pipe_write(struct ctrl_pipe *pipe, const char __user *buffer, size_
 			       length);
 			break;
 		}
-		if (0 != copy_from_user(&command, buffer + processed, sizeof(unsigned int))) {
+		len = copy_from_user(&command, buffer + processed, sizeof(unsigned int));
+		if (len != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -191,6 +193,7 @@ unsigned int ctrl_pipe_poll(struct ctrl_pipe *pipe)
 
 ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *buffer, size_t length)
 {
+	unsigned long len;
 	int result = SUCCESS;
 	ssize_t processed = 0;
 
@@ -201,7 +204,8 @@ ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *bu
 		return -ENOMEM;
 	}
 
-	if (0 != copy_from_user(kernel_buffer, buffer, length)) {
+	len = copy_from_user(kernel_buffer, buffer, length);
+	if (len != 0) {
 		kfree(kernel_buffer);
 		pr_err("Unable to write to pipe: invalid user buffer\n");
 		return -EINVAL;

@@ -185,11 +185,13 @@ int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned cmd, unsi
 			* geometry, of course, so make something up.
 			*/
 		case HDIO_GETGEO: {
+			unsigned long len;
 			struct hd_geometry geo;
 
 			res = _snapimage_getgeo(bdev, &geo);
 
-			if (copy_to_user((void *)arg, &geo, sizeof(geo)))
+			len = copy_to_user((void *)arg, &geo, sizeof(geo));
+			if (len != 0)
 				res = -EFAULT;
 			else
 				res = SUCCESS;
@@ -934,6 +936,7 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 
 	real_count = min(count, real_count);
 	if (real_count > 0) {
+		unsigned long len;
 		struct image_info_s *p_kernel_image_info = NULL;
 		size_t buff_size;
 
@@ -977,7 +980,8 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 		up_read(&snap_images_lock);
 		up_read(&snap_image_destroy_lock);
 
-		if (0 != copy_to_user(p_user_image_info, p_kernel_image_info, buff_size)) {
+		len = copy_to_user(p_user_image_info, p_kernel_image_info, buff_size);
+		if (len != 0) {
 			pr_err("Unable to collect snapshot images: failed to copy data to user buffer\n");
 			res = -ENODATA;
 		}
