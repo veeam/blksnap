@@ -257,7 +257,9 @@ int _tracker_remove(struct tracker *tracker)
 		else
 			result = blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev,
 						 &superblock);
-
+/*
+	!!! ToDo : remove from tracker must be in this place 
+*/
 		if (tracker->is_unfreezable)
 			up_write(&tracker->unfreezable_lock);
 		else
