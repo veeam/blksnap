@@ -66,7 +66,7 @@ int blk_descr_file_pool_add(struct blk_descr_pool *pool, struct list_head *range
 	union blk_descr_unify blk_descr = blk_descr_pool_alloc(
 		pool, sizeof(struct blk_descr_file), _blk_descr_file_allocate, (void *)rangelist);
 
-	if (NULL == blk_descr.ptr) {
+	if (blk_descr.ptr == NULL) {
 		pr_err("Failed to allocate block descriptor\n");
 		return -ENOMEM;
 	}

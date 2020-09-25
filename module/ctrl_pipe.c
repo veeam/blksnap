@@ -74,7 +74,7 @@ struct ctrl_pipe *ctrl_pipe_new(void)
 	int ret;
 	struct ctrl_pipe *pipe = kmalloc(sizeof(struct ctrl_pipe), GFP_KERNEL);
 
-	if (NULL == pipe) {
+	if (pipe == NULL) {
 		pr_err("Failed to create new ctrl pipe: not enough memory\n");
 		return NULL;
 	}
@@ -276,7 +276,7 @@ ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *bu
 
 			dev_id_set_buffer_size = sizeof(dev_t) * dev_id_set_length;
 			dev_set = kzalloc(dev_id_set_buffer_size, GFP_KERNEL);
-			if (NULL == dev_set) {
+			if (dev_set == NULL) {
 				pr_err("Unable to process stretch snapstore initiation command: cannot allocate memory\n");
 				result = -ENOMEM;
 				break;

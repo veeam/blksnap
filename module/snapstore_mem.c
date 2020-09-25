@@ -13,7 +13,7 @@ struct snapstore_mem *snapstore_mem_create(size_t available_blocks)
 {
 	struct snapstore_mem *mem = kzalloc(sizeof(struct snapstore_mem), GFP_KERNEL);
 
-	if (NULL == mem)
+	if (mem == NULL)
 		return NULL;
 
 	blk_descr_mem_pool_init(&mem->pool, available_blocks);
@@ -30,7 +30,7 @@ void snapstore_mem_destroy(struct snapstore_mem *mem)
 {
 	struct buffer_el *buffer_el;
 
-	if (NULL == mem)
+	if (mem == NULL)
 		return;
 
 	do {

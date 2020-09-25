@@ -48,7 +48,7 @@ ssize_t ctrl_write(struct file *fl, const char __user *buffer, size_t length, lo
 	ssize_t bytes_wrote = 0;
 
 	struct ctrl_pipe *pipe = (struct ctrl_pipe *)fl->private_data;
-	if (NULL == pipe) {
+	if (pipe == NULL) {
 		pr_err("Unable to write into pipe: invalid pipe pointer\n");
 		bytes_wrote = -EINVAL;
 	}
@@ -168,7 +168,7 @@ int ioctl_tracking_collect(unsigned long arg)
 
 	if (get.p_cbt_info == NULL) {
 		res = tracking_collect(0x7FFFffff, NULL, &get.count);
-		if (SUCCESS == res) {
+		if (res == SUCCESS) {
 			if (0 != copy_to_user((void *)arg, (void *)&get,
 					      sizeof(struct ioctl_tracking_collect_s))) {
 				pr_err("Unable to collect tracking devices: invalid user buffer for arguments\n");
@@ -181,7 +181,7 @@ int ioctl_tracking_collect(unsigned long arg)
 		struct cbt_info_s *p_cbt_info = NULL;
 
 		p_cbt_info = kzalloc(get.count * sizeof(struct cbt_info_s), GFP_KERNEL);
-		if (NULL == p_cbt_info) {
+		if (p_cbt_info == NULL) {
 			pr_err("Unable to collect tracing devices: cannot allocate memory\n");
 			return -ENOMEM;
 		}
@@ -291,7 +291,7 @@ int ioctl_snapshot_create(unsigned long arg)
 
 	dev_id_buffer_size = sizeof(struct ioctl_dev_id_s) * param.count;
 	pk_dev_id = kzalloc(dev_id_buffer_size, GFP_KERNEL);
-	if (NULL == pk_dev_id) {
+	if (pk_dev_id == NULL) {
 		pr_err("Unable to create snapshot: cannot allocate [%ld] bytes\n",
 		       dev_id_buffer_size);
 		return -ENOMEM;
@@ -311,7 +311,7 @@ int ioctl_snapshot_create(unsigned long arg)
 
 		dev_buffer_size = sizeof(dev_t) * param.count;
 		p_dev = kzalloc(dev_buffer_size, GFP_KERNEL);
-		if (NULL == p_dev) {
+		if (p_dev == NULL) {
 			pr_err("Unable to create snapshot: cannot allocate [%ld] bytes\n",
 			       dev_buffer_size);
 			status = -ENOMEM;
@@ -368,7 +368,7 @@ int ioctl_snapstore_create(unsigned long arg)
 
 	dev_id_buffer_size = sizeof(struct ioctl_dev_id_s) * param.count;
 	pk_dev_id = kzalloc(dev_id_buffer_size, GFP_KERNEL);
-	if (NULL == pk_dev_id) {
+	if (pk_dev_id == NULL) {
 		pr_err("Unable to create snapstore: cannot allocate [%ld] bytes\n",
 		       dev_id_buffer_size);
 		return -ENOMEM;
@@ -401,7 +401,7 @@ int ioctl_snapstore_create(unsigned long arg)
 
 		dev_id_set_buffer_size = sizeof(dev_t) * param.count;
 		dev_id_set = kzalloc(dev_id_set_buffer_size, GFP_KERNEL);
-		if (NULL == dev_id_set) {
+		if (dev_id_set == NULL) {
 			pr_err("Unable to create snapstore: cannot allocate [%ld] bytes\n",
 			       dev_id_set_buffer_size);
 			res = -ENOMEM;
@@ -435,7 +435,7 @@ int ioctl_snapstore_file(unsigned long arg)
 	ranges_buffer_size = sizeof(struct ioctl_range_s) * param.range_count;
 
 	ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
-	if (NULL == ranges) {
+	if (ranges == NULL) {
 		pr_err("Unable to add file to snapstore: cannot allocate [%ld] bytes\n",
 		       ranges_buffer_size);
 		return -ENOMEM;
@@ -515,7 +515,7 @@ int ioctl_snapstore_file_multidev(unsigned long arg)
 	ranges_buffer_size = sizeof(struct ioctl_range_s) * param.range_count;
 
 	ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
-	if (NULL == ranges) {
+	if (ranges == NULL) {
 		pr_err("Unable to add file to multidev snapstore: cannot allocate [%ld] bytes\n",
 		       ranges_buffer_size);
 		return -ENOMEM;

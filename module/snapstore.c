@@ -251,7 +251,7 @@ struct snapstore *_snapstore_find(uuid_t *id)
 	if (!list_empty(&snapstores)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &snapstores) {
+		list_for_each(_head, &snapstores) {
 			struct snapstore *snapstore = list_entry(_head, struct snapstore, link);
 
 			if (uuid_equal(&snapstore->id, id)) {
@@ -268,7 +268,7 @@ struct snapstore *_snapstore_find(uuid_t *id)
 int snapstore_stretch_initiate(uuid_t *unique_id, struct ctrl_pipe *ctrl_pipe, sector_t empty_limit)
 {
 	struct snapstore *snapstore = _snapstore_find(unique_id);
-	if (NULL == snapstore) {
+	if (snapstore == NULL) {
 		pr_err("Unable to initiate stretch snapstore: cannot find snapstore by uuid %pUB\n",
 		       unique_id);
 		return -ENODATA;
@@ -316,7 +316,7 @@ int snapstore_add_memory(uuid_t *id, unsigned long long sz)
 		snapstore->mem = snapstore_mem_create(available_blocks);
 		for (current_block = 0; current_block < available_blocks; ++current_block) {
 			void *buffer = snapstore_mem_get_block(snapstore->mem);
-			if (NULL == buffer) {
+			if (buffer == NULL) {
 				pr_err("Unable to add memory block to snapstore: not enough memory\n");
 				res = -ENOMEM;
 				break;
@@ -388,7 +388,7 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 		struct ioctl_range_s *ioctl_range = (struct ioctl_range_s *)big_buffer_get_element(
 			ranges, inx, sizeof(struct ioctl_range_s));
 
-		if (NULL == ioctl_range) {
+		if (ioctl_range == NULL) {
 			pr_err("Invalid count of ranges\n");
 			res = -ENODATA;
 			break;
@@ -501,7 +501,7 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 		struct ioctl_range_s *data = (struct ioctl_range_s *)big_buffer_get_element(
 			ranges, inx, sizeof(struct ioctl_range_s));
 
-		if (NULL == data) {
+		if (data == NULL) {
 			pr_err("Invalid count of ranges\n");
 			res = -ENODATA;
 			break;
@@ -520,7 +520,7 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 			range_offset += rg.cnt;
 
 			blk_dev = snapstore_multidev_get_device(snapstore->multidev, dev_id);
-			if (NULL == blk_dev) {
+			if (blk_dev == NULL) {
 				pr_err("Cannot find or open device [%d:%d] for multidevice snapstore\n",
 				       MAJOR(dev_id), MINOR(dev_id));
 				res = -ENODEV;
@@ -592,7 +592,7 @@ union blk_descr_unify snapstore_get_empty_block(struct snapstore *snapstore)
 	else if (snapstore->mem != NULL)
 		result = blk_descr_mem_pool_take(&snapstore->mem->pool);
 
-	if (NULL == result.ptr) {
+	if (result.ptr == NULL) {
 		if (snapstore->ctrl_pipe) {
 			sector_t fill_status;
 			_snapstore_check_halffill(snapstore, &fill_status);
@@ -608,7 +608,7 @@ union blk_descr_unify snapstore_get_empty_block(struct snapstore *snapstore)
 int snapstore_check_halffill(uuid_t *unique_id, sector_t *fill_status)
 {
 	struct snapstore *snapstore = _snapstore_find(unique_id);
-	if (NULL == snapstore) {
+	if (snapstore == NULL) {
 		pr_err("Cannot find snapstore by uuid %pUB\n", unique_id);
 		return -ENODATA;
 	}
@@ -660,7 +660,7 @@ int snapstore_redirect_read(struct blk_redirect_bio *rq_redir, struct snapstore 
 		if (!list_empty(&blk_descr.file->rangelist)) {
 			struct list_head *_list_head;
 
-			list_for_each (_list_head, &blk_descr.file->rangelist) {
+			list_for_each(_list_head, &blk_descr.file->rangelist) {
 				struct blk_range_link *range_link =
 					list_entry(_list_head, struct blk_range_link, link);
 
@@ -696,7 +696,7 @@ int snapstore_redirect_read(struct blk_redirect_bio *rq_redir, struct snapstore 
 		if (!list_empty(&blk_descr.multidev->rangelist)) {
 			struct list_head *_list_head;
 
-			list_for_each (_list_head, &blk_descr.multidev->rangelist) {
+			list_for_each(_list_head, &blk_descr.multidev->rangelist) {
 				struct blk_range_link_ex *range_link =
 					list_entry(_list_head, struct blk_range_link_ex, link);
 
@@ -756,14 +756,14 @@ int snapstore_redirect_write(struct blk_redirect_bio *rq_redir, struct snapstore
 	sector_t current_ofs = 0;
 	sector_t block_ofs = target_pos & snapstore_block_mask();
 
-	BUG_ON(NULL == rq_redir);
-	BUG_ON(NULL == snapstore);
+	BUG_ON(rq_redir == NULL);
+	BUG_ON(snapstore == NULL);
 
 	if (snapstore->file) {
 		if (!list_empty(&blk_descr.file->rangelist)) {
 			struct list_head *_list_head;
 
-			list_for_each (_list_head, &blk_descr.file->rangelist) {
+			list_for_each(_list_head, &blk_descr.file->rangelist) {
 				struct blk_range_link *range_link =
 					list_entry(_list_head, struct blk_range_link, link);
 
@@ -798,7 +798,7 @@ int snapstore_redirect_write(struct blk_redirect_bio *rq_redir, struct snapstore
 		if (!list_empty(&blk_descr.multidev->rangelist)) {
 			struct list_head *_list_head;
 
-			list_for_each (_list_head, &blk_descr.multidev->rangelist) {
+			list_for_each(_list_head, &blk_descr.multidev->rangelist) {
 				struct blk_range_link_ex *range_link =
 					list_entry(_list_head, struct blk_range_link_ex, link);
 

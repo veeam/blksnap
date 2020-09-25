@@ -35,7 +35,7 @@ struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue *queue)
 {
 	struct defer_io_orig_rq *dio_rq = kzalloc(sizeof(struct defer_io_orig_rq), GFP_NOIO);
 
-	if (NULL == dio_rq)
+	if (dio_rq == NULL)
 		return NULL;
 
 	INIT_LIST_HEAD(&dio_rq->link);
@@ -208,7 +208,7 @@ int defer_io_work_thread(void *p)
 					       dio_copy_result);
 					break;
 				}
-				if (NULL == dio_copy_req)
+				if (dio_copy_req == NULL)
 					break; //nothing to copy
 
 				dio_copy_result = blk_deferred_request_read_original(
@@ -256,7 +256,7 @@ int defer_io_work_thread(void *p)
 
 static void _defer_io_destroy(struct defer_io *defer_io)
 {
-	if (NULL == defer_io)
+	if (defer_io == NULL)
 		return;
 
 	if (defer_io->dio_thread)
@@ -302,7 +302,7 @@ int defer_io_create(dev_t dev_id, struct block_device *blk_dev, struct defer_io 
 		return -ENOMEM;
 
 	snapstore_device = snapstore_device_find_by_dev_id(dev_id);
-	if (NULL == snapstore_device) {
+	if (snapstore_device == NULL) {
 		pr_err("Unable to create defer IO processor: failed to initialize snapshot data for device [%d:%d]\n",
 		       MAJOR(dev_id), MINOR(dev_id));
 

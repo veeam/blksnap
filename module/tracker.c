@@ -20,7 +20,7 @@ int tracker_find_by_queue(struct gendisk *disk, u8 partno, struct tracker **ptra
 	if (!list_empty(&trackers)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &trackers) {
+		list_for_each(_head, &trackers) {
 			struct tracker *_tracker = list_entry(_head, struct tracker, link);
 
 			if ((disk == _tracker->target_dev->bd_disk) &&
@@ -46,7 +46,7 @@ int tracker_find_by_dev_id(dev_t dev_id, struct tracker **ptracker)
 	if (!list_empty(&trackers)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &trackers) {
+		list_for_each(_head, &trackers) {
 			struct tracker *_tracker = list_entry(_head, struct tracker, link);
 
 			if (_tracker->original_dev_id == dev_id) {
@@ -72,7 +72,7 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_c
 	if (!list_empty(&trackers)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &trackers) {
+		list_for_each(_head, &trackers) {
 			struct tracker *tracker = list_entry(_head, struct tracker, link);
 
 			if (count >= max_count) {
@@ -105,7 +105,7 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_c
 	}
 	read_unlock(&trackers_lock);
 
-	if (SUCCESS == result)
+	if (result == SUCCESS)
 		if (count == 0)
 			result = -ENODATA;
 
@@ -121,10 +121,10 @@ void tracker_cbt_start(struct tracker *tracker, unsigned long long snapshot_id)
 static struct super_block *blk_thaw_bdev(dev_t dev_id, struct block_device *device,
 					 struct super_block *superblock)
 {
-	if (NULL == superblock)
+	if (superblock == NULL)
 		return NULL;
 
-	if (SUCCESS == thaw_bdev(device, superblock))
+	if (thaw_bdev(device, superblock) == SUCCESS)
 		pr_info("Device [%d:%d] was unfrozen\n", MAJOR(dev_id), MINOR(dev_id));
 	else
 		pr_err("Failed to unfreeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
@@ -148,7 +148,7 @@ static int blk_freeze_bdev(dev_t dev_id, struct block_device *device,
 		int errcode;
 		pr_err("Failed to freeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
 
-		if (NULL == superblock)
+		if (superblock == NULL)
 			errcode = -ENODEV;
 		else {
 			errcode = PTR_ERR(superblock);
@@ -172,8 +172,9 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 	*ptracker = NULL;
 
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
-	if (NULL == tracker)
+	if (tracker == NULL)
 		return -ENOMEM;
+
 	INIT_LIST_HEAD(&tracker->link);
 
 	atomic_set(&tracker->is_captured, false);
@@ -225,7 +226,7 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 
 	} while (false);
 
-	if (SUCCESS == result) {
+	if (result == SUCCESS) {
 		*ptracker = tracker;
 	} else {
 		int remove_status;
@@ -234,7 +235,7 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 		       MAJOR(tracker->original_dev_id), MINOR(tracker->original_dev_id));
 
 		remove_status = tracker_remove(tracker);
-		if ((SUCCESS == remove_status) || (-ENODEV == remove_status))
+		if ((remove_status == SUCCESS) || (remove_status == -ENODEV))
 			tracker = NULL;
 		else
 			pr_err("Failed to perfrom tracker cleanup. errno=%d\n",
@@ -340,7 +341,7 @@ void tracker_cbt_bitmap_set(struct tracker *tracker, sector_t sector, sector_t s
 
 bool tracker_cbt_bitmap_lock(struct tracker *tracker)
 {
-	if (NULL == tracker->cbt_map)
+	if (tracker->cbt_map == NULL)
 		return false;
 
 	cbt_map_read_lock(tracker->cbt_map);

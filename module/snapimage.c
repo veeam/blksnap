@@ -244,8 +244,8 @@ int _snapimage_request_write(struct snapimage *image, struct blk_redirect_bio *r
 	struct cbt_map *cbt_map;
 	int res = SUCCESS;
 
-	BUG_ON(NULL == image->defer_io);
-	BUG_ON(NULL == image->cbt_map);
+	BUG_ON(image->defer_io == NULL);
+	BUG_ON(image->cbt_map == NULL);
 
 	snapstore_device = image->defer_io->snapstore_device;
 	cbt_map = image->cbt_map;
@@ -419,6 +419,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 
 	atomic_inc(&image->own_cnt);
 	do {
+		int res;
 		struct blk_redirect_bio *rq_redir;
 
 		if (false == atomic_read(&(image->image_queue.active_state))) {
@@ -431,17 +432,15 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 			break;
 		}
 
-		{
-			int res = _snapimage_throttling(image->defer_io);
-			if (SUCCESS != res) {
-				pr_err("Failed to throttle snapshot image device. errno=%d\n", res);
-				_snapimage_bio_complete(bio, res);
-				break;
-			}
+		res = _snapimage_throttling(image->defer_io);
+		if (SUCCESS != res) {
+			pr_err("Failed to throttle snapshot image device. errno=%d\n", res);
+			_snapimage_bio_complete(bio, res);
+			break;
 		}
 
 		rq_redir = redirect_bio_queue_new(&image->image_queue);
-		if (NULL == rq_redir) {
+		if (rq_redir == NULL) {
 			pr_err("Unable to make snapshot image request: failed to allocate redirect bio structure\n");
 			_snapimage_bio_complete(bio, -ENOMEM);
 			break;
@@ -453,15 +452,15 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 
 		atomic64_inc(&image->state_received);
 
-		if (SUCCESS == redirect_bio_queue_push_back(&image->image_queue, rq_redir)) {
+		res = redirect_bio_queue_push_back(&image->image_queue, rq_redir);
+		if (res == SUCCESS)
 			wake_up(&image->rq_proc_event);
-		} else {
+		else {
 			redirect_bio_queue_free(rq_redir);
 			_snapimage_bio_complete(bio, -EIO);
 
-			if (redirect_bio_queue_unactive(image->image_queue)) {
+			if (redirect_bio_queue_unactive(image->image_queue))
 				wake_up_interruptible(&image->rq_complete_event);
-			}
 		}
 
 	} while (false);
@@ -608,7 +607,7 @@ int snapimage_create(dev_t original_dev)
 		image->queue = blk_alloc_queue(_snapimage_make_request, NUMA_NO_NODE);
 #endif
 
-		if (NULL == image->queue) {
+		if (image->queue == NULL) {
 			pr_err("Unable to create snapshot image: failed to allocate block device queue\n");
 			res = -ENOMEM;
 			break;
@@ -753,7 +752,7 @@ struct snapimage *snapimage_find(dev_t original_dev)
 	if (!list_empty(&snap_images)) {
 		struct list_head *_list_head;
 
-		list_for_each (_list_head, &snap_images) {
+		list_for_each(_list_head, &snap_images) {
 			struct snapimage *_image = list_entry(_list_head, struct snapimage, link);
 
 			if (_image->original_dev == original_dev) {
@@ -797,7 +796,7 @@ void snapimage_destroy(dev_t original_dev)
 	if (!list_empty(&snap_images)) {
 		struct list_head *_list_head;
 
-		list_for_each (_list_head, &snap_images) {
+		list_for_each(_list_head, &snap_images) {
 			struct snapimage *_image = list_entry(_list_head, struct snapimage, link);
 
 			if (_image->original_dev == original_dev) {
@@ -887,7 +886,7 @@ void snapimage_done(void)
 		}
 		up_write(&snap_images_lock);
 
-		if (NULL == image)
+		if (image == NULL)
 			break;
 
 		pr_err("Snapshot image for device was unexpectedly removed [%d:%d]\n",
@@ -924,7 +923,7 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 	if (!list_empty(&snap_images)) {
 		struct list_head *_list_head;
 
-		list_for_each (_list_head, &snap_images)
+		list_for_each(_list_head, &snap_images)
 			real_count++;
 	}
 	up_read(&snap_images_lock);
@@ -953,7 +952,7 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 			size_t inx = 0;
 			struct list_head *_list_head;
 
-			list_for_each (_list_head, &snap_images) {
+			list_for_each(_list_head, &snap_images) {
 				struct snapimage *img =
 					list_entry(_list_head, struct snapimage, link);
 

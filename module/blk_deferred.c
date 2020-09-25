@@ -7,8 +7,7 @@
 #include "snapstore.h"
 #include "snapstore_blk.h"
 
-struct bio_set g_BlkDeferredBioset = { 0 };
-#define BlkDeferredBioset &g_BlkDeferredBioset
+struct bio_set g_blk_deferred_bioset = { 0 };
 
 struct dio_bio_complete {
 	struct blk_deferred_request *dio_req;
@@ -74,7 +73,7 @@ void blk_deferred_free(struct blk_deferred_io *dio)
 	size_t inx = 0;
 
 	if (dio->page_array != NULL) {
-		while (NULL != dio->page_array[inx]) {
+		while (dio->page_array[inx] != NULL) {
 			__free_page(dio->page_array[inx]);
 			dio->page_array[inx] = NULL;
 
@@ -92,8 +91,8 @@ struct blk_deferred_io *blk_deferred_alloc(unsigned long block_index,
 {
 	size_t inx;
 	size_t page_count;
-
 	struct blk_deferred_io *dio = kmalloc(sizeof(struct blk_deferred_io), GFP_NOIO);
+
 	if (dio == NULL)
 		return NULL;
 
@@ -106,9 +105,12 @@ struct blk_deferred_io *blk_deferred_alloc(unsigned long block_index,
 	dio->sect.cnt = snapstore_block_size();
 
 	page_count = snapstore_block_size() / (PAGE_SIZE / SECTOR_SIZE);
-	dio->page_array = kzalloc((page_count + 1) * sizeof(struct page *),
-				  GFP_NOIO); //empty pointer on the end
-	if (NULL == dio->page_array) {
+	/*
+	 * empty pointer on the end
+	 */
+	dio->page_array = kzalloc((page_count + 1) * sizeof(struct page *), GFP_NOIO);
+
+	if (dio->page_array == NULL) {
 		pr_err("Failed to allocate defer IO block [%ld]\n", block_index);
 
 		blk_deferred_free(dio);
@@ -117,7 +119,7 @@ struct blk_deferred_io *blk_deferred_alloc(unsigned long block_index,
 
 	for (inx = 0; inx < page_count; inx++) {
 		dio->page_array[inx] = alloc_page(GFP_NOIO);
-		if (NULL == dio->page_array[inx]) {
+		if (dio->page_array[inx] == NULL) {
 			pr_err("Failed to allocate page\n");
 			blk_deferred_free(dio);
 			return NULL;
@@ -129,22 +131,25 @@ struct blk_deferred_io *blk_deferred_alloc(unsigned long block_index,
 
 int blk_deferred_bioset_create(void)
 {
-	return bioset_init(BlkDeferredBioset, 64, sizeof(struct dio_bio_complete),
+	return bioset_init(&g_blk_deferred_bioset, 64, sizeof(struct dio_bio_complete),
 			   BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
 }
 
 void blk_deferred_bioset_free(void)
 {
-	bioset_exit(BlkDeferredBioset);
+	bioset_exit(&g_blk_deferred_bioset);
 }
 
 struct bio *_blk_deferred_bio_alloc(int nr_iovecs)
 {
-	struct bio *new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, BlkDeferredBioset);
-	if (new_bio) {
-		new_bio->bi_end_io = blk_deferred_bio_endio;
-		new_bio->bi_private = ((void *)new_bio) - sizeof(struct dio_bio_complete);
-	}
+	struct bio *new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &g_blk_deferred_bioset);
+
+	if (new_bio == NULL)
+		return NULL;
+	
+	new_bio->bi_end_io = blk_deferred_bio_endio;
+	new_bio->bi_private = ((void *)new_bio) - sizeof(struct dio_bio_complete);
+	
 	return new_bio;
 }
 
@@ -153,9 +158,8 @@ static void blk_deferred_complete(struct blk_deferred_request *dio_req, sector_t
 {
 	atomic64_add(portion_sect_cnt, &dio_req->sect_processed);
 
-	if (dio_req->sect_len == atomic64_read(&dio_req->sect_processed)) {
+	if (dio_req->sect_len == atomic64_read(&dio_req->sect_processed))
 		complete(&dio_req->complete);
-	}
 
 	if (result != SUCCESS) {
 		dio_req->result = result;
@@ -190,6 +194,7 @@ static inline size_t _page_count_calculate(sector_t size_sector)
 
 	if (unlikely(size_sector & ((PAGE_SIZE / SECTOR_SIZE) - 1)))
 		page_count += 1;
+
 	return page_count;
 }
 
@@ -227,9 +232,10 @@ sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
 		sector_t bvec_len_sect =
 			min_t(sector_t, ((PAGE_SIZE / SECTOR_SIZE) - unordered), size_sector);
 		struct page *page = page_array[page_inx];
+		unsigned int len = (unsigned int)from_sectors(bvec_len_sect);
+		unsigned int offset = (unsigned int)from_sectors(unordered);
 
-		if (0 == bio_add_page(bio, page, (unsigned int)from_sectors(bvec_len_sect),
-				      (unsigned int)from_sectors(unordered))) {
+		if (unlikely(bio_add_page(bio, page, len, offset) != len)) {
 			bio_put(bio);
 			return 0;
 		}
@@ -241,9 +247,10 @@ sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
 		sector_t bvec_len_sect =
 			min_t(sector_t, (PAGE_SIZE / SECTOR_SIZE), (size_sector - process_sect));
 		struct page *page = page_array[page_inx];
+		unsigned int len = (unsigned int)from_sectors(bvec_len_sect);
 
-		BUG_ON(NULL == page);
-		if (0 == bio_add_page(bio, page, (unsigned int)from_sectors(bvec_len_sect), 0))
+		BUG_ON(page == NULL);
+		if (unlikely(bio_add_page(bio, page, len, 0) != len))
 			break;
 
 		++page_inx;
@@ -307,7 +314,7 @@ bool blk_deferred_request_already_added(struct blk_deferred_request *dio_req,
 	if (list_empty(&dio_req->dios))
 		return result;
 
-	list_for_each (_list_head, &dio_req->dios) {
+	list_for_each(_list_head, &dio_req->dios) {
 		struct blk_deferred_io *dio = list_entry(_list_head, struct blk_deferred_io, link);
 
 		if (dio->blk_index == block_index) {
@@ -353,7 +360,7 @@ int blk_deferred_request_wait(struct blk_deferred_request *dio_req)
 	u64 start_jiffies = get_jiffies_64();
 	u64 current_jiffies;
 
-	while (0 == wait_for_completion_timeout(&dio_req->complete, (HZ * 1))) {
+	while (wait_for_completion_timeout(&dio_req->complete, (HZ * 1)) == 0) {
 		current_jiffies = get_jiffies_64();
 		if (jiffies_to_msecs(current_jiffies - start_jiffies) > 60 * 1000) {
 			pr_warn("Defer IO request timeout\n");
@@ -375,7 +382,7 @@ int blk_deferred_request_read_original(struct block_device *original_blk_dev,
 	if (list_empty(&dio_copy_req->dios))
 		return res;
 
-	list_for_each (_list_head, &dio_copy_req->dios) {
+	list_for_each(_list_head, &dio_copy_req->dios) {
 		struct blk_deferred_io *dio = list_entry(_list_head, struct blk_deferred_io, link);
 
 		sector_t ofs = dio->sect.ofs;
@@ -397,118 +404,108 @@ int blk_deferred_request_read_original(struct block_device *original_blk_dev,
 	return res;
 }
 
+
+static int _store_file(struct block_device *blk_dev, struct blk_deferred_request *dio_copy_req,
+		       struct blk_descr_file *blk_descr, struct page **page_array)
+{
+	struct list_head *_rangelist_head;
+	sector_t page_array_ofs = 0;
+
+	BUG_ON(list_empty(&blk_descr->rangelist));
+	list_for_each(_rangelist_head, &blk_descr->rangelist) {
+		struct blk_range_link *range_link;
+		sector_t process_sect;
+
+		range_link= list_entry(_rangelist_head, struct blk_range_link, link);
+		process_sect = blk_deferred_submit_pages(blk_dev, dio_copy_req, WRITE,
+							 page_array_ofs, page_array,
+						  	 range_link->rg.ofs, range_link->rg.cnt);
+		if (range_link->rg.cnt != process_sect) {
+			pr_err("Failed to submit defer IO request for storing\n");
+			return -EIO;
+		}
+		page_array_ofs += range_link->rg.cnt;
+	}
+	return SUCCESS;
+}
+
 int blk_deferred_request_store_file(struct block_device *blk_dev,
 				    struct blk_deferred_request *dio_copy_req)
 {
-	int res = SUCCESS;
 	struct list_head *_dio_list_head;
-	struct list_head *_rangelist_head;
 
 	blk_deferred_request_waiting_skip(dio_copy_req);
 
 	BUG_ON(list_empty(&dio_copy_req->dios));
-	list_for_each (_dio_list_head, &dio_copy_req->dios) {
-		struct blk_deferred_io *dio =
-			list_entry(_dio_list_head, struct blk_deferred_io, link);
-		sector_t page_array_ofs = 0;
-		struct blk_descr_file *blk_descr = dio->blk_descr.file;
+	list_for_each(_dio_list_head, &dio_copy_req->dios) {
+		int res;
+		struct blk_deferred_io *dio;
 
-		BUG_ON(list_empty(&blk_descr->rangelist));
-		list_for_each (_rangelist_head, &blk_descr->rangelist) {
-			sector_t process_sect;
-			struct blk_range_link *range_link =
-				list_entry(_rangelist_head, struct blk_range_link, link);
-
-			//BUG_ON( NULL == dio->page_array );
-			process_sect =
-				blk_deferred_submit_pages(blk_dev, dio_copy_req, WRITE,
-							  page_array_ofs, dio->page_array,
-							  range_link->rg.ofs, range_link->rg.cnt);
-			if (range_link->rg.cnt != process_sect) {
-				pr_err("Failed to submit defer IO request for storing. ofs=%lld\n",
-				       dio->sect.ofs);
-				res = -EIO;
-				break;
-			}
-			page_array_ofs += range_link->rg.cnt;
-		}
-
+		dio = list_entry(_dio_list_head, struct blk_deferred_io, link);
+		res = _store_file(blk_dev, dio_copy_req, dio->blk_descr.file, dio->page_array);
 		if (res != SUCCESS)
-			break;
+			return res;
 	}
 
-	if (res != SUCCESS)
-		return res;
-
-	res = blk_deferred_request_wait(dio_copy_req);
-	return res;
+	return blk_deferred_request_wait(dio_copy_req);
 }
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
+
+static int _store_multidev(struct blk_deferred_request *dio_copy_req,
+			   struct blk_descr_multidev *blk_descr, struct page **page_array)
+{
+	struct list_head *_ranges_list_head;	
+	sector_t page_array_ofs = 0;
+
+	BUG_ON(list_empty(&blk_descr->rangelist));
+	list_for_each(_ranges_list_head, &blk_descr->rangelist) {
+		sector_t process_sect;
+		struct blk_range_link_ex *range_link; 
+
+		range_link = list_entry(_ranges_list_head, struct blk_range_link_ex, link);
+		process_sect = blk_deferred_submit_pages(range_link->blk_dev, dio_copy_req, WRITE,
+						  	 page_array_ofs, page_array,
+						  	 range_link->rg.ofs, range_link->rg.cnt);
+		if (range_link->rg.cnt != process_sect) {
+			pr_err("Failed to submit defer IO request for storing\n");
+			return -EIO;
+		}
+
+		page_array_ofs += range_link->rg.cnt;
+	}
+
+	return SUCCESS;
+}
+
 int blk_deferred_request_store_multidev(struct blk_deferred_request *dio_copy_req)
 {
-	int res = SUCCESS;
 	struct list_head *_dio_list_head;
-	struct list_head *_ranges_list_head;
 
 	blk_deferred_request_waiting_skip(dio_copy_req);
 
 	BUG_ON(list_empty(&dio_copy_req->dios));
-	list_for_each (_dio_list_head, &dio_copy_req->dios) {
-		struct blk_deferred_io *dio =
-			list_entry(_dio_list_head, struct blk_deferred_io, link);
-		sector_t page_array_ofs = 0;
-		struct blk_descr_multidev *blk_descr = dio->blk_descr.multidev;
+	list_for_each(_dio_list_head, &dio_copy_req->dios) {
+		int res;
+		struct blk_deferred_io *dio;
 
-		BUG_ON(list_empty(&blk_descr->rangelist));
-		list_for_each (_ranges_list_head, &blk_descr->rangelist) {
-			sector_t process_sect;
-			struct blk_range_link_ex *range_link =
-				list_entry(_ranges_list_head, struct blk_range_link_ex, link);
-
-			process_sect =
-				blk_deferred_submit_pages(range_link->blk_dev, dio_copy_req, WRITE,
-							  page_array_ofs, dio->page_array,
-							  range_link->rg.ofs, range_link->rg.cnt);
-			if (range_link->rg.cnt != process_sect) {
-				pr_err("Failed to submit defer IO request for storing. ofs=%lld\n",
-				       dio->sect.ofs);
-				res = -EIO;
-				break;
-			}
-			page_array_ofs += range_link->rg.cnt;
-		}
-
+		dio = list_entry(_dio_list_head, struct blk_deferred_io, link);
+		res = _store_multidev(dio_copy_req, dio->blk_descr.multidev, dio->page_array);
 		if (res != SUCCESS)
-			break;
+			return res;
 	}
 
-	if (res != SUCCESS)
-		return res;
-
-	res = blk_deferred_request_wait(dio_copy_req);
-	return res;
+	return blk_deferred_request_wait(dio_copy_req);
 }
 #endif
 
-static size_t _store_pages(void *dst, size_t arr_ofs, struct page **page_array, size_t length)
+static size_t _store_pages(void *dst, struct page **page_array, size_t length)
 {
-	size_t page_inx = arr_ofs / PAGE_SIZE;
-
+	size_t page_inx = 0;
 	size_t processed_len = 0;
-	void *src;
 
-	{ //first
-		size_t unordered = arr_ofs & (PAGE_SIZE - 1);
-		size_t page_len = min_t(size_t, (PAGE_SIZE - unordered), length);
-
-		src = page_address(page_array[page_inx]);
-		memcpy(dst + processed_len, src + unordered, page_len);
-
-		++page_inx;
-		processed_len += page_len;
-	}
 	while ((processed_len < length) && (NULL != page_array[page_inx])) {
+		void *src;
 		size_t page_len = min_t(size_t, PAGE_SIZE, (length - processed_len));
 
 		src = page_address(page_array[page_inx]);
@@ -528,14 +525,16 @@ int blk_deffered_request_store_mem(struct blk_deferred_request *dio_copy_req)
 
 	if (!list_empty(&dio_copy_req->dios)) {
 		struct list_head *_list_head;
-		list_for_each (_list_head, &dio_copy_req->dios) {
-			struct blk_deferred_io *dio =
-				list_entry(_list_head, struct blk_deferred_io, link);
-			struct blk_descr_mem *blk_descr = dio->blk_descr.mem;
+		list_for_each(_list_head, &dio_copy_req->dios) {
+			size_t length;
+			size_t portion;
+			struct blk_deferred_io *dio;
 
-			size_t portion = _store_pages(blk_descr->buff, 0, dio->page_array,
-						      (snapstore_block_size() * SECTOR_SIZE));
-			if (unlikely(portion != (snapstore_block_size() * SECTOR_SIZE))) {
+			dio = list_entry(_list_head, struct blk_deferred_io, link);
+			length = snapstore_block_size() * SECTOR_SIZE;
+
+			portion = _store_pages(dio->blk_descr.mem->buff, dio->page_array, length);
+			if (unlikely(portion != length)) {
 				res = -EIO;
 				break;
 			}

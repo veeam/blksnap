@@ -36,7 +36,7 @@ static struct pool_el *pool_el_alloc(size_t blk_descr_size)
 	size_t el_size;
 	struct pool_el *el =
 		(struct pool_el *)kmalloc_huge(8 * PAGE_SIZE, PAGE_SIZE, GFP_NOIO, &el_size);
-	if (NULL == el)
+	if (el == NULL)
 		return NULL;
 
 	el->capacity = (el_size - sizeof(struct pool_el)) / blk_descr_size;
@@ -105,7 +105,7 @@ union blk_descr_unify blk_descr_pool_alloc(
 
 		if (el == NULL) {
 			el = pool_el_alloc(blk_descr_size);
-			if (NULL == el)
+			if (el == NULL)
 				break;
 
 			list_add_tail(&el->link, &pool->head);
@@ -127,7 +127,7 @@ union blk_descr_unify blk_descr_pool_alloc(
 #define _FOREACH_EL_BEGIN(pool, el)                                                                \
 	if (!list_empty(&(pool)->head)) {                                                          \
 		struct list_head *_list_head;                                                      \
-		list_for_each (_list_head, &(pool)->head) {                                        \
+		list_for_each(_list_head, &(pool)->head) {                                        \
 			el = list_entry(_list_head, struct pool_el, link);
 
 #define _FOREACH_EL_END()                                                                          \

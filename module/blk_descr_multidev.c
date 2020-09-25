@@ -68,7 +68,7 @@ int blk_descr_multidev_pool_add(struct blk_descr_pool *pool, struct list_head *r
 		blk_descr_pool_alloc(pool, sizeof(struct blk_descr_multidev),
 				     blk_descr_multidev_allocate, (void *)rangelist);
 
-	if (NULL == blk_descr.ptr) {
+	if (blk_descr.ptr == NULL) {
 		pr_err("Failed to allocate block descriptor\n");
 		return -ENOMEM;
 	}

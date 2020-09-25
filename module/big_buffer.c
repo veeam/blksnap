@@ -22,33 +22,33 @@ struct big_buffer *big_buffer_alloc(size_t buffer_size, int gfp_opt)
 	count = page_count_calc(buffer_size);
 
 	bbuff = kzalloc(sizeof(struct big_buffer) + count * sizeof(void *), gfp_opt);
-	if (NULL == bbuff) {
-		pr_err("Failed to allocate big_buffer buffer\n");
+	if (bbuff == NULL)
 		return NULL;
-	}
 
 	bbuff->pg_cnt = count;
 	for (inx = 0; inx < bbuff->pg_cnt; ++inx) {
 		struct page *pg = alloc_page(gfp_opt);
-		if (NULL == pg) {
-			pr_err("Failed to allocate page\n");
+
+		if (!pg) {
 			res = -ENOMEM;
 			break;
 		}
 		bbuff->pg[inx] = page_address(pg);
 	}
 
-	if (SUCCESS == res)
-		return bbuff;
+	if (res != SUCCESS) {
+		big_buffer_free(bbuff);
+		return NULL;		
+	}
 
-	big_buffer_free(bbuff);
-	return NULL;
+	return bbuff;
 }
 
 void big_buffer_free(struct big_buffer *bbuff)
 {
 	size_t inx;
 	size_t count = bbuff->pg_cnt;
+
 	if (bbuff == NULL)
 		return;
 
@@ -65,14 +65,14 @@ size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset, struct big_
 	size_t left_data_length;
 	int page_inx = offset / PAGE_SIZE;
 	size_t processed_len = 0;
-
 	size_t unordered = offset & (PAGE_SIZE - 1);
+
 	if (unordered != 0) { //first
 		size_t page_len = min_t(size_t, (PAGE_SIZE - unordered), length);
 
 		left_data_length = copy_to_user(dst_user + processed_len,
 						bbuff->pg[page_inx] + unordered, page_len);
-		if (0 != left_data_length) {
+		if (left_data_length != 0) {
 			pr_err("Failed to copy data from big_buffer to user buffer\n");
 			return processed_len;
 		}
@@ -86,7 +86,7 @@ size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset, struct big_
 
 		left_data_length =
 			copy_to_user(dst_user + processed_len, bbuff->pg[page_inx], page_len);
-		if (0 != left_data_length) {
+		if (left_data_length != 0) {
 			pr_err("Failed to copy data from big_buffer to user buffer\n");
 			break;
 		}
@@ -104,14 +104,14 @@ size_t big_buffer_copy_from_user(const char __user *src_user, size_t offset,
 	size_t left_data_length;
 	int page_inx = offset / PAGE_SIZE;
 	size_t processed_len = 0;
-
 	size_t unordered = offset & (PAGE_SIZE - 1);
+
 	if (unordered != 0) { //first
 		size_t page_len = min_t(size_t, (PAGE_SIZE - unordered), length);
 
 		left_data_length = copy_from_user(bbuff->pg[page_inx] + unordered,
 						  src_user + processed_len, page_len);
-		if (0 != left_data_length) {
+		if (left_data_length != 0) {
 			pr_err("Failed to copy data from user buffer to big_buffer\n");
 			return processed_len;
 		}
@@ -125,7 +125,7 @@ size_t big_buffer_copy_from_user(const char __user *src_user, size_t offset,
 
 		left_data_length =
 			copy_from_user(bbuff->pg[page_inx], src_user + processed_len, page_len);
-		if (0 != left_data_length) {
+		if (left_data_length != 0) {
 			pr_err("Failed to copy data from user buffer to big_buffer\n");
 			break;
 		}
@@ -152,6 +152,7 @@ void *big_buffer_get_element(struct big_buffer *bbuff, size_t index, size_t size
 void big_buffer_memset(struct big_buffer *bbuff, int value)
 {
 	size_t inx;
+	
 	for (inx = 0; inx < bbuff->pg_cnt; ++inx)
 		memset(bbuff->pg[inx], value, PAGE_SIZE);
 }

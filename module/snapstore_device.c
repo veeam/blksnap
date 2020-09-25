@@ -46,7 +46,7 @@ struct snapstore_device *snapstore_device_find_by_dev_id(dev_t dev_id)
 	if (!list_empty(&snapstore_devices)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &snapstore_devices) {
+		list_for_each(_head, &snapstore_devices) {
 			struct snapstore_device *snapstore_device =
 				list_entry(_head, struct snapstore_device, link);
 
@@ -69,7 +69,7 @@ struct snapstore_device *_snapstore_device_get_by_snapstore_id(uuid_t *id)
 	if (!list_empty(&snapstore_devices)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &snapstore_devices) {
+		list_for_each(_head, &snapstore_devices) {
 			struct snapstore_device *snapstore_device =
 				list_entry(_head, struct snapstore_device, link);
 
@@ -148,7 +148,7 @@ int snapstore_device_create(dev_t dev_id, struct snapstore *snapstore)
 	struct snapstore_device *snapstore_device =
 		kzalloc(sizeof(struct snapstore_device), GFP_KERNEL);
 
-	if (NULL == snapstore_device)
+	if (snapstore_device == NULL)
 		return -ENOMEM;
 
 	INIT_LIST_HEAD(&snapstore_device->link);
@@ -387,7 +387,7 @@ int _snapstore_device_copy_on_write(struct snapstore_device *snapstore_device,
 			break;
 		}
 
-		if (NULL == dio_copy_req)
+		if (dio_copy_req == NULL)
 			break; //nothing to copy
 
 		res = blk_deferred_request_read_original(snapstore_device->orig_blk_dev,
@@ -429,9 +429,9 @@ int snapstore_device_write(struct snapstore_device *snapstore_device,
 
 	struct blk_range rq_range;
 
-	BUG_ON(NULL == snapstore_device);
-	BUG_ON(NULL == rq_redir);
-	BUG_ON(NULL == rq_redir->bio);
+	BUG_ON(snapstore_device == NULL);
+	BUG_ON(rq_redir == NULL);
+	BUG_ON(rq_redir->bio == NULL);
 
 	if (snapstore_device_is_corrupted(snapstore_device))
 		return -ENODATA;

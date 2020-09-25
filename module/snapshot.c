@@ -38,7 +38,7 @@ int _snapshot_New(dev_t *p_dev, int count, struct snapshot **pp_snapshot)
 	dev_t *snap_set = NULL;
 
 	p_snapshot = (struct snapshot *)kzalloc(sizeof(struct snapshot), GFP_KERNEL);
-	if (NULL == p_snapshot) {
+	if (p_snapshot == NULL) {
 		pr_err("Unable to create snapshot: failed to allocate memory for snapshot structure\n");
 		return -ENOMEM;
 	}
@@ -47,7 +47,7 @@ int _snapshot_New(dev_t *p_dev, int count, struct snapshot **pp_snapshot)
 	p_snapshot->id = (unsigned long)(p_snapshot);
 
 	snap_set = (dev_t *)kzalloc(sizeof(dev_t) * count, GFP_KERNEL);
-	if (NULL == snap_set) {
+	if (snap_set == NULL) {
 		kfree(p_snapshot);
 
 		pr_err("Unable to create snapshot: faile to allocate memory for snapshot map\n");
@@ -206,7 +206,7 @@ int snapshot_destroy(unsigned long long snapshot_id)
 	if (!list_empty(&snapshots)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &snapshots) {
+		list_for_each(_head, &snapshots) {
 			struct snapshot *_snap = list_entry(_head, struct snapshot, link);
 
 			if (_snap->id == snapshot_id) {
@@ -218,7 +218,7 @@ int snapshot_destroy(unsigned long long snapshot_id)
 	}
 	up_read(&snapshots_lock);
 
-	if (NULL == snapshot) {
+	if (snapshot == NULL) {
 		pr_err("Unable to destroy snapshot [0x%llx]: cannot find snapshot by id\n",
 		       snapshot_id);
 		return -ENODEV;

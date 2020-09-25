@@ -142,7 +142,7 @@ int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector
 		if (cbt_block < cbt_map->map_size) {
 			u8 num;
 			res = big_buffer_byte_get(map, cbt_block, &num);
-			if (SUCCESS == res) {
+			if (res == SUCCESS) {
 				if (num < snap_number) {
 					res = big_buffer_byte_set(map, cbt_block, snap_number);
 				}

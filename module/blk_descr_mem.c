@@ -51,7 +51,7 @@ int blk_descr_mem_pool_add(struct blk_descr_pool *pool, void *buffer)
 	union blk_descr_unify blk_descr = blk_descr_pool_alloc(pool, sizeof(struct blk_descr_mem),
 							       blk_descr_mem_alloc, buffer);
 
-	if (NULL == blk_descr.ptr) {
+	if (blk_descr.ptr == NULL) {
 		pr_err("Failed to allocate block descriptor\n");
 		return -ENOMEM;
 	}

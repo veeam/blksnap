@@ -38,7 +38,7 @@ void snapstore_multidev_destroy(struct snapstore_multidev *multidev)
 {
 	struct multidev_el *el;
 
-	//BUG_ON(NULL == multidev);
+	//BUG_ON(multidev == NULL);
 	blk_descr_multidev_pool_done(&multidev->pool);
 
 	do {
@@ -72,7 +72,7 @@ struct multidev_el *snapstore_multidev_find(struct snapstore_multidev *multidev,
 	if (!list_empty(&multidev->devicelist)) {
 		struct list_head *_head;
 
-		list_for_each (_head, &multidev->devicelist) {
+		list_for_each(_head, &multidev->devicelist) {
 			struct multidev_el *_el = list_entry(_head, struct multidev_el, link);
 
 			if (_el->dev_id == dev_id) {
