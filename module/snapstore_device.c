@@ -6,8 +6,6 @@
 #include "params.h"
 #include "blk_util.h"
 
-int inc_snapstore_block_size_pow(void);
-
 LIST_HEAD(snapstore_devices);
 DECLARE_RWSEM(snapstore_devices_lock);
 

@@ -6,16 +6,16 @@
 
 #define bio_vec_sectors(bv) (bv.bv_len >> SECTOR_SHIFT)
 
-struct bio_set g_BlkRedirectBioset = { 0 };
+struct bio_set blk_redirect_bioset = { 0 };
 
 int blk_redirect_bioset_create(void)
 {
-	return bioset_init(&g_BlkRedirectBioset, 64, 0, BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
+	return bioset_init(&blk_redirect_bioset, 64, 0, BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
 }
 
 void blk_redirect_bioset_free(void)
 {
-	bioset_exit(&g_BlkRedirectBioset);
+	bioset_exit(&blk_redirect_bioset);
 }
 
 void blk_redirect_bio_endio(struct bio *bb)
@@ -45,7 +45,7 @@ struct bio *_blk_dev_redirect_bio_alloc(int nr_iovecs, void *bi_private)
 {
 	struct bio *new_bio;
 
-	new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &g_BlkRedirectBioset);
+	new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &blk_redirect_bioset);
 	if (new_bio == NULL)
 		return NULL;
 
@@ -74,15 +74,19 @@ int bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
 	struct blk_redirect_bio_list *head;
 
 	if (rq_redir->bio_list_head == NULL) {
-		if ((rq_redir->bio_list_head = _redirect_bio_allocate_list(new_bio)) == NULL)
+		//list is empty, add first bio
+		rq_redir->bio_list_head = _redirect_bio_allocate_list(new_bio);
+		if (rq_redir->bio_list_head == NULL)
 			return -ENOMEM;
 		return SUCCESS;
 	}
 
+	// seek end of list
 	head = rq_redir->bio_list_head;
 	while (head->next != NULL)
 		head = head->next;
 
+	//append new bio to the end of list
 	head->next = _redirect_bio_allocate_list(new_bio);
 	if (head->next == NULL)
 		return -ENOMEM;
@@ -130,7 +134,7 @@ static int _blk_dev_redirect_part_fast(struct blk_redirect_bio *rq_redir, int di
 
 	nr_iovecs = get_max_sect(blk_dev) >> (PAGE_SHIFT - SECTOR_SHIFT);
 
-	bio_for_each_segment (bvec, rq_redir->bio, iter) {
+	bio_for_each_segment(bvec, rq_redir->bio, iter) {
 		sector_t bvec_ofs;
 		sector_t bvec_sectors;
 

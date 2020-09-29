@@ -7,7 +7,7 @@
 #include "snapstore.h"
 #include "params.h"
 
-struct bio_set g_blk_deferred_bioset = { 0 };
+struct bio_set blk_deferred_bioset = { 0 };
 
 struct dio_bio_complete {
 	struct blk_deferred_request *dio_req;
@@ -128,18 +128,18 @@ struct blk_deferred_io *blk_deferred_alloc(unsigned long block_index,
 
 int blk_deferred_bioset_create(void)
 {
-	return bioset_init(&g_blk_deferred_bioset, 64, sizeof(struct dio_bio_complete),
+	return bioset_init(&blk_deferred_bioset, 64, sizeof(struct dio_bio_complete),
 			   BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
 }
 
 void blk_deferred_bioset_free(void)
 {
-	bioset_exit(&g_blk_deferred_bioset);
+	bioset_exit(&blk_deferred_bioset);
 }
 
 struct bio *_blk_deferred_bio_alloc(int nr_iovecs)
 {
-	struct bio *new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &g_blk_deferred_bioset);
+	struct bio *new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &blk_deferred_bioset);
 
 	if (new_bio == NULL)
 		return NULL;

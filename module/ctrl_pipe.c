@@ -34,6 +34,17 @@ static void ctrl_pipe_request_acknowledge(struct ctrl_pipe *pipe, unsigned int r
 	ctrl_pipe_push_request(pipe, cmd, 2);
 }
 
+static inline dev_t _snapstore_dev(struct ioctl_dev_id_s *dev_id)
+{
+	if ((dev_id->major == 0) && (dev_id->minor == 0))
+		return 0; //memory snapstore
+
+	if ((dev_id->major == -1) && (dev_id->minor == -1))
+		return 0xFFFFffff; //multidevice snapstore
+
+	return MKDEV(dev_id->major, dev_id->minor);
+}
+
 static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *buffer,
 					  size_t length)
 {
@@ -109,21 +120,9 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 			size_t inx;
 			dev_t *dev_set;
 			size_t dev_id_set_length = (size_t)dev_id_list_length;
-			dev_t snapstore_dev;
-			size_t dev_id_set_buffer_size;
 
-			if ((snapstore_dev_id->major == -1) && (snapstore_dev_id->minor == -1))
-				snapstore_dev = 0xFFFFffff; //multidevice
-			else if ((snapstore_dev_id->major == 0) && (snapstore_dev_id->minor == 0))
-				snapstore_dev = 0; //in memory
-			else
-				snapstore_dev =
-					MKDEV(snapstore_dev_id->major, snapstore_dev_id->minor);
-
-			dev_id_set_buffer_size = sizeof(dev_t) * dev_id_set_length;
-			dev_set = kzalloc(dev_id_set_buffer_size, GFP_KERNEL);
+			dev_set = kcalloc(dev_id_set_length, sizeof(dev_t), GFP_KERNEL);
 			if (dev_set == NULL) {
-				pr_err("Unable to process stretch snapstore initiation command: cannot allocate memory\n");
 				result = -ENOMEM;
 				break;
 			}
@@ -132,12 +131,11 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 				dev_set[inx] =
 					MKDEV(dev_id_list[inx].major, dev_id_list[inx].minor);
 
-			result = snapstore_create(unique_id, snapstore_dev, dev_set,
-						  dev_id_set_length);
+			result = snapstore_create(unique_id, _snapstore_dev(snapstore_dev_id),
+						  dev_set, dev_id_set_length);
 			kfree(dev_set);
 			if (result != SUCCESS) {
-				pr_err("Failed to create snapstore on device [%d:%d]\n",
-				       MAJOR(snapstore_dev), MINOR(snapstore_dev));
+				pr_err("Failed to create snapstore\n");
 				break;
 			}
 
@@ -160,6 +158,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user *buffer,
 					      size_t length)
 {
+	unsigned long len;
 	int result = SUCCESS;
 	ssize_t processed = 0;
 	struct big_buffer *ranges = NULL;
@@ -171,11 +170,13 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 
 		//get snapstore id
 		if ((length - processed) < 16) {
-			pr_err("Unable to get snapstore id: invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("Unable to get snapstore id: ");
+			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
 			       length);
 			break;
 		}
-		if (copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t)) != 0) {
+		len = copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t));
+		if (len != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -184,11 +185,13 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 
 		//get ranges length
 		if ((length - processed) < 4) {
-			pr_err("Unable to get device id list length: invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("Unable to get device id list length: ");
+			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
 			       length);
 			break;
 		}
-		if (copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int)) != 0) {
+		len = copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int));
+		if (len != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -199,19 +202,22 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 
 		// ranges
 		if ((length - processed) < (ranges_buffer_size)) {
-			pr_err("Unable to get all ranges: invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("Unable to get all ranges: ");
+			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
 			       length);
 			break;
 		}
 		ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
 		if (ranges == NULL) {
-			pr_err("Unable to allocate page array buffer: failed to process next portion command\n");
+			pr_err("Unable to allocate page array buffer: ");
+			pr_err("failed to process next portion command\n");
 			processed = -ENOMEM;
 			break;
 		}
 		if (ranges_buffer_size !=
 		    big_buffer_copy_from_user(buffer + processed, 0, ranges, ranges_buffer_size)) {
-			pr_err("Unable to process next portion command: invalid user buffer for parameters\n");
+		    	pr_err("Unable to process next portion command: ");
+			pr_err("invalid user buffer for parameters\n");
 			processed = -EINVAL;
 			break;
 		}
@@ -239,6 +245,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 						       const char __user *buffer, size_t length)
 {
+	unsigned long len;
 	int result = SUCCESS;
 	ssize_t processed = 0;
 	struct big_buffer *ranges = NULL;
@@ -252,11 +259,13 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 
 		//get snapstore id
 		if ((length - processed) < 16) {
-			pr_err("Unable to get snapstore id: invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("Unable to get snapstore id: ");
+			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
 			       length);
 			break;
 		}
-		if (0 != copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t))) {
+		len = copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t));
+		if (len != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -265,20 +274,20 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 
 		//get device id
 		if ((length - processed) < 8) {
-			pr_err("Unable to get device id list length: invalid ctrl pipe next portion command. length=%lu\n",
-			       length);
+			pr_err("Unable to get device id list length: ");
+			pr_err("invalid ctrl pipe next portion command. length=%lu\n", length);
 			break;
 		}
-		if (0 !=
-		    copy_from_user(&snapstore_major, buffer + processed, sizeof(unsigned int))) {
+		len = copy_from_user(&snapstore_major, buffer + processed, sizeof(unsigned int));
+		if (len != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
 		}
 		processed += sizeof(unsigned int);
 
-		if (0 !=
-		    copy_from_user(&snapstore_minor, buffer + processed, sizeof(unsigned int))) {
+		len = copy_from_user(&snapstore_minor, buffer + processed, sizeof(unsigned int));
+		if (len != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -287,11 +296,13 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 
 		//get ranges length
 		if ((length - processed) < 4) {
-			pr_err("Unable to get device id list length: invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("Unable to get device id list length: ");
+			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
 			       length);
 			break;
 		}
-		if (copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int)) != 0) {
+		len = copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int));
+		if (len != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -302,19 +313,22 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 
 		// ranges
 		if ((length - processed) < (ranges_buffer_size)) {
-			pr_err("Unable to get all ranges: invalid ctrl pipe next portion command.  length=%lu\n",
+			pr_err("Unable to get all ranges: ");
+			pr_err("invalid ctrl pipe next portion command.  length=%lu\n",
 			       length);
 			break;
 		}
 		ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
 		if (ranges == NULL) {
-			pr_err("Unable to process next portion command: failed to allocate page array buffer\n");
+			pr_err("Unable to process next portion command: ");
+			pr_err("failed to allocate page array buffer\n");
 			processed = -ENOMEM;
 			break;
 		}
 		if (ranges_buffer_size !=
 		    big_buffer_copy_from_user(buffer + processed, 0, ranges, ranges_buffer_size)) {
-			pr_err("Unable to process next portion command: invalid user buffer from parameters\n");
+		    	pr_err("Unable to process next portion command: ");
+			pr_err("invalid user buffer from parameters\n");
 			processed = -EINVAL;
 			break;
 		}
@@ -336,8 +350,8 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		big_buffer_free(ranges);
 
 	if (result == SUCCESS)
-		//log_traceln_sz( "processed=", processed );
 		return processed;
+
 	return result;
 }
 #endif

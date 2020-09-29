@@ -30,22 +30,19 @@ static blk_qc_t filter_submit_bio(struct bio *bio)
 	return filter_submit_original_bio(bio);
 }
 
-const struct blk_filter_ops g_filter_ops = { .disk_add = filter_disk_add,
-					     .disk_del = filter_disk_del,
-					     .disk_release = filter_disk_release,
-					     .submit_bio = filter_submit_bio };
+const struct blk_filter_ops filter_ops = { .disk_add = filter_disk_add,
+					   .disk_del = filter_disk_del,
+					   .disk_release = filter_disk_release,
+					   .submit_bio = filter_submit_bio };
 
-
-struct blk_filter g_filter = { .name = MODULE_NAME,
-			       .ops = &g_filter_ops,
-			       .altitude = BLK_SNAP_DEFAULT_ALTITUDE,
-			       .blk_filter_ctx = NULL };
-
-
+struct blk_filter filter = { .name = MODULE_NAME,
+			     .ops = &filter_ops,
+			     .altitude = BLK_SNAP_DEFAULT_ALTITUDE,
+			     .blk_filter_ctx = NULL };
 
 blk_qc_t filter_submit_original_bio(struct bio *bio)
 {
-	return blk_filter_submit_bio_next(&g_filter, bio);
+	return blk_filter_submit_bio_next(&filter, bio);
 }
 
 int filter_init(void)
@@ -53,14 +50,14 @@ int filter_init(void)
 	const char *exist_filter;
 	int result;
 
-	result = blk_filter_register(&g_filter);
+	result = blk_filter_register(&filter);
 	if (result != SUCCESS) {
 		pr_err("Failed to register block io layer filter\n");
 
-		exist_filter = blk_filter_check_altitude(g_filter.altitude);
+		exist_filter = blk_filter_check_altitude(filter.altitude);
 		if (exist_filter)
 			pr_err("Block io layer filter [%s] already exist on altitude [%ld]\n",
-			       exist_filter, g_filter.altitude);
+			       exist_filter, filter.altitude);
 	}
 
 	return result;
@@ -68,7 +65,7 @@ int filter_init(void)
 
 void filter_done(void)
 {
-	int result = blk_filter_unregister(&g_filter);
+	int result = blk_filter_unregister(&filter);
 
 	BUG_ON(result != SUCCESS);
 }

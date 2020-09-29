@@ -17,24 +17,24 @@
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 
-static int blk_snap_major = 0;
+int blk_snap_major = 0;
 
-static struct file_operations ctrl_fops = { .owner = THIS_MODULE,
-					    .read = ctrl_read,
-					    .write = ctrl_write,
-					    .open = ctrl_open,
-					    .release = ctrl_release,
-					    .poll = ctrl_poll,
-					    .unlocked_ioctl = ctrl_unlocked_ioctl };
+const struct file_operations ctrl_fops = { .owner = THIS_MODULE,
+					   .read = ctrl_read,
+					   .write = ctrl_write,
+					   .open = ctrl_open,
+					   .release = ctrl_release,
+					   .poll = ctrl_poll,
+					   .unlocked_ioctl = ctrl_unlocked_ioctl };
 
 int get_change_tracking_block_size_pow(void);
 
-static atomic_t g_dev_open_cnt = ATOMIC_INIT(0);
+atomic_t dev_open_cnt = ATOMIC_INIT(0);
 
-static struct ioctl_getversion_s g_version = { .major = FILEVER_MAJOR,
-					       .minor = FILEVER_MINOR,
-					       .revision = FILEVER_REVISION,
-					       .build = 0 };
+const struct ioctl_getversion_s version = { .major = FILEVER_MAJOR,
+					    .minor = FILEVER_MINOR,
+					    .revision = FILEVER_REVISION,
+					    .build = 0 };
 
 int get_blk_snap_major(void)
 {
@@ -117,7 +117,7 @@ int ctrl_open(struct inode *inode, struct file *fl)
 		return -ENOMEM;
 	}
 
-	atomic_inc(&g_dev_open_cnt);
+	atomic_inc(&dev_open_cnt);
 
 	return SUCCESS;
 }
@@ -126,11 +126,11 @@ int ctrl_release(struct inode *inode, struct file *fl)
 {
 	int result = SUCCESS;
 
-	if (atomic_read(&g_dev_open_cnt) > 0) {
+	if (atomic_read(&dev_open_cnt) > 0) {
 		module_put(THIS_MODULE);
 		ctrl_pipe_put_resource((struct ctrl_pipe *)fl->private_data);
 
-		atomic_dec(&g_dev_open_cnt);
+		atomic_dec(&dev_open_cnt);
 	} else {
 		pr_err("Unable to close ctrl file: the file is already closed\n");
 		result = -EALREADY;
@@ -164,7 +164,7 @@ int ioctl_get_version(unsigned long arg)
 
 	pr_info("Get version\n");
 
-	len = copy_to_user((void *)arg, &g_version, sizeof(struct ioctl_getversion_s));
+	len = copy_to_user((void *)arg, &version, sizeof(struct ioctl_getversion_s));
 	if (len != 0) {
 		pr_err("Unable to get version: invalid user buffer\n");
 		return -ENODATA;

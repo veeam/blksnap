@@ -15,9 +15,9 @@
 
 #define SNAPIMAGE_MAX_DEVICES 2048
 
-static int g_snapimage_major = 0;
-static unsigned long *g_snapimage_minors;
-static DEFINE_SPINLOCK(g_snapimage_minors_lock);
+int snapimage_major = 0;
+unsigned long *snapimage_minors = NULL;
+DEFINE_SPINLOCK(snapimage_minors_lock);
 
 LIST_HEAD(snap_images);
 DECLARE_RWSEM(snap_images_lock);
@@ -222,7 +222,7 @@ int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned cmd, unsi
 blk_qc_t _snapimage_submit_bio(struct bio *bio);
 #endif
 
-static struct block_device_operations g_snapimage_ops = {
+const struct block_device_operations snapimage_ops = {
 	.owner = THIS_MODULE,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
 	.submit_bio = _snapimage_submit_bio,
@@ -572,9 +572,9 @@ int snapimage_create(dev_t original_dev)
 	INIT_LIST_HEAD(&image->link);
 
 	do {
-		spin_lock(&g_snapimage_minors_lock);
-		minor = bitmap_find_free_region(g_snapimage_minors, SNAPIMAGE_MAX_DEVICES, 0);
-		spin_unlock(&g_snapimage_minors_lock);
+		spin_lock(&snapimage_minors_lock);
+		minor = bitmap_find_free_region(snapimage_minors, SNAPIMAGE_MAX_DEVICES, 0);
+		spin_unlock(&snapimage_minors_lock);
 
 		if (minor < SUCCESS) {
 			pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
@@ -593,7 +593,7 @@ int snapimage_create(dev_t original_dev)
 		image->cbt_map = cbt_map_get_resource(tracker->cbt_map);
 		image->original_dev = original_dev;
 
-		image->image_dev = MKDEV(g_snapimage_major, minor);
+		image->image_dev = MKDEV(snapimage_major, minor);
 		pr_info("Snapshot image device id [%d:%d]\n", MAJOR(image->image_dev),
 			MINOR(image->image_dev));
 
@@ -649,13 +649,13 @@ int snapimage_create(dev_t original_dev)
 		disk->flags |= GENHD_FL_NO_PART_SCAN;
 		disk->flags |= GENHD_FL_REMOVABLE;
 
-		disk->major = g_snapimage_major;
+		disk->major = snapimage_major;
 		disk->minors = 1; // one disk have only one partition.
 		disk->first_minor = minor;
 
 		disk->private_data = image;
 
-		disk->fops = &g_snapimage_ops;
+		disk->fops = &snapimage_ops;
 		disk->queue = image->queue;
 
 		set_capacity(disk, image->capacity);
@@ -741,9 +741,9 @@ void _snapimage_destroy(struct snapimage *image)
 		put_disk(disk);
 	}
 
-	spin_lock(&g_snapimage_minors_lock);
-	bitmap_clear(g_snapimage_minors, MINOR(image->image_dev), (int)1);
-	spin_unlock(&g_snapimage_minors_lock);
+	spin_lock(&snapimage_minors_lock);
+	bitmap_clear(snapimage_minors, MINOR(image->image_dev), (int)1);
+	spin_unlock(&snapimage_minors_lock);
 }
 
 struct snapimage *snapimage_find(dev_t original_dev)
@@ -856,17 +856,17 @@ int snapimage_init(void)
 {
 	int res = SUCCESS;
 
-	res = register_blkdev(g_snapimage_major, SNAP_IMAGE_NAME);
+	res = register_blkdev(snapimage_major, SNAP_IMAGE_NAME);
 	if (res >= SUCCESS) {
-		g_snapimage_major = res;
-		pr_info("Snapshot image block device major %d was registered\n", g_snapimage_major);
+		snapimage_major = res;
+		pr_info("Snapshot image block device major %d was registered\n", snapimage_major);
 		res = SUCCESS;
 
-		spin_lock(&g_snapimage_minors_lock);
-		g_snapimage_minors = bitmap_zalloc(SNAPIMAGE_MAX_DEVICES, GFP_KERNEL);
-		spin_unlock(&g_snapimage_minors_lock);
+		spin_lock(&snapimage_minors_lock);
+		snapimage_minors = bitmap_zalloc(SNAPIMAGE_MAX_DEVICES, GFP_KERNEL);
+		spin_unlock(&snapimage_minors_lock);
 
-		if (g_snapimage_minors == NULL)
+		if (snapimage_minors == NULL)
 			pr_err("Failed to initialize bitmap of minors\n");
 	} else
 		pr_err("Failed to register snapshot image block device. errno=%d\n", res);
@@ -901,17 +901,17 @@ void snapimage_done(void)
 		image = NULL;
 	}
 
-	spin_lock(&g_snapimage_minors_lock);
-	bitmap_free(g_snapimage_minors);
-	g_snapimage_minors = NULL;
-	spin_unlock(&g_snapimage_minors_lock);
+	spin_lock(&snapimage_minors_lock);
+	bitmap_free(snapimage_minors);
+	snapimage_minors = NULL;
+	spin_unlock(&snapimage_minors_lock);
 
 	//BUG_ON(!list_empty(&snap_images))
 	if (!list_empty(&snap_images))
 		pr_err("Failed to release snapshot images container\n");
 
-	unregister_blkdev(g_snapimage_major, SNAP_IMAGE_NAME);
-	pr_info("Snapshot image block device [%d] was unregistered\n", g_snapimage_major);
+	unregister_blkdev(snapimage_major, SNAP_IMAGE_NAME);
+	pr_info("Snapshot image block device [%d] was unregistered\n", snapimage_major);
 
 	up_write(&snap_image_destroy_lock);
 }

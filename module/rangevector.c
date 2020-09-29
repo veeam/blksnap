@@ -14,7 +14,7 @@ static inline sector_t range_node_last(struct blk_range_tree_node *range_node)
 	return range_node->range.ofs + range_node->range.cnt - 1;
 }
 #ifndef INTERVAL_TREE_DEFINE
-#pragma message("INTERVAL_TREE_DEFINE  is undefined")
+#pragma message("INTERVAL_TREE_DEFINE is undefined")
 #endif
 
 INTERVAL_TREE_DEFINE(struct blk_range_tree_node, _node, sector_t, _subtree_last, range_node_start,
