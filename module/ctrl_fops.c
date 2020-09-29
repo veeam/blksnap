@@ -11,10 +11,21 @@
 #include "tracker.h"
 #include "blk_deferred.h"
 #include "big_buffer.h"
+#include "params.h"
 
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>
+
+static int blk_snap_major = 0;
+
+static struct file_operations ctrl_fops = { .owner = THIS_MODULE,
+					    .read = ctrl_read,
+					    .write = ctrl_write,
+					    .open = ctrl_open,
+					    .release = ctrl_release,
+					    .poll = ctrl_poll,
+					    .unlocked_ioctl = ctrl_unlocked_ioctl };
 
 int get_change_tracking_block_size_pow(void);
 
@@ -25,8 +36,29 @@ static struct ioctl_getversion_s g_version = { .major = FILEVER_MAJOR,
 					       .revision = FILEVER_REVISION,
 					       .build = 0 };
 
+int get_blk_snap_major(void)
+{
+	return blk_snap_major;
+}
+
+int ctrl_init(void)
+{
+	int ret;
+
+	ret = register_chrdev(0, MODULE_NAME, &ctrl_fops);
+	if (ret < 0) {
+		pr_err("Failed to register a character device. errno=%d\n", blk_snap_major);
+		return ret;
+	}
+
+	blk_snap_major = ret;
+	pr_info("Module major [%d]\n", blk_snap_major);
+	return SUCCESS;
+}
+
 void ctrl_done(void)
 {
+	unregister_chrdev(blk_snap_major, MODULE_NAME);
 	ctrl_pipe_done();
 }
 
@@ -197,15 +229,13 @@ int ioctl_tracking_collect(unsigned long arg)
 	} else {
 		struct cbt_info_s *p_cbt_info = NULL;
 
-		p_cbt_info = kzalloc(get.count * sizeof(struct cbt_info_s), GFP_KERNEL);
-		if (p_cbt_info == NULL) {
-			pr_err("Unable to collect tracing devices: cannot allocate memory\n");
+		p_cbt_info = kcalloc(get.count, sizeof(struct cbt_info_s), GFP_KERNEL);
+		if (p_cbt_info == NULL)
 			return -ENOMEM;
-		}
 
 		do {
 			res = tracking_collect(get.count, p_cbt_info, &get.count);
-			if (SUCCESS != res) {
+			if (res != SUCCESS) {
 				pr_err("Failed to execute tracking_collect. errno=%d\n", res);
 				break;
 			}
@@ -236,7 +266,7 @@ int ioctl_tracking_collect(unsigned long arg)
 int ioctl_tracking_block_size(unsigned long arg)
 {
 	unsigned long len;
-	unsigned int blk_sz = (1 << get_change_tracking_block_size_pow());
+	unsigned int blk_sz = change_tracking_block_size();
 
 	len = copy_to_user((void *)arg, &blk_sz, sizeof(unsigned int));
 	if (len != 0) {
@@ -290,7 +320,7 @@ int ioctl_tracking_mark_dirty_blocks(unsigned long arg)
 		dev_t image_dev_id;
 
 		len = copy_from_user(p_dirty_blocks, (void *)param.p_dirty_blocks, buffer_size);
-		if (len !=0 ) {
+		if (len != 0) {
 			pr_err("Unable to mark dirty blocks: invalid user buffer\n");
 			result = -ENODATA;
 			break;
@@ -385,14 +415,25 @@ int ioctl_snapshot_destroy(unsigned long arg)
 
 	return snapshot_destroy(param);
 }
-//////////////////////////////////////////////////////////////////////////
+
+static inline dev_t _snapstore_dev(struct ioctl_dev_id_s *dev_id)
+{
+	if ((dev_id->major == 0) && (dev_id->minor == 0))
+		return 0; //memory snapstore
+
+	if ((dev_id->major == -1) && (dev_id->minor == -1))
+		return 0xFFFFffff; //multidevice snapstore
+
+	return MKDEV(dev_id->major, dev_id->minor);
+}
+
 int ioctl_snapstore_create(unsigned long arg)
 {
 	unsigned long len;
 	int res = SUCCESS;
 	struct ioctl_snapstore_create_s param;
-	struct ioctl_dev_id_s *pk_dev_id = NULL;
-	size_t dev_id_buffer_size;
+	size_t inx = 0;
+	dev_t *dev_id_set = NULL;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_snapstore_create_s));
 	if (len != 0) {
@@ -400,56 +441,30 @@ int ioctl_snapstore_create(unsigned long arg)
 		return -EINVAL;
 	}
 
-	dev_id_buffer_size = sizeof(struct ioctl_dev_id_s) * param.count;
-	pk_dev_id = kzalloc(dev_id_buffer_size, GFP_KERNEL);
-	if (pk_dev_id == NULL) {
-		pr_err("Unable to create snapstore: cannot allocate [%ld] bytes\n",
-		       dev_id_buffer_size);
+	dev_id_set = kcalloc(param.count, sizeof(dev_t), GFP_KERNEL);
+	if (dev_id_set == NULL)
 		return -ENOMEM;
-	}
 
-	do {
-		size_t inx = 0;
-		dev_t *dev_id_set = NULL;
-		uuid_t *id = (uuid_t *)param.id;
-		dev_t snapstore_dev_id;
-		size_t dev_id_set_length = (size_t)param.count;
-		size_t dev_id_set_buffer_size;
+	for (inx = 0; inx < param.count; ++inx) {
+		struct ioctl_dev_id_s dev_id;
 
-		if ((0 == param.snapstore_dev_id.major) && (0 == param.snapstore_dev_id.minor))
-			snapstore_dev_id = 0; //memory snapstore
-		else if ((-1 == param.snapstore_dev_id.major) &&
-			 (-1 == param.snapstore_dev_id.minor))
-			snapstore_dev_id = 0xFFFFffff; //multidevice snapstore
-		else
-			snapstore_dev_id = MKDEV(param.snapstore_dev_id.major,
-				      		 param.snapstore_dev_id.minor);
-
-		len = copy_from_user(pk_dev_id, (void *)param.p_dev_id,
-				     param.count * sizeof(struct ioctl_dev_id_s));
+		len = copy_from_user(&dev_id, param.p_dev_id + inx, sizeof(struct ioctl_dev_id_s));
 		if (len != 0) {
-			pr_err("Unable to create snapstore: invalid user buffer for parameters\n");
+			pr_err("Unable to create snapstore: ");
+			pr_err("invalid user buffer for parameters\n");
+
 			res = -ENODATA;
 			break;
 		}
 
-		dev_id_set_buffer_size = sizeof(dev_t) * param.count;
-		dev_id_set = kzalloc(dev_id_set_buffer_size, GFP_KERNEL);
-		if (dev_id_set == NULL) {
-			pr_err("Unable to create snapstore: cannot allocate [%ld] bytes\n",
-			       dev_id_set_buffer_size);
-			res = -ENOMEM;
-			break;
-		}
+		dev_id_set[inx] = MKDEV(dev_id.major, dev_id.minor);
+	}
 
-		for (inx = 0; inx < dev_id_set_length; ++inx)
-			dev_id_set[inx] = MKDEV(pk_dev_id[inx].major, pk_dev_id[inx].minor);
+	if (res == SUCCESS)
+		res = snapstore_create((uuid_t *)param.id, _snapstore_dev(&param.snapstore_dev_id),
+				       dev_id_set, (size_t)param.count);
 
-		res = snapstore_create(id, snapstore_dev_id, dev_id_set, dev_id_set_length);
-
-		kfree(dev_id_set);
-	} while (false);
-	kfree(pk_dev_id);
+	kfree(dev_id_set);
 
 	return res;
 }
@@ -477,19 +492,14 @@ int ioctl_snapstore_file(unsigned long arg)
 		return -ENOMEM;
 	}
 
-	do {
-		uuid_t *id = (uuid_t *)(param.id);
-		size_t ranges_cnt = (size_t)param.range_count;
+	if (big_buffer_copy_from_user((void *)param.ranges, 0, ranges, ranges_buffer_size)
+		!= ranges_buffer_size) {
 
-		if (ranges_buffer_size != big_buffer_copy_from_user((void *)param.ranges, 0, ranges,
-								    ranges_buffer_size)) {
-			pr_err("Unable to add file to snapstore: invalid user buffer for parameters\n");
-			res = -ENODATA;
-			break;
-		}
+		pr_err("Unable to add file to snapstore: invalid user buffer for parameters\n");
+		res = -ENODATA;
+	} else
+		res = snapstore_add_file((uuid_t *)(param.id), ranges, (size_t)param.range_count);
 
-		res = snapstore_add_file(id, ranges, ranges_cnt);
-	} while (false);
 	big_buffer_free(ranges);
 
 	return res;
@@ -584,9 +594,9 @@ int ioctl_snapstore_file_multidev(unsigned long arg)
 #endif
 //////////////////////////////////////////////////////////////////////////
 
-/**
-  * Snapshot get errno for device
-  */
+/*
+ * Snapshot get errno for device
+ */
 int ioctl_snapshot_errno(unsigned long arg)
 {
 	unsigned long len;

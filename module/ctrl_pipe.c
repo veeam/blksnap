@@ -12,197 +12,39 @@
 
 #define CMD_TO_USER_FIFO_SIZE 1024
 
-ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *buffer,
-				   size_t length);
-ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user *buffer,
-				       size_t length);
-#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe, const char __user *buffer,
-						size_t length);
-#endif
-
-void ctrl_pipe_request_acknowledge(struct ctrl_pipe *pipe, unsigned int result);
-void ctrl_pipe_request_invalid(struct ctrl_pipe *pipe);
-
 LIST_HEAD(ctl_pipes);
 DECLARE_RWSEM(ctl_pipes_lock);
 
-void ctrl_pipe_done(void)
+
+static void ctrl_pipe_push_request(struct ctrl_pipe *pipe, unsigned int *cmd, size_t cmd_len)
 {
-	bool is_empty;
+	kfifo_in_spinlocked(&pipe->cmd_to_user, cmd, (cmd_len * sizeof(unsigned int)),
+			    &pipe->cmd_to_user_lock);
 
-	pr_err("Ctrl pipes - done\n");
-
-	down_write(&ctl_pipes_lock);
-	is_empty = list_empty(&ctl_pipes);
-	up_write(&ctl_pipes_lock);
-
-	//BUG_ON(!is_empty)
-	if (!is_empty)
-		pr_err("Unable to perform ctrl pipes cleanup: container is not empty\n");
+	wake_up(&pipe->readq);
 }
 
-static void ctrl_pipe_release_cb(struct kref *kref)
+static void ctrl_pipe_request_acknowledge(struct ctrl_pipe *pipe, unsigned int result)
 {
-	struct ctrl_pipe *pipe = container_of(kref, struct ctrl_pipe, refcount);
+	unsigned int cmd[2];
 
-	down_write(&ctl_pipes_lock);
-	list_del(&pipe->link);
-	up_write(&ctl_pipes_lock);
+	cmd[0] = BLK_SNAP_CHARCMD_ACKNOWLEDGE;
+	cmd[1] = result;
 
-	kfifo_free(&pipe->cmd_to_user);
-
-	kfree(pipe);
+	ctrl_pipe_push_request(pipe, cmd, 2);
 }
 
-struct ctrl_pipe *ctrl_pipe_get_resource(struct ctrl_pipe *pipe)
-{
-	if (pipe)
-		kref_get(&pipe->refcount);
-
-	return pipe;
-}
-
-void ctrl_pipe_put_resource(struct ctrl_pipe *pipe)
-{
-	if (pipe)
-		kref_put(&pipe->refcount, ctrl_pipe_release_cb);
-}
-
-struct ctrl_pipe *ctrl_pipe_new(void)
-{
-	int ret;
-	struct ctrl_pipe *pipe = kmalloc(sizeof(struct ctrl_pipe), GFP_KERNEL);
-
-	if (pipe == NULL) {
-		pr_err("Failed to create new ctrl pipe: not enough memory\n");
-		return NULL;
-	}
-	INIT_LIST_HEAD(&pipe->link);
-
-	ret = kfifo_alloc(&pipe->cmd_to_user, CMD_TO_USER_FIFO_SIZE, GFP_KERNEL);
-	if (ret) {
-		pr_err("Failed to allocate fifo. errno=%d.\n", ret);
-		kfree(pipe);
-		return NULL;
-	}
-	spin_lock_init(&pipe->cmd_to_user_lock);
-
-	kref_init(&pipe->refcount);
-
-	init_waitqueue_head(&pipe->readq);
-
-	down_write(&ctl_pipes_lock);
-	list_add_tail(&pipe->link, &ctl_pipes);
-	up_write(&ctl_pipes_lock);
-
-	return pipe;
-}
-
-ssize_t ctrl_pipe_read(struct ctrl_pipe *pipe, char __user *buffer, size_t length)
-{
-	int ret;
-	unsigned int processed = 0;
-
-	if (kfifo_is_empty_spinlocked(&pipe->cmd_to_user, &pipe->cmd_to_user_lock)) {
-		//nothing to read
-		if (wait_event_interruptible(pipe->readq,
-					     !kfifo_is_empty_spinlocked(&pipe->cmd_to_user,
-									&pipe->cmd_to_user_lock))) {
-			pr_err("Unable to wait for pipe read queue: interrupt signal was received\n");
-			return -ERESTARTSYS;
-		}
-	}
-
-	ret = kfifo_to_user(&pipe->cmd_to_user, buffer, length, &processed);
-	if (ret) {
-		pr_err("Failed to read command from ctrl pipe\n");
-		return ret;
-	}
-
-	return (ssize_t)processed;
-}
-
-ssize_t ctrl_pipe_write(struct ctrl_pipe *pipe, const char __user *buffer, size_t length)
-{
-	ssize_t processed = 0;
-
-	do {
-		unsigned long len;
-		unsigned int command;
-
-		if ((length - processed) < 4) {
-			pr_err("Unable to write command to ctrl pipe: invalid command length=%lu\n",
-			       length);
-			break;
-		}
-		len = copy_from_user(&command, buffer + processed, sizeof(unsigned int));
-		if (len != 0) {
-			pr_err("Unable to write to pipe: invalid user buffer\n");
-			processed = -EINVAL;
-			break;
-		}
-		processed += sizeof(unsigned int);
-		//+4
-		switch (command) {
-		case BLK_SNAP_CHARCMD_INITIATE: {
-			ssize_t res = ctrl_pipe_command_initiate(pipe, buffer + processed,
-								 length - processed);
-			if (res >= 0)
-				processed += res;
-			else
-				processed = res;
-		} break;
-		case BLK_SNAP_CHARCMD_NEXT_PORTION: {
-			ssize_t res = ctrl_pipe_command_next_portion(pipe, buffer + processed,
-								     length - processed);
-			if (res >= 0)
-				processed += res;
-			else
-				processed = res;
-		} break;
-#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-		case BLK_SNAP_CHARCMD_NEXT_PORTION_MULTIDEV: {
-			ssize_t res = ctrl_pipe_command_next_portion_multidev(
-				pipe, buffer + processed, length - processed);
-			if (res >= 0)
-				processed += res;
-			else
-				processed = res;
-		} break;
-#endif
-		default:
-			pr_err("Ctrl pipe write error: invalid command [0x%x] received\n", command);
-			break;
-		}
-	} while (false);
-	return processed;
-}
-
-unsigned int ctrl_pipe_poll(struct ctrl_pipe *pipe)
-{
-	unsigned int mask = 0;
-
-	if (!kfifo_is_empty_spinlocked(&pipe->cmd_to_user, &pipe->cmd_to_user_lock)) {
-		mask |= (POLLIN | POLLRDNORM); /* readable */
-	}
-	mask |= (POLLOUT | POLLWRNORM); /* writable */
-
-	return mask;
-}
-
-ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *buffer, size_t length)
+static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *buffer,
+					  size_t length)
 {
 	unsigned long len;
 	int result = SUCCESS;
 	ssize_t processed = 0;
+	char *kernel_buffer;
 
-	char *kernel_buffer = kmalloc(length, GFP_KERNEL);
-	if (kernel_buffer == NULL) {
-		pr_err("Unable to send next portion to pipe: cannot allocate buffer. length=%lu\n",
-		       length);
+	kernel_buffer = kmalloc(length, GFP_KERNEL);
+	if (kernel_buffer == NULL)
 		return -ENOMEM;
-	}
 
 	len = copy_from_user(kernel_buffer, buffer, length);
 	if (len != 0) {
@@ -315,8 +157,8 @@ ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __user *bu
 	return result;
 }
 
-ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user *buffer,
-				       size_t length)
+static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user *buffer,
+					      size_t length)
 {
 	int result = SUCCESS;
 	ssize_t processed = 0;
@@ -333,7 +175,7 @@ ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user
 			       length);
 			break;
 		}
-		if (0 != copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t))) {
+		if (copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t)) != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -346,7 +188,7 @@ ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user
 			       length);
 			break;
 		}
-		if (0 != copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int))) {
+		if (copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int)) != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -392,9 +234,10 @@ ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char __user
 		return processed;
 	return result;
 }
+
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe, const char __user *buffer,
-						size_t length)
+static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
+						       const char __user *buffer, size_t length)
 {
 	int result = SUCCESS;
 	ssize_t processed = 0;
@@ -448,7 +291,7 @@ ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe, const ch
 			       length);
 			break;
 		}
-		if (0 != copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int))) {
+		if (copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int)) != 0) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -499,22 +342,169 @@ ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe, const ch
 }
 #endif
 
-void ctrl_pipe_push_request(struct ctrl_pipe *pipe, unsigned int *cmd, size_t cmd_len)
+static void ctrl_pipe_release_cb(struct kref *kref)
 {
-	kfifo_in_spinlocked(&pipe->cmd_to_user, cmd, (cmd_len * sizeof(unsigned int)),
-			    &pipe->cmd_to_user_lock);
+	struct ctrl_pipe *pipe = container_of(kref, struct ctrl_pipe, refcount);
 
-	wake_up(&pipe->readq);
+	down_write(&ctl_pipes_lock);
+	list_del(&pipe->link);
+	up_write(&ctl_pipes_lock);
+
+	kfifo_free(&pipe->cmd_to_user);
+
+	kfree(pipe);
 }
 
-void ctrl_pipe_request_acknowledge(struct ctrl_pipe *pipe, unsigned int result)
+struct ctrl_pipe *ctrl_pipe_get_resource(struct ctrl_pipe *pipe)
 {
-	unsigned int cmd[2];
+	if (pipe)
+		kref_get(&pipe->refcount);
 
-	cmd[0] = BLK_SNAP_CHARCMD_ACKNOWLEDGE;
-	cmd[1] = result;
+	return pipe;
+}
 
-	ctrl_pipe_push_request(pipe, cmd, 2);
+void ctrl_pipe_put_resource(struct ctrl_pipe *pipe)
+{
+	if (pipe)
+		kref_put(&pipe->refcount, ctrl_pipe_release_cb);
+}
+
+void ctrl_pipe_done(void)
+{
+	bool is_empty;
+
+	pr_err("Ctrl pipes - done\n");
+
+	down_write(&ctl_pipes_lock);
+	is_empty = list_empty(&ctl_pipes);
+	up_write(&ctl_pipes_lock);
+
+	//BUG_ON(!is_empty)
+	if (!is_empty)
+		pr_err("Unable to perform ctrl pipes cleanup: container is not empty\n");
+}
+
+struct ctrl_pipe *ctrl_pipe_new(void)
+{
+	int ret;
+	struct ctrl_pipe *pipe;
+
+	pipe= kzalloc(sizeof(struct ctrl_pipe), GFP_KERNEL);
+	if (pipe == NULL)
+		return NULL;
+
+	INIT_LIST_HEAD(&pipe->link);
+
+	ret = kfifo_alloc(&pipe->cmd_to_user, CMD_TO_USER_FIFO_SIZE, GFP_KERNEL);
+	if (ret) {
+		pr_err("Failed to allocate fifo. errno=%d.\n", ret);
+		kfree(pipe);
+		return NULL;
+	}
+	spin_lock_init(&pipe->cmd_to_user_lock);
+
+	kref_init(&pipe->refcount);
+
+	init_waitqueue_head(&pipe->readq);
+
+	down_write(&ctl_pipes_lock);
+	list_add_tail(&pipe->link, &ctl_pipes);
+	up_write(&ctl_pipes_lock);
+
+	return pipe;
+}
+
+ssize_t ctrl_pipe_read(struct ctrl_pipe *pipe, char __user *buffer, size_t length)
+{
+	int ret;
+	unsigned int processed = 0;
+
+	if (kfifo_is_empty_spinlocked(&pipe->cmd_to_user, &pipe->cmd_to_user_lock)) {
+		//nothing to read
+		ret = wait_event_interruptible(pipe->readq,
+					       !kfifo_is_empty_spinlocked(&pipe->cmd_to_user,
+									&pipe->cmd_to_user_lock));
+		if (ret) {
+			pr_err("Unable to wait for pipe read queue: interrupt signal was received\n");
+			return -ERESTARTSYS;
+		}
+	}
+
+	ret = kfifo_to_user(&pipe->cmd_to_user, buffer, length, &processed);
+	if (ret) {
+		pr_err("Failed to read command from ctrl pipe\n");
+		return ret;
+	}
+
+	return (ssize_t)processed;
+}
+
+ssize_t ctrl_pipe_write(struct ctrl_pipe *pipe, const char __user *buffer, size_t length)
+{
+	ssize_t processed = 0;
+
+	do {
+		unsigned long len;
+		unsigned int command;
+
+		if ((length - processed) < 4) {
+			pr_err("Unable to write command to ctrl pipe: invalid command length=%lu\n",
+			       length);
+			break;
+		}
+		len = copy_from_user(&command, buffer + processed, sizeof(unsigned int));
+		if (len != 0) {
+			pr_err("Unable to write to pipe: invalid user buffer\n");
+			processed = -EINVAL;
+			break;
+		}
+		processed += sizeof(unsigned int);
+		//+4
+		switch (command) {
+		case BLK_SNAP_CHARCMD_INITIATE: {
+			ssize_t res = ctrl_pipe_command_initiate(pipe, buffer + processed,
+								 length - processed);
+			if (res >= 0)
+				processed += res;
+			else
+				processed = res;
+		} break;
+		case BLK_SNAP_CHARCMD_NEXT_PORTION: {
+			ssize_t res = ctrl_pipe_command_next_portion(pipe, buffer + processed,
+								     length - processed);
+			if (res >= 0)
+				processed += res;
+			else
+				processed = res;
+		} break;
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
+		case BLK_SNAP_CHARCMD_NEXT_PORTION_MULTIDEV: {
+			ssize_t res = ctrl_pipe_command_next_portion_multidev(
+				pipe, buffer + processed, length - processed);
+			if (res >= 0)
+				processed += res;
+			else
+				processed = res;
+		} break;
+#endif
+		default:
+			pr_err("Ctrl pipe write error: invalid command [0x%x] received\n", command);
+			break;
+		}
+	} while (false);
+	return processed;
+}
+
+unsigned int ctrl_pipe_poll(struct ctrl_pipe *pipe)
+{
+	unsigned int mask = 0;
+
+	if (!kfifo_is_empty_spinlocked(&pipe->cmd_to_user, &pipe->cmd_to_user_lock))
+		mask |= (POLLIN | POLLRDNORM); /* readable */
+
+	mask |= (POLLOUT | POLLWRNORM); /* writable */
+
+	return mask;
 }
 
 void ctrl_pipe_request_halffill(struct ctrl_pipe *pipe, unsigned long long filled_status)
@@ -556,15 +546,4 @@ void ctrl_pipe_request_terminate(struct ctrl_pipe *pipe, unsigned long long fill
 	cmd[2] = (unsigned int)(filled_status >> 32);
 
 	ctrl_pipe_push_request(pipe, cmd, 3);
-}
-
-void ctrl_pipe_request_invalid(struct ctrl_pipe *pipe)
-{
-	unsigned int cmd[1];
-
-	pr_err("Ctrl pipe received invalid command\n");
-
-	cmd[0] = BLK_SNAP_CHARCMD_INVALID;
-
-	ctrl_pipe_push_request(pipe, cmd, 1);
 }

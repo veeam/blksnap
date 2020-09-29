@@ -5,7 +5,7 @@
 #include "blk_deferred.h"
 #include "blk_util.h"
 #include "snapstore.h"
-#include "snapstore_blk.h"
+#include "params.h"
 
 struct bio_set g_blk_deferred_bioset = { 0 };
 

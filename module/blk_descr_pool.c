@@ -2,7 +2,7 @@
 #define BLK_SNAP_SECTION "-blk_descr"
 #include "common.h"
 #include "blk_descr_pool.h"
-#include "snapstore_blk.h"
+#include "params.h"
 
 struct pool_el {
 	struct list_head link;
@@ -126,16 +126,6 @@ union blk_descr_unify blk_descr_pool_alloc(
 	return blk_descr;
 }
 
-#define _FOREACH_EL_BEGIN(pool, el)                                                                \
-	if (!list_empty(&(pool)->head)) {                                                          \
-		struct list_head *_list_head;                                                      \
-		list_for_each(_list_head, &(pool)->head) {                                         \
-			el = list_entry(_list_head, struct pool_el, link);                         \
-
-#define _FOREACH_EL_END()                                                                          \
-		}                                                                                  \
-	}                                                                                          \
-
 static union blk_descr_unify __blk_descr_pool_at(struct blk_descr_pool *pool, size_t blk_descr_size,
 						 size_t index)
 {
@@ -143,15 +133,19 @@ static union blk_descr_unify __blk_descr_pool_at(struct blk_descr_pool *pool, si
 	size_t curr_inx = 0;
 	struct pool_el *el;
 
-	_FOREACH_EL_BEGIN(pool, el)
-	{
-		if ((index >= curr_inx) && (index < (curr_inx + el->used_cnt))) {
-			bkl_descr.ptr = el->descr_array + (index - curr_inx) * blk_descr_size;
-			break;
+	if (!list_empty(&(pool)->head)) {
+		struct list_head *_list_head;
+
+		list_for_each(_list_head, &(pool)->head) {
+			el = list_entry(_list_head, struct pool_el, link);
+
+			if ((index >= curr_inx) && (index < (curr_inx + el->used_cnt))) {
+				bkl_descr.ptr = el->descr_array + (index - curr_inx) * blk_descr_size;
+				break;
+			}
+			curr_inx += el->used_cnt;
 		}
-		curr_inx += el->used_cnt;
 	}
-	_FOREACH_EL_END();
 
 	return bkl_descr;
 }

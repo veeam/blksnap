@@ -5,13 +5,14 @@
 #include "blk_deferred.h"
 #include "tracker.h"
 #include "blk_util.h"
+#include "filter.h"
 
 #include <linux/kthread.h>
 
 #define BLK_IMAGE_THROTTLE_TIMEOUT (1 * HZ) //delay 1 sec
 //#define BLK_IMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )	//delay 10 ms
 
-blk_qc_t filter_submit_original_bio(struct bio *bio);
+
 
 struct defer_io_orig_rq {
 	struct list_head link;

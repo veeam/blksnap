@@ -3,7 +3,7 @@
 #include "common.h"
 #include "snapstore_device.h"
 #include "snapstore.h"
-#include "snapstore_blk.h"
+#include "params.h"
 #include "blk_util.h"
 
 int inc_snapstore_block_size_pow(void);

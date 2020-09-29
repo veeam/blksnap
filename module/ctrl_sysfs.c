@@ -2,12 +2,11 @@
 #define BLK_SNAP_SECTION "-ctrl"
 #include "common.h"
 #include "ctrl_sysfs.h"
+#include "ctrl_fops.h"
 #include "blk-snap-ctl.h"
 
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
-
-int get_blk_snap_major(void);
 
 static ssize_t major_show(struct class *class, struct class_attribute *attr, char *buf)
 {
@@ -15,11 +14,12 @@ static ssize_t major_show(struct class *class, struct class_attribute *attr, cha
 	return strlen(buf);
 }
 
-CLASS_ATTR_RO(major);
-
+CLASS_ATTR_RO(major); // declare class_attr_major
 static struct class *blk_snap_class = NULL;
 
-int ctrl_sysfs_init(struct device **p_device)
+static struct device *blk_snap_device = NULL;
+
+int ctrl_sysfs_init(void)
 {
 	struct device *dev;
 	int res;
@@ -27,6 +27,7 @@ int ctrl_sysfs_init(struct device **p_device)
 	blk_snap_class = class_create(THIS_MODULE, MODULE_NAME);
 	if (IS_ERR(blk_snap_class)) {
 		res = PTR_ERR(blk_snap_class);
+
 		pr_err("Bad class create. errno=%d\n", 0 - res);
 		return res;
 	}
@@ -53,15 +54,15 @@ int ctrl_sysfs_init(struct device **p_device)
 		return res;
 	}
 
-	*p_device = dev;
+	blk_snap_device = dev;
 	return res;
 }
 
-void ctrl_sysfs_done(struct device **p_device)
+void ctrl_sysfs_done(void)
 {
-	if (*p_device) {
-		device_unregister(*p_device);
-		*p_device = NULL;
+	if (blk_snap_device) {
+		device_unregister(blk_snap_device);
+		blk_snap_device = NULL;
 	}
 
 	if (blk_snap_class != NULL) {

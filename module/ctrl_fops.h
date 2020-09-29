@@ -3,6 +3,9 @@
 
 #include <linux/fs.h>
 
+int get_blk_snap_major(void);
+
+int ctrl_init(void);
 void ctrl_done(void);
 
 int ctrl_open(struct inode *inode, struct file *file);

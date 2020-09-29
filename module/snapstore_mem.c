@@ -2,7 +2,7 @@
 #define BLK_SNAP_SECTION "-snapstore"
 #include "common.h"
 #include "snapstore_mem.h"
-#include "snapstore_blk.h"
+#include "params.h"
 
 struct buffer_el {
 	struct list_head link;

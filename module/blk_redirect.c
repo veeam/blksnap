@@ -74,7 +74,7 @@ int bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
 	struct blk_redirect_bio_list *head;
 
 	if (rq_redir->bio_list_head == NULL) {
-		if (NULL == (rq_redir->bio_list_head = _redirect_bio_allocate_list(new_bio)))
+		if ((rq_redir->bio_list_head = _redirect_bio_allocate_list(new_bio)) == NULL)
 			return -ENOMEM;
 		return SUCCESS;
 	}
@@ -93,7 +93,9 @@ int bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
 void bio_endio_list_cleanup(struct blk_redirect_bio_list *curr)
 {
 	while (curr != NULL) {
-		struct blk_redirect_bio_list *next = curr->next;
+		struct blk_redirect_bio_list *next;
+
+		next = curr->next;
 		kfree(curr);
 		curr = next;
 	}
