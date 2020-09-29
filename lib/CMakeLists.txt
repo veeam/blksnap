@@ -10,3 +10,5 @@ set(SOURCE_FILES
 
 add_library(${PROJECT_NAME} ${SOURCE_FILES})
 target_include_directories(${PROJECT_NAME} PUBLIC ../include)
+
+add_library(BlkSnap::Lib ALIAS ${PROJECT_NAME})
