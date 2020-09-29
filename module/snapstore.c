@@ -3,7 +3,6 @@
 #include "common.h"
 #include "snapstore.h"
 #include "snapstore_device.h"
-#include "snapstore_blk.h"
 #include "big_buffer.h"
 
 LIST_HEAD(snapstores);
