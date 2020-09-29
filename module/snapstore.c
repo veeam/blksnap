@@ -4,6 +4,7 @@
 #include "snapstore.h"
 #include "snapstore_device.h"
 #include "big_buffer.h"
+#include "params.h"
 
 LIST_HEAD(snapstores);
 DECLARE_RWSEM(snapstores_lock);
