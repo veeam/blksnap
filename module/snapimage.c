@@ -49,10 +49,9 @@ struct snapimage {
 
 	struct mutex open_locker;
 	struct block_device *open_bdev;
-	volatile size_t open_cnt;
+
+	size_t open_cnt;
 };
-
-
 
 int _snapimage_open(struct block_device *bdev, fmode_t mode)
 {
