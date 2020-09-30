@@ -17,7 +17,7 @@
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 
-int blk_snap_major = 0;
+int blk_snap_major; //zero by default
 
 const struct file_operations ctrl_fops = { .owner = THIS_MODULE,
 					   .read = ctrl_read,
@@ -26,8 +26,6 @@ const struct file_operations ctrl_fops = { .owner = THIS_MODULE,
 					   .release = ctrl_release,
 					   .poll = ctrl_poll,
 					   .unlocked_ioctl = ctrl_unlocked_ioctl };
-
-int get_change_tracking_block_size_pow(void);
 
 atomic_t dev_open_cnt = ATOMIC_INIT(0);
 

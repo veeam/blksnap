@@ -22,7 +22,7 @@ struct defer_io_orig_rq {
 	struct tracker *tracker;
 };
 
-void defer_io_queue_init(struct defer_io_queue *queue)
+static inline void defer_io_queue_init(struct defer_io_queue *queue)
 {
 	INIT_LIST_HEAD(&queue->list);
 
@@ -32,7 +32,7 @@ void defer_io_queue_init(struct defer_io_queue *queue)
 	atomic_set(&queue->active_state, true);
 }
 
-struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue *queue)
+static inline struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue *queue)
 {
 	struct defer_io_orig_rq *dio_rq = kzalloc(sizeof(struct defer_io_orig_rq), GFP_NOIO);
 
@@ -45,13 +45,12 @@ struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue *queue)
 	return dio_rq;
 }
 
-void defer_io_queue_free(struct defer_io_orig_rq *dio_rq)
+static inline void defer_io_queue_free(struct defer_io_orig_rq *dio_rq)
 {
-	if (dio_rq)
-		kfree(dio_rq);
+	kfree(dio_rq);
 }
 
-int defer_io_queue_push_back(struct defer_io_queue *queue, struct defer_io_orig_rq *dio_rq)
+static int defer_io_queue_push_back(struct defer_io_queue *queue, struct defer_io_orig_rq *dio_rq)
 {
 	int res = SUCCESS;
 
@@ -69,7 +68,7 @@ int defer_io_queue_push_back(struct defer_io_queue *queue, struct defer_io_orig_
 	return res;
 }
 
-struct defer_io_orig_rq *defer_io_queue_get_first(struct defer_io_queue *queue)
+static struct defer_io_orig_rq *defer_io_queue_get_first(struct defer_io_queue *queue)
 {
 	struct defer_io_orig_rq *dio_rq = NULL;
 
@@ -86,7 +85,7 @@ struct defer_io_orig_rq *defer_io_queue_get_first(struct defer_io_queue *queue)
 	return dio_rq;
 }
 
-bool defer_io_queue_active(struct defer_io_queue *queue, bool state)
+static bool defer_io_queue_active(struct defer_io_queue *queue, bool state)
 {
 	bool prev_state;
 
@@ -102,7 +101,7 @@ bool defer_io_queue_active(struct defer_io_queue *queue, bool state)
 
 #define defer_io_queue_empty(queue) (atomic_read(&(queue).in_queue_cnt) == 0)
 
-void _defer_io_finish(struct defer_io *defer_io, struct defer_io_queue *queue_in_progress)
+static void _defer_io_finish(struct defer_io *defer_io, struct defer_io_queue *queue_in_progress)
 {
 	while (!defer_io_queue_empty(*queue_in_progress)) {
 		struct tracker *tracker = NULL;
@@ -134,8 +133,9 @@ void _defer_io_finish(struct defer_io *defer_io, struct defer_io_queue *queue_in
 	}
 }
 
-int _defer_io_copy_prepare(struct defer_io *defer_io, struct defer_io_queue *queue_in_process,
-			   struct blk_deferred_request **dio_copy_req)
+static int _defer_io_copy_prepare(struct defer_io *defer_io,
+				  struct defer_io_queue *queue_in_process,
+				  struct blk_deferred_request **dio_copy_req)
 {
 	int res = SUCCESS;
 	int dios_count = 0;
@@ -174,7 +174,7 @@ int _defer_io_copy_prepare(struct defer_io *defer_io, struct defer_io_queue *que
 	return res;
 }
 
-int defer_io_work_thread(void *p)
+static int defer_io_work_thread(void *p)
 {
 	struct defer_io_queue queue_in_process = { 0 };
 	struct defer_io *defer_io = NULL;
@@ -240,9 +240,8 @@ int defer_io_work_thread(void *p)
 		}
 
 		//wake up snapimage if defer io queue empty
-		if (defer_io_queue_empty(defer_io->dio_queue)) {
+		if (defer_io_queue_empty(defer_io->dio_queue))
 			wake_up_interruptible(&defer_io->queue_throttle_waiter);
-		}
 	}
 	defer_io_queue_active(&defer_io->dio_queue, false);
 
@@ -356,8 +355,8 @@ int defer_io_stop(struct defer_io *defer_io)
 
 	if (defer_io->dio_thread != NULL) {
 		struct task_struct *dio_thread = defer_io->dio_thread;
-		defer_io->dio_thread = NULL;
 
+		defer_io->dio_thread = NULL;
 		res = kthread_stop(dio_thread); //stopping and waiting.
 		if (res != SUCCESS)
 			pr_err("Failed to stop defer IO thread. errno=%d\n", res);
@@ -381,7 +380,7 @@ int defer_io_redirect_bio(struct defer_io *defer_io, struct bio *bio, void *trac
 
 	dio_orig_req->tracker = (struct tracker *)tracker;
 
-	if (SUCCESS != defer_io_queue_push_back(&defer_io->dio_queue, dio_orig_req)) {
+	if (defer_io_queue_push_back(&defer_io->dio_queue, dio_orig_req) != SUCCESS) {
 		defer_io_queue_free(dio_orig_req);
 		return -EFAULT;
 	}

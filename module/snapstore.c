@@ -48,7 +48,9 @@ void _snapstore_destroy(struct snapstore *snapstore)
 		snapstore_file_destroy(snapstore->file);
 
 	if (snapstore->ctrl_pipe) {
-		struct ctrl_pipe *pipe = snapstore->ctrl_pipe;
+		struct ctrl_pipe *pipe;
+
+		pipe = snapstore->ctrl_pipe;
 		snapstore->ctrl_pipe = NULL;
 
 		ctrl_pipe_request_terminate(pipe, fill_status);
@@ -72,17 +74,18 @@ struct snapstore *snapstore_get(struct snapstore *snapstore)
 		kref_get(&snapstore->refcount);
 
 	return snapstore;
-};
+}
 
 void snapstore_put(struct snapstore *snapstore)
 {
 	if (snapstore)
 		kref_put(&snapstore->refcount, _snapstore_destroy_cb);
-};
+}
 
-void snapstore_done()
+void snapstore_done(void)
 {
 	bool is_empty;
+
 	down_read(&snapstores_lock);
 	is_empty = list_empty(&snapstores);
 	up_read(&snapstores_lock);
@@ -126,6 +129,7 @@ int snapstore_create(uuid_t *id, dev_t snapstore_dev_id, dev_t *dev_id_set,
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	else if (snapstore_dev_id == 0xFFFFffff) {
 		struct snapstore_multidev *multidev = NULL;
+
 		res = snapstore_multidev_create(&multidev);
 		if (res != SUCCESS) {
 			kfree(snapstore);
@@ -138,6 +142,7 @@ int snapstore_create(uuid_t *id, dev_t snapstore_dev_id, dev_t *dev_id_set,
 #endif
 	else {
 		struct snapstore_file *file = NULL;
+
 		res = snapstore_file_create(snapstore_dev_id, &file);
 		if (res != SUCCESS) {
 			kfree(snapstore);
@@ -160,9 +165,9 @@ int snapstore_create(uuid_t *id, dev_t snapstore_dev_id, dev_t *dev_id_set,
 			break;
 	}
 
-	if (res != SUCCESS) {
+	if (res != SUCCESS)
 		snapstore_device_cleanup(id);
-	}
+
 	snapstore_put(snapstore);
 	return res;
 }
@@ -218,9 +223,9 @@ int snapstore_create_multidev(uuid_t *id, dev_t *dev_id_set, size_t dev_id_set_l
 			break;
 	}
 
-	if (res != SUCCESS) {
+	if (res != SUCCESS)
 		snapstore_device_cleanup(id);
-	}
+
 	snapstore_put(snapstore);
 	return res;
 }
@@ -230,6 +235,7 @@ int snapstore_cleanup(uuid_t *id, u64 *filled_bytes)
 {
 	int res;
 	sector_t filled;
+
 	res = snapstore_check_halffill(id, &filled);
 	if (res == SUCCESS) {
 		*filled_bytes = (u64)from_sectors(filled);
@@ -267,7 +273,9 @@ struct snapstore *_snapstore_find(uuid_t *id)
 
 int snapstore_stretch_initiate(uuid_t *unique_id, struct ctrl_pipe *ctrl_pipe, sector_t empty_limit)
 {
-	struct snapstore *snapstore = _snapstore_find(unique_id);
+	struct snapstore *snapstore;
+
+	snapstore = _snapstore_find(unique_id);
 	if (snapstore == NULL) {
 		pr_err("Unable to initiate stretch snapstore: cannot find snapstore by uuid %pUB\n",
 		       unique_id);
@@ -316,6 +324,7 @@ int snapstore_add_memory(uuid_t *id, unsigned long long sz)
 		snapstore->mem = snapstore_mem_create(available_blocks);
 		for (current_block = 0; current_block < available_blocks; ++current_block) {
 			void *buffer = snapstore_mem_get_block(snapstore->mem);
+
 			if (buffer == NULL) {
 				pr_err("Unable to add memory block to snapstore: not enough memory\n");
 				res = -ENOMEM;
@@ -338,7 +347,9 @@ int snapstore_add_memory(uuid_t *id, unsigned long long sz)
 
 int rangelist_add(struct list_head *rglist, struct blk_range *rg)
 {
-	struct blk_range_link *range_link = kzalloc(sizeof(struct blk_range_link), GFP_KERNEL);
+	struct blk_range_link *range_link;
+
+	range_link = kzalloc(sizeof(struct blk_range_link), GFP_KERNEL);
 	if (range_link == NULL)
 		return -ENOMEM;
 
@@ -513,6 +524,7 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 		while (range_offset < range.cnt) {
 			struct blk_range rg;
 			struct block_device *blk_dev = NULL;
+
 			rg.ofs = range.ofs + range_offset;
 			rg.cnt = min_t(sector_t, (range.cnt - range_offset),
 				       (snapstore_block_size() - current_blk_size));
@@ -595,6 +607,7 @@ union blk_descr_unify snapstore_get_empty_block(struct snapstore *snapstore)
 	if (result.ptr == NULL) {
 		if (snapstore->ctrl_pipe) {
 			sector_t fill_status;
+
 			_snapstore_check_halffill(snapstore, &fill_status);
 			ctrl_pipe_request_overflow(snapstore->ctrl_pipe, -EINVAL,
 						   (u64)from_sectors(fill_status));
@@ -607,7 +620,9 @@ union blk_descr_unify snapstore_get_empty_block(struct snapstore *snapstore)
 
 int snapstore_check_halffill(uuid_t *unique_id, sector_t *fill_status)
 {
-	struct snapstore *snapstore = _snapstore_find(unique_id);
+	struct snapstore *snapstore;
+
+	snapstore = _snapstore_find(unique_id);
 	if (snapstore == NULL) {
 		pr_err("Cannot find snapstore by uuid %pUB\n", unique_id);
 		return -ENODATA;
@@ -741,9 +756,8 @@ int snapstore_redirect_read(struct blk_redirect_bio *rq_redir, struct snapstore 
 	} else
 		res = -EINVAL;
 
-	if (res != SUCCESS) {
+	if (res != SUCCESS)
 		pr_err("Failed to read from snapstore. Offset %lld sector\n", target_pos);
-	}
 
 	return res;
 }

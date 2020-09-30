@@ -253,19 +253,19 @@ int snapstore_device_prepare_requests(struct snapstore_device *snapstore_device,
 		(unsigned long)((copy_range->ofs + copy_range->cnt - 1) >> snapstore_block_shift());
 
 	for (inx = first; inx <= last; inx++) {
-		if (NULL != xa_load(&snapstore_device->store_block_map, inx)) {
-			//Already stored block
-		} else {
+		if (xa_load(&snapstore_device->store_block_map, inx) == NULL) {
 			res = snapstore_device_add_request(snapstore_device, inx, dio_copy_req);
 			if (res != SUCCESS) {
 				pr_err("Failed to create copy defer IO request. errno=%d\n", res);
 				break;
 			}
 		}
+		/*
+		 * If xa_load() return not NULL, then block already stored.
+		 */
 	}
-	if (res != SUCCESS) {
+	if (res != SUCCESS)
 		snapstore_device_set_corrupted(snapstore_device, res);
-	}
 
 	return res;
 }
@@ -273,7 +273,9 @@ int snapstore_device_prepare_requests(struct snapstore_device *snapstore_device,
 int snapstore_device_store(struct snapstore_device *snapstore_device,
 			   struct blk_deferred_request *dio_copy_req)
 {
-	int res = snapstore_request_store(snapstore_device->snapstore, dio_copy_req);
+	int res;
+
+	res = snapstore_request_store(snapstore_device->snapstore, dio_copy_req);
 	if (res != SUCCESS)
 		snapstore_device_set_corrupted(snapstore_device, res);
 
@@ -501,7 +503,7 @@ bool snapstore_device_is_corrupted(struct snapstore_device *snapstore_device)
 		return true;
 
 	if (snapstore_device->corrupted) {
-		if (0 == atomic_read(&snapstore_device->req_failed_cnt))
+		if (atomic_read(&snapstore_device->req_failed_cnt) == 0)
 			pr_err("Snapshot device is corrupted for [%d:%d]\n",
 			       MAJOR(snapstore_device->dev_id), MINOR(snapstore_device->dev_id));
 
@@ -526,7 +528,9 @@ void snapstore_device_set_corrupted(struct snapstore_device *snapstore_device, i
 
 int snapstore_device_errno(dev_t dev_id, int *p_err_code)
 {
-	struct snapstore_device *snapstore_device = snapstore_device_find_by_dev_id(dev_id);
+	struct snapstore_device *snapstore_device;
+
+	snapstore_device = snapstore_device_find_by_dev_id(dev_id);
 	if (snapstore_device == NULL)
 		return -ENODATA;
 

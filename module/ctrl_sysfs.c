@@ -15,9 +15,9 @@ static ssize_t major_show(struct class *class, struct class_attribute *attr, cha
 }
 
 CLASS_ATTR_RO(major); // declare class_attr_major
-static struct class *blk_snap_class = NULL;
+static struct class *blk_snap_class;
 
-static struct device *blk_snap_device = NULL;
+static struct device *blk_snap_device;
 
 int ctrl_sysfs_init(void)
 {

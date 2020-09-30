@@ -145,16 +145,17 @@ static int blk_freeze_bdev(dev_t dev_id, struct block_device *device,
 
 	superblock = freeze_bdev(device);
 	if (IS_ERR_OR_NULL(superblock)) {
-		int errcode;
+		int result;
+
 		pr_err("Failed to freeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
 
 		if (superblock == NULL)
-			errcode = -ENODEV;
+			result = -ENODEV;
 		else {
-			errcode = PTR_ERR(superblock);
-			pr_err("Error code: %d\n", errcode);
+			result = PTR_ERR(superblock);
+			pr_err("Error code: %d\n", result);
 		}
-		return errcode;
+		return result;
 	}
 
 	pr_info("Device [%d:%d] was frozen\n", MAJOR(dev_id), MINOR(dev_id));
@@ -249,7 +250,7 @@ int _tracker_remove(struct tracker *tracker)
 {
 	int result = SUCCESS;
 
-	if (NULL != tracker->target_dev) {
+	if (tracker->target_dev != NULL) {
 		struct super_block *superblock = NULL;
 
 		if (tracker->is_unfreezable)
@@ -258,8 +259,8 @@ int _tracker_remove(struct tracker *tracker)
 			result = blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev,
 						 &superblock);
 /*
-	!!! ToDo : remove from tracker must be in this place
-*/
+ *	!!! ToDo : remove from tracker must be in this place
+ */
 		if (tracker->is_unfreezable)
 			up_write(&tracker->unfreezable_lock);
 		else
@@ -272,7 +273,7 @@ int _tracker_remove(struct tracker *tracker)
 	} else
 		result = -ENODEV;
 
-	if (NULL != tracker->cbt_map) {
+	if (tracker->cbt_map != NULL) {
 		cbt_map_put_resource(tracker->cbt_map);
 		tracker->cbt_map = NULL;
 	}
@@ -334,7 +335,7 @@ void tracker_cbt_bitmap_set(struct tracker *tracker, sector_t sector, sector_t s
 		return;
 	}
 
-	if (SUCCESS != cbt_map_set(tracker->cbt_map, sector, sector_cnt)) { //cbt corrupt
+	if (cbt_map_set(tracker->cbt_map, sector, sector_cnt) != SUCCESS) { //cbt corrupt
 		pr_warn("CBT fault detected\n");
 		tracker->cbt_map->active = false;
 		return;
@@ -443,6 +444,7 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 
 	if (result != SUCCESS) {
 		int status;
+
 		pr_err("Failed to capture snapshot. errno=%d\n", result);
 
 		status = tracker_release_snapshot(dev_id_set, dev_id_set_size);

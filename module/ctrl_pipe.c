@@ -216,7 +216,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 		}
 		if (ranges_buffer_size !=
 		    big_buffer_copy_from_user(buffer + processed, 0, ranges, ranges_buffer_size)) {
-		    	pr_err("Unable to process next portion command: ");
+			pr_err("Unable to process next portion command: ");
 			pr_err("invalid user buffer for parameters\n");
 			processed = -EINVAL;
 			break;
@@ -327,7 +327,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		}
 		if (ranges_buffer_size !=
 		    big_buffer_copy_from_user(buffer + processed, 0, ranges, ranges_buffer_size)) {
-		    	pr_err("Unable to process next portion command: ");
+			pr_err("Unable to process next portion command: ");
 			pr_err("invalid user buffer from parameters\n");
 			processed = -EINVAL;
 			break;
@@ -403,7 +403,7 @@ struct ctrl_pipe *ctrl_pipe_new(void)
 	int ret;
 	struct ctrl_pipe *pipe;
 
-	pipe= kzalloc(sizeof(struct ctrl_pipe), GFP_KERNEL);
+	pipe = kzalloc(sizeof(struct ctrl_pipe), GFP_KERNEL);
 	if (pipe == NULL)
 		return NULL;
 

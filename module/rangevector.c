@@ -13,12 +13,12 @@ static inline sector_t range_node_last(struct blk_range_tree_node *range_node)
 {
 	return range_node->range.ofs + range_node->range.cnt - 1;
 }
+
 #ifndef INTERVAL_TREE_DEFINE
 #pragma message("INTERVAL_TREE_DEFINE is undefined")
 #endif
-
-INTERVAL_TREE_DEFINE(struct blk_range_tree_node, _node, sector_t, _subtree_last, range_node_start,
-		     range_node_last, , blk_range_rb)
+INTERVAL_TREE_DEFINE(struct blk_range_tree_node, _node, sector_t, _subtree_last,
+		     range_node_start, range_node_last,, blk_range_rb)
 
 void rangevector_init(struct rangevector *rangevector)
 {
@@ -30,8 +30,8 @@ void rangevector_init(struct rangevector *rangevector)
 void rangevector_done(struct rangevector *rangevector)
 {
 	struct rb_node *rb_node = NULL;
-	down_write(&rangevector->lock);
 
+	down_write(&rangevector->lock);
 	rb_node = rb_first_cached(&rangevector->root);
 	while (rb_node) {
 		struct blk_range_tree_node *range_node = (struct blk_range_tree_node *)
@@ -47,8 +47,9 @@ void rangevector_done(struct rangevector *rangevector)
 
 int rangevector_add(struct rangevector *rangevector, struct blk_range *rg)
 {
-	struct blk_range_tree_node *range_node =
-		kzalloc(sizeof(struct blk_range_tree_node), GFP_KERNEL);
+	struct blk_range_tree_node *range_node;
+
+	range_node = kzalloc(sizeof(struct blk_range_tree_node), GFP_KERNEL);
 	if (range_node)
 		return -ENOMEM;
 

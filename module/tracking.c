@@ -6,7 +6,7 @@
 #include "blk_util.h"
 #include "defer_io.h"
 
-/**
+/*
  * tracking_submit_bio() - Intercept bio by block io layer filter
  */
 bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
@@ -52,6 +52,7 @@ bool tracking_submit_bio(struct bio *bio, blk_qc_t *result)
 			if (cbt_locked) {
 				sector_t sectStart = bio->bi_iter.bi_sector;
 				sector_t sectCount = bio_sectors(bio);
+
 				tracker_cbt_bitmap_set(tracker, sectStart, sectCount);
 			}
 		}
@@ -122,7 +123,9 @@ static int _create_new_tracker(dev_t dev_id, unsigned int cbt_block_size_degree,
 
 	do {
 		struct tracker *tracker = NULL;
-		result = tracker_find_by_queue(target_dev->bd_disk,target_dev->bd_partno, &tracker);
+
+		result = tracker_find_by_queue(target_dev->bd_disk, target_dev->bd_partno,
+					       &tracker);
 		if (result == SUCCESS) {
 			pr_err("Tracker queue already exist.\n");
 
@@ -130,7 +133,8 @@ static int _create_new_tracker(dev_t dev_id, unsigned int cbt_block_size_degree,
 			break;
 		}
 
-		result = tracker_create(snapshot_id, dev_id, cbt_block_size_degree, NULL, &tracker);
+		result = tracker_create(snapshot_id, dev_id, cbt_block_size_degree, NULL,
+					&tracker);
 		if (result != SUCCESS) {
 			pr_err("Failed to create tracker. errno=%d\n", result);
 			break;
@@ -145,7 +149,8 @@ static int _create_new_tracker(dev_t dev_id, unsigned int cbt_block_size_degree,
 		else
 			pr_info("Filesystem not found\n");
 
-	} while(false);
+	} while (false);
+
 	blk_dev_close(target_dev);
 
 	return result;
@@ -203,7 +208,7 @@ int tracking_remove(dev_t dev_id)
 	}
 
 	result = tracker_remove(tracker);
-	if (SUCCESS != result) {
+	if (result != SUCCESS) {
 		pr_err("Unable to remove device [%d:%d] from tracking: ",
 		       MAJOR(dev_id), MINOR(dev_id));
 		pr_err("failed to remove tracker. errno=%d\n", result);
@@ -235,7 +240,7 @@ int tracking_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 	struct tracker *tracker = NULL;
 
 	result = tracker_find_by_dev_id(dev_id, &tracker);
-	if (SUCCESS == result) {
+	if (result == SUCCESS) {
 		if (atomic_read(&tracker->is_captured))
 			result = cbt_map_read_to_user(tracker->cbt_map, user_buff, offset, length);
 		else {
