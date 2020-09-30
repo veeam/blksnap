@@ -21,7 +21,7 @@ struct tracker {
 
 	struct defer_io *defer_io;
 
-	volatile unsigned long long snapshot_id; // current snapshot for this device
+	unsigned long long snapshot_id; // current snapshot for this device
 };
 
 void tracker_done(void);

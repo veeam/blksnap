@@ -13,7 +13,7 @@ struct ctrl_pipe {
 	wait_queue_head_t readq;
 
 	struct kfifo cmd_to_user;
-	struct spinlock cmd_to_user_lock;
+	spinlock_t cmd_to_user_lock;
 };
 
 struct ctrl_pipe *ctrl_pipe_get_resource(struct ctrl_pipe *pipe);

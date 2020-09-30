@@ -16,10 +16,10 @@ struct blk_descr_pool {
 	struct list_head head;
 	struct mutex lock;
 
-	size_t blocks_cnt; //count of struct pool_el
+	size_t blocks_cnt; // count of struct pool_el
 
-	volatile size_t total_cnt; ///total count of block descriptors
-	volatile size_t take_cnt; // take count of block descriptors
+	size_t total_cnt;  // total count of block descriptors
+	size_t take_cnt;   // take count of block descriptors
 };
 
 void blk_descr_pool_init(struct blk_descr_pool *pool, size_t available_blocks);

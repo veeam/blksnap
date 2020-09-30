@@ -27,8 +27,8 @@ struct snapstore {
 	struct ctrl_pipe *ctrl_pipe;
 	sector_t empty_limit;
 
-	volatile bool halffilled;
-	volatile bool overflowed;
+	bool halffilled;
+	bool overflowed;
 };
 
 void snapstore_done(void);

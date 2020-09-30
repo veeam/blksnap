@@ -23,8 +23,8 @@ struct snapstore_device {
 	struct rangevector zero_sectors;
 
 	atomic_t req_failed_cnt;
-	volatile int err_code;
-	volatile bool corrupted;
+	int err_code;
+	bool corrupted;
 };
 
 void snapstore_device_done(void);

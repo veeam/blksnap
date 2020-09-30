@@ -15,7 +15,7 @@
 #include <linux/spinlock.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <linux/blkdev.h>
 
 #define from_sectors(_sectors) (_sectors << SECTOR_SHIFT)

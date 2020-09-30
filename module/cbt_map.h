@@ -17,11 +17,11 @@ struct cbt_map {
 	struct big_buffer *read_map;
 	struct big_buffer *write_map;
 
-	volatile unsigned long snap_number_active;
-	volatile unsigned long snap_number_previous;
+	unsigned long snap_number_active;
+	unsigned long snap_number_previous;
 	uuid_t generationId;
 
-	volatile bool active;
+	bool active;
 
 	struct rw_semaphore rw_lock;
 
