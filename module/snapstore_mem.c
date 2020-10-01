@@ -71,11 +71,7 @@ void *snapstore_mem_get_block(struct snapstore_mem *mem)
 		return NULL;
 	INIT_LIST_HEAD(&buffer_el->link);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
 	buffer_el->buff = __vmalloc(snapstore_block_size() * SECTOR_SIZE, GFP_NOIO);
-#else
-	buffer_el->buff = __vmalloc(snapstore_block_size() * SECTOR_SIZE, GFP_NOIO, PAGE_KERNEL);
-#endif
 	if (buffer_el->buff == NULL) {
 		kfree(buffer_el);
 		return NULL;
