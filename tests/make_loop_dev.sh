@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 set -e
 DEVICE_PATH="/tmp/loopbackfile.img"
 echo "Prepare device $DEVICE_PATH"
