@@ -14,7 +14,9 @@ set(SOURCE_FILES
         BlkSnapStoreCtx.cpp
         Uuid.cpp
         Helper.cpp
+        Snapshot.cpp
         commands/store/InMemoryStoreArgs.cpp
+        commands/snapshot/CreateSnapshotArgs.cpp
         )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})

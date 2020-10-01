@@ -51,7 +51,7 @@ void BlkSnapStoreCtx::Detach()
 void BlkSnapStoreCtx::Release()
 {
     static_assert(sizeof(snap_store::id) == sizeof(uuid_t), "[TBD] Check id length");
-    if ( !uuid_is_null(m_store.id) )
+    if ( uuid_is_null(m_store.id) )
         return;
 
     if ( snap_snapshot_store_cleanup(m_ptrSnapCtx->raw(), &m_store) )
@@ -107,4 +107,9 @@ BlkSnapStoreCtx BlkSnapStoreCtx::CreateInMemory(BlkSnapCtx::Ptr ptrSnapCtx, size
 snap_store* BlkSnapStoreCtx::Raw()
 {
     return &m_store;
+}
+
+BlkSnapCtx::Ptr BlkSnapStoreCtx::GetBlkSnapCtx()
+{
+    return m_ptrSnapCtx;
 }
