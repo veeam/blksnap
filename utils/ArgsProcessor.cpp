@@ -6,7 +6,10 @@
 #include "commands/store/InMemoryStoreArgs.h"
 
 ArgsProcessor::ArgsProcessor()
-{}
+{
+    std::shared_ptr<InMemoryStoreArgs> ptrInMemoryStoreArgs = std::make_shared<InMemoryStoreArgs>();
+    m_commands[ptrInMemoryStoreArgs->GetCommandName()] = ptrInMemoryStoreArgs;
+}
 
 int ArgsProcessor::Run(int argc, char** argv)
 {

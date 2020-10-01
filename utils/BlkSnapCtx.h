@@ -2,10 +2,13 @@
 #define BLK_SNAP_BLKSNAPCTX_H
 
 #include <blk-snap/snapshot_ctl.h>
+#include <memory>
 
 class BlkSnapCtx
 {
 public:
+    using Ptr = std::shared_ptr<BlkSnapCtx>;
+
     BlkSnapCtx();
     ~BlkSnapCtx();
 
