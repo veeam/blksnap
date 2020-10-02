@@ -4,9 +4,16 @@
 #include <iostream>
 
 #include "commands/store/InMemoryStoreArgs.h"
+#include "commands/snapshot/CreateSnapshotArgs.h"
 
 ArgsProcessor::ArgsProcessor()
-{}
+{
+    std::shared_ptr<InMemoryStoreArgs> ptrInMemoryStoreArgs = std::make_shared<InMemoryStoreArgs>();
+    m_commands[ptrInMemoryStoreArgs->GetCommandName()] = ptrInMemoryStoreArgs;
+
+    std::shared_ptr<CreateSnapshotArgs> ptrCreateSnapshotArgs = std::make_shared<CreateSnapshotArgs>();
+    m_commands[ptrCreateSnapshotArgs->GetCommandName()] = ptrCreateSnapshotArgs;
+}
 
 int ArgsProcessor::Run(int argc, char** argv)
 {

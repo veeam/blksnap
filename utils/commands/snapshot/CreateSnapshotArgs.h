@@ -1,5 +1,5 @@
-#ifndef BLK_SNAP_INMEMORYSTOREARGS_H
-#define BLK_SNAP_INMEMORYSTOREARGS_H
+#ifndef BLK_SNAP_CREATESNAPSHOTARGS_H
+#define BLK_SNAP_CREATESNAPSHOTARGS_H
 
 #include <blk-snap/types.h>
 #include <boost/program_options.hpp>
@@ -8,10 +8,10 @@
 
 #include "../ICommandArgsProcessor.h"
 
-class InMemoryStoreArgs : public ICommandArgsProcessor
+class CreateSnapshotArgs : public ICommandArgsProcessor
 {
 public:
-    InMemoryStoreArgs();
+    CreateSnapshotArgs();
 
     std::string GetCommandName() override;
     int Process(std::vector<std::string> args) override;
@@ -21,4 +21,4 @@ private:
     static boost::program_options::options_description CreateDesc();
 };
 
-#endif // BLK_SNAP_INMEMORYSTOREARGS_H
+#endif // BLK_SNAP_CREATESNAPSHOTARGS_H

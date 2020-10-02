@@ -11,7 +11,7 @@ public:
     using Ptr = std::shared_ptr<ICommandArgsProcessor>;
 
     virtual std::string GetCommandName() = 0;
-    virtual std::string Process(std::vector<std::string> args) = 0;
+    virtual int Process(std::vector<std::string> args) = 0;
     virtual std::string GetHelpMessage() = 0;
 };
 
