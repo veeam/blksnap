@@ -419,19 +419,12 @@ int snapstore_device_write(struct snapstore_device *snapstore_device,
 			   struct blk_redirect_bio *rq_redir)
 {
 	int res = SUCCESS;
-
 	unsigned long block_index;
 	unsigned long block_index_last;
 	unsigned long block_index_first;
-
 	sector_t blk_ofs_start = 0; //device range start
 	sector_t blk_ofs_count = 0; //device range length
-
 	struct blk_range rq_range;
-
-	BUG_ON(snapstore_device == NULL);
-	BUG_ON(rq_redir == NULL);
-	BUG_ON(rq_redir->bio == NULL);
 
 	if (snapstore_device_is_corrupted(snapstore_device))
 		return -ENODATA;

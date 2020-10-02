@@ -67,5 +67,6 @@ void filter_done(void)
 {
 	int result = blk_filter_unregister(&filter);
 
-	BUG_ON(result != SUCCESS);
+	if (unlikely(result != SUCCESS))
+		pr_err("Failed to unregister block filter");
 }

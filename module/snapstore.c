@@ -90,7 +90,6 @@ void snapstore_done(void)
 	is_empty = list_empty(&snapstores);
 	up_read(&snapstores_lock);
 
-	//BUG_ON(!is_empty)
 	if (!is_empty)
 		pr_err("Unable to perform snapstore cleanup: container is not empty\n");
 }
@@ -277,8 +276,8 @@ int snapstore_stretch_initiate(uuid_t *unique_id, struct ctrl_pipe *ctrl_pipe, s
 
 	snapstore = _snapstore_find(unique_id);
 	if (snapstore == NULL) {
-		pr_err("Unable to initiate stretch snapstore: cannot find snapstore by uuid %pUB\n",
-		       unique_id);
+		pr_err("Unable to initiate stretch snapstore: ");
+		pr_err("cannot find snapstore by uuid %pUB\n", unique_id);
 		return -ENODATA;
 	}
 
@@ -292,56 +291,59 @@ int snapstore_add_memory(uuid_t *id, unsigned long long sz)
 {
 	int res = SUCCESS;
 	struct snapstore *snapstore = NULL;
+	size_t available_blocks = (size_t)(sz >> (snapstore_block_shift() + SECTOR_SHIFT));
+	size_t current_block = 0;
 
 	pr_info("Adding %lld bytes to the snapstore\n", sz);
 
 	snapstore = _snapstore_find(id);
 	if (snapstore == NULL) {
-		pr_err("Unable to add memory block to the snapstore: cannot found snapstore by id %pUB\n",
-		       id);
+		pr_err("Unable to add memory block to the snapstore: ");
+		pr_err("cannot found snapstore by id %pUB\n", id);
 		return -ENODATA;
 	}
 
 	if (snapstore->file != NULL) {
-		pr_err("Unable to add memory block to the snapstore: snapstore file is already created\n");
+		pr_err("Unable to add memory block to the snapstore: ");
+		pr_err("snapstore file is already created\n");
 		return -EINVAL;
 	}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 	if (snapstore->multidev != NULL) {
-		pr_err("Unable to add memory block to the snapstore: snapstore multidevice is already created\n");
+		pr_err("Unable to add memory block to the snapstore: ");
+		pr_err("snapstore multidevice is already created\n");
 		return -EINVAL;
 	}
 #endif
 	if (snapstore->mem != NULL) {
-		pr_err("Unable to add memory block to the snapstore: snapstore memory buffer is already created\n");
+		pr_err("Unable to add memory block to the snapstore: ");
+		pr_err("snapstore memory buffer is already created\n");
 		return -EINVAL;
 	}
 
-	{
-		size_t available_blocks = (size_t)(sz >> (snapstore_block_shift() + SECTOR_SHIFT));
-		size_t current_block = 0;
+	snapstore->mem = snapstore_mem_create(available_blocks);
+	for (current_block = 0; current_block < available_blocks; ++current_block) {
+		void *buffer = snapstore_mem_get_block(snapstore->mem);
 
-		snapstore->mem = snapstore_mem_create(available_blocks);
-		for (current_block = 0; current_block < available_blocks; ++current_block) {
-			void *buffer = snapstore_mem_get_block(snapstore->mem);
-
-			if (buffer == NULL) {
-				pr_err("Unable to add memory block to snapstore: not enough memory\n");
-				res = -ENOMEM;
-				break;
-			}
-
-			res = blk_descr_mem_pool_add(&snapstore->mem->pool, buffer);
-			if (res != SUCCESS) {
-				pr_err("Unable to add memory block to snapstore: failed to initialize new block\n");
-				break;
-			}
+		if (buffer == NULL) {
+			pr_err("Unable to add memory block to the snapstore: ");
+			pr_err("not enough memory\n");
+			res = -ENOMEM;
+			break;
 		}
+
+		res = blk_descr_mem_pool_add(&snapstore->mem->pool, buffer);
 		if (res != SUCCESS) {
-			snapstore_mem_destroy(snapstore->mem);
-			snapstore->mem = NULL;
+			pr_err("Unable to add memory block to the snapstore: ");
+			pr_err("failed to initialize new block\n");
+			break;
 		}
 	}
+	if (res != SUCCESS) {
+		snapstore_mem_destroy(snapstore->mem);
+		snapstore->mem = NULL;
+	}
+
 	return res;
 }
 
@@ -379,12 +381,14 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 
 	snapstore = _snapstore_find(id);
 	if (snapstore == NULL) {
-		pr_err("Unable to add file to snapstore: cannot find snapstore by id %pUB\n", id);
+		pr_err("Unable to add file to snapstore: ");
+		pr_err("cannot find snapstore by id %pUB\n", id);
 		return -ENODATA;
 	}
 
 	if (snapstore->file == NULL) {
-		pr_err("Unable to add file to snapstore: snapstore file was not initialized\n");
+		pr_err("Unable to add file to snapstore: ");
+		pr_err("snapstore file was not initialized\n");
 		return -EFAULT;
 	}
 
@@ -396,9 +400,9 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 		sector_t range_offset = 0;
 
 		struct blk_range range;
-		struct ioctl_range_s *ioctl_range = (struct ioctl_range_s *)big_buffer_get_element(
-			ranges, inx, sizeof(struct ioctl_range_s));
+		struct ioctl_range_s *ioctl_range;
 
+		ioctl_range = big_buffer_get_element(ranges, inx, sizeof(struct ioctl_range_s));
 		if (ioctl_range == NULL) {
 			pr_err("Invalid count of ranges\n");
 			res = -ENODATA;
@@ -419,7 +423,8 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 
 			res = rangelist_add(&blk_rangelist, &rg);
 			if (res != SUCCESS) {
-				pr_err("Unable to add file to snapstore: cannot add range to rangelist\n");
+				pr_err("Unable to add file to snapstore: ");
+				pr_err("cannot add range to rangelist\n");
 				break;
 			}
 
@@ -427,7 +432,8 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 			if (snapstore_device != NULL) {
 				res = rangevector_add(&snapstore_device->zero_sectors, &rg);
 				if (res != SUCCESS) {
-					pr_err("Unable to add file to snapstore: cannot add range to zero_sectors tree\n");
+					pr_err("Unable to add file to snapstore: ");
+					pr_err("cannot add range to zero_sectors tree\n");
 					break;
 				}
 			}
@@ -438,7 +444,8 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 				res = blk_descr_file_pool_add(&snapstore->file->pool,
 							      &blk_rangelist);
 				if (res != SUCCESS) {
-					pr_err("Unable to add file to snapstore: cannot initialize new block\n");
+					pr_err("Unable to add file to snapstore: ");
+					pr_err("cannot initialize new block\n");
 					break;
 				}
 
@@ -495,12 +502,14 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 
 	snapstore = _snapstore_find(id);
 	if (snapstore == NULL) {
-		pr_err("Unable to add file to snapstore: cannot find snapstore by id %pUB\n", id);
+		pr_err("Unable to add file to multidevice snapstore: ");
+		pr_err("cannot find snapstore by id %pUB\n", id);
 		return -ENODATA;
 	}
 
 	if (snapstore->multidev == NULL) {
-		pr_err("Unable to add file to multidevice snapstore: it was not initialized\n");
+		pr_err("Unable to add file to multidevice snapstore: ");
+		pr_err("it was not initialized\n");
 		return -EFAULT;
 	}
 
@@ -508,10 +517,9 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 		size_t blocks_count = 0;
 		sector_t range_offset = 0;
 		struct blk_range range;
+		struct ioctl_range_s *data;
 
-		struct ioctl_range_s *data = (struct ioctl_range_s *)big_buffer_get_element(
-			ranges, inx, sizeof(struct ioctl_range_s));
-
+		data = big_buffer_get_element(ranges, inx, sizeof(struct ioctl_range_s));
 		if (data == NULL) {
 			pr_err("Invalid count of ranges\n");
 			res = -ENODATA;
@@ -526,8 +534,9 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 			struct block_device *blk_dev = NULL;
 
 			rg.ofs = range.ofs + range_offset;
-			rg.cnt = min_t(sector_t, (range.cnt - range_offset),
-				       (snapstore_block_size() - current_blk_size));
+			rg.cnt = min_t(sector_t,
+				       range.cnt - range_offset,
+				       snapstore_block_size() - current_blk_size);
 
 			range_offset += rg.cnt;
 
@@ -541,7 +550,8 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 
 			res = rangelist_ex_add(&blk_rangelist, &rg, blk_dev);
 			if (res != SUCCESS) {
-				pr_err("Unable to add file to snapstore: failed to add range to rangelist\n");
+				pr_err("Unable to add file to multidevice snapstore: ");
+				pr_err("failed to add range to rangelist\n");
 				break;
 			}
 
@@ -555,7 +565,8 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 				res = blk_descr_multidev_pool_add(&snapstore->multidev->pool,
 								  &blk_rangelist);
 				if (res != SUCCESS) {
-					pr_err("Unable to add file to snapstore: failed to initialize new block\n");
+					pr_err("Unable to add file to multidevice snapstore: ");
+					pr_err("failed to initialize new block\n");
 					break;
 				}
 
@@ -568,7 +579,7 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 		}
 		if (res != SUCCESS)
 			break;
-	} //for
+	}
 
 	if ((res == SUCCESS) && (current_blk_size != 0))
 		pr_warn("Snapstore portion was not ordered by Copy-on-Write block size\n");
@@ -656,93 +667,122 @@ int snapstore_request_store(struct snapstore *snapstore, struct blk_deferred_req
 		res = blk_deferred_request_store_multidev(dio_copy_req);
 #endif
 	else if (snapstore->mem)
-		res = blk_deffered_request_store_mem(dio_copy_req);
+		res = blk_deferred_request_store_mem(dio_copy_req);
 	else
 		res = -EINVAL;
 
 	return res;
 }
 
+static int _snapstore_redirect_read_file(struct blk_redirect_bio *rq_redir,
+					 struct block_device *snapstore_blk_dev,
+					 struct blk_descr_file *file,
+					 sector_t block_ofs,
+					 sector_t rq_ofs, sector_t rq_count)
+{
+	int res = SUCCESS;
+	sector_t current_ofs = 0;
+	struct list_head *_list_head;
+
+	if (unlikely(list_empty(&file->rangelist))) {
+		pr_err("Invalid file block descriptor");
+		return -EINVAL;
+	}
+
+	list_for_each(_list_head, &file->rangelist) {
+		struct blk_range_link *range_link;
+
+		range_link = list_entry(_list_head, struct blk_range_link, link);
+		if (current_ofs >= rq_count)
+			break;
+
+		if (range_link->rg.cnt > block_ofs) {
+			sector_t pos = range_link->rg.ofs + block_ofs;
+			sector_t len = min_t(sector_t,
+					     range_link->rg.cnt - block_ofs,
+					     rq_count - current_ofs);
+
+			res = blk_dev_redirect_part(rq_redir, READ, snapstore_blk_dev, pos,
+						    rq_ofs + current_ofs, len);
+			if (res != SUCCESS) {
+				pr_err("Failed to read from snapstore file. Sector #%lld\n",
+				       pos);
+				break;
+			}
+
+			current_ofs += len;
+			block_ofs = 0;
+		} else
+			block_ofs -= range_link->rg.cnt;
+	}
+
+	if (res != SUCCESS)
+		pr_err("Failed to read from file snapstore\n");
+	return res;
+}
+
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
+static int _snapstore_redirect_read_multidev(struct blk_redirect_bio *rq_redir,
+					      struct blk_descr_multidev *multidev,
+					      sector_t block_ofs,
+					      sector_t rq_ofs, sector_t rq_count)
+{
+	int res = SUCCESS;
+	sector_t current_ofs = 0;
+	struct list_head *_list_head;
+
+	if (unlikely(list_empty(&multidev->rangelist))) {
+		pr_err("Invalid multidev block descriptor");
+		return -EINVAL;
+	}
+
+	list_for_each(_list_head, &multidev->rangelist) {
+		struct blk_range_link_ex *range_link =
+			list_entry(_list_head, struct blk_range_link_ex, link);
+
+		if (current_ofs >= rq_count)
+			break;
+
+		if (range_link->rg.cnt > block_ofs) {
+			sector_t pos = range_link->rg.ofs + block_ofs;
+			sector_t len = min_t(sector_t,
+					     range_link->rg.cnt - block_ofs,
+					     rq_count - current_ofs);
+
+			res = blk_dev_redirect_part(rq_redir, READ, range_link->blk_dev, pos,
+						    rq_ofs + current_ofs, len);
+
+			if (res != SUCCESS) {
+				pr_err("Failed to read from snapstore file. Sector #%lld\n", pos);
+				break;
+			}
+
+			current_ofs += len;
+			block_ofs = 0;
+		} else
+			block_ofs -= range_link->rg.cnt;
+	}
+
+	if (res != SUCCESS)
+		pr_err("Failed to read from multidev snapstore\n");
+	return res;
+}
+#endif
+
 int snapstore_redirect_read(struct blk_redirect_bio *rq_redir, struct snapstore *snapstore,
 			    union blk_descr_unify blk_descr, sector_t target_pos, sector_t rq_ofs,
 			    sector_t rq_count)
 {
 	int res = SUCCESS;
-	sector_t current_ofs = 0;
 	sector_t block_ofs = target_pos & snapstore_block_mask();
 
-	if (snapstore->file) {
-		if (!list_empty(&blk_descr.file->rangelist)) {
-			struct list_head *_list_head;
-
-			list_for_each(_list_head, &blk_descr.file->rangelist) {
-				struct blk_range_link *range_link =
-					list_entry(_list_head, struct blk_range_link, link);
-
-				if (current_ofs >= rq_count)
-					break;
-
-				if (range_link->rg.cnt >
-				    block_ofs) { //read first portion from block
-
-					sector_t pos = range_link->rg.ofs + block_ofs;
-					sector_t len =
-						min_t(sector_t, (range_link->rg.cnt - block_ofs),
-						      (rq_count - current_ofs));
-
-					res = blk_dev_redirect_part(rq_redir, READ,
-								    snapstore->file->blk_dev, pos,
-								    rq_ofs + current_ofs, len);
-					if (res != SUCCESS) {
-						pr_err("Failed to read from snapstore file. Sector #%lld\n",
-						       pos);
-						break;
-					}
-
-					current_ofs += len;
-					block_ofs = 0;
-				} else
-					block_ofs -= range_link->rg.cnt;
-			}
-		}
-	}
+	if (snapstore->file)
+		res = _snapstore_redirect_read_file(rq_redir, snapstore->file->blk_dev,
+						    blk_descr.file, block_ofs, rq_ofs, rq_count);
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-	else if (snapstore->multidev) {
-		if (!list_empty(&blk_descr.multidev->rangelist)) {
-			struct list_head *_list_head;
-
-			list_for_each(_list_head, &blk_descr.multidev->rangelist) {
-				struct blk_range_link_ex *range_link =
-					list_entry(_list_head, struct blk_range_link_ex, link);
-
-				if (current_ofs >= rq_count)
-					break;
-
-				if (range_link->rg.cnt >
-				    block_ofs) { //read first portion from block
-					sector_t pos = range_link->rg.ofs + block_ofs;
-					sector_t len =
-						min_t(sector_t, (range_link->rg.cnt - block_ofs),
-						      (rq_count - current_ofs));
-
-					res = blk_dev_redirect_part(rq_redir, READ,
-								    range_link->blk_dev, pos,
-								    rq_ofs + current_ofs, len);
-
-					if (res != SUCCESS) {
-						pr_err("Failed to read from snapstore file. Sector #%lld\n",
-						       pos);
-						break;
-					}
-
-					current_ofs += len;
-					block_ofs = 0;
-				} else
-					block_ofs -= range_link->rg.cnt;
-			}
-		}
-
-	}
+	else if (snapstore->multidev)
+		res = _snapstore_redirect_read_multidev(rq_redir, blk_descr.multidev, block_ofs,
+							rq_ofs, rq_count);
 #endif
 	else if (snapstore->mem) {
 		res = blk_dev_redirect_memcpy_part(
@@ -751,108 +791,133 @@ int snapstore_redirect_read(struct blk_redirect_bio *rq_redir, struct snapstore 
 
 		if (res != SUCCESS)
 			pr_err("Failed to read from snapstore memory\n");
-		else
-			current_ofs += rq_count;
 	} else
 		res = -EINVAL;
 
 	if (res != SUCCESS)
 		pr_err("Failed to read from snapstore. Offset %lld sector\n", target_pos);
-
 	return res;
 }
+
+static int _snapstore_redirect_write_file(struct blk_redirect_bio *rq_redir,
+					  struct block_device *snapstore_blk_dev,
+					  struct blk_descr_file *file,
+					  sector_t block_ofs,
+					  sector_t rq_ofs, sector_t rq_count)
+{
+	int res = SUCCESS;
+	sector_t current_ofs = 0;
+	struct list_head *_list_head;
+
+	if (unlikely(list_empty(&file->rangelist))) {
+		pr_err("Invalid file block descriptor");
+		return -EINVAL;
+	}
+
+	list_for_each(_list_head, &file->rangelist) {
+		struct blk_range_link *range_link;
+
+		range_link = list_entry(_list_head, struct blk_range_link, link);
+		if (current_ofs >= rq_count)
+			break;
+
+		if (range_link->rg.cnt > block_ofs) {
+			sector_t pos = range_link->rg.ofs + block_ofs;
+			sector_t len = min_t(sector_t,
+					     range_link->rg.cnt - block_ofs,
+					     rq_count - current_ofs);
+
+			res = blk_dev_redirect_part(rq_redir, WRITE, snapstore_blk_dev, pos,
+						    rq_ofs + current_ofs, len);
+
+			if (res != SUCCESS) {
+				pr_err("Failed to write to snapstore file. Sector #%lld\n",
+				       pos);
+				break;
+			}
+
+			current_ofs += len;
+			block_ofs = 0;
+		} else
+			block_ofs -= range_link->rg.cnt;
+	}
+	if (res != SUCCESS)
+		pr_err("Failed to write to file snapstore\n");
+	return res;
+}
+
+#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
+static int _snapstore_redirect_write_multidev(struct blk_redirect_bio *rq_redir,
+					      struct blk_descr_multidev *multidev,
+					      sector_t block_ofs,
+					      sector_t rq_ofs, sector_t rq_count)
+{
+	int res = SUCCESS;
+	sector_t current_ofs = 0;
+	struct list_head *_list_head;
+
+	if (unlikely(list_empty(&multidev->rangelist))) {
+		pr_err("Invalid multidev block descriptor");
+		return -EINVAL;
+	}
+
+	list_for_each(_list_head, &multidev->rangelist) {
+		struct blk_range_link_ex *range_link;
+
+		range_link = list_entry(_list_head, struct blk_range_link_ex, link);
+		if (current_ofs >= rq_count)
+			break;
+
+		if (range_link->rg.cnt > block_ofs) {
+			sector_t pos = range_link->rg.ofs + block_ofs;
+			sector_t len = min_t(sector_t,
+					     range_link->rg.cnt - block_ofs,
+					     rq_count - current_ofs);
+
+			res = blk_dev_redirect_part(rq_redir, WRITE, range_link->blk_dev, pos,
+						    rq_ofs + current_ofs, len);
+
+			if (res != SUCCESS) {
+				pr_err("Failed to write to snapstore file. Sector #%lld\n",
+				       pos);
+				break;
+			}
+
+			current_ofs += len;
+			block_ofs = 0;
+		} else
+			block_ofs -= range_link->rg.cnt;
+	}
+
+	if (res != SUCCESS)
+		pr_err("Failed to write to multidevice snapstore\n");
+	return res;
+}
+#endif
 
 int snapstore_redirect_write(struct blk_redirect_bio *rq_redir, struct snapstore *snapstore,
 			     union blk_descr_unify blk_descr, sector_t target_pos, sector_t rq_ofs,
 			     sector_t rq_count)
 {
 	int res = SUCCESS;
-	sector_t current_ofs = 0;
 	sector_t block_ofs = target_pos & snapstore_block_mask();
 
-	BUG_ON(rq_redir == NULL);
-	BUG_ON(snapstore == NULL);
+	if (snapstore->file)
+		res = _snapstore_redirect_write_file(rq_redir, snapstore->file->blk_dev,
+						     blk_descr.file, block_ofs, rq_ofs, rq_count);
 
-	if (snapstore->file) {
-		if (!list_empty(&blk_descr.file->rangelist)) {
-			struct list_head *_list_head;
-
-			list_for_each(_list_head, &blk_descr.file->rangelist) {
-				struct blk_range_link *range_link =
-					list_entry(_list_head, struct blk_range_link, link);
-
-				if (current_ofs >= rq_count)
-					break;
-
-				if (range_link->rg.cnt >
-				    block_ofs) { //read first portion from block
-					sector_t pos = range_link->rg.ofs + block_ofs;
-					sector_t len =
-						min_t(sector_t, (range_link->rg.cnt - block_ofs),
-						      (rq_count - current_ofs));
-
-					res = blk_dev_redirect_part(rq_redir, WRITE,
-								    snapstore->file->blk_dev, pos,
-								    rq_ofs + current_ofs, len);
-
-					if (res != SUCCESS) {
-						pr_err("Failed to write to snapstore file. Sector #%lld\n",
-						       pos);
-						break;
-					}
-
-					current_ofs += len;
-					block_ofs = 0;
-				} else
-					block_ofs -= range_link->rg.cnt;
-			}
-		}
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-	} else if (snapstore->multidev) {
-		if (!list_empty(&blk_descr.multidev->rangelist)) {
-			struct list_head *_list_head;
-
-			list_for_each(_list_head, &blk_descr.multidev->rangelist) {
-				struct blk_range_link_ex *range_link =
-					list_entry(_list_head, struct blk_range_link_ex, link);
-
-				if (current_ofs >= rq_count)
-					break;
-
-				if (range_link->rg.cnt >
-				    block_ofs) { //read first portion from block
-					sector_t pos = range_link->rg.ofs + block_ofs;
-					sector_t len =
-						min_t(sector_t, (range_link->rg.cnt - block_ofs),
-						      (rq_count - current_ofs));
-
-					res = blk_dev_redirect_part(rq_redir, WRITE,
-								    range_link->blk_dev, pos,
-								    rq_ofs + current_ofs, len);
-
-					if (res != SUCCESS) {
-						pr_err("Failed to write to snapstore file. Sector #%lld\n",
-						       pos);
-						break;
-					}
-
-					current_ofs += len;
-					block_ofs = 0;
-				} else
-					block_ofs -= range_link->rg.cnt;
-			}
-		}
+	else if (snapstore->multidev)
+		res = _snapstore_redirect_write_multidev(rq_redir, blk_descr.multidev,
+							 block_ofs, rq_ofs, rq_count);
 #endif
-	} else if (snapstore->mem) {
+	else if (snapstore->mem) {
 		res = blk_dev_redirect_memcpy_part(
 			rq_redir, WRITE, blk_descr.mem->buff + (size_t)from_sectors(block_ofs),
 			rq_ofs, rq_count);
 
 		if (res != SUCCESS)
-			pr_err("Failed to write to snapstore memory\n");
-		else
-			current_ofs += rq_count;
-
+			pr_err("Failed to write to memory snapstore\n");
 	} else {
 		pr_err("Unable to write to snapstore: invalid type of snapstore device\n");
 		res = -EINVAL;
@@ -860,6 +925,5 @@ int snapstore_redirect_write(struct blk_redirect_bio *rq_redir, struct snapstore
 
 	if (res != SUCCESS)
 		pr_err("Failed to write to snapstore. Offset %lld sector\n", target_pos);
-
 	return res;
 }

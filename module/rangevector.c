@@ -18,7 +18,29 @@ static inline sector_t range_node_last(struct blk_range_tree_node *range_node)
 #pragma message("INTERVAL_TREE_DEFINE is undefined")
 #endif
 INTERVAL_TREE_DEFINE(struct blk_range_tree_node, _node, sector_t, _subtree_last,
-		     range_node_start, range_node_last, , blk_range_rb)
+		     range_node_start, range_node_last, static inline, _blk_range_rb)
+
+void blk_range_rb_insert(struct blk_range_tree_node *node, struct rb_root_cached *root)
+{
+	_blk_range_rb_insert(node, root);
+}
+
+void blk_range_rb_remove(struct blk_range_tree_node *node, struct rb_root_cached *root)
+{
+	_blk_range_rb_remove(node, root);
+}
+
+struct blk_range_tree_node *blk_range_rb_iter_first(struct rb_root_cached *root, sector_t start,
+						    sector_t last)
+{
+	return _blk_range_rb_iter_first(root, start, last);
+}
+
+struct blk_range_tree_node *blk_range_rb_iter_next(struct blk_range_tree_node *node, sector_t start,
+						   sector_t last)
+{
+	return _blk_range_rb_iter_next(node, start, last);
+}
 
 void rangevector_init(struct rangevector *rangevector)
 {

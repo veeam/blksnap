@@ -393,7 +393,6 @@ void ctrl_pipe_done(void)
 	is_empty = list_empty(&ctl_pipes);
 	up_write(&ctl_pipes_lock);
 
-	//BUG_ON(!is_empty)
 	if (!is_empty)
 		pr_err("Unable to perform ctrl pipes cleanup: container is not empty\n");
 }

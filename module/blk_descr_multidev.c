@@ -22,9 +22,11 @@ static inline void blk_descr_multidev_init(struct blk_descr_multidev *blk_descr,
 
 static inline void blk_descr_multidev_done(struct blk_descr_multidev *blk_descr)
 {
+	struct blk_range_link_ex *rangelist;
+
 	while (!list_empty(&blk_descr->rangelist)) {
-		struct blk_range_link_ex *rangelist =
-			list_entry(blk_descr->rangelist.next, struct blk_range_link_ex, link);
+		rangelist = list_entry(blk_descr->rangelist.next,
+				       struct blk_range_link_ex, link);
 
 		list_del(&rangelist->link);
 		kfree(rangelist);
@@ -64,10 +66,10 @@ static union blk_descr_unify blk_descr_multidev_allocate(void *descr_array, size
 
 int blk_descr_multidev_pool_add(struct blk_descr_pool *pool, struct list_head *rangelist)
 {
-	union blk_descr_unify blk_descr =
-		blk_descr_pool_alloc(pool, sizeof(struct blk_descr_multidev),
-				     blk_descr_multidev_allocate, (void *)rangelist);
+	union blk_descr_unify blk_descr;
 
+	blk_descr = blk_descr_pool_alloc(pool, sizeof(struct blk_descr_multidev),
+					 blk_descr_multidev_allocate, (void *)rangelist);
 	if (blk_descr.ptr == NULL) {
 		pr_err("Failed to allocate block descriptor\n");
 		return -ENOMEM;

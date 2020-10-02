@@ -159,7 +159,7 @@ void _snapimage_close(struct gendisk *disk, fmode_t mode)
 		} while (false);
 		up_read(&snap_image_destroy_lock);
 	} else
-		pr_err("Unable to to close snapshot image: private data is not initialized\n");
+		pr_err("Unable to close snapshot image: private data is not initialized\n");
 }
 
 int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, unsigned long arg)
@@ -238,8 +238,11 @@ int _snapimage_request_write(struct snapimage *image, struct blk_redirect_bio *r
 	struct cbt_map *cbt_map;
 	int res = SUCCESS;
 
-	BUG_ON(image->defer_io == NULL);
-	BUG_ON(image->cbt_map == NULL);
+	if (unlikely((image->defer_io == NULL) || (image->cbt_map == NULL))) {
+		pr_err("Invalid snapshot image structure");
+		return -EINVAL;
+	}
+
 
 	snapstore_device = image->defer_io->snapstore_device;
 	cbt_map = image->cbt_map;
@@ -879,7 +882,6 @@ void snapimage_done(void)
 	snapimage_minors = NULL;
 	spin_unlock(&snapimage_minors_lock);
 
-	//BUG_ON(!list_empty(&snap_images))
 	if (!list_empty(&snap_images))
 		pr_err("Failed to release snapshot images container\n");
 

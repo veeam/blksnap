@@ -27,6 +27,7 @@ static void *kmalloc_huge(size_t max_size, size_t min_size, gfp_t flags, size_t 
 		pr_err("Failed to allocate buffer size=%lu\n", max_size);
 		max_size = max_size >> 1;
 	} while (max_size >= min_size);
+
 	pr_err("Failed to allocate buffer.");
 	return NULL;
 }
@@ -34,8 +35,9 @@ static void *kmalloc_huge(size_t max_size, size_t min_size, gfp_t flags, size_t 
 static struct pool_el *pool_el_alloc(size_t blk_descr_size)
 {
 	size_t el_size;
-	struct pool_el *el =
-		(struct pool_el *)kmalloc_huge(8 * PAGE_SIZE, PAGE_SIZE, GFP_NOIO, &el_size);
+	struct pool_el *el;
+
+	el = kmalloc_huge(8 * PAGE_SIZE, PAGE_SIZE, GFP_NOIO, &el_size);
 	if (el == NULL)
 		return NULL;
 
@@ -132,19 +134,19 @@ static union blk_descr_unify __blk_descr_pool_at(struct blk_descr_pool *pool, si
 	union blk_descr_unify bkl_descr = { NULL };
 	size_t curr_inx = 0;
 	struct pool_el *el;
+	struct list_head *_list_head;
 
-	if (!list_empty(&(pool)->head)) {
-		struct list_head *_list_head;
+	if (list_empty(&(pool)->head))
+		return bkl_descr;
 
-		list_for_each(_list_head, &(pool)->head) {
-			el = list_entry(_list_head, struct pool_el, link);
+	list_for_each(_list_head, &(pool)->head) {
+		el = list_entry(_list_head, struct pool_el, link);
 
-			if ((index >= curr_inx) && (index < (curr_inx + el->used_cnt))) {
-				bkl_descr.ptr = el->descr_array + (index - curr_inx) * blk_descr_size;
-				break;
-			}
-			curr_inx += el->used_cnt;
+		if ((index >= curr_inx) && (index < (curr_inx + el->used_cnt))) {
+			bkl_descr.ptr = el->descr_array + (index - curr_inx) * blk_descr_size;
+			break;
 		}
+		curr_inx += el->used_cnt;
 	}
 
 	return bkl_descr;
@@ -157,14 +159,16 @@ union blk_descr_unify blk_descr_pool_take(struct blk_descr_pool *pool, size_t bl
 	mutex_lock(&pool->lock);
 	do {
 		if (pool->take_cnt >= pool->total_cnt) {
-			pr_err("Unable to get block descriptor: not enough descriptors. Already took %ld, total %ld\n",
+			pr_err("Unable to get block descriptor: ");
+			pr_err("not enough descriptors, already took %ld, total %ld\n",
 			       pool->take_cnt, pool->total_cnt);
 			break;
 		}
 
 		result = __blk_descr_pool_at(pool, blk_descr_size, pool->take_cnt);
 		if (result.ptr == NULL) {
-			pr_err("Unable to get block descriptor: not enough descriptors. Already took %ld, total %ld\n",
+			pr_err("Unable to get block descriptor: ");
+			pr_err("not enough descriptors, already took %ld, total %ld\n",
 			       pool->take_cnt, pool->total_cnt);
 			break;
 		}

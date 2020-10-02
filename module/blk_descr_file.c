@@ -21,9 +21,10 @@ static inline void blk_descr_file_init(struct blk_descr_file *blk_descr,
 
 static inline void blk_descr_file_done(struct blk_descr_file *blk_descr)
 {
+	struct blk_range_link *range_link;
+
 	while (!list_empty(&blk_descr->rangelist)) {
-		struct blk_range_link *range_link =
-			list_entry(blk_descr->rangelist.next, struct blk_range_link, link);
+		range_link = list_entry(blk_descr->rangelist.next, struct blk_range_link, link);
 
 		list_del(&range_link->link);
 		kfree(range_link);
@@ -63,9 +64,10 @@ static union blk_descr_unify _blk_descr_file_allocate(void *descr_array, size_t 
 
 int blk_descr_file_pool_add(struct blk_descr_pool *pool, struct list_head *rangelist)
 {
-	union blk_descr_unify blk_descr = blk_descr_pool_alloc(
-		pool, sizeof(struct blk_descr_file), _blk_descr_file_allocate, (void *)rangelist);
+	union blk_descr_unify blk_descr;
 
+	blk_descr = blk_descr_pool_alloc(pool, sizeof(struct blk_descr_file),
+					 _blk_descr_file_allocate, (void *)rangelist);
 	if (blk_descr.ptr == NULL) {
 		pr_err("Failed to allocate block descriptor\n");
 		return -ENOMEM;

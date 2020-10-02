@@ -38,7 +38,6 @@ void snapstore_multidev_destroy(struct snapstore_multidev *multidev)
 {
 	struct multidev_el *el;
 
-	//BUG_ON(multidev == NULL);
 	blk_descr_multidev_pool_done(&multidev->pool);
 
 	do {

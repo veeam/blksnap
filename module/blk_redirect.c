@@ -376,8 +376,6 @@ int blk_dev_redirect_read_zeroed(struct blk_redirect_bio *rq_redir, struct block
 	sector_t from = rq_pos + blk_ofs_start;
 	sector_t to = rq_pos + blk_ofs_start + blk_ofs_count - 1;
 
-	BUG_ON(zero_sectors == NULL);
-
 	down_read(&zero_sectors->lock);
 	range_node = blk_range_rb_iter_first(&zero_sectors->root, from, to);
 	while (range_node) {

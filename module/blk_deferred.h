@@ -64,4 +64,4 @@ int blk_deferred_request_store_file(struct block_device *blk_dev,
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 int blk_deferred_request_store_multidev(struct blk_deferred_request *dio_copy_req);
 #endif
-int blk_deffered_request_store_mem(struct blk_deferred_request *dio_copy_req);
+int blk_deferred_request_store_mem(struct blk_deferred_request *dio_copy_req);

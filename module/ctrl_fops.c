@@ -626,9 +626,9 @@ int ioctl_collect_snapimages(unsigned long arg)
 {
 	unsigned long len;
 	int status = SUCCESS;
-	struct ioctl_collect_shapshot_images_s param;
+	struct ioctl_collect_snapshot_images_s param;
 
-	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_collect_shapshot_images_s));
+	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_collect_snapshot_images_s));
 	if (len != 0) {
 		pr_err("Unable to collect snapshot images: invalid user buffer\n");
 		return -ENODATA;
@@ -636,7 +636,7 @@ int ioctl_collect_snapimages(unsigned long arg)
 
 	status = snapimage_collect_images(param.count, param.p_image_info, &param.count);
 
-	len = copy_to_user((void *)arg, &param, sizeof(struct ioctl_collect_shapshot_images_s));
+	len = copy_to_user((void *)arg, &param, sizeof(struct ioctl_collect_snapshot_images_s));
 	if (len != 0) {
 		pr_err("Unable to collect snapshot images: invalid user buffer\n");
 		return -ENODATA;

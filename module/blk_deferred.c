@@ -232,6 +232,11 @@ sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
 		unsigned int len = (unsigned int)from_sectors(bvec_len_sect);
 		unsigned int offset = (unsigned int)from_sectors(unordered);
 
+		if (unlikely(page == NULL)) {
+			pr_err("NULL found in page array");
+			bio_put(bio);
+			return 0;
+		}
 		if (unlikely(bio_add_page(bio, page, len, offset) != len)) {
 			bio_put(bio);
 			return 0;
@@ -246,7 +251,11 @@ sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
 		struct page *page = page_array[page_inx];
 		unsigned int len = (unsigned int)from_sectors(bvec_len_sect);
 
-		BUG_ON(page == NULL);
+
+		if (unlikely(page == NULL)) {
+			pr_err("NULL found in page array");
+			break;
+		}
 		if (unlikely(bio_add_page(bio, page, len, 0) != len))
 			break;
 
@@ -408,7 +417,10 @@ static int _store_file(struct block_device *blk_dev, struct blk_deferred_request
 	struct list_head *_rangelist_head;
 	sector_t page_array_ofs = 0;
 
-	BUG_ON(list_empty(&blk_descr->rangelist));
+	if (unlikely(list_empty(&blk_descr->rangelist))) {
+		pr_err("Invalid block descriptor");
+		return -EINVAL;
+	}
 	list_for_each(_rangelist_head, &blk_descr->rangelist) {
 		struct blk_range_link *range_link;
 		sector_t process_sect;
@@ -433,7 +445,10 @@ int blk_deferred_request_store_file(struct block_device *blk_dev,
 
 	blk_deferred_request_waiting_skip(dio_copy_req);
 
-	BUG_ON(list_empty(&dio_copy_req->dios));
+	if (unlikely(list_empty(&dio_copy_req->dios))) {
+		pr_err("Invalid deferred io request");
+		return -EINVAL;
+	}
 	list_for_each(_dio_list_head, &dio_copy_req->dios) {
 		int res;
 		struct blk_deferred_io *dio;
@@ -455,7 +470,10 @@ static int _store_multidev(struct blk_deferred_request *dio_copy_req,
 	struct list_head *_ranges_list_head;
 	sector_t page_array_ofs = 0;
 
-	BUG_ON(list_empty(&blk_descr->rangelist));
+	if (unlikely(list_empty(&blk_descr->rangelist))) {
+		pr_err("Invalid block descriptor");
+		return -EINVAL;
+	}
 	list_for_each(_ranges_list_head, &blk_descr->rangelist) {
 		sector_t process_sect;
 		struct blk_range_link_ex *range_link;
@@ -481,7 +499,10 @@ int blk_deferred_request_store_multidev(struct blk_deferred_request *dio_copy_re
 
 	blk_deferred_request_waiting_skip(dio_copy_req);
 
-	BUG_ON(list_empty(&dio_copy_req->dios));
+	if (unlikely(list_empty(&dio_copy_req->dios))) {
+		pr_err("Invalid deferred io request");
+		return -EINVAL;
+	}
 	list_for_each(_dio_list_head, &dio_copy_req->dios) {
 		int res;
 		struct blk_deferred_io *dio;
@@ -515,7 +536,7 @@ static size_t _store_pages(void *dst, struct page **page_array, size_t length)
 	return processed_len;
 }
 
-int blk_deffered_request_store_mem(struct blk_deferred_request *dio_copy_req)
+int blk_deferred_request_store_mem(struct blk_deferred_request *dio_copy_req)
 {
 	int res = SUCCESS;
 	sector_t processed = 0;

@@ -8,12 +8,17 @@
 config BLK_SNAP
 	tristate "Block device snapshot filter"
 	depends on BLK_FILTER
-
 	help
-	  Allow to create snapshots and track block changes for a block devices. 
+
+	  Allow to create snapshots and track block changes for a block
+	  devices. Designed for creating backups for any block devices
+	  (without device mapper). Snapshots are temporary and are released
+	  then backup is completed. Change block tracking allows you to
+	  create incremental or differential backups.
 
 config BLK_SNAP_SNAPSTORE_MULTIDEV
 	bool "Multi device snapstore configuration support"
 	depends on BLK_SNAP
 	help
-	  Allow to create snapstore on multiple block devices
+
+	  Allow to create snapstore on multiple block devices.

@@ -165,14 +165,14 @@ struct image_info_s {
 	struct ioctl_dev_id_s snapshot_dev_id;
 };
 
-struct ioctl_collect_shapshot_images_s {
+struct ioctl_collect_snapshot_images_s {
 	int count; //
 	union {
 		struct image_info_s *p_image_info;
 		unsigned long long ull_image_info;
 	};
 };
-#define IOCTL_COLLECT_SNAPSHOT_IMAGES _IOW(BLK_SNAP, 0x30, struct ioctl_collect_shapshot_images_s)
+#define IOCTL_COLLECT_SNAPSHOT_IMAGES _IOW(BLK_SNAP, 0x30, struct ioctl_collect_snapshot_images_s)
 
 #pragma pack(pop)
 
