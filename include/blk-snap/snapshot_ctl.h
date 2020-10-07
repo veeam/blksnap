@@ -49,6 +49,8 @@ int snap_create_file_snapshot_store(struct snap_ctx* ctx,
 unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
 										struct ioctl_dev_id_s devId);
 
+int snap_collect_snapshot_images(struct snap_ctx* ctx, struct image_info_s* images_info);
+
 int snap_destroy_snapshot(struct snap_ctx* ctx,
 						  unsigned long long snapshot_id);
 
@@ -73,6 +75,9 @@ struct snapshot_store_ranges
 int snap_poll(struct snap_ctx* ctx, int timeout);
 ssize_t snap_read(struct snap_ctx* ctx, void *buf, size_t length);
 int snap_write(struct snap_ctx* ctx, void *buf, size_t length);
+
+//@todo: delete this func
+void set_snapshot_image_name(const char* image_name);
 
 #ifdef  __cplusplus
 }

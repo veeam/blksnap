@@ -12,6 +12,9 @@
 #include "utils.h"
 #include <poll.h>
 
+
+const char* SNAPSHOT_IMAGE_NAME = "/dev/"MODULE_NAME;
+
 struct snap_ctx
 {
     int fd;
@@ -27,7 +30,7 @@ int snap_ctx_create(struct snap_ctx** ctx)
     if (*ctx == NULL)
         return -1;
 
-    (*ctx)->fd = open( "/dev/"MODULE_NAME, O_RDWR );
+    (*ctx)->fd = open( SNAPSHOT_IMAGE_NAME, O_RDWR );
     if ((*ctx)->fd == -1)
     {
         error = errno;
@@ -248,5 +251,20 @@ int snap_mark_dirty_blocks(struct snap_ctx* ctx,
     return ioctl(ctx->fd, IOCTL_TRACKING_MARK_DIRTY_BLOCKS, &param);
 }
 
+int snap_collect_snapshot_images(struct snap_ctx* ctx, struct image_info_s* images_info)
+{
+    int res = ioctl(ctx->fd, IOCTL_COLLECT_SNAPSHOT_IMAGES, images_info);
+    if (res == 0)
+        return 0;
 
+    if (errno == ENODATA)
+        return 0;
 
+    return 0;
+}
+
+//@todo: delete this func
+void set_snapshot_image_name(const char* image_name)
+{
+    SNAPSHOT_IMAGE_NAME = image_name;
+}
