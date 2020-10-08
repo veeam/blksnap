@@ -16,7 +16,7 @@
 void CommonSnapStoreTest(boost::filesystem::path testName, boost::filesystem::path originalDev,
                          BlkSnapStoreCtx& storeCtx)
 {
-    boost::filesystem::path commonTestMountDir = TestConfig::Get().mount_dir / "common_test";
+    boost::filesystem::path commonTestMountDir = TestConfig::Get().workDir_dir /testName;
 
     boost::filesystem::path origMountDir = commonTestMountDir/"orig_mount";
     boost::filesystem::path snapMountDir = commonTestMountDir/"snap_mount";

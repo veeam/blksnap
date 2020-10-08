@@ -15,11 +15,11 @@ bool IsDiscovery(Catch::Session& sess)
     return false;
 }
 
-void Clean()
+void CleanTestDir()
 {
     try
     {
-        boost::filesystem::path mount_dir = TestConfig::Get().mount_dir / "clean";
+        boost::filesystem::path mount_dir = TestConfig::Get().workDir_dir / "clean";
         MountPoint mountPoint(TestConfig::Get().test_device, mount_dir);
         
         boost::filesystem::remove_all(mount_dir/TestConfig::Get().test_dir);
@@ -52,12 +52,12 @@ int main(int argc, char* argv[])
     Catch::Session sess;
     
     std::string testDir = "blk-snap-tests";
-    std::string mountDir = "/tmp/blk-snap-mount";
+    std::string workDir = "/tmp/blk-snap-mount";
     std::string device = "";
     
     auto cli = sess.cli() |
                Catch::clara::Opt(testDir, "test dir")["--testDir"]("testDir").optional() |
-               Catch::clara::Opt(mountDir, "mount dir")["--mounDir"]("mountDir").optional() |
+               Catch::clara::Opt(workDir, "work dir")["--workDir"]("workDir: for mount and snap store files").optional() |
                Catch::clara::Opt(device, "path to device")["--device"]("device for taking snapshot").optional();
     
     sess.cli(cli);
@@ -66,24 +66,26 @@ int main(int argc, char* argv[])
     if (IsDiscovery(sess))
         return sess.run();
     
+    boost::filesystem::create_directories(workDir);
     LoopDevice::Ptr ptrLoop;
     if (device.empty())
     {
-        ptrLoop = LoopDevice::Create("/tmp", size_t(2) * 1024 * 1024 * 1024);
+        ptrLoop = LoopDevice::Create(workDir, size_t(2) * 1024 * 1024 * 1024);
         ptrLoop->Mkfs("ext4");
         device = ptrLoop->GetDevice().string();
     }
     
     TestConfig config;
     config.test_dir = testDir;
-    config.mount_dir = mountDir;
+    config.workDir_dir = workDir;
     config.test_device = device;
     config.snap_image_name = PrepareSnapName();
     TestConfig::Set(config);
     
-    boost::filesystem::create_directories(mountDir);
     
     int result = sess.run();
-    Clean();
+    CleanTestDir();
+    ptrLoop.reset();
+    boost::filesystem::remove_all(TestConfig::Get().workDir_dir);
     return result;
 };

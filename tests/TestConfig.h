@@ -8,7 +8,7 @@ struct TestConfig
 {
     std::string snap_image_name;
     boost::filesystem::path test_dir;
-    boost::filesystem::path mount_dir;
+    boost::filesystem::path workDir_dir;
     boost::filesystem::path test_device;
 
     static const TestConfig& Get();
