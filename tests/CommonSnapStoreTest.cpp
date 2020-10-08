@@ -9,20 +9,21 @@
 #include "helpers/MountPoint.h"
 #include "helpers/SnapshotHelper.h"
 #include "helpers/FileHelper.h"
+#include "TestConfig.h"
 
 #define RANDOM_DATA_SIZE 500*1024
 
-void CommonSnapStoreTest(boost::filesystem::path testDir, boost::filesystem::path originalDev,
+void CommonSnapStoreTest(boost::filesystem::path testName, boost::filesystem::path originalDev,
                          BlkSnapStoreCtx& storeCtx)
 {
-    boost::filesystem::path commonTestDir = testDir / "common_test";
-    boost::filesystem::create_directory(commonTestDir);
+    boost::filesystem::path commonTestMountDir = TestConfig::Get().mount_dir / "common_test";
 
-    boost::filesystem::path origDir = commonTestDir / "orig";
-    boost::filesystem::path snapDir = commonTestDir / "snap";
+    boost::filesystem::path origMountDir = commonTestMountDir/"orig_mount";
+    boost::filesystem::path snapMountDir = commonTestMountDir/"snap_mount";
 
-    MountPoint origMountPoint(originalDev, origDir);
-    boost::filesystem::path origFile = origDir / "file";
+    MountPoint origMountPoint(originalDev, origMountDir);
+    boost::filesystem::create_directories(origMountDir/TestConfig::Get().test_dir/testName);
+    boost::filesystem::path origFile = origMountDir/TestConfig::Get().test_dir/testName/"file";
     FileHelper::Create(origFile, RANDOM_DATA_SIZE);
     FileHelper::FillRandom(origFile);
     std::string origHash = FileHelper::CalcHash(origFile);
@@ -32,8 +33,8 @@ void CommonSnapStoreTest(boost::filesystem::path testDir, boost::filesystem::pat
     REQUIRE_NOTHROW(ptrSnapshot.reset(new Snapshot(Snapshot::Create(storeCtx, Helper::GetDevice(originalDev.string())))));
     REQUIRE_NOTHROW(minor = SnapshotHelper::GetSnapshotDevice(storeCtx.GetBlkSnapCtx(), originalDev));
     
-    boost::filesystem::path snapFile = snapDir / "file";
-    MountPoint snapMountPoint(std::string("/dev/veeamimage") + std::to_string(minor), snapDir);
+    boost::filesystem::path snapFile = snapMountDir/TestConfig::Get().test_dir/testName/"file";
+    MountPoint snapMountPoint(TestConfig::Get().snap_image_name + std::to_string(minor), snapMountDir);
     std::string snapHash = FileHelper::CalcHash(snapFile);
     
     REQUIRE(snapHash == origHash);
@@ -42,4 +43,5 @@ void CommonSnapStoreTest(boost::filesystem::path testDir, boost::filesystem::pat
     REQUIRE(snapHash != origHash);
     std::string snapHash2 = FileHelper::CalcHash(snapFile);
     REQUIRE(snapHash == snapHash2);
+    boost::filesystem::remove(origFile);
 }

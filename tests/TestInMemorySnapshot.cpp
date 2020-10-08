@@ -5,6 +5,7 @@
 
 #include "helpers/LoopDevice.h"
 #include "CommonSnapStoreTest.h"
+#include "TestConfig.h"
 
 static LoopDevice::Ptr GetLoopDevice()
 {
@@ -17,23 +18,13 @@ static LoopDevice::Ptr GetLoopDevice()
 
 TEST_CASE("inmemory", "[snapshot]")
 {
-    Uuid uuid = Uuid::GenerateRandom();
-    
-    boost::filesystem::path testDir = boost::filesystem::path("/tmp/snap_test/") / uuid.ToStr() / "inmemory";
-    boost::filesystem::create_directories(testDir);
-    
-    
-    LoopDevice::Ptr ptrLoop = GetLoopDevice();
     BlkSnapCtx::Ptr ptrSnapCtx = std::make_shared<BlkSnapCtx>();
 
     std::vector<dev_t> snapDevs;
-    REQUIRE_NOTHROW(snapDevs.push_back(Helper::GetDevice(ptrLoop->GetDevice().string())));
+    REQUIRE_NOTHROW(snapDevs.push_back(Helper::GetDevice(TestConfig::Get().test_device.string())));
     
     std::shared_ptr<BlkSnapStoreCtx> ptrStoreCtx;
     REQUIRE_NOTHROW(ptrStoreCtx.reset(new BlkSnapStoreCtx(BlkSnapStoreCtx::CreateInMemory(ptrSnapCtx, 500 * 1024 * 1024, snapDevs))));
     
-//    std::shared_ptr<Snapshot> ptrSnapshot;
-//    REQUIRE_NOTHROW(ptrSnapshot.reset(new Snapshot(Snapshot::Create(*ptrStoreCtx, snapDevs.front()))));
-    
-    CommonSnapStoreTest(testDir, ptrLoop->GetDevice(), *ptrStoreCtx);
+    CommonSnapStoreTest(TestConfig::Get().test_dir/"inmemory", TestConfig::Get().test_device, *ptrStoreCtx);
 }

@@ -21,6 +21,7 @@ set(SOURCE_FILES
         helpers/SnapshotHelper.cpp
         LoopTests.cpp
         TestInMemorySnapshot.cpp
+        TestConfig.cpp
         CommonSnapStoreTest.cpp
         main.cpp
         )
