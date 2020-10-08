@@ -10,6 +10,7 @@ FIND_PACKAGE( Boost COMPONENTS program_options filesystem system thread REQUIRED
 
 add_subdirectory(examples)
 add_subdirectory(lib)
+add_subdirectory(libcpp)
 add_subdirectory(utils)
 add_subdirectory(tests)
 #add_subdirectory(module)
