@@ -1,3 +1,4 @@
+//@todo: hide this header
 #ifndef BLK_SNAP_HELPER_H
 #define BLK_SNAP_HELPER_H
 

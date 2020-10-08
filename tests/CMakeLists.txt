@@ -19,6 +19,8 @@ set(SOURCE_FILES
         helpers/FileHelper.cpp
         helpers/MountPoint.cpp
         LoopTests.cpp
+        TestInMemorySnapshot.cpp
+        CommonSnapStoreTest.cpp
         main.cpp
         )
 
@@ -28,6 +30,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE BlkSnap::Lib)
 target_link_libraries(${PROJECT_NAME} PRIVATE Boost::program_options)
 target_link_libraries(${PROJECT_NAME} PRIVATE Boost::filesystem )
 target_link_libraries(${PROJECT_NAME} PRIVATE Boost::thread )
+target_link_libraries(${PROJECT_NAME} PRIVATE BlkSnapCpp::Lib )
+
 target_link_libraries(${PROJECT_NAME} PRIVATE ${OPENSSL_LIBRARIES} )
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBUUID_LIBRARY})
 target_include_directories(${PROJECT_NAME} PRIVATE ./)

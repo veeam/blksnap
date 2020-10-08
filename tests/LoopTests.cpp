@@ -2,7 +2,6 @@
 #include "helpers/LoopDevice.h"
 #include "helpers/MountPoint.h"
 #include "helpers/FileHelper.h"
-#include <iostream>
 
 TEST_CASE("create loop", "[loop]")
 {
