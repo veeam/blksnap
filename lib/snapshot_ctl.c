@@ -251,16 +251,16 @@ int snap_mark_dirty_blocks(struct snap_ctx* ctx,
     return ioctl(ctx->fd, IOCTL_TRACKING_MARK_DIRTY_BLOCKS, &param);
 }
 
-int snap_collect_snapshot_images(struct snap_ctx* ctx, struct image_info_s* images_info)
+int snap_collect_snapshot_images(struct snap_ctx* ctx, struct image_info_s* images_info, size_t* images_length)
 {
-    int res = ioctl(ctx->fd, IOCTL_COLLECT_SNAPSHOT_IMAGES, images_info);
-    if (res == 0)
-        return 0;
+    struct ioctl_collect_snapshot_images_s param;
+    param.count = *images_length;
+    param.p_image_info = images_info;
 
-    if (errno == ENODATA)
-        return 0;
+    int result = ioctl(ctx->fd, IOCTL_COLLECT_SNAPSHOT_IMAGES, &param);
+    *images_length = param.count;
 
-    return 0;
+    return result;
 }
 
 //@todo: delete this func

@@ -18,6 +18,7 @@ set(SOURCE_FILES
         helpers/SHA256Calc.cpp
         helpers/FileHelper.cpp
         helpers/MountPoint.cpp
+        helpers/SnapshotHelper.cpp
         LoopTests.cpp
         TestInMemorySnapshot.cpp
         CommonSnapStoreTest.cpp

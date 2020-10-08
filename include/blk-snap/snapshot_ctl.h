@@ -49,7 +49,7 @@ int snap_create_file_snapshot_store(struct snap_ctx* ctx,
 unsigned long long snap_create_snapshot(struct snap_ctx* ctx,
 										struct ioctl_dev_id_s devId);
 
-int snap_collect_snapshot_images(struct snap_ctx* ctx, struct image_info_s* images_info);
+int snap_collect_snapshot_images(struct snap_ctx* ctx, struct image_info_s* images_info, size_t* images_length);
 
 int snap_destroy_snapshot(struct snap_ctx* ctx,
 						  unsigned long long snapshot_id);
