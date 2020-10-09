@@ -29,9 +29,10 @@ public:
 
     snap_store* Raw();
     BlkSnapCtx::Ptr GetBlkSnapCtx();
-
-private:
+    
     static BlkSnapStoreCtx Create(BlkSnapCtx::Ptr ptrSnapCtx, dev_t snap_store_dev, std::vector<dev_t> snap_devs);
+    
+private:
     BlkSnapStoreCtx(BlkSnapCtx::Ptr ptrSnapCtx);
 
 private:

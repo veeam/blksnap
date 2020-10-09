@@ -11,6 +11,7 @@ add_library(${PROJECT_NAME} STATIC
         src/BlkSnapStoreCtx.cpp
         src/BlkSnapCtx.cpp
         src/Helper.cpp
+        src/FileSnapshotStore.cpp
         )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC

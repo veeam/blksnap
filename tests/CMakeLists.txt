@@ -2,6 +2,7 @@ project(blk-snap-tests)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
 
 find_library(LIBUUID_LIBRARY libuuid.a REQUIRED)
+set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
 
 if (NOT LIBUUID_LIBRARY)
@@ -21,6 +22,7 @@ set(SOURCE_FILES
         helpers/SnapshotHelper.cpp
         LoopTests.cpp
         TestInMemorySnapshot.cpp
+        TestFileSnapshot.cpp
         TestConfig.cpp
         CommonSnapStoreTest.cpp
         main.cpp
@@ -34,7 +36,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Boost::filesystem )
 target_link_libraries(${PROJECT_NAME} PRIVATE Boost::thread )
 target_link_libraries(${PROJECT_NAME} PRIVATE BlkSnapCpp::Lib )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ${OPENSSL_LIBRARIES} )
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::Crypto )
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBUUID_LIBRARY})
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 

@@ -1,4 +1,6 @@
 #include "Helper.h"
+#include "../libcpp/include/blk-snap-cpp/Helper.h"
+
 
 #include <sys/sysmacros.h>
 #include <system_error>
@@ -22,3 +24,4 @@ ioctl_dev_id_s Helper::ToDevId(dev_t dev)
 
     return result;
 }
+
