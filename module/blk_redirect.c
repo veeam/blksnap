@@ -263,7 +263,7 @@ void blk_dev_redirect_submit(struct blk_redirect_bio *rq_redir)
 	rq_redir->bio_list_head = NULL;
 
 	while (curr != NULL) {
-		submit_bio(curr->this);
+		submit_bio_direct(curr->this);
 
 		curr = curr->next;
 	}

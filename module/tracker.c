@@ -3,6 +3,7 @@
 #include "common.h"
 #include "tracker.h"
 #include "blk_util.h"
+#include "params.h"
 
 LIST_HEAD(trackers);
 DEFINE_RWLOCK(trackers_lock);
@@ -12,7 +13,7 @@ void tracker_done(void)
 	tracker_remove_all();
 }
 
-int tracker_find_by_queue(struct gendisk *disk, u8 partno, struct tracker **ptracker)
+int tracker_find_by_bio(struct bio *bio, struct tracker **ptracker)
 {
 	int result = -ENODATA;
 
@@ -23,8 +24,8 @@ int tracker_find_by_queue(struct gendisk *disk, u8 partno, struct tracker **ptra
 		list_for_each(_head, &trackers) {
 			struct tracker *_tracker = list_entry(_head, struct tracker, link);
 
-			if ((disk == _tracker->target_dev->bd_disk) &&
-			    (partno == _tracker->target_dev->bd_partno)) {
+			if ((bio->bi_disk == _tracker->target_dev->bd_disk) &&
+			    (bio->bi_partno == _tracker->target_dev->bd_partno)) {
 				if (ptracker != NULL)
 					*ptracker = _tracker;
 
@@ -97,7 +98,7 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_c
 				}
 
 				p_cbt_info[count].dev_capacity = (u64)from_sectors(
-					blk_dev_get_capacity(tracker->target_dev));
+					part_nr_sects_read(tracker->target_dev->bd_part));
 			}
 
 			++count;
@@ -113,23 +114,16 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_c
 	return result;
 }
 
-void tracker_cbt_start(struct tracker *tracker, unsigned long long snapshot_id)
-{
-	tracker_snapshot_id_set(tracker, snapshot_id);
-}
-
-static struct super_block *blk_thaw_bdev(dev_t dev_id, struct block_device *device,
+static void blk_thaw_bdev(dev_t dev_id, struct block_device *device,
 					 struct super_block *superblock)
 {
 	if (superblock == NULL)
-		return NULL;
+		return;
 
 	if (thaw_bdev(device, superblock) == SUCCESS)
 		pr_info("Device [%d:%d] was unfrozen\n", MAJOR(dev_id), MINOR(dev_id));
 	else
 		pr_err("Failed to unfreeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
-
-	return NULL;
 }
 
 static int blk_freeze_bdev(dev_t dev_id, struct block_device *device,
@@ -138,8 +132,8 @@ static int blk_freeze_bdev(dev_t dev_id, struct block_device *device,
 	struct super_block *superblock;
 
 	if (device->bd_super == NULL) {
-		pr_warn("Unable to freeze device [%d:%d]: no superblock was found\n", MAJOR(dev_id),
-			MINOR(dev_id));
+		pr_warn("Unable to freeze device [%d:%d]: no superblock was found\n",
+			MAJOR(dev_id), MINOR(dev_id));
 		return SUCCESS;
 	}
 
@@ -164,10 +158,50 @@ static int blk_freeze_bdev(dev_t dev_id, struct block_device *device,
 	return SUCCESS;
 }
 
-int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cbt_block_size_degree,
-		   struct cbt_map *cbt_map, struct tracker **ptracker)
+int _tracker_create(struct tracker *tracker, void *filter, bool attach_filter)
 {
 	int result = SUCCESS;
+	unsigned int sect_in_block_degree;
+	sector_t capacity;
+	struct super_block *superblock = NULL;
+
+	result = blk_dev_open(tracker->original_dev_id, &tracker->target_dev);
+	if (result != SUCCESS)
+		return ENODEV;
+
+	pr_info("Create tracker for device [%d:%d]. Capacity 0x%llx sectors\n",
+		MAJOR(tracker->original_dev_id), MINOR(tracker->original_dev_id),
+		(unsigned long long)part_nr_sects_read(tracker->target_dev->bd_part));
+
+	sect_in_block_degree = get_change_tracking_block_size_pow() - SECTOR_SHIFT;
+	capacity = part_nr_sects_read(tracker->target_dev->bd_part);
+
+	tracker->cbt_map = cbt_map_create(sect_in_block_degree, capacity);
+	if (tracker->cbt_map == NULL) {
+		pr_err("Failed to create tracker for device [%d:%d]\n",
+		       MAJOR(tracker->original_dev_id), MINOR(tracker->original_dev_id));
+		tracker_remove(tracker);
+		return -ENOMEM;
+	}
+
+	tracker->snapshot_id = 0ull;
+
+	if (attach_filter) {
+		blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
+		blk_filter_freeze(tracker->target_dev);
+
+		blk_filter_attach(tracker->original_dev_id, filter, tracker);
+
+		blk_filter_thaw(tracker->target_dev);
+		blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
+	}
+
+	return SUCCESS;
+}
+
+int tracker_create(dev_t dev_id, void *filter, struct tracker **ptracker)
+{
+	int ret;
 	struct tracker *tracker = NULL;
 
 	*ptracker = NULL;
@@ -177,121 +211,61 @@ int tracker_create(unsigned long long snapshot_id, dev_t dev_id, unsigned int cb
 		return -ENOMEM;
 
 	INIT_LIST_HEAD(&tracker->link);
-
 	atomic_set(&tracker->is_captured, false);
-	tracker->is_unfreezable = false;
-	init_rwsem(&tracker->unfreezable_lock);
-
 	tracker->original_dev_id = dev_id;
-
-	result = blk_dev_open(tracker->original_dev_id, &tracker->target_dev);
-	if (result != SUCCESS) {
-		kfree(tracker);
-		return result;
-	}
 
 	write_lock(&trackers_lock);
 	list_add_tail(&tracker->link, &trackers);
 	write_unlock(&trackers_lock);
 
-	do {
-		struct super_block *superblock = NULL;
-
-		pr_info("Create tracker for device [%d:%d]. Capacity 0x%llx sectors\n",
-			MAJOR(tracker->original_dev_id), MINOR(tracker->original_dev_id),
-			(unsigned long long)blk_dev_get_capacity(tracker->target_dev));
-
-		if (cbt_map)
-			tracker->cbt_map = cbt_map_get_resource(cbt_map);
-		else {
-			tracker->cbt_map =
-				cbt_map_create(cbt_block_size_degree - SECTOR_SHIFT,
-					       blk_dev_get_capacity(tracker->target_dev));
-			if (tracker->cbt_map == NULL) {
-				result = -ENOMEM;
-				break;
-			}
-		}
-
-		tracker_cbt_start(tracker, snapshot_id);
-
-		result =
-			blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
-		if (result != SUCCESS) {
-			tracker->is_unfreezable = true;
-			break;
-		}
-
-		superblock =
-			blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
-
-	} while (false);
-
-	if (result == SUCCESS) {
-		*ptracker = tracker;
-	} else {
-		int remove_status;
-
-		pr_err("Failed to create tracker for device [%d:%d]\n",
-		       MAJOR(tracker->original_dev_id), MINOR(tracker->original_dev_id));
-
-		remove_status = tracker_remove(tracker);
-		if ((remove_status == SUCCESS) || (remove_status == -ENODEV))
-			tracker = NULL;
-		else
-			pr_err("Failed to perfrom tracker cleanup. errno=%d\n",
-			       (0 - remove_status));
+	ret = _tracker_create(tracker, filter, true);
+	if (ret < 0) {
+		tracker_remove(tracker);
+		return ret;
 	}
 
-	return result;
+	*ptracker = tracker;
+	if (ret == ENODEV)
+		pr_info("Cannot attach to unknown device [%d:%d]",
+		       MAJOR(tracker->original_dev_id), MINOR(tracker->original_dev_id));
+
+	return ret;
 }
 
-int _tracker_remove(struct tracker *tracker)
+void _tracker_remove(struct tracker *tracker, bool detach_filter)
 {
-	int result = SUCCESS;
+	struct super_block *superblock = NULL;
 
 	if (tracker->target_dev != NULL) {
-		struct super_block *superblock = NULL;
+		if (detach_filter) {
+			blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
+			blk_filter_freeze(tracker->target_dev);
 
-		if (tracker->is_unfreezable)
-			down_write(&tracker->unfreezable_lock);
-		else
-			result = blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev,
-						 &superblock);
-/*
- *	!!! ToDo : remove from tracker must be in this place
- */
-		if (tracker->is_unfreezable)
-			up_write(&tracker->unfreezable_lock);
-		else
-			superblock = blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev,
-						   superblock);
+			blk_filter_detach(tracker->original_dev_id);
+
+			blk_filter_thaw(tracker->target_dev);
+			blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
+		}
 
 		blk_dev_close(tracker->target_dev);
-
 		tracker->target_dev = NULL;
-	} else
-		result = -ENODEV;
+	}
 
 	if (tracker->cbt_map != NULL) {
 		cbt_map_put_resource(tracker->cbt_map);
 		tracker->cbt_map = NULL;
 	}
-
-	return result;
 }
 
-int tracker_remove(struct tracker *tracker)
+void tracker_remove(struct tracker *tracker)
 {
-	int result = _tracker_remove(tracker);
+	_tracker_remove(tracker, true);
 
 	write_lock(&trackers_lock);
 	list_del(&tracker->link);
 	write_unlock(&trackers_lock);
 
 	kfree(tracker);
-
-	return result;
 }
 
 void tracker_remove_all(void)
@@ -312,13 +286,7 @@ void tracker_remove_all(void)
 		write_unlock(&trackers_lock);
 
 		if (tracker) {
-			int status = _tracker_remove(tracker);
-
-			if (status != SUCCESS)
-				pr_err("Failed to remove device [%d:%d] from tracking. errno=%d\n",
-				       MAJOR(tracker->original_dev_id),
-				       MINOR(tracker->original_dev_id), 0 - status);
-
+			_tracker_remove(tracker, true);
 			kfree(tracker);
 		}
 	} while (tracker);
@@ -329,7 +297,7 @@ void tracker_cbt_bitmap_set(struct tracker *tracker, sector_t sector, sector_t s
 	if (tracker->cbt_map == NULL)
 		return;
 
-	if (tracker->cbt_map->device_capacity != blk_dev_get_capacity(tracker->target_dev)) {
+	if (tracker->cbt_map->device_capacity != part_nr_sects_read(tracker->target_dev->bd_part)) {
 		pr_warn("Device resize detected\n");
 		tracker->cbt_map->active = false;
 		return;
@@ -404,37 +372,33 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 			break;
 		}
 
-		if (tracker->is_unfreezable)
-			down_write(&tracker->unfreezable_lock);
-		else
-			blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
-		{
-			result = _tracker_capture_snapshot(tracker);
-			if (result != SUCCESS)
-				pr_err("Failed to capture snapshot for device [%d:%d]\n",
-				       MAJOR(dev_id), MINOR(dev_id));
-		}
-		if (tracker->is_unfreezable)
-			up_write(&tracker->unfreezable_lock);
-		else
-			superblock = blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev,
-						   superblock);
+
+		blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
+		blk_filter_freeze(tracker->target_dev);
+
+		result = _tracker_capture_snapshot(tracker);
+		if (result != SUCCESS)
+			pr_err("Failed to capture snapshot for device [%d:%d]\n",
+			       MAJOR(dev_id), MINOR(dev_id));
+
+		blk_filter_thaw(tracker->target_dev);
+		blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
 	}
 	if (result != SUCCESS)
 		return result;
 
 	for (inx = 0; inx < dev_id_set_size; ++inx) {
-		struct tracker *p_tracker = NULL;
+		struct tracker *tracker = NULL;
 		dev_t dev_id = dev_id_set[inx];
 
-		result = tracker_find_by_dev_id(dev_id, &p_tracker);
+		result = tracker_find_by_dev_id(dev_id, &tracker);
 		if (result != SUCCESS) {
 			pr_err("Unable to capture snapshot: cannot find device [%d:%d]\n",
 			       MAJOR(dev_id), MINOR(dev_id));
 			continue;
 		}
 
-		if (snapstore_device_is_corrupted(p_tracker->defer_io->snapstore_device)) {
+		if (snapstore_device_is_corrupted(tracker->defer_io->snapstore_device)) {
 			pr_err("Unable to freeze devices [%d:%d]: snapshot data is corrupted\n",
 			       MAJOR(dev_id), MINOR(dev_id));
 			result = -EDEADLK;
@@ -443,48 +407,35 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 	}
 
 	if (result != SUCCESS) {
-		int status;
-
 		pr_err("Failed to capture snapshot. errno=%d\n", result);
 
-		status = tracker_release_snapshot(dev_id_set, dev_id_set_size);
-		if (status != SUCCESS)
-			pr_err("Failed to perfrom snapshot cleanup. errno=%d\n", status);
+		tracker_release_snapshot(dev_id_set, dev_id_set_size);
 	}
 	return result;
 }
 
-int _tracker_release_snapshot(struct tracker *tracker)
+void _tracker_release_snapshot(struct tracker *tracker)
 {
-	int result = SUCCESS;
 	struct super_block *superblock = NULL;
 	struct defer_io *defer_io = tracker->defer_io;
 
-	if (tracker->is_unfreezable)
-		down_write(&tracker->unfreezable_lock);
-	else
-		result =
-			blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
+	blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
+	blk_filter_freeze(tracker->target_dev);
 	{ //locked region
 		atomic_set(&tracker->is_captured, false); //clear freeze flag
 
 		tracker->defer_io = NULL;
 	}
-	if (tracker->is_unfreezable)
-		up_write(&tracker->unfreezable_lock);
-	else
-		superblock =
-			blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
+	blk_filter_thaw(tracker->target_dev);
+
+	blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
 
 	defer_io_stop(defer_io);
 	defer_io_put_resource(defer_io);
-
-	return result;
 }
 
-int tracker_release_snapshot(dev_t *dev_id_set, int dev_id_set_size)
+void tracker_release_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 {
-	int result = SUCCESS;
 	int inx = 0;
 
 	for (; inx < dev_id_set_size; ++inx) {
@@ -493,29 +444,10 @@ int tracker_release_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 		dev_t dev = dev_id_set[inx];
 
 		status = tracker_find_by_dev_id(dev, &p_tracker);
-		if (status == SUCCESS) {
-			status = _tracker_release_snapshot(p_tracker);
-			if (status != SUCCESS) {
-				pr_err("Failed to release snapshot for device [%d:%d]\n",
-				       MAJOR(dev), MINOR(dev));
-
-				result = status;
-				break;
-			}
-		} else
+		if (status == SUCCESS)
+			_tracker_release_snapshot(p_tracker);
+		else
 			pr_err("Unable to release snapshot: cannot find tracker for device [%d:%d]\n",
 			       MAJOR(dev), MINOR(dev));
 	}
-
-	return result;
-}
-
-void tracker_snapshot_id_set(struct tracker *tracker, unsigned long long snapshot_id)
-{
-	tracker->snapshot_id = snapshot_id;
-}
-
-unsigned long long tracker_snapshot_id_get(struct tracker *tracker)
-{
-	return tracker->snapshot_id;
 }

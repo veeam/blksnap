@@ -11,12 +11,12 @@ static inline sector_t snapstore_block_shift(void)
 
 static inline sector_t snapstore_block_size(void)
 {
-	return 1 << snapstore_block_shift();
+	return 1ull << snapstore_block_shift();
 };
 
 static inline sector_t snapstore_block_mask(void)
 {
-	return snapstore_block_size() - 1;
+	return snapstore_block_size() - 1ull;
 };
 
 int get_change_tracking_block_size_pow(void);

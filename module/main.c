@@ -11,7 +11,7 @@
 #include "snapstore_device.h"
 #include "snapshot.h"
 #include "tracker.h"
-#include "filter.h"
+#include "tracking.h"
 #include <linux/module.h>
 
 int __init blk_snap_init(void)
@@ -42,7 +42,7 @@ int __init blk_snap_init(void)
 	if (result != SUCCESS)
 		return result;
 
-	result = filter_init();
+	result = tracking_init();
 	if (result != SUCCESS)
 		return result;
 
@@ -61,8 +61,7 @@ void __exit blk_snap_exit(void)
 	snapstore_done();
 
 	tracker_done();
-
-	filter_done();
+	tracking_done();
 
 	snapimage_done();
 

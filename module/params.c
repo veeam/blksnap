@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #include "common.h"
+#include "params.h"
 #include <linux/module.h>
 
 int snapstore_block_size_pow = 14;
