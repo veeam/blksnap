@@ -9,7 +9,7 @@ int snapstore_file_create(dev_t dev_id, struct snapstore_file **pfile)
 	int res = SUCCESS;
 	struct snapstore_file *file;
 
-	pr_err("Single device file snapstore was created on device [%d:%d]\n", MAJOR(dev_id),
+	pr_info("Single device file snapstore was created on device [%d:%d]\n", MAJOR(dev_id),
 	       MINOR(dev_id));
 
 	file = kzalloc(sizeof(struct snapstore_file), GFP_KERNEL);
@@ -26,8 +26,8 @@ int snapstore_file_create(dev_t dev_id, struct snapstore_file **pfile)
 	{
 		struct request_queue *q = bdev_get_queue(file->blk_dev);
 
-		pr_err("snapstore device logical block size %d\n", q->limits.logical_block_size);
-		pr_err("snapstore device physical block size %d\n", q->limits.physical_block_size);
+		pr_info("snapstore device logical block size %d\n", q->limits.logical_block_size);
+		pr_info("snapstore device physical block size %d\n", q->limits.physical_block_size);
 	}
 
 	file->blk_dev_id = dev_id;
