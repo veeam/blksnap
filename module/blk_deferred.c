@@ -266,7 +266,7 @@ sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
 	((struct dio_bio_complete *)bio->bi_private)->dio_req = dio_req;
 	((struct dio_bio_complete *)bio->bi_private)->bio_sect_len = process_sect;
 
-	submit_bio(bio);
+	submit_bio_direct(bio);
 
 	return process_sect;
 }

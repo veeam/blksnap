@@ -29,7 +29,7 @@ static int _snapshot_remove_device(dev_t dev_id)
 	if (result != SUCCESS)
 		return result;
 
-	tracker_snapshot_id_set(tracker, 0ull);
+	tracker->snapshot_id = 0ull;
 
 	pr_info("Device [%d:%d] successfully removed from snapshot\n", MAJOR(dev_id),
 		MINOR(dev_id));
@@ -54,7 +54,6 @@ static void _snapshot_cleanup(struct snapshot *snapshot)
 
 static void _snapshot_destroy(struct snapshot *snapshot)
 {
-	int result = SUCCESS;
 	size_t inx;
 
 	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx)
@@ -62,9 +61,7 @@ static void _snapshot_destroy(struct snapshot *snapshot)
 
 	pr_info("Release snapshot [0x%llx]\n", snapshot->id);
 
-	result = tracker_release_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
-	if (result != SUCCESS)
-		pr_err("Failed to release snapshot [0x%llx]\n", snapshot->id);
+	tracker_release_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
 
 	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx)
 		snapimage_destroy(snapshot->dev_id_set[inx]);
@@ -129,7 +126,7 @@ void snapshot_done(void)
 }
 
 int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
-		    unsigned int cbt_block_size_degree, unsigned long long *psnapshot_id)
+		    unsigned long long *p_snapshot_id)
 {
 	struct snapshot *snapshot = NULL;
 	int result = SUCCESS;
@@ -150,7 +147,7 @@ int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
 			dev_t dev_id = snapshot->dev_id_set[inx];
 
-			result = tracking_add(dev_id, cbt_block_size_degree, snapshot->id);
+			result = tracking_add(dev_id, snapshot->id);
 			if (result == -EALREADY)
 				result = SUCCESS;
 			else if (result != SUCCESS) {
@@ -179,7 +176,7 @@ int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 			break;
 		}
 
-		*psnapshot_id = snapshot->id;
+		*p_snapshot_id = snapshot->id;
 		pr_info("Snapshot [0x%llx] was created\n", snapshot->id);
 	} while (false);
 

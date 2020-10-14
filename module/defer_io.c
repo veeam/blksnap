@@ -5,7 +5,6 @@
 #include "blk_deferred.h"
 #include "tracker.h"
 #include "blk_util.h"
-#include "filter.h"
 
 #include <linux/kthread.h>
 
@@ -124,7 +123,7 @@ static void _defer_io_finish(struct defer_io *defer_io, struct defer_io_queue *q
 		}
 
 		bio_put(orig_req->bio);
-		filter_submit_original_bio(orig_req->bio);
+		submit_bio_direct(orig_req->bio);
 
 		if (cbt_locked)
 			tracker_cbt_bitmap_unlock(tracker);
@@ -376,7 +375,8 @@ int defer_io_redirect_bio(struct defer_io *defer_io, struct bio *bio, void *trac
 	if (dio_orig_req == NULL)
 		return -ENOMEM;
 
-	bio_get(dio_orig_req->bio = bio);
+	dio_orig_req->bio = bio;
+	bio_get(dio_orig_req->bio);
 
 	dio_orig_req->tracker = (struct tracker *)tracker;
 

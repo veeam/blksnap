@@ -182,8 +182,7 @@ int ioctl_tracking_add(unsigned long arg)
 		return -ENODATA;
 	}
 
-	return tracking_add(MKDEV(dev.major, dev.minor), get_change_tracking_block_size_pow(),
-			    0ull);
+	return tracking_add(MKDEV(dev.major, dev.minor), 0ull);
 }
 
 int ioctl_tracking_remove(unsigned long arg)
@@ -379,8 +378,7 @@ int ioctl_snapshot_create(unsigned long arg)
 		for (inx = 0; inx < param.count; ++inx)
 			p_dev[inx] = MKDEV(pk_dev_id[inx].major, pk_dev_id[inx].minor);
 
-		status = snapshot_create(p_dev, param.count, get_change_tracking_block_size_pow(),
-					 &param.snapshot_id);
+		status = snapshot_create(p_dev, param.count, &param.snapshot_id);
 
 		kfree(p_dev);
 		p_dev = NULL;
