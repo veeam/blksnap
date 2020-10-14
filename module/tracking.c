@@ -24,7 +24,6 @@ static bool _tracking_submit_bio(struct bio *bio, void *filter_data)
 	if (!tracker)
 		return false;
 
-
 	//intercepting
 	if (atomic_read(&tracker->is_captured)) {
 		//snapshot is captured, call bio redirect algorithm

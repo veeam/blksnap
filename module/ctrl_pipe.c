@@ -387,7 +387,7 @@ void ctrl_pipe_done(void)
 {
 	bool is_empty;
 
-	pr_err("Ctrl pipes - done\n");
+	pr_info("Ctrl pipes - done\n");
 
 	down_write(&ctl_pipes_lock);
 	is_empty = list_empty(&ctl_pipes);
@@ -524,7 +524,7 @@ void ctrl_pipe_request_halffill(struct ctrl_pipe *pipe, unsigned long long fille
 {
 	unsigned int cmd[3];
 
-	pr_err("Snapstore is half-full\n");
+	pr_info("Snapstore is half-full\n");
 
 	cmd[0] = (unsigned int)BLK_SNAP_CHARCMD_HALFFILL;
 	cmd[1] = (unsigned int)(filled_status & 0xFFFFffff); //lo
@@ -538,7 +538,7 @@ void ctrl_pipe_request_overflow(struct ctrl_pipe *pipe, unsigned int error_code,
 {
 	unsigned int cmd[4];
 
-	pr_err("Snapstore overflow\n");
+	pr_info("Snapstore overflow\n");
 
 	cmd[0] = (unsigned int)BLK_SNAP_CHARCMD_OVERFLOW;
 	cmd[1] = error_code;
@@ -552,7 +552,7 @@ void ctrl_pipe_request_terminate(struct ctrl_pipe *pipe, unsigned long long fill
 {
 	unsigned int cmd[3];
 
-	pr_err("Snapstore termination\n");
+	pr_info("Snapstore termination\n");
 
 	cmd[0] = (unsigned int)BLK_SNAP_CHARCMD_TERMINATE;
 	cmd[1] = (unsigned int)(filled_status & 0xFFFFffff); //lo
