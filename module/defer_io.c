@@ -31,12 +31,16 @@ static inline void defer_io_queue_init(struct defer_io_queue *queue)
 	atomic_set(&queue->active_state, true);
 }
 
-static inline struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue *queue)
+static inline struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue *queue, struct bio *bio)
 {
-	struct defer_io_orig_rq *dio_rq = kzalloc(sizeof(struct defer_io_orig_rq), GFP_NOIO);
+	struct defer_io_orig_rq *dio_rq;
 
+	dio_rq = kzalloc(sizeof(struct defer_io_orig_rq), GFP_NOIO);
 	if (dio_rq == NULL)
 		return NULL;
+
+	dio_rq->bio = bio;
+	bio_get(dio_rq->bio);
 
 	INIT_LIST_HEAD(&dio_rq->link);
 	dio_rq->queue = queue;
@@ -46,7 +50,13 @@ static inline struct defer_io_orig_rq *defer_io_queue_new(struct defer_io_queue 
 
 static inline void defer_io_queue_free(struct defer_io_orig_rq *dio_rq)
 {
-	kfree(dio_rq);
+	if (likely(dio_rq)) {
+		if (likely(dio_rq->bio)) {
+			bio_put(dio_rq->bio);
+			dio_rq->bio = NULL;
+		}
+		kfree(dio_rq);
+	}
 }
 
 static int defer_io_queue_push_back(struct defer_io_queue *queue, struct defer_io_orig_rq *dio_rq)
@@ -56,8 +66,6 @@ static int defer_io_queue_push_back(struct defer_io_queue *queue, struct defer_i
 	spin_lock(&queue->lock);
 
 	if (atomic_read(&queue->active_state)) {
-		INIT_LIST_HEAD(&dio_rq->link);
-
 		list_add_tail(&dio_rq->link, &queue->list);
 		atomic_inc(&queue->in_queue_cnt);
 	} else
@@ -122,7 +130,6 @@ static void _defer_io_finish(struct defer_io *defer_io, struct defer_io_queue *q
 			}
 		}
 
-		bio_put(orig_req->bio);
 		submit_bio_direct(orig_req->bio);
 
 		if (cbt_locked)
@@ -371,12 +378,9 @@ int defer_io_redirect_bio(struct defer_io *defer_io, struct bio *bio, void *trac
 	if (snapstore_device_is_corrupted(defer_io->snapstore_device))
 		return -ENODATA;
 
-	dio_orig_req = defer_io_queue_new(&defer_io->dio_queue);
+	dio_orig_req = defer_io_queue_new(&defer_io->dio_queue, bio);
 	if (dio_orig_req == NULL)
 		return -ENOMEM;
-
-	dio_orig_req->bio = bio;
-	bio_get(dio_orig_req->bio);
 
 	dio_orig_req->tracker = (struct tracker *)tracker;
 
