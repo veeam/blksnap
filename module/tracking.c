@@ -15,14 +15,15 @@ void *filter;
 /*
  * _tracking_submit_bio() - Intercept bio by block io layer filter
  */
-static void _tracking_submit_bio(struct bio *bio, void *filter_data)
+static bool _tracking_submit_bio(struct bio *bio, void *filter_data)
 {
 	int res;
-	bool bio_redirected = false;
+	bool cbt_locked = false;
 	struct tracker *tracker = filter_data;
 
 	if (!tracker)
-		submit_bio_direct(bio);
+		return false;
+
 
 	//intercepting
 	if (atomic_read(&tracker->is_captured)) {
@@ -30,27 +31,24 @@ static void _tracking_submit_bio(struct bio *bio, void *filter_data)
 
 		res = defer_io_redirect_bio(tracker->defer_io, bio, tracker);
 		if (res == SUCCESS)
-			bio_redirected = true;
+			return true;
 	}
 
-	if (!bio_redirected) {
-		bool cbt_locked = false;
+	cbt_locked = false;
+	if (tracker && bio_data_dir(bio) && bio_has_data(bio)) {
+		//call CBT algorithm
+		cbt_locked = tracker_cbt_bitmap_lock(tracker);
+		if (cbt_locked) {
+			sector_t sectStart = bio->bi_iter.bi_sector;
+			sector_t sectCount = bio_sectors(bio);
 
-		if (tracker && bio_data_dir(bio) && bio_has_data(bio)) {
-			//call CBT algorithm
-			cbt_locked = tracker_cbt_bitmap_lock(tracker);
-			if (cbt_locked) {
-				sector_t sectStart = bio->bi_iter.bi_sector;
-				sector_t sectCount = bio_sectors(bio);
-
-				tracker_cbt_bitmap_set(tracker, sectStart, sectCount);
-			}
+			tracker_cbt_bitmap_set(tracker, sectStart, sectCount);
 		}
-		if (cbt_locked)
-			tracker_cbt_bitmap_unlock(tracker);
-
-		submit_bio_direct(bio);
 	}
+	if (cbt_locked)
+		tracker_cbt_bitmap_unlock(tracker);
+
+	return false;
 }
 
 static bool _tracking_part_add(dev_t devt, void **p_filter_data)
