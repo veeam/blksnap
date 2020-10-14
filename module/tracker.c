@@ -188,11 +188,9 @@ int _tracker_create(struct tracker *tracker, void *filter, bool attach_filter)
 
 	if (attach_filter) {
 		blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
-		blk_filter_freeze(tracker->target_dev);
 
 		blk_filter_attach(tracker->original_dev_id, filter, tracker);
 
-		blk_filter_thaw(tracker->target_dev);
 		blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
 	}
 
@@ -239,11 +237,9 @@ void _tracker_remove(struct tracker *tracker, bool detach_filter)
 	if (tracker->target_dev != NULL) {
 		if (detach_filter) {
 			blk_freeze_bdev(tracker->original_dev_id, tracker->target_dev, &superblock);
-			blk_filter_freeze(tracker->target_dev);
 
 			blk_filter_detach(tracker->original_dev_id);
 
-			blk_filter_thaw(tracker->target_dev);
 			blk_thaw_bdev(tracker->original_dev_id, tracker->target_dev, superblock);
 		}
 

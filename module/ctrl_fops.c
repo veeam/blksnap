@@ -529,7 +529,7 @@ int ioctl_snapstore_cleanup(unsigned long arg)
 		return -EINVAL;
 	}
 
-	pr_err("id=%pUB\n", (uuid_t *)param.id);
+	pr_info("Cleanup snapstore %pUB\n", (uuid_t *)param.id);
 	res = snapstore_cleanup((uuid_t *)param.id, &param.filled_bytes);
 
 	if (res == SUCCESS) {
