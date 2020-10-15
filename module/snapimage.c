@@ -918,7 +918,7 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 		buff_size = sizeof(struct image_info_s) * real_count;
 		p_kernel_image_info = kzalloc(buff_size, GFP_KERNEL);
 		if (p_kernel_image_info == NULL) {
-			pr_err("Unable to collect snapshot images: not enough memory. size=%lu\n",
+			pr_err("Unable to collect snapshot images: not enough memory. size=%zu\n",
 			       buff_size);
 			return res = -ENOMEM;
 		}

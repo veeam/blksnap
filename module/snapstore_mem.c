@@ -4,6 +4,8 @@
 #include "snapstore_mem.h"
 #include "params.h"
 
+#include <linux/vmalloc.h>
+
 struct buffer_el {
 	struct list_head link;
 	void *buff;
@@ -61,7 +63,7 @@ void *snapstore_mem_get_block(struct snapstore_mem *mem)
 
 	if (mem->blocks_allocated >= mem->blocks_limit) {
 		pr_err("Unable to get block from snapstore in memory\n");
-		pr_err("Block limit is reached, allocated %ld, limit %ld\n", mem->blocks_allocated,
+		pr_err("Block limit is reached, allocated %zu, limit %zu\n", mem->blocks_allocated,
 		       mem->blocks_limit);
 		return NULL;
 	}
@@ -71,7 +73,7 @@ void *snapstore_mem_get_block(struct snapstore_mem *mem)
 		return NULL;
 	INIT_LIST_HEAD(&buffer_el->link);
 
-	buffer_el->buff = __vmalloc(snapstore_block_size() * SECTOR_SIZE, GFP_NOIO);
+	buffer_el->buff = vmalloc(snapstore_block_size() * SECTOR_SIZE);
 	if (buffer_el->buff == NULL) {
 		kfree(buffer_el);
 		return NULL;
@@ -79,7 +81,7 @@ void *snapstore_mem_get_block(struct snapstore_mem *mem)
 
 	++mem->blocks_allocated;
 	if (0 == (mem->blocks_allocated & 0x7F))
-		pr_info("%ld MiB was allocated\n", mem->blocks_allocated);
+		pr_info("%zu MiB was allocated\n", mem->blocks_allocated);
 
 	mutex_lock(&mem->blocks_lock);
 	list_add_tail(&buffer_el->link, &mem->blocks);

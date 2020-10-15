@@ -374,7 +374,7 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 	LIST_HEAD(blk_rangelist);
 	size_t inx;
 
-	pr_info("Snapstore add %ld ranges\n", ranges_cnt);
+	pr_info("Snapstore add %zu ranges\n", ranges_cnt);
 
 	if ((ranges_cnt == 0) || (ranges == NULL))
 		return -EINVAL;
@@ -494,7 +494,7 @@ int snapstore_add_multidev(uuid_t *id, dev_t dev_id, struct big_buffer *ranges, 
 	size_t inx;
 	LIST_HEAD(blk_rangelist);
 
-	pr_info("Snapstore add %ld ranges for device [%d:%d]\n", ranges_cnt, MAJOR(dev_id),
+	pr_info("Snapstore add %zu ranges for device [%d:%d]\n", ranges_cnt, MAJOR(dev_id),
 		MINOR(dev_id));
 
 	if ((ranges_cnt == 0) || (ranges == NULL))

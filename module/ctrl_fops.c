@@ -309,7 +309,7 @@ int ioctl_tracking_mark_dirty_blocks(unsigned long arg)
 	buffer_size = param.count * sizeof(struct block_range_s);
 	p_dirty_blocks = kzalloc(buffer_size, GFP_KERNEL);
 	if (p_dirty_blocks == NULL) {
-		pr_err("Unable to mark dirty blocks: cannot allocate [%ld] bytes\n", buffer_size);
+		pr_err("Unable to mark dirty blocks: cannot allocate [%zu] bytes\n", buffer_size);
 		return -ENOMEM;
 	}
 
@@ -348,7 +348,7 @@ int ioctl_snapshot_create(unsigned long arg)
 	dev_id_buffer_size = sizeof(struct ioctl_dev_id_s) * param.count;
 	pk_dev_id = kzalloc(dev_id_buffer_size, GFP_KERNEL);
 	if (pk_dev_id == NULL) {
-		pr_err("Unable to create snapshot: cannot allocate [%ld] bytes\n",
+		pr_err("Unable to create snapshot: cannot allocate [%zu] bytes\n",
 		       dev_id_buffer_size);
 		return -ENOMEM;
 	}
@@ -369,7 +369,7 @@ int ioctl_snapshot_create(unsigned long arg)
 		dev_buffer_size = sizeof(dev_t) * param.count;
 		p_dev = kzalloc(dev_buffer_size, GFP_KERNEL);
 		if (p_dev == NULL) {
-			pr_err("Unable to create snapshot: cannot allocate [%ld] bytes\n",
+			pr_err("Unable to create snapshot: cannot allocate [%zu] bytes\n",
 			       dev_buffer_size);
 			status = -ENOMEM;
 			break;
@@ -483,7 +483,7 @@ int ioctl_snapstore_file(unsigned long arg)
 
 	ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
 	if (ranges == NULL) {
-		pr_err("Unable to add file to snapstore: cannot allocate [%ld] bytes\n",
+		pr_err("Unable to add file to snapstore: cannot allocate [%zu] bytes\n",
 		       ranges_buffer_size);
 		return -ENOMEM;
 	}
@@ -563,7 +563,7 @@ int ioctl_snapstore_file_multidev(unsigned long arg)
 
 	ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
 	if (ranges == NULL) {
-		pr_err("Unable to add file to multidev snapstore: cannot allocate [%ld] bytes\n",
+		pr_err("Unable to add file to multidev snapstore: cannot allocate [%zu] bytes\n",
 		       ranges_buffer_size);
 		return -ENOMEM;
 	}

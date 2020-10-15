@@ -73,7 +73,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 
 		//get snapstore uuid
 		if ((length - processed) < 16) {
-			pr_err("Unable to get snapstore uuid: invalid ctrl pipe initiate command. length=%lu\n",
+			pr_err("Unable to get snapstore uuid: invalid ctrl pipe initiate command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -82,7 +82,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 
 		//get snapstore empty limit
 		if ((length - processed) < sizeof(u64)) {
-			pr_err("Unable to get stretch snapstore limit: invalid ctrl pipe initiate command. length=%lu\n",
+			pr_err("Unable to get stretch snapstore limit: invalid ctrl pipe initiate command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -91,7 +91,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 
 		//get snapstore device id
 		if ((length - processed) < sizeof(struct ioctl_dev_id_s)) {
-			pr_err("Unable to get snapstore device id: invalid ctrl pipe initiate command. length=%lu\n",
+			pr_err("Unable to get snapstore device id: invalid ctrl pipe initiate command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -100,7 +100,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 
 		//get device id list length
 		if ((length - processed) < 4) {
-			pr_err("Unable to get device id list length: ivalid ctrl pipe initiate command. length=%lu\n",
+			pr_err("Unable to get device id list length: ivalid ctrl pipe initiate command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -109,7 +109,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 
 		//get devices id list
 		if ((length - processed) < (dev_id_list_length * sizeof(struct ioctl_dev_id_s))) {
-			pr_err("Unable to get all devices from device id list: invalid ctrl pipe initiate command. length=%lu\n",
+			pr_err("Unable to get all devices from device id list: invalid ctrl pipe initiate command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -171,7 +171,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 		//get snapstore id
 		if ((length - processed) < 16) {
 			pr_err("Unable to get snapstore id: ");
-			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("invalid ctrl pipe next portion command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -186,7 +186,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 		//get ranges length
 		if ((length - processed) < 4) {
 			pr_err("Unable to get device id list length: ");
-			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("invalid ctrl pipe next portion command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -203,7 +203,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 		// ranges
 		if ((length - processed) < (ranges_buffer_size)) {
 			pr_err("Unable to get all ranges: ");
-			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("invalid ctrl pipe next portion command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -260,7 +260,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		//get snapstore id
 		if ((length - processed) < 16) {
 			pr_err("Unable to get snapstore id: ");
-			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("invalid ctrl pipe next portion command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -275,7 +275,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		//get device id
 		if ((length - processed) < 8) {
 			pr_err("Unable to get device id list length: ");
-			pr_err("invalid ctrl pipe next portion command. length=%lu\n", length);
+			pr_err("invalid ctrl pipe next portion command. length=%zu\n", length);
 			break;
 		}
 		len = copy_from_user(&snapstore_major, buffer + processed, sizeof(unsigned int));
@@ -297,7 +297,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		//get ranges length
 		if ((length - processed) < 4) {
 			pr_err("Unable to get device id list length: ");
-			pr_err("invalid ctrl pipe next portion command. length=%lu\n",
+			pr_err("invalid ctrl pipe next portion command. length=%zu\n",
 			       length);
 			break;
 		}
@@ -314,7 +314,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		// ranges
 		if ((length - processed) < (ranges_buffer_size)) {
 			pr_err("Unable to get all ranges: ");
-			pr_err("invalid ctrl pipe next portion command.  length=%lu\n",
+			pr_err("invalid ctrl pipe next portion command.  length=%zu\n",
 			       length);
 			break;
 		}
@@ -461,7 +461,7 @@ ssize_t ctrl_pipe_write(struct ctrl_pipe *pipe, const char __user *buffer, size_
 		unsigned int command;
 
 		if ((length - processed) < 4) {
-			pr_err("Unable to write command to ctrl pipe: invalid command length=%lu\n",
+			pr_err("Unable to write command to ctrl pipe: invalid command length=%zu\n",
 			       length);
 			break;
 		}

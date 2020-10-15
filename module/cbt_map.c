@@ -12,7 +12,7 @@ int cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_deg
 	cbt_map->device_capacity = device_capacity;
 	cbt_map->map_size = (device_capacity >> (sector_t)cbt_sect_in_block_degree);
 
-	pr_info("Allocate CBT map of %lu\n", cbt_map->map_size);
+	pr_info("Allocate CBT map of %zu\n", cbt_map->map_size);
 
 	size_mod = (device_capacity & ((sector_t)(1 << cbt_sect_in_block_degree) - 1));
 	if (size_mod)
@@ -27,7 +27,7 @@ int cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_deg
 		big_buffer_memset(cbt_map->write_map, 0);
 
 	if ((cbt_map->read_map == NULL) || (cbt_map->write_map == NULL)) {
-		pr_err("Cannot allocate CBT map. map_size=%lu\n", cbt_map->map_size);
+		pr_err("Cannot allocate CBT map. map_size=%zu\n", cbt_map->map_size);
 		return -ENOMEM;
 	}
 
@@ -150,7 +150,7 @@ int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector
 			res = -EINVAL;
 
 		if (res != SUCCESS) {
-			pr_err("Block index is too large. #%ld was demanded, map size %ld\n",
+			pr_err("Block index is too large. #%zu was demanded, map size %zu\n",
 			       cbt_block, cbt_map->map_size);
 			break;
 		}
@@ -202,7 +202,7 @@ size_t cbt_map_read_to_user(struct cbt_map *cbt_map, void __user *user_buff, siz
 	if (left_size == 0)
 		readed = real_size;
 	else {
-		pr_err("Not all CBT data was read. Left [%ld] bytes\n", left_size);
+		pr_err("Not all CBT data was read. Left [%zu] bytes\n", left_size);
 		readed = real_size - left_size;
 	}
 

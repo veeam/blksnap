@@ -24,7 +24,7 @@ static void *kmalloc_huge(size_t max_size, size_t min_size, gfp_t flags, size_t 
 			*p_allocated_size = max_size;
 			return ptr;
 		}
-		pr_err("Failed to allocate buffer size=%lu\n", max_size);
+		pr_err("Failed to allocate buffer size=%zu\n", max_size);
 		max_size = max_size >> 1;
 	} while (max_size >= min_size);
 
@@ -160,7 +160,7 @@ union blk_descr_unify blk_descr_pool_take(struct blk_descr_pool *pool, size_t bl
 	do {
 		if (pool->take_cnt >= pool->total_cnt) {
 			pr_err("Unable to get block descriptor: ");
-			pr_err("not enough descriptors, already took %ld, total %ld\n",
+			pr_err("not enough descriptors, already took %zu, total %zu\n",
 			       pool->take_cnt, pool->total_cnt);
 			break;
 		}
@@ -168,7 +168,7 @@ union blk_descr_unify blk_descr_pool_take(struct blk_descr_pool *pool, size_t bl
 		result = __blk_descr_pool_at(pool, blk_descr_size, pool->take_cnt);
 		if (result.ptr == NULL) {
 			pr_err("Unable to get block descriptor: ");
-			pr_err("not enough descriptors, already took %ld, total %ld\n",
+			pr_err("not enough descriptors, already took %zu, total %zu\n",
 			       pool->take_cnt, pool->total_cnt);
 			break;
 		}
