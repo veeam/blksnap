@@ -8,7 +8,7 @@
 
 #define MAX_TRACKING_DEVICE_COUNT 256
 
-#define BLK_SNAP 0x56730000 // 'sV' <-> "Vs"
+#define BLK_SNAP 'V'
 
 #pragma pack(push, 1)
 //////////////////////////////////////////////////////////////////////////
