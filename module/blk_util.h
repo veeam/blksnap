@@ -9,20 +9,23 @@ void blk_dev_close(struct block_device *blk_dev);
  */
 static inline sector_t part_nr_sects_read(struct hd_struct *part)
 {
-#if BITS_PER_LONG==32 && defined(CONFIG_SMP)
+#if (BITS_PER_LONG == 32) && defined(CONFIG_SMP)
 	sector_t nr_sects;
-	unsigned seq;
+	unsigned int seq;
+
 	do {
 		seq = read_seqcount_begin(&part->nr_sects_seq);
 		nr_sects = part->nr_sects;
 	} while (read_seqcount_retry(&part->nr_sects_seq, seq));
+
 	return nr_sects;
-#elif BITS_PER_LONG==32 && defined(CONFIG_PREEMPTION)
+#elif (BITS_PER_LONG == 32) && defined(CONFIG_PREEMPTION)
 	sector_t nr_sects;
 
 	preempt_disable();
 	nr_sects = part->nr_sects;
 	preempt_enable();
+
 	return nr_sects;
 #else
 	return part->nr_sects;
