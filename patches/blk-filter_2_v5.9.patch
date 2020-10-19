@@ -30,7 +30,7 @@ index 8d841f5f986f..b8ee50b8e031 100644
  obj-$(CONFIG_BLK_INLINE_ENCRYPTION_FALLBACK)	+= blk-crypto-fallback.o
 +obj-$(CONFIG_BLK_FILTER)	+= blk-filter.o
 diff --git a/block/blk-core.c b/block/blk-core.c
-index 10c08ac50697..9c7179c3e81c 100644
+index 10c08ac50697..cc06402af695 100644
 --- a/block/blk-core.c
 +++ b/block/blk-core.c
 @@ -1216,23 +1216,20 @@ blk_qc_t submit_bio_noacct(struct bio *bio)
@@ -43,7 +43,7 @@ index 10c08ac50697..9c7179c3e81c 100644
 - * submit_bio() is used to submit I/O requests to block devices.  It is passed a
 - * fully set up &struct bio that describes the I/O that needs to be done.  The
 - * bio will be send to the device described by the bi_disk and bi_partno fields.
-+ * submit_bio_direct - submit a bio to the block device layer for I/O 
++ * submit_bio_direct - submit a bio to the block device layer for I/O
 + * bypass filter.
 + * @bio:  The bio describing the location in memory and on the device.
   *
@@ -106,7 +106,7 @@ index 10c08ac50697..9c7179c3e81c 100644
   *                              for the new queue limits
 diff --git a/block/blk-filter-internal.h b/block/blk-filter-internal.h
 new file mode 100644
-index 000000000000..7822a2897856
+index 000000000000..d456a09f50db
 --- /dev/null
 +++ b/block/blk-filter-internal.h
 @@ -0,0 +1,29 @@
@@ -133,7 +133,7 @@ index 000000000000..7822a2897856
 +static inline void blk_filter_part_add(struct hd_struct *part, dev_t devt)
 +{ };
 +
-+static inline void blk_filter_part_del(struct hd_struct *part) 
++static inline void blk_filter_part_del(struct hd_struct *part)
 +{ };
 +
 +#endif /* CONFIG_BLK_FILTER */
@@ -141,10 +141,10 @@ index 000000000000..7822a2897856
 +#endif
 diff --git a/block/blk-filter.c b/block/blk-filter.c
 new file mode 100644
-index 000000000000..5cf79fbf1404
+index 000000000000..f6de16c45a16
 --- /dev/null
 +++ b/block/blk-filter.c
-@@ -0,0 +1,287 @@
+@@ -0,0 +1,286 @@
 +// SPDX-License-Identifier: GPL-2.0
 +
 +#include <linux/genhd.h>
@@ -181,7 +181,7 @@ index 000000000000..5cf79fbf1404
 + * @devt: Device id for new block device.
 + *
 + * Description:
-+ *    When the block device is appears in the system, call the filter 
++ *    When the block device is appears in the system, call the filter
 + *    callback to notify that the block device appears.
 + */
 +void blk_filter_part_add(struct hd_struct *part, dev_t devt)
@@ -191,7 +191,7 @@ index 000000000000..5cf79fbf1404
 +		struct list_head *_list_head;
 +
 +		list_for_each(_list_head, &filters) {
-+			void* filter_data;			
++			void *filter_data;
 +			bool attached = false;
 +			struct blk_filter *flt;
 +
@@ -253,7 +253,7 @@ index 000000000000..5cf79fbf1404
 +	if (unlikely(!part)) {
 +		bio->bi_status = BLK_STS_IOERR;
 +		bio_endio(bio);
-+		
++
 +		bio_put(bio);
 +		return;
 +	}
@@ -277,7 +277,7 @@ index 000000000000..5cf79fbf1404
 +/**
 + * blk_filter_register() - Register block layer filter.
 + * @ops: New filter callbacks.
-+ * 
++ *
 + * Return:
 + *     Filter ID, a pointer to the service structure of the filter.
 + *
@@ -307,10 +307,10 @@ index 000000000000..5cf79fbf1404
 +/**
 + * blk_filter_unregister() - Unregister block layer filter.
 + * @filter: filter identifier.
-+ * 
++ *
 + * Description:
-+ *    Before call blk_filter_unregister() and unload filter module all 
-+ *    partitions MUST be detached. Otherwise, the system will have a 
++ *    Before call blk_filter_unregister() and unload filter module all
++ *    partitions MUST be detached. Otherwise, the system will have a
 + *    filter with non-existent interception functions.
 + */
 +void blk_filter_unregister(void *filter)
@@ -341,7 +341,7 @@ index 000000000000..5cf79fbf1404
 + *    Attach the device to the block layer filter.
 + *    Only one filter can be attached to a single device.
 + */
-+int blk_filter_attach(dev_t devt, void *filter, void* filter_data)
++int blk_filter_attach(dev_t devt, void *filter, void *filter_data)
 +{
 +	int ret = 0;
 +	struct blk_filter *flt = filter;
@@ -349,18 +349,17 @@ index 000000000000..5cf79fbf1404
 +
 +
 +	blk_dev = bdget(devt);
-+	if (!blk_dev) 
++	if (!blk_dev)
 +		return -ENODEV;
 +
 +	blk_filter_freeze(blk_dev);
-+	
++
 +	if (blk_dev->bd_part->filter) {
 +		if (blk_dev->bd_part->filter == flt)
 +			ret = -EALREADY;
 +		else
 +			ret = -EBUSY;
-+	}
-+	else {
++	} else {
 +		blk_filter_get(flt);
 +		blk_dev->bd_part->filter = flt;
 +		blk_dev->bd_part->filter_data = filter_data;
@@ -379,8 +378,8 @@ index 000000000000..5cf79fbf1404
 + * @devt: The block device identification number.
 + *
 + * Description:
-+ *    Detach the device from the block layer filter. 
-+ *    Do not forget detach all devices before calling the 
++ *    Detach the device from the block layer filter.
++ *    Do not forget detach all devices before calling the
 + *    blk_filter_unregister() function and unload the module!
 + */
 +void blk_filter_detach(dev_t devt)
@@ -389,7 +388,7 @@ index 000000000000..5cf79fbf1404
 +	struct block_device *blk_dev;
 +
 +	blk_dev = bdget(devt);
-+	if (!blk_dev) 
++	if (!blk_dev)
 +		return;
 +
 +	blk_filter_freeze(blk_dev);
@@ -425,14 +424,13 @@ index 000000000000..5cf79fbf1404
 + * @bdev: The block device pointer.
 + *
 + * Description:
-+ *    Resume bio processing. 
++ *    Resume bio processing.
 + */
 +void blk_filter_thaw(struct block_device *bdev)
 +{
 +	up_write(&bdev->bd_part->filter_rw_lockup);
 +}
 +EXPORT_SYMBOL(blk_filter_thaw);
-\ No newline at end of file
 diff --git a/block/partitions/core.c b/block/partitions/core.c
 index 722406b841df..6b845e98b9a1 100644
 --- a/block/partitions/core.c
@@ -591,7 +589,7 @@ index c6d765382926..5b0a32697207 100644
  
 diff --git a/include/linux/blk-filter.h b/include/linux/blk-filter.h
 new file mode 100644
-index 000000000000..53a92cefc337
+index 000000000000..f3e79e5b4586
 --- /dev/null
 +++ b/include/linux/blk-filter.h
 @@ -0,0 +1,76 @@
@@ -612,7 +610,7 @@ index 000000000000..53a92cefc337
 +	 * Intercept bio callback.
 +	 *
 +	 * Returns true if the request was intercepted and placed in the
-+	 * queue for processing. Otherwise submit_bio_direct() calling 
++	 * queue for processing. Otherwise submit_bio_direct() calling
 +	 * needed.
 +	 */
 +	bool (*filter_bio)(struct bio *bio, void *filter_data);
@@ -621,7 +619,7 @@ index 000000000000..53a92cefc337
 +	 * Callback to a request to add block device to the filter.
 +	 *
 +	 * Returns true if the block device will be filtered.
-+	 * *p_filter_data gets a pointer to data that is unique to 
++	 * p_filter_data gets a pointer to data that is unique to
 +	 * this device.
 +	 */
 +	bool (*part_add)(dev_t devt, void **p_filter_data);
@@ -648,7 +646,7 @@ index 000000000000..53a92cefc337
 +/*
 + * Attach/detach device to filter
 + */
-+int blk_filter_attach(dev_t devt, void *filter, void* filter_data);
++int blk_filter_attach(dev_t devt, void *filter, void *filter_data);
 +
 +void blk_filter_detach(dev_t devt);
 +
