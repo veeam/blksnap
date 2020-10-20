@@ -2,6 +2,7 @@
 !.gitignore
 !.editorconfig
 cmake*
+/build/
 bins
 *.o
 *.a
