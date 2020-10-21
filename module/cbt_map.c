@@ -3,7 +3,7 @@
 #include "common.h"
 #include "cbt_map.h"
 
-int cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
+static int _cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
 		     sector_t device_capacity)
 {
 	sector_t size_mod;
@@ -42,7 +42,7 @@ int cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_deg
 	return SUCCESS;
 }
 
-void cbt_map_deallocate(struct cbt_map *cbt_map)
+static void _cbt_map_deallocate(struct cbt_map *cbt_map)
 {
 	if (cbt_map->read_map != NULL) {
 		big_buffer_free(cbt_map->read_map);
@@ -61,7 +61,7 @@ static void cbt_map_destroy(struct cbt_map *cbt_map)
 {
 	pr_info("CBT map destroy\n");
 	if (cbt_map != NULL) {
-		cbt_map_deallocate(cbt_map);
+		_cbt_map_deallocate(cbt_map);
 
 		kfree(cbt_map);
 	}
@@ -77,7 +77,7 @@ struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t d
 	if (cbt_map == NULL)
 		return NULL;
 
-	if (cbt_map_allocate(cbt_map, cbt_sect_in_block_degree, device_capacity) != SUCCESS) {
+	if (_cbt_map_allocate(cbt_map, cbt_sect_in_block_degree, device_capacity) != SUCCESS) {
 		cbt_map_destroy(cbt_map);
 		return NULL;
 	}
@@ -89,7 +89,7 @@ struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t d
 	return cbt_map;
 }
 
-void cbt_map_destroy_cb(struct kref *kref)
+static void _cbt_map_destroy_cb(struct kref *kref)
 {
 	cbt_map_destroy(container_of(kref, struct cbt_map, refcount));
 }
@@ -105,7 +105,7 @@ struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map)
 void cbt_map_put_resource(struct cbt_map *cbt_map)
 {
 	if (cbt_map)
-		kref_put(&cbt_map->refcount, cbt_map_destroy_cb);
+		kref_put(&cbt_map->refcount, _cbt_map_destroy_cb);
 }
 
 void cbt_map_switch(struct cbt_map *cbt_map)
@@ -129,7 +129,7 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 	spin_unlock(&cbt_map->locker);
 }
 
-int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt,
+static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt,
 		 u8 snap_number, struct big_buffer *map)
 {
 	int res = SUCCESS;

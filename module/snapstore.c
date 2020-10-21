@@ -9,7 +9,7 @@
 LIST_HEAD(snapstores);
 DECLARE_RWSEM(snapstores_lock);
 
-bool _snapstore_check_halffill(struct snapstore *snapstore, sector_t *fill_status)
+static bool _snapstore_check_halffill(struct snapstore *snapstore, sector_t *fill_status)
 {
 	struct blk_descr_pool *pool = NULL;
 
@@ -28,7 +28,7 @@ bool _snapstore_check_halffill(struct snapstore *snapstore, sector_t *fill_statu
 	return false;
 }
 
-void _snapstore_destroy(struct snapstore *snapstore)
+static void _snapstore_destroy(struct snapstore *snapstore)
 {
 	sector_t fill_status;
 
@@ -248,7 +248,7 @@ int snapstore_cleanup(uuid_t *id, u64 *filled_bytes)
 	return snapstore_device_cleanup(id);
 }
 
-struct snapstore *_snapstore_find(uuid_t *id)
+static struct snapstore *_snapstore_find(uuid_t *id)
 {
 	struct snapstore *result = NULL;
 
@@ -347,7 +347,7 @@ int snapstore_add_memory(uuid_t *id, unsigned long long sz)
 	return res;
 }
 
-int rangelist_add(struct list_head *rglist, struct blk_range *rg)
+static int _rangelist_add(struct list_head *rglist, struct blk_range *rg)
 {
 	struct blk_range_link *range_link;
 
@@ -421,7 +421,7 @@ int snapstore_add_file(uuid_t *id, struct big_buffer *ranges, size_t ranges_cnt)
 
 			range_offset += rg.cnt;
 
-			res = rangelist_add(&blk_rangelist, &rg);
+			res = _rangelist_add(&blk_rangelist, &rg);
 			if (res != SUCCESS) {
 				pr_err("Unable to add file to snapstore: ");
 				pr_err("cannot add range to rangelist\n");

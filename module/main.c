@@ -14,7 +14,7 @@
 #include "tracking.h"
 #include <linux/module.h>
 
-int __init blk_snap_init(void)
+static int __init blk_snap_init(void)
 {
 	int result = SUCCESS;
 
@@ -49,7 +49,7 @@ int __init blk_snap_init(void)
 	return result;
 }
 
-void __exit blk_snap_exit(void)
+static void __exit blk_snap_exit(void)
 {
 	pr_info("Unloading module\n");
 

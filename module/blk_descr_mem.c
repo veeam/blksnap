@@ -20,7 +20,7 @@ void blk_descr_mem_pool_init(struct blk_descr_pool *pool, size_t available_block
 	blk_descr_pool_init(pool, available_blocks);
 }
 
-void blk_descr_mem_cleanup(void *descr_array, size_t count)
+static void _blk_descr_mem_cleanup(void *descr_array, size_t count)
 {
 	size_t inx;
 	struct blk_descr_mem *mem_blocks = descr_array;
@@ -31,7 +31,7 @@ void blk_descr_mem_cleanup(void *descr_array, size_t count)
 
 void blk_descr_mem_pool_done(struct blk_descr_pool *pool)
 {
-	blk_descr_pool_done(pool, blk_descr_mem_cleanup);
+	blk_descr_pool_done(pool, _blk_descr_mem_cleanup);
 }
 
 static union blk_descr_unify blk_descr_mem_alloc(void *descr_array, size_t index, void *arg)

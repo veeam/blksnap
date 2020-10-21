@@ -137,7 +137,7 @@ void blk_deferred_bioset_free(void)
 	bioset_exit(&blk_deferred_bioset);
 }
 
-struct bio *_blk_deferred_bio_alloc(int nr_iovecs)
+static struct bio *_blk_deferred_bio_alloc(int nr_iovecs)
 {
 	struct bio *new_bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &blk_deferred_bioset);
 
@@ -195,7 +195,7 @@ static inline size_t _page_count_calculate(sector_t size_sector)
 	return page_count;
 }
 
-sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
+static sector_t _blk_deferred_submit_pages(struct block_device *blk_dev,
 				    struct blk_deferred_request *dio_req, int direction,
 				    sector_t arr_ofs, struct page **page_array, sector_t ofs_sector,
 				    sector_t size_sector)

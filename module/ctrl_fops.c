@@ -137,7 +137,7 @@ int ctrl_release(struct inode *inode, struct file *fl)
 	return result;
 }
 
-int ioctl_compatibility_flags(unsigned long arg)
+static int _ioctl_compatibility_flags(unsigned long arg)
 {
 	unsigned long len;
 	struct ioctl_compatibility_flags_s param;
@@ -156,7 +156,7 @@ int ioctl_compatibility_flags(unsigned long arg)
 	return SUCCESS;
 }
 
-int ioctl_get_version(unsigned long arg)
+static int _ioctl_get_version(unsigned long arg)
 {
 	unsigned long len;
 
@@ -171,7 +171,7 @@ int ioctl_get_version(unsigned long arg)
 	return SUCCESS;
 }
 
-int ioctl_tracking_add(unsigned long arg)
+static int _ioctl_tracking_add(unsigned long arg)
 {
 	unsigned long len;
 	struct ioctl_dev_id_s dev;
@@ -185,7 +185,7 @@ int ioctl_tracking_add(unsigned long arg)
 	return tracking_add(MKDEV(dev.major, dev.minor), 0ull);
 }
 
-int ioctl_tracking_remove(unsigned long arg)
+static int _ioctl_tracking_remove(unsigned long arg)
 {
 	struct ioctl_dev_id_s dev;
 
@@ -197,7 +197,7 @@ int ioctl_tracking_remove(unsigned long arg)
 	;
 }
 
-int ioctl_tracking_collect(unsigned long arg)
+static int _ioctl_tracking_collect(unsigned long arg)
 {
 	unsigned long len;
 	int res;
@@ -260,7 +260,7 @@ int ioctl_tracking_collect(unsigned long arg)
 	return res;
 }
 
-int ioctl_tracking_block_size(unsigned long arg)
+static int _ioctl_tracking_block_size(unsigned long arg)
 {
 	unsigned long len;
 	unsigned int blk_sz = change_tracking_block_size();
@@ -273,7 +273,7 @@ int ioctl_tracking_block_size(unsigned long arg)
 	return SUCCESS;
 }
 
-int ioctl_tracking_read_cbt_map(unsigned long arg)
+static int _ioctl_tracking_read_cbt_map(unsigned long arg)
 {
 	dev_t dev_id;
 	unsigned long len;
@@ -291,7 +291,7 @@ int ioctl_tracking_read_cbt_map(unsigned long arg)
 					(void *)readbitmap.buff);
 }
 
-int ioctl_tracking_mark_dirty_blocks(unsigned long arg)
+static int _ioctl_tracking_mark_dirty_blocks(unsigned long arg)
 {
 	unsigned long len;
 	struct ioctl_tracking_mark_dirty_blocks_s param;
@@ -331,7 +331,7 @@ int ioctl_tracking_mark_dirty_blocks(unsigned long arg)
 	return result;
 }
 
-int ioctl_snapshot_create(unsigned long arg)
+static int _ioctl_snapshot_create(unsigned long arg)
 {
 	unsigned long len;
 	size_t dev_id_buffer_size;
@@ -398,7 +398,7 @@ int ioctl_snapshot_create(unsigned long arg)
 	return status;
 }
 
-int ioctl_snapshot_destroy(unsigned long arg)
+static int _ioctl_snapshot_destroy(unsigned long arg)
 {
 	unsigned long len;
 	unsigned long long param;
@@ -423,7 +423,7 @@ static inline dev_t _snapstore_dev(struct ioctl_dev_id_s *dev_id)
 	return MKDEV(dev_id->major, dev_id->minor);
 }
 
-int ioctl_snapstore_create(unsigned long arg)
+static int _ioctl_snapstore_create(unsigned long arg)
 {
 	unsigned long len;
 	int res = SUCCESS;
@@ -465,7 +465,7 @@ int ioctl_snapstore_create(unsigned long arg)
 	return res;
 }
 
-int ioctl_snapstore_file(unsigned long arg)
+static int _ioctl_snapstore_file(unsigned long arg)
 {
 	unsigned long len;
 	int res = SUCCESS;
@@ -501,7 +501,7 @@ int ioctl_snapstore_file(unsigned long arg)
 	return res;
 }
 
-int ioctl_snapstore_memory(unsigned long arg)
+static int _ioctl_snapstore_memory(unsigned long arg)
 {
 	unsigned long len;
 	int res = SUCCESS;
@@ -517,7 +517,7 @@ int ioctl_snapstore_memory(unsigned long arg)
 
 	return res;
 }
-int ioctl_snapstore_cleanup(unsigned long arg)
+static int _ioctl_snapstore_cleanup(unsigned long arg)
 {
 	unsigned long len;
 	int res = SUCCESS;
@@ -544,7 +544,7 @@ int ioctl_snapstore_cleanup(unsigned long arg)
 }
 
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-int ioctl_snapstore_file_multidev(unsigned long arg)
+static int _ioctl_snapstore_file_multidev(unsigned long arg)
 {
 	unsigned long len;
 	int res = SUCCESS;
@@ -593,7 +593,7 @@ int ioctl_snapstore_file_multidev(unsigned long arg)
 /*
  * Snapshot get errno for device
  */
-int ioctl_snapshot_errno(unsigned long arg)
+static int _ioctl_snapshot_errno(unsigned long arg)
 {
 	unsigned long len;
 	int res;
@@ -620,7 +620,7 @@ int ioctl_snapshot_errno(unsigned long arg)
 	return SUCCESS;
 }
 
-int ioctl_collect_snapimages(unsigned long arg)
+static int _ioctl_collect_snapimages(unsigned long arg)
 {
 	unsigned long len;
 	int status = SUCCESS;
@@ -649,28 +649,28 @@ struct blk_snap_ioctl_table {
 };
 
 static struct blk_snap_ioctl_table blk_snap_ioctl_table[] = {
-	{ (IOCTL_COMPATIBILITY_FLAGS), ioctl_compatibility_flags },
-	{ (IOCTL_GETVERSION), ioctl_get_version },
+	{ (IOCTL_COMPATIBILITY_FLAGS), _ioctl_compatibility_flags },
+	{ (IOCTL_GETVERSION), _ioctl_get_version },
 
-	{ (IOCTL_TRACKING_ADD), ioctl_tracking_add },
-	{ (IOCTL_TRACKING_REMOVE), ioctl_tracking_remove },
-	{ (IOCTL_TRACKING_COLLECT), ioctl_tracking_collect },
-	{ (IOCTL_TRACKING_BLOCK_SIZE), ioctl_tracking_block_size },
-	{ (IOCTL_TRACKING_READ_CBT_BITMAP), ioctl_tracking_read_cbt_map },
-	{ (IOCTL_TRACKING_MARK_DIRTY_BLOCKS), ioctl_tracking_mark_dirty_blocks },
+	{ (IOCTL_TRACKING_ADD), _ioctl_tracking_add },
+	{ (IOCTL_TRACKING_REMOVE), _ioctl_tracking_remove },
+	{ (IOCTL_TRACKING_COLLECT), _ioctl_tracking_collect },
+	{ (IOCTL_TRACKING_BLOCK_SIZE), _ioctl_tracking_block_size },
+	{ (IOCTL_TRACKING_READ_CBT_BITMAP), _ioctl_tracking_read_cbt_map },
+	{ (IOCTL_TRACKING_MARK_DIRTY_BLOCKS), _ioctl_tracking_mark_dirty_blocks },
 
-	{ (IOCTL_SNAPSHOT_CREATE), ioctl_snapshot_create },
-	{ (IOCTL_SNAPSHOT_DESTROY), ioctl_snapshot_destroy },
-	{ (IOCTL_SNAPSHOT_ERRNO), ioctl_snapshot_errno },
+	{ (IOCTL_SNAPSHOT_CREATE), _ioctl_snapshot_create },
+	{ (IOCTL_SNAPSHOT_DESTROY), _ioctl_snapshot_destroy },
+	{ (IOCTL_SNAPSHOT_ERRNO), _ioctl_snapshot_errno },
 
-	{ (IOCTL_SNAPSTORE_CREATE), ioctl_snapstore_create },
-	{ (IOCTL_SNAPSTORE_FILE), ioctl_snapstore_file },
-	{ (IOCTL_SNAPSTORE_MEMORY), ioctl_snapstore_memory },
-	{ (IOCTL_SNAPSTORE_CLEANUP), ioctl_snapstore_cleanup },
+	{ (IOCTL_SNAPSTORE_CREATE), _ioctl_snapstore_create },
+	{ (IOCTL_SNAPSTORE_FILE), _ioctl_snapstore_file },
+	{ (IOCTL_SNAPSTORE_MEMORY), _ioctl_snapstore_memory },
+	{ (IOCTL_SNAPSTORE_CLEANUP), _ioctl_snapstore_cleanup },
 #ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
-	{ (IOCTL_SNAPSTORE_FILE_MULTIDEV), ioctl_snapstore_file_multidev },
+	{ (IOCTL_SNAPSTORE_FILE_MULTIDEV), _ioctl_snapstore_file_multidev },
 #endif
-	{ (IOCTL_COLLECT_SNAPSHOT_IMAGES), ioctl_collect_snapimages },
+	{ (IOCTL_COLLECT_SNAPSHOT_IMAGES), _ioctl_collect_snapimages },
 	{ 0, NULL }
 };
 

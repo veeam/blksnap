@@ -36,7 +36,7 @@ void blk_descr_file_pool_init(struct blk_descr_pool *pool)
 	blk_descr_pool_init(pool, 0);
 }
 
-void _blk_descr_file_cleanup(void *descr_array, size_t count)
+static void _blk_descr_file_cleanup(void *descr_array, size_t count)
 {
 	size_t inx;
 	struct blk_descr_file *file_blocks = descr_array;

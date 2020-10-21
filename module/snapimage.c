@@ -53,7 +53,7 @@ struct snapimage {
 	size_t open_cnt;
 };
 
-int _snapimage_open(struct block_device *bdev, fmode_t mode)
+static int _snapimage_open(struct block_device *bdev, fmode_t mode)
 {
 	int res = SUCCESS;
 
@@ -94,7 +94,7 @@ static inline uint64_t do_div_inline(uint64_t division, uint32_t divisor)
 	return division;
 }
 
-int _snapimage_getgeo(struct block_device *bdev, struct hd_geometry *geo)
+static int _snapimage_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 {
 	int res = SUCCESS;
 	sector_t quotient;
@@ -140,7 +140,7 @@ int _snapimage_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 	return res;
 }
 
-void _snapimage_close(struct gendisk *disk, fmode_t mode)
+static void _snapimage_close(struct gendisk *disk, fmode_t mode)
 {
 	if (disk->private_data != NULL) {
 		down_read(&snap_image_destroy_lock);
@@ -162,7 +162,7 @@ void _snapimage_close(struct gendisk *disk, fmode_t mode)
 		pr_err("Unable to close snapshot image: private data is not initialized\n");
 }
 
-int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, unsigned long arg)
+static int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, unsigned long arg)
 {
 	int res = -ENOTTY;
 
@@ -210,15 +210,11 @@ int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, 
 	return res;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
 blk_qc_t _snapimage_submit_bio(struct bio *bio);
-#endif
 
 const struct block_device_operations snapimage_ops = {
 	.owner = THIS_MODULE,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
 	.submit_bio = _snapimage_submit_bio,
-#endif
 	.open = _snapimage_open,
 	.ioctl = _snapimage_ioctl,
 	.release = _snapimage_close,
@@ -232,7 +228,7 @@ static inline int _snapimage_request_read(struct snapimage *image,
 	return snapstore_device_read(snapstore_device, rq_redir);
 }
 
-int _snapimage_request_write(struct snapimage *image, struct blk_redirect_bio *rq_redir)
+static int _snapimage_request_write(struct snapimage *image, struct blk_redirect_bio *rq_redir)
 {
 	struct snapstore_device *snapstore_device;
 	struct cbt_map *cbt_map;
@@ -278,7 +274,7 @@ int _snapimage_request_write(struct snapimage *image, struct blk_redirect_bio *r
 	return res;
 }
 
-void _snapimage_processing(struct snapimage *image)
+static void _snapimage_processing(struct snapimage *image)
 {
 	int res = SUCCESS;
 	struct blk_redirect_bio *rq_redir;
@@ -300,7 +296,7 @@ void _snapimage_processing(struct snapimage *image)
 		blk_redirect_complete(rq_redir, res);
 }
 
-int snapimage_processor_waiting(struct snapimage *image)
+static int _snapimage_processor_waiting(struct snapimage *image)
 {
 	int res = SUCCESS;
 
@@ -317,7 +313,7 @@ int snapimage_processor_waiting(struct snapimage *image)
 	return res;
 }
 
-int snapimage_processor_thread(void *data)
+static int _snapimage_processor_thread(void *data)
 {
 	struct snapimage *image = data;
 
@@ -330,7 +326,7 @@ int snapimage_processor_thread(void *data)
 	set_user_nice(current, -20); //MIN_NICE
 
 	while (!kthread_should_stop()) {
-		int res = snapimage_processor_waiting(image);
+		int res = _snapimage_processor_waiting(image);
 
 		if (res == SUCCESS) {
 			if (!redirect_bio_queue_empty(image->image_queue))
@@ -362,7 +358,7 @@ static inline void _snapimage_bio_complete(struct bio *bio, int err)
 	bio_endio(bio);
 }
 
-void _snapimage_bio_complete_cb(void *complete_param, struct bio *bio, int err)
+static void _snapimage_bio_complete_cb(void *complete_param, struct bio *bio, int err)
 {
 	struct snapimage *image = (struct snapimage *)complete_param;
 
@@ -374,23 +370,16 @@ void _snapimage_bio_complete_cb(void *complete_param, struct bio *bio, int err)
 	atomic_dec(&image->own_cnt);
 }
 
-int _snapimage_throttling(struct defer_io *defer_io)
+static int _snapimage_throttling(struct defer_io *defer_io)
 {
 	return wait_event_interruptible(defer_io->queue_throttle_waiter,
 					redirect_bio_queue_empty(defer_io->dio_queue));
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
-blk_qc_t _snapimage_make_request(struct request_queue *q, struct bio *bio)
-{
-#else
 blk_qc_t _snapimage_submit_bio(struct bio *bio)
 {
-	struct request_queue *q = bio->bi_disk->queue;
-#endif
-
 	blk_qc_t result = SUCCESS;
-
+	struct request_queue *q = bio->bi_disk->queue;
 	struct snapimage *image = q->queuedata;
 
 	if (unlikely(blk_mq_queue_stopped(q))) {
@@ -476,15 +465,9 @@ static int _blk_dev_get_info(struct block_device *blk_dev, struct blk_dev_info *
 
 	SectorStart = get_start_sect(blk_dev);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
 	pdev_info->physical_block_size = blk_dev->bd_disk->queue->limits.physical_block_size;
 	pdev_info->logical_block_size = blk_dev->bd_disk->queue->limits.logical_block_size;
 	pdev_info->io_min = blk_dev->bd_disk->queue->limits.io_min;
-#else
-	pdev_info->physical_block_size = blk_dev->bd_queue->limits.physical_block_size;
-	pdev_info->logical_block_size = blk_dev->bd_queue->limits.logical_block_size;
-	pdev_info->io_min = blk_dev->bd_queue->limits.io_min;
-#endif
 
 	pdev_info->blk_size = block_size(blk_dev);
 	pdev_info->start_sect = SectorStart;
@@ -571,7 +554,7 @@ static void _snapimage_destroy(struct snapimage *image)
 	spin_unlock(&snapimage_minors_lock);
 }
 
-int snapimage_create(dev_t original_dev)
+static int _snapimage_create(dev_t original_dev)
 {
 	int res = SUCCESS;
 	struct tracker *tracker = NULL;
@@ -631,12 +614,7 @@ int snapimage_create(dev_t original_dev)
 		image->open_bdev = NULL;
 		image->open_cnt = 0;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
 		image->queue = blk_alloc_queue(NUMA_NO_NODE);
-#else
-		image->queue = blk_alloc_queue(_snapimage_make_request, NUMA_NO_NODE);
-#endif
-
 		if (image->queue == NULL) {
 			res = -ENOMEM;
 			break;
@@ -693,7 +671,7 @@ int snapimage_create(dev_t original_dev)
 
 		{
 			struct task_struct *task =
-				kthread_create(snapimage_processor_thread, image, disk->disk_name);
+				kthread_create(_snapimage_processor_thread, image, disk->disk_name);
 			if (IS_ERR(task)) {
 				res = PTR_ERR(task);
 				pr_err("Failed to create request processing thread for snapshot image device. errno=%d\n",
@@ -801,7 +779,7 @@ void snapimage_destroy(dev_t original_dev)
 		       MINOR(original_dev));
 }
 
-void snapimage_destroy_for(dev_t *p_dev, int count)
+static void _snapimage_destroy_for(dev_t *p_dev, int count)
 {
 	int inx = 0;
 
@@ -815,7 +793,7 @@ int snapimage_create_for(dev_t *p_dev, int count)
 	int inx = 0;
 
 	for (; inx < count; ++inx) {
-		res = snapimage_create(p_dev[inx]);
+		res = _snapimage_create(p_dev[inx]);
 		if (res != SUCCESS) {
 			pr_err("Failed to create snapshot image for original device [%d:%d]\n",
 			       MAJOR(p_dev[inx]), MINOR(p_dev[inx]));
@@ -824,7 +802,7 @@ int snapimage_create_for(dev_t *p_dev, int count)
 	}
 	if (res != SUCCESS)
 		if (inx > 0)
-			snapimage_destroy_for(p_dev, inx - 1);
+			_snapimage_destroy_for(p_dev, inx - 1);
 	return res;
 }
 

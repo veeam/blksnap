@@ -41,7 +41,7 @@ void blk_redirect_bio_endio(struct bio *bb)
 	bio_put(bb);
 }
 
-struct bio *_blk_dev_redirect_bio_alloc(int nr_iovecs, void *bi_private)
+static struct bio *_blk_dev_redirect_bio_alloc(int nr_iovecs, void *bi_private)
 {
 	struct bio *new_bio;
 
@@ -55,7 +55,7 @@ struct bio *_blk_dev_redirect_bio_alloc(int nr_iovecs, void *bi_private)
 	return new_bio;
 }
 
-struct blk_redirect_bio_list *_redirect_bio_allocate_list(struct bio *new_bio)
+static struct blk_redirect_bio_list *_redirect_bio_allocate_list(struct bio *new_bio)
 {
 	struct blk_redirect_bio_list *next;
 
@@ -69,7 +69,7 @@ struct blk_redirect_bio_list *_redirect_bio_allocate_list(struct bio *new_bio)
 	return next;
 }
 
-int bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
+static int _bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
 {
 	struct blk_redirect_bio_list *head;
 
@@ -94,7 +94,7 @@ int bio_endio_list_push(struct blk_redirect_bio *rq_redir, struct bio *new_bio)
 	return SUCCESS;
 }
 
-void bio_endio_list_cleanup(struct blk_redirect_bio_list *curr)
+static void _bio_endio_list_cleanup(struct blk_redirect_bio_list *curr)
 {
 	while (curr != NULL) {
 		struct blk_redirect_bio_list *next;
@@ -189,7 +189,7 @@ _reprocess_bv:
 				goto _fail_out;
 			}
 
-			res = bio_endio_list_push(rq_redir, new_bio);
+			res = _bio_endio_list_push(rq_redir, new_bio);
 			if (res != SUCCESS) {
 				pr_err("Failed to add bio into bio_endio_list\n");
 				goto _fail_out;
@@ -206,7 +206,7 @@ _reprocess_bv:
 	}
 
 	if (new_bio != NULL) {
-		res = bio_endio_list_push(rq_redir, new_bio);
+		res = _bio_endio_list_push(rq_redir, new_bio);
 		if (res != SUCCESS) {
 			pr_err("Failed to add bio into bio_endio_list\n");
 			goto _fail_out;
@@ -227,7 +227,7 @@ _fail_out:
 		bio_endio_rec = bio_endio_rec->next;
 	}
 
-	bio_endio_list_cleanup(bio_endio_rec);
+	_bio_endio_list_cleanup(bio_endio_rec);
 
 	pr_err("Failed to process part of redirect IO request. rq_ofs=%lld, rq_count=%lld\n",
 	       rq_ofs, rq_count);
@@ -268,7 +268,7 @@ void blk_dev_redirect_submit(struct blk_redirect_bio *rq_redir)
 		curr = curr->next;
 	}
 
-	bio_endio_list_cleanup(head);
+	_bio_endio_list_cleanup(head);
 }
 
 int blk_dev_redirect_memcpy_part(struct blk_redirect_bio *rq_redir, int direction, void *buff,
