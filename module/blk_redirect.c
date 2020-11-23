@@ -414,10 +414,16 @@ int blk_dev_redirect_read_zeroed(struct blk_redirect_bio *rq_redir, struct block
 
 	return res;
 }
+
 void blk_redirect_complete(struct blk_redirect_bio *rq_redir, int res)
 {
-	rq_redir->complete_cb(rq_redir->complete_param, rq_redir->bio, res);
+	struct bio *bio = rq_redir->bio;
+	void *complete_param = rq_redir->complete_param;
+	blk_redirect_bio_complete_cb_t complete_cb = rq_redir->complete_cb;
+
 	redirect_bio_queue_free(rq_redir);
+
+	complete_cb(complete_param, bio, res);
 }
 
 void redirect_bio_queue_init(struct redirect_bio_queue *queue)

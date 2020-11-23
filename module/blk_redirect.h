@@ -22,6 +22,8 @@ struct redirect_bio_queue {
 	atomic_t alloc_cnt;
 };
 
+typedef void (*blk_redirect_bio_complete_cb_t)(void *complete_param, struct bio *rq, int err);
+
 struct blk_redirect_bio {
 	struct list_head link;
 	struct redirect_bio_queue *queue;
@@ -32,7 +34,7 @@ struct blk_redirect_bio {
 	atomic64_t bio_count;
 
 	void *complete_param;
-	void (*complete_cb)(void *complete_param, struct bio *rq, int err);
+	blk_redirect_bio_complete_cb_t complete_cb;
 };
 
 int blk_dev_redirect_part(struct blk_redirect_bio *rq_redir, int direction,
