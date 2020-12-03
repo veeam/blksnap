@@ -6,12 +6,212 @@
 #include "blk_util.h"
 #include "defer_io.h"
 #include "params.h"
+#include <linux/genhd.h>
 
-#include <linux/blk-filter.h>
+int tracking_attach(struct tracker *tracker, struct gendisk *disk);
+void tracking_detach(struct tracker *tracker, struct gendisk *disk);
 
-/* pointer to block layer filter */
-void *filter;
+blk_qc_t _tracking_submit_bio(struct blk_interposer *ip, struct bio *bio);
 
+LIST_HEAD(disk_interposers);
+
+struct disk_interposer
+{
+	struct kref kref;
+	struct rb_root_cached trackers_root;
+	struct blk_interposer ip;
+};
+
+static struct disk_interposer * _new_disk_interposer(struct gendisk* disk)
+{
+	struct disk_interposer *disk_ip = kzalloc(sizeof(struct disk_interposer), GFP_NOIO);
+
+	if (!disk_ip)
+		return NULL;
+
+	kref_init(&disk_ip->kref);
+	disk_ip->trackers_root = RB_ROOT_CACHED;
+	disk_ip->ip.ip_submit_bio = _tracking_submit_bio;
+	disk_ip->ip.ip_disk = disk;
+
+	/* Attach new interposer to disk.
+	 * We do not use blk_interposer_attach() because queue already stopped.
+	 */
+	disk->interposer = &disk_ip->ip;
+}
+
+static void _release_disk_interposer(struct kref *kref)
+{
+	struct disk_interposer *disk_ip = container_of(kref, struct disk_interposer, kref);
+
+	/* Detach interposer from disk.
+	 * We do not use blk_interposer_detach() because queue already stopped.
+	 */
+	disk_ip->ip_disk->interposer = NULL;
+	kfree(disk_ip);
+}
+
+/*
+ * Disk queue should be stopped.
+ */
+static struct disk_interposer * _get_disk_interposer(struct gendisk* disk)
+{
+	struct blk_interposer *ip;
+	struct disk_interposer *disk_ip;
+
+	ip = disk->interposer;
+	if (ip) {
+		if (ip->ip_submit_bio != _tracking_submit_bio) {
+			pr_err("Disks interposer already busy.\n");
+			return ERR_PTR(-EBUSY);
+		}
+
+		disk_ip = container_of(ip, struct disk_interposer, ip);
+		kref_get(&disk_ip->kref);
+	} else {
+		int ret;
+
+		disk_ip = _new_disk_interposer(disk);
+		if (!disk_ip)
+			return ERR_PTR(-ENOMEM);
+	}
+
+	return disk_ip;
+}
+
+static void _put_disk_interposer(struct disk_interposer *disk_ip)
+{
+	kref_put(&disk_ip->kref, _release_disk_interposer);
+}
+
+int tracking_attach(struct tracker *tracker, struct gendisk *disk)
+{
+	struct gendisk *disk = bdev->bd_disk;
+
+	/*
+	 * We need to freeze device queue here so that we can
+	 * to add the tracker to the tree
+	 */
+	blk_mq_freeze_queue(disk->queue);
+	blk_mq_quiesce_queue(disk->queue);
+	{
+		struct disk_interposer *disk_ip;
+
+		disk_ip = _get_disk_interposer(disk);
+		if (IS_ERR(disk_ip))
+			return PTR_ERR(disk_ip);
+
+		blk_range_rb_insert(&disk_ip->trackers_root, &tracker->range_node);
+	}
+	blk_mq_unquiesce_queue(disk->queue);
+	blk_mq_unfreeze_queue(disk->queue);
+
+	return 0;
+}
+
+void tracking_detach(struct tracker *tracker, struct gendisk *disk)
+{
+	blk_mq_freeze_queue(disk->queue);
+	blk_mq_quiesce_queue(disk->queue);
+	{
+		struct blk_interposer *ip = disk->interposer;
+
+		if(ip) {
+			struct disk_interposer *disk_ip;
+
+			disk_ip = container_of(ip, struct disk_interposer, ip);
+
+			blk_range_rb_remove(&disk_ip->trackers_root, &tracker->range_node);
+
+			_put_disk_interposer(disk_ip);
+		}
+	}
+	blk_mq_unquiesce_queue(disk->queue);
+	blk_mq_unfreeze_queue(disk->queue);
+}
+
+static blk_qc_t _tracking_submit_bio(struct blk_interposer *ip, struct bio *bio)
+{
+	struct disk_interposer *disk_ip;
+	sector_t bio_start, bio_cnt, bio_end;
+	sector_t start, cnt;
+	struct blk_range_tree_node *range_node;
+
+
+	if (WARN_ON(!ip))
+		goto out;
+
+	disk_ip = container_of(ip, disk_interposer, ip);
+
+	bio_start = bio->bi_iter.bi_sector;
+	bio_cnt = to_sector(bio->bi_iter.bi_size);
+	bio_end = bio_start + bio_cnt;
+
+	range_node = blk_range_rb_iter_first(&disk_ip->trackers_root, bio_start, bio_end - 1);
+	if(!range_node)
+		goto out; //trackers not found
+
+	cnt = bio_cnt;
+	start = bio_start - range_node->range.ofs; //remap to tracked block device
+	while(cnt) {
+		sector_t range_end = range_node->range.ofs + range_node->range.cnt;
+		struct tracker *tracker = container_of(range_node, struct tracker, range_node);
+
+		if (bio_end > range_end)
+			cnt = cnt - (bio_end - range_end);
+
+		if (bio_data_dir(bio) && bio_has_data(bio)) {
+			//call CBT algorithm
+			if (tracker_cbt_bitmap_lock(tracker)) {
+				tracker_cbt_bitmap_set(tracker, start, cnt);
+				tracker_cbt_bitmap_unlock(tracker);
+			}
+
+			//initiate COW algorithm
+			if (atomic_read(&tracker->is_captured))
+				tracker_cow(tracker, start, cnt);
+		}
+
+		/* try to find next tracker for this bio */
+		range_node = blk_range_rb_iter_next(range_node, bio_start, bio_end - 1);
+		if(!range_node)
+			break;
+
+		start = bio_start + cnt - range_node->range.ofs; //remap to next tracked device
+		cnt = bio_cnt - cnt;
+
+		/*
+		 * If second range_node was found then bio content sectors from both partitions
+		 */
+		pr_tr("Multi-partition bio\n");
+	}
+
+out:
+	bio_list_add(&current->bio_list[0], bio);
+	return BLK_QC_T_NONE;
+}
+
+int tracking_attach_tracker(struct tracker *tracker)
+{
+	struct gendisk *disk = tracker->target_dev->bd_disk;
+	struct disk_interposer *disk_ip;
+
+	if (blk_has_interposer(disk) && (disk->interposer->ip_submit_bio != _tracking_submit_bio)) {
+		pr_tr("Foreign interposer is already attached.\n");
+		return -EBUSY;
+	}
+
+	if (!blk_has_interposer(disk)) {
+		disk_ip = disk_interposer_new();
+	}
+}
+
+void tracking_dettach_tracker(struct tracker *tracker)
+{
+	//disk_interposer_delete(disk_ip);
+}
+
+#if 0
 /*
  * _tracking_submit_bio() - Intercept bio by block io layer filter
  */
@@ -88,7 +288,7 @@ struct blk_filter_ops filter_ops = {
 	.part_add = _tracking_part_add,
 	.part_del = _tracking_part_del };
 
-
+#endif
 
 int tracking_init(void)
 {
@@ -141,9 +341,9 @@ static int _add_already_tracked(dev_t dev_id, unsigned long long snapshot_id,
 	if (!cbt_reset_needed)
 		return SUCCESS;
 
-	_tracker_remove(tracker, true);
+	_tracker_remove(tracker);
 
-	result = _tracker_create(tracker, filter, true);
+	result = _tracker_create(tracker, dev_id);
 	if (result != SUCCESS) {
 		pr_err("Failed to create tracker. errno=%d\n", result);
 		return result;
@@ -159,7 +359,7 @@ static int _create_new_tracker(dev_t dev_id, unsigned long long snapshot_id)
 	int result;
 	struct tracker *tracker = NULL;
 
-	result = tracker_create(dev_id, filter, &tracker);
+	result = tracker_create(dev_id, &tracker);
 	if (result != SUCCESS) {
 		pr_err("Failed to create tracker. errno=%d\n", result);
 		return result;

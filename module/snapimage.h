@@ -7,8 +7,8 @@ int snapimage_init(void);
 void snapimage_done(void);
 int snapimage_create_for(dev_t *p_dev, int count);
 
-void snapimage_stop(dev_t original_dev);
-void snapimage_destroy(dev_t original_dev);
+void snapimage_stop(dev_t orig_dev_id);
+void snapimage_destroy(dev_t orig_dev_id);
 
 int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, int *p_real_count);
 

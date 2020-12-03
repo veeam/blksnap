@@ -30,6 +30,8 @@ struct cbt_map {
 };
 
 struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t device_capacity);
+int cbt_map_reset(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
+		  sector_t device_capacity);
 
 struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map);
 void cbt_map_put_resource(struct cbt_map *cbt_map);

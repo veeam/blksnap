@@ -31,3 +31,12 @@ static inline sector_t part_nr_sects_read(struct hd_struct *part)
 	return part->nr_sects;
 #endif
 }
+
+int blk_bioset_create(void);
+void blk_bioset_free(void);
+
+int blk_submit_pages(struct block_device *blk_dev, int direction, sector_t arr_ofs,
+		     struct page **page_array,
+		     sector_t ofs_sector, sector_t size_sector,
+		     atomic_t *bio_counter,
+		     void* bi_private, bio_end_io_t bi_end_io);

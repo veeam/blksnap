@@ -28,9 +28,11 @@ struct snapimage {
 	struct list_head link;
 
 	sector_t capacity;
-	dev_t original_dev;
+	dev_t orig_dev_id;
 
-	struct defer_io *defer_io;
+	struct blk_interposer interposer;
+	//struct defer_io *defer_io;
+	struct snapstore_device *snapdev;
 	struct cbt_map *cbt_map;
 
 	dev_t image_dev;
@@ -211,6 +213,7 @@ static int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned in
 }
 
 blk_qc_t _snapimage_submit_bio(struct bio *bio);
+blk_qc_t _snapimage_interpose_bio(struct bio *bio);
 
 const struct block_device_operations snapimage_ops = {
 	.owner = THIS_MODULE,
@@ -223,27 +226,25 @@ const struct block_device_operations snapimage_ops = {
 static inline int _snapimage_request_read(struct snapimage *image,
 					  struct blk_redirect_bio *rq_redir)
 {
-	struct snapstore_device *snapstore_device = image->defer_io->snapstore_device;
-
-	return snapstore_device_read(snapstore_device, rq_redir);
+	return snapstore_device_read(image->snapdev, rq_redir);
 }
 
 static int _snapimage_request_write(struct snapimage *image, struct blk_redirect_bio *rq_redir)
 {
-	struct snapstore_device *snapstore_device;
+	struct snapstore_device *snapdev;
 	struct cbt_map *cbt_map;
 	int res = SUCCESS;
 
-	if (unlikely((image->defer_io == NULL) || (image->cbt_map == NULL))) {
+	if (unlikely((image->snapdev == NULL) || (image->cbt_map == NULL))) {
 		pr_err("Invalid snapshot image structure");
 		return -EINVAL;
 	}
 
 
-	snapstore_device = image->defer_io->snapstore_device;
+	snapdev = image->snapdev;
 	cbt_map = image->cbt_map;
 
-	if (snapstore_device_is_corrupted(snapstore_device))
+	if (snapstore_device_is_corrupted(snapdev))
 		return -ENODATA;
 
 	if (!bio_has_data(rq_redir->bio)) {
@@ -264,7 +265,7 @@ static int _snapimage_request_write(struct snapimage *image, struct blk_redirect
 			       res);
 	}
 
-	res = snapstore_device_write(snapstore_device, rq_redir);
+	res = snapstore_device_write(snapdev, rq_redir);
 
 	if (res != SUCCESS) {
 		pr_err("Failed to write data to snapshot image\n");
@@ -273,7 +274,7 @@ static int _snapimage_request_write(struct snapimage *image, struct blk_redirect
 
 	return res;
 }
-
+/*
 static void _snapimage_processing(struct snapimage *image)
 {
 	int res = SUCCESS;
@@ -295,7 +296,8 @@ static void _snapimage_processing(struct snapimage *image)
 	if (res != SUCCESS)
 		blk_redirect_complete(rq_redir, res);
 }
-
+*/
+/*
 static int _snapimage_processor_waiting(struct snapimage *image)
 {
 	int res = SUCCESS;
@@ -311,8 +313,8 @@ static int _snapimage_processor_waiting(struct snapimage *image)
 			res = -ETIME;
 	}
 	return res;
-}
-
+}*/
+/*
 static int _snapimage_processor_thread(void *data)
 {
 	struct snapimage *image = data;
@@ -347,7 +349,7 @@ static int _snapimage_processor_thread(void *data)
 		MINOR(image->image_dev));
 	return 0;
 }
-
+*/
 static inline void _snapimage_bio_complete(struct bio *bio, int err)
 {
 	if (err == SUCCESS)
@@ -370,12 +372,28 @@ static void _snapimage_bio_complete_cb(void *complete_param, struct bio *bio, in
 	atomic_dec(&image->own_cnt);
 }
 
-static int _snapimage_throttling(struct defer_io *defer_io)
+/*static int _snapimage_throttling(struct defer_io *defer_io)
 {
 	return wait_event_interruptible(defer_io->queue_throttle_waiter,
 					redirect_bio_queue_empty(defer_io->dio_queue));
+}*/
+
+blk_qc_t _snapimage_interpose_bio(struct bio *bio)
+{
+
+
+	return BLK_QC_T_NONE;
 }
 
+blk_qc_t _snapimage_submit_bio(struct bio *bio)
+{
+	/*
+	 * Don't do anything, because the reassignment is done in _snapimage_interpose_bio()
+	 */
+
+	return BLK_QC_T_NONE;
+}
+/*
 blk_qc_t _snapimage_submit_bio(struct bio *bio)
 {
 	blk_qc_t result = SUCCESS;
@@ -401,10 +419,11 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 			break;
 		}
 
-		if (snapstore_device_is_corrupted(image->defer_io->snapstore_device)) {
+		if (snapstore_device_is_corrupted(image->snapdev)) {
 			_snapimage_bio_complete(bio, -ENODATA);
 			break;
 		}
+
 
 		res = _snapimage_throttling(image->defer_io);
 		if (res != SUCCESS) {
@@ -439,7 +458,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 	atomic_dec(&image->own_cnt);
 
 	return result;
-}
+}*/
 
 struct blk_dev_info {
 	size_t blk_size;
@@ -497,13 +516,18 @@ static int blk_dev_get_info(dev_t dev_id, struct blk_dev_info *pdev_info)
 
 static inline void _snapimage_free(struct snapimage *image)
 {
-	defer_io_put_resource(image->defer_io);
+	snapstore_device_put_resource(image->snapdev);
+	image->snapdev = NULL;
+
 	cbt_map_put_resource(image->cbt_map);
-	image->defer_io = NULL;
+	image->cbt_map = NULL;
 }
 
 static void _snapimage_stop(struct snapimage *image)
 {
+	struct request_queue *q = image->queue;
+
+	/*
 	if (image->rq_processor != NULL) {
 		if (redirect_bio_queue_active(&image->image_queue, false)) {
 			struct request_queue *q = image->queue;
@@ -524,6 +548,13 @@ static void _snapimage_stop(struct snapimage *image)
 			wait_event_interruptible(image->rq_complete_event,
 						 redirect_bio_queue_unactive(image->image_queue));
 	}
+	*/
+	pr_info("Snapshot image request processing stop\n");
+	blk_mq_freeze_queue(q);
+	blk_mq_quiesce_queue(q);
+
+	pr_info("Snapshot image disk delete\n");
+	del_gendisk(image->disk);
 }
 
 static void _snapimage_destroy(struct snapimage *image)
@@ -554,7 +585,7 @@ static void _snapimage_destroy(struct snapimage *image)
 	spin_unlock(&snapimage_minors_lock);
 }
 
-static int _snapimage_create(dev_t original_dev)
+static int _snapimage_create(dev_t orig_dev_id)
 {
 	int res = SUCCESS;
 	struct tracker *tracker = NULL;
@@ -563,19 +594,19 @@ static int _snapimage_create(dev_t original_dev)
 	int minor;
 	struct blk_dev_info original_dev_info;
 
-	pr_info("Create snapshot image for device [%d:%d]\n", MAJOR(original_dev),
-		MINOR(original_dev));
+	pr_info("Create snapshot image for device [%d:%d]\n", MAJOR(orig_dev_id),
+		MINOR(orig_dev_id));
 
-	res = blk_dev_get_info(original_dev, &original_dev_info);
+	res = blk_dev_get_info(orig_dev_id, &original_dev_info);
 	if (res != SUCCESS) {
 		pr_err("Failed to obtain original device info\n");
 		return res;
 	}
 
-	res = tracker_find_by_dev_id(original_dev, &tracker);
+	res = tracker_find_by_dev_id(orig_dev_id, &tracker);
 	if (res != SUCCESS) {
 		pr_err("Unable to create snapshot image: cannot find tracker for device [%d:%d]\n",
-		       MAJOR(original_dev), MINOR(original_dev));
+		       MAJOR(orig_dev_id), MINOR(orig_dev_id));
 		return res;
 	}
 
@@ -600,9 +631,9 @@ static int _snapimage_create(dev_t original_dev)
 
 		image->capacity = original_dev_info.count_sect;
 
-		image->defer_io = defer_io_get_resource(tracker->defer_io);
+		image->snapdev = defer_io_get_resource(tracker->snapdev);
 		image->cbt_map = cbt_map_get_resource(tracker->cbt_map);
-		image->original_dev = original_dev;
+		image->orig_dev_id = orig_dev_id;
 
 		image->image_dev = MKDEV(snapimage_major, minor);
 		pr_info("Snapshot image device id [%d:%d]\n", MAJOR(image->image_dev),
@@ -667,7 +698,7 @@ static int _snapimage_create(dev_t original_dev)
 			(u64)from_sectors(image->capacity));
 
 		//res = -ENOMEM;
-		redirect_bio_queue_init(&image->image_queue);
+/*		redirect_bio_queue_init(&image->image_queue);
 
 		{
 			struct task_struct *task =
@@ -683,7 +714,21 @@ static int _snapimage_create(dev_t original_dev)
 		init_waitqueue_head(&image->rq_complete_event);
 
 		init_waitqueue_head(&image->rq_proc_event);
-		wake_up_process(image->rq_processor);
+		wake_up_process(image->rq_processor);*/
+		/*
+		 * snapimage - it`s fake device. Its purpose is just to redirect bio to another devices.
+		 * Therefore, the main work is implemented in the  _snapimage_interpose_bio() function.
+		 * blk_interposer allow to schedule the executing of a new child bio.
+		 * Then the child`s bio will complete, the original bio will also be complete.
+		 */
+		image->interposer.ip_disk = disk;
+		image->interposer.ip_submit_bio = _snapimage_interpose_bio;
+		image->interposer.ip_private = image;
+
+		disk->interposer = &image->interposer;
+
+		add_disk(image->disk);
+
 	} while (false);
 
 	if (res == SUCCESS) {
@@ -700,7 +745,7 @@ static int _snapimage_create(dev_t original_dev)
 	return res;
 }
 
-static struct snapimage *snapimage_find(dev_t original_dev)
+static struct snapimage *snapimage_find(dev_t orig_dev_id)
 {
 	struct snapimage *image = NULL;
 
@@ -711,7 +756,7 @@ static struct snapimage *snapimage_find(dev_t original_dev)
 		list_for_each(_list_head, &snap_images) {
 			struct snapimage *_image = list_entry(_list_head, struct snapimage, link);
 
-			if (_image->original_dev == original_dev) {
+			if (_image->orig_dev_id == orig_dev_id) {
 				image = _image;
 				break;
 			}
@@ -722,31 +767,31 @@ static struct snapimage *snapimage_find(dev_t original_dev)
 	return image;
 }
 
-void snapimage_stop(dev_t original_dev)
+void snapimage_stop(dev_t orig_dev_id)
 {
 	struct snapimage *image;
 
-	pr_info("Snapshot image processing stop for original device [%d:%d]\n", MAJOR(original_dev),
-		MINOR(original_dev));
+	pr_info("Snapshot image processing stop for original device [%d:%d]\n", MAJOR(orig_dev_id),
+		MINOR(orig_dev_id));
 
 	down_read(&snap_image_destroy_lock);
 
-	image = snapimage_find(original_dev);
+	image = snapimage_find(orig_dev_id);
 	if (image != NULL)
 		_snapimage_stop(image);
 	else
-		pr_err("Snapshot image [%d:%d] not found\n", MAJOR(original_dev),
-		       MINOR(original_dev));
+		pr_err("Snapshot image [%d:%d] not found\n", MAJOR(orig_dev_id),
+		       MINOR(orig_dev_id));
 
 	up_read(&snap_image_destroy_lock);
 }
 
-void snapimage_destroy(dev_t original_dev)
+void snapimage_destroy(dev_t orig_dev_id)
 {
 	struct snapimage *image = NULL;
 
-	pr_info("Destroy snapshot image for device [%d:%d]\n", MAJOR(original_dev),
-		MINOR(original_dev));
+	pr_info("Destroy snapshot image for device [%d:%d]\n", MAJOR(orig_dev_id),
+		MINOR(orig_dev_id));
 
 	down_write(&snap_images_lock);
 	if (!list_empty(&snap_images)) {
@@ -755,7 +800,7 @@ void snapimage_destroy(dev_t original_dev)
 		list_for_each(_list_head, &snap_images) {
 			struct snapimage *_image = list_entry(_list_head, struct snapimage, link);
 
-			if (_image->original_dev == original_dev) {
+			if (_image->orig_dev_id == orig_dev_id) {
 				image = _image;
 				list_del(&image->link);
 				break;
@@ -775,8 +820,8 @@ void snapimage_destroy(dev_t original_dev)
 
 		up_write(&snap_image_destroy_lock);
 	} else
-		pr_err("Snapshot image [%d:%d] not found\n", MAJOR(original_dev),
-		       MINOR(original_dev));
+		pr_err("Snapshot image [%d:%d] not found\n", MAJOR(orig_dev_id),
+		       MINOR(orig_dev_id));
 }
 
 static void _snapimage_destroy_for(dev_t *p_dev, int count)
@@ -846,7 +891,7 @@ void snapimage_done(void)
 			break;
 
 		pr_err("Snapshot image for device was unexpectedly removed [%d:%d]\n",
-		       MAJOR(image->original_dev), MINOR(image->original_dev));
+		       MAJOR(image->orig_dev_id), MINOR(image->orig_dev_id));
 
 		_snapimage_destroy(image);
 		_snapimage_free(image);
@@ -915,9 +960,9 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 				real_count++;
 
 				p_kernel_image_info[inx].original_dev_id.major =
-					MAJOR(img->original_dev);
+					MAJOR(img->orig_dev_id);
 				p_kernel_image_info[inx].original_dev_id.minor =
-					MINOR(img->original_dev);
+					MINOR(img->orig_dev_id);
 
 				p_kernel_image_info[inx].snapshot_dev_id.major =
 					MAJOR(img->image_dev);

@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#include <linux/kref.h>
-#include "snapstore_device.h"
+#include "snapstore.h"
 
+
+//#include "snapstore_device.h"
+/*
 struct defer_io_queue {
 	struct list_head list;
 	spinlock_t lock;
@@ -37,3 +39,4 @@ struct defer_io *defer_io_get_resource(struct defer_io *defer_io);
 void defer_io_put_resource(struct defer_io *defer_io);
 
 int defer_io_redirect_bio(struct defer_io *defer_io, struct bio *bio, void *tracker);
+*/

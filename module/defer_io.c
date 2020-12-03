@@ -2,12 +2,15 @@
 #define BLK_SNAP_SECTION "-defer_io"
 #include "common.h"
 #include "defer_io.h"
-#include "blk_deferred.h"
-#include "tracker.h"
+//#include "blk_deferred.h"
+//#include "tracker.h"
 #include "blk_util.h"
 
-#include <linux/kthread.h>
+//#include <linux/kthread.h>
 
+
+
+/*
 #define BLK_IMAGE_THROTTLE_TIMEOUT (1 * HZ) //delay 1 sec
 //#define BLK_IMAGE_THROTTLE_TIMEOUT ( HZ/1000 * 10 )	//delay 10 ms
 
@@ -130,7 +133,7 @@ static void _defer_io_finish(struct defer_io *defer_io, struct defer_io_queue *q
 			}
 		}
 
-		submit_bio_direct(orig_req->bio);
+		submit_bio(orig_req->bio);
 
 		if (cbt_locked)
 			tracker_cbt_bitmap_unlock(tracker);
@@ -395,3 +398,4 @@ int defer_io_redirect_bio(struct defer_io *defer_io, struct bio *bio, void *trac
 
 	return SUCCESS;
 }
+*/

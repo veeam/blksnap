@@ -26,6 +26,10 @@ static int __init blk_snap_init(void)
 	if (result != SUCCESS)
 		return result;
 
+	result = blk_bioset_create();
+	if (result != SUCCESS)
+		return result;
+
 	result = blk_redirect_bioset_create();
 	if (result != SUCCESS)
 		return result;
@@ -69,6 +73,8 @@ static void __exit blk_snap_exit(void)
 	blk_deferred_done();
 
 	blk_redirect_bioset_free();
+
+	blk_bioset_free();
 
 	ctrl_done();
 }

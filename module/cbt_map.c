@@ -44,6 +44,8 @@ static int _cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_b
 
 static void _cbt_map_deallocate(struct cbt_map *cbt_map)
 {
+	cbt_map->active = false;
+
 	if (cbt_map->read_map != NULL) {
 		big_buffer_free(cbt_map->read_map);
 		cbt_map->read_map = NULL;
@@ -53,8 +55,14 @@ static void _cbt_map_deallocate(struct cbt_map *cbt_map)
 		big_buffer_free(cbt_map->write_map);
 		cbt_map->write_map = NULL;
 	}
+}
 
-	cbt_map->active = false;
+int cbt_map_reset(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
+		  sector_t device_capacity)
+{
+	_cbt_map_deallocate(cbt_map);
+
+	return _cbt_map_allocate(cbt_map, cbt_sect_in_block_degree, device_capacity);
 }
 
 static void cbt_map_destroy(struct cbt_map *cbt_map)

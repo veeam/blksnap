@@ -9,14 +9,6 @@
 LIST_HEAD(snapstore_devices);
 DECLARE_RWSEM(snapstore_devices_lock);
 
-static inline void _snapstore_device_descr_write_lock(struct snapstore_device *snapstore_device)
-{
-	mutex_lock(&snapstore_device->store_block_map_locker);
-}
-static inline void _snapstore_device_descr_write_unlock(struct snapstore_device *snapstore_device)
-{
-	mutex_unlock(&snapstore_device->store_block_map_locker);
-}
 
 void snapstore_device_done(void)
 {
@@ -36,7 +28,7 @@ void snapstore_device_done(void)
 	} while (snapstore_device);
 }
 
-struct snapstore_device *snapstore_device_find_by_dev_id(dev_t dev_id)
+struct snapstore_device *snapstore_device_find_by_dev_id(dev_t orig_dev_id)
 {
 	struct snapstore_device *result = NULL;
 
@@ -48,7 +40,7 @@ struct snapstore_device *snapstore_device_find_by_dev_id(dev_t dev_id)
 			struct snapstore_device *snapstore_device =
 				list_entry(_head, struct snapstore_device, link);
 
-			if (dev_id == snapstore_device->dev_id) {
+			if (orig_dev_id == snapstore_device->orig_dev_id) {
 				result = snapstore_device;
 				break;
 			}
@@ -87,10 +79,10 @@ static void _snapstore_device_destroy(struct snapstore_device *snapstore_device)
 {
 	pr_info("Destroy snapstore device\n");
 
-	xa_destroy(&snapstore_device->store_block_map);
+	xa_destroy(&snapstore_device->cow_blk_map);
 
-	if (snapstore_device->orig_blk_dev != NULL)
-		blk_dev_close(snapstore_device->orig_blk_dev);
+	if (snapstore_device->orig_bdev != NULL)
+		blk_dev_close(snapstore_device->orig_bdev);
 
 	rangevector_done(&snapstore_device->zero_sectors);
 
@@ -140,7 +132,7 @@ int snapstore_device_cleanup(uuid_t *id)
 	return result;
 }
 
-int snapstore_device_create(dev_t dev_id, struct snapstore *snapstore)
+int snapstore_device_create(dev_t orig_dev_id, struct snapstore *snapstore)
 {
 	int res = SUCCESS;
 	struct snapstore_device *snapstore_device =
@@ -150,14 +142,14 @@ int snapstore_device_create(dev_t dev_id, struct snapstore *snapstore)
 		return -ENOMEM;
 
 	INIT_LIST_HEAD(&snapstore_device->link);
-	snapstore_device->dev_id = dev_id;
+	snapstore_device->orig_dev_id = orig_dev_id;
 
-	res = blk_dev_open(dev_id, &snapstore_device->orig_blk_dev);
+	res = blk_dev_open(orig_dev_id, &snapstore_device->orig_bdev);
 	if (res != SUCCESS) {
 		kfree(snapstore_device);
 
 		pr_err("Unable to create snapstore device: failed to open original device [%d:%d]\n",
-		       MAJOR(dev_id), MINOR(dev_id));
+		       MAJOR(orig_dev_id), MINOR(orig_dev_id));
 		return res;
 	}
 
@@ -168,11 +160,11 @@ int snapstore_device_create(dev_t dev_id, struct snapstore *snapstore)
 	snapstore_device->corrupted = false;
 	atomic_set(&snapstore_device->req_failed_cnt, 0);
 
-	mutex_init(&snapstore_device->store_block_map_locker);
+	mutex_init(&snapstore_device->cow_blk_map_locker);
 
 	rangevector_init(&snapstore_device->zero_sectors);
 
-	xa_init(&snapstore_device->store_block_map);
+	xa_init(&snapstore_device->cow_blk_map);
 
 	snapstore_device->snapstore = snapstore_get(snapstore);
 
@@ -182,7 +174,7 @@ int snapstore_device_create(dev_t dev_id, struct snapstore *snapstore)
 
 	return SUCCESS;
 }
-
+/*
 int snapstore_device_add_request(struct snapstore_device *snapstore_device,
 				 unsigned long block_index,
 				 struct blk_deferred_request **dio_copy_req)
@@ -199,7 +191,7 @@ int snapstore_device_add_request(struct snapstore_device *snapstore_device,
 	}
 
 	res = xa_err(
-		xa_store(&snapstore_device->store_block_map, block_index, blk_descr.ptr, GFP_NOIO));
+		xa_store(&snapstore_device->cow_blk_map, block_index, blk_descr.ptr, GFP_NOIO));
 	if (res != SUCCESS) {
 		pr_err("Unable to add block to defer IO request: failed to set block descriptor to descriptors array. errno=%d\n",
 		       res);
@@ -242,6 +234,8 @@ int snapstore_device_add_request(struct snapstore_device *snapstore_device,
 	return res;
 }
 
+
+
 int snapstore_device_prepare_requests(struct snapstore_device *snapstore_device,
 				      struct blk_range *copy_range,
 				      struct blk_deferred_request **dio_copy_req)
@@ -253,16 +247,15 @@ int snapstore_device_prepare_requests(struct snapstore_device *snapstore_device,
 		(unsigned long)((copy_range->ofs + copy_range->cnt - 1) >> snapstore_block_shift());
 
 	for (inx = first; inx <= last; inx++) {
-		if (xa_load(&snapstore_device->store_block_map, inx) == NULL) {
+		if (xa_load(&snapstore_device->cow_blk_map, inx) == NULL) {
 			res = snapstore_device_add_request(snapstore_device, inx, dio_copy_req);
 			if (res != SUCCESS) {
 				pr_err("Failed to create copy defer IO request. errno=%d\n", res);
 				break;
 			}
 		}
-		/*
-		 * If xa_load() return not NULL, then block already stored.
-		 */
+		// If xa_load() return not NULL, then block already stored.
+
 	}
 	if (res != SUCCESS)
 		snapstore_device_set_corrupted(snapstore_device, res);
@@ -280,6 +273,26 @@ int snapstore_device_store(struct snapstore_device *snapstore_device,
 		snapstore_device_set_corrupted(snapstore_device, res);
 
 	return res;
+}
+*/
+/*int snapstore_device_submit_pages(struct snapstore_device *snapstore_device,
+				  int direction, sector_t arr_ofs,
+				  struct page **page_array,
+				  sector_t ofs_sector, sector_t size_sector,
+				  atomic_t *bio_counter,
+				  void* bi_private, bio_end_io_t bi_end_io)
+*/
+int snapstore_device_store_block(struct snapstore_device *snapstore_device,
+				 struct cow_block *blk, bio_end_io_t bi_end_io)
+{
+	int res = SUCCESS;
+	union blk_descr_unify blk_descr = { NULL };
+
+	blk_descr = snapstore_get_empty_block(snapstore_device->snapstore);
+	if (blk_descr.ptr == NULL) {
+		pr_err("Unable to add block to defer IO request: failed to allocate next block\n");
+		return -ENODATA;
+	}
 }
 
 int snapstore_device_read(struct snapstore_device *snapstore_device,
@@ -315,7 +328,7 @@ int snapstore_device_read(struct snapstore_device *snapstore_device,
 	block_index_last =
 		(unsigned long)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
 
-	_snapstore_device_descr_write_lock(snapstore_device);
+	mutex_lock(&snapstore_device->cow_blk_map_locker);
 	for (block_index = block_index_first; block_index <= block_index_last; ++block_index) {
 		union blk_descr_unify blk_descr;
 
@@ -324,7 +337,7 @@ int snapstore_device_read(struct snapstore_device *snapstore_device,
 					      (rq_range.ofs + blk_ofs_start),
 				      rq_range.cnt - blk_ofs_start);
 
-		blk_descr = (union blk_descr_unify)xa_load(&snapstore_device->store_block_map,
+		blk_descr = (union blk_descr_unify)xa_load(&snapstore_device->cow_blk_map,
 							   block_index);
 		if (blk_descr.ptr) {
 			//push snapstore read
@@ -339,12 +352,12 @@ int snapstore_device_read(struct snapstore_device *snapstore_device,
 			//device read with zeroing
 			if (zero_sectors)
 				res = blk_dev_redirect_read_zeroed(rq_redir,
-								   snapstore_device->orig_blk_dev,
+								   snapstore_device->orig_bdev,
 								   rq_range.ofs, blk_ofs_start,
 								   blk_ofs_count, zero_sectors);
 			else
 				res = blk_dev_redirect_part(rq_redir, READ,
-							    snapstore_device->orig_blk_dev,
+							    snapstore_device->orig_bdev,
 							    rq_range.ofs + blk_ofs_start,
 							    blk_ofs_start, blk_ofs_count);
 
@@ -368,7 +381,7 @@ int snapstore_device_read(struct snapstore_device *snapstore_device,
 		pr_err("Failed to read from snapstore device. errno=%d\n", res);
 		pr_err("Position %lld sector, length %lld sectors\n", rq_range.ofs, rq_range.cnt);
 	}
-	_snapstore_device_descr_write_unlock(snapstore_device);
+	mutex_unlock(&snapstore_device->cow_blk_map_locker);
 
 	return res;
 }
@@ -379,7 +392,7 @@ int _snapstore_device_copy_on_write(struct snapstore_device *snapstore_device,
 	int res = SUCCESS;
 	struct blk_deferred_request *dio_copy_req = NULL;
 
-	mutex_lock(&snapstore_device->store_block_map_locker);
+	mutex_lock(&snapstore_device->cow_blk_map_locker);
 	do {
 		res = snapstore_device_prepare_requests(snapstore_device, rq_range, &dio_copy_req);
 		if (res != SUCCESS) {
@@ -390,7 +403,7 @@ int _snapstore_device_copy_on_write(struct snapstore_device *snapstore_device,
 		if (dio_copy_req == NULL)
 			break; //nothing to copy
 
-		res = blk_deferred_request_read_original(snapstore_device->orig_blk_dev,
+		res = blk_deferred_request_read_original(snapstore_device->orig_bdev,
 							 dio_copy_req);
 		if (res != SUCCESS) {
 			pr_err("Failed to read data from the original device. errno=%d\n", res);
@@ -403,7 +416,7 @@ int _snapstore_device_copy_on_write(struct snapstore_device *snapstore_device,
 			break;
 		}
 	} while (false);
-	mutex_unlock(&snapstore_device->store_block_map_locker);
+	mutex_unlock(&snapstore_device->cow_blk_map_locker);
 
 	if (dio_copy_req) {
 		if (res == -EDEADLK)
@@ -447,7 +460,7 @@ int snapstore_device_write(struct snapstore_device *snapstore_device,
 	block_index_last =
 		(unsigned long)((rq_range.ofs + rq_range.cnt - 1) >> snapstore_block_shift());
 
-	_snapstore_device_descr_write_lock(snapstore_device);
+	mutex_lock(&snapstore_device->cow_blk_map_locker);
 	for (block_index = block_index_first; block_index <= block_index_last; ++block_index) {
 		union blk_descr_unify blk_descr;
 
@@ -456,7 +469,7 @@ int snapstore_device_write(struct snapstore_device *snapstore_device,
 					      (rq_range.ofs + blk_ofs_start),
 				      rq_range.cnt - blk_ofs_start);
 
-		blk_descr = (union blk_descr_unify)xa_load(&snapstore_device->store_block_map,
+		blk_descr = (union blk_descr_unify)xa_load(&snapstore_device->cow_blk_map,
 							   block_index);
 		if (blk_descr.ptr == NULL) {
 			pr_err("Unable to write from snapstore device: invalid snapstore block descriptor\n");
@@ -486,7 +499,7 @@ int snapstore_device_write(struct snapstore_device *snapstore_device,
 
 		snapstore_device_set_corrupted(snapstore_device, res);
 	}
-	_snapstore_device_descr_write_unlock(snapstore_device);
+	mutex_unlock(&snapstore_device->cow_blk_map_locker);
 	return res;
 }
 
@@ -529,4 +542,33 @@ int snapstore_device_errno(dev_t dev_id, int *p_err_code)
 
 	*p_err_code = snapstore_device->err_code;
 	return SUCCESS;
+}
+
+
+struct cow_block *snapstore_device_take_cow_block(struct snapstore_device *snapstore_device,
+						  uint64_t blk_inx)
+{
+	struct range rg;
+	struct cow_block *blk;
+
+	mutex_lock(&snapstore_device->cow_blk_map_locker);
+	do {
+		blk = xa_load(&cow_map->blocks, blk_inx);
+		if (blk)
+			break;
+
+		rg.ofs = blk_inx << snapstore_block_shift();
+		rg.cnt = snapstore_block_size();
+		if ((rg.ofs + rg.cnt) > cow_block->dev_capacity)
+			rg.cnt = cow_block->dev_capacity - rg.ofs;
+
+		blk = cow_block_new(snapstore_device, rg);
+		if (IS_ERR(blk))
+			break;
+
+		xa_store(&cow_map->blocks, blk_inx, blk, GFP_NOIO);
+	} while (false);
+	mutex_unlock(&snapstore_device->cow_blk_map_locker);
+
+	return blk;
 }
