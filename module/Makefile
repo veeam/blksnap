@@ -27,5 +27,21 @@ $(KERNEL_MODULE_NAME)-y += snapstore_multidev.o
 $(KERNEL_MODULE_NAME)-y += tracker.o
 $(KERNEL_MODULE_NAME)-y += tracking.o
 
+# for upstream, we don't need any configurations
 #obj-$(CONFIG_BLK_SNAP)	 += $(KERNEL_MODULE_NAME).o
+
+# but for a standalone module, the configuration is necessary
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&&	\
+		echo -DHAVE_SUBMIT_BIO_NOACCT;					\
+	)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
+		echo -DHAVE_BI_BDEV						\
+	)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
+		echo -DHAVE_BI_BDISK						\
+	)
+
 obj-m	 += $(KERNEL_MODULE_NAME).o

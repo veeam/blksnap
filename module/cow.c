@@ -14,7 +14,7 @@ struct write_plan {
 	struct cow_block *cow_block;
 };
 
-static void _write_endio(void *param, struct bio *bio, int err)
+void cow_write_endio(void *param, struct bio *bio, int err)
 {
 	int ret;
 	struct cow_block *blk = param;
@@ -60,10 +60,10 @@ static void _write_cow_block_fn(struct work_struct *work)
 	}
 
 	//ret = blk_submit_pages(bdev, WRITE, 0, blk->page_array, blk->rg.ofs, blk->rg.cnt,
-	//		       &blk->bio_cnt, blk, _write_endio);
+	//		       &blk->bio_cnt, blk, cow_write_endio);
 	//ret = snapstore_device_submit_pages(blk->snapstore_device, WRITE, 0, blk->page_array,
 	//				    blk->rg.ofs, blk->rg.cnt, &blk->bio_cnt,
-	//				    blk, _write_endio);
+	//				    blk, cow_write_endio);
 	ret = snapstore_device_store_block()
 	if (unlikely(!ret))
 		pr_err("Failed to write cow-block. errno=%d\n", 0-ret);
@@ -87,7 +87,7 @@ static void _schedule_write(struct cow_block *cow_block)
 }
 
 
-static void _read_endio(void *param, struct bio *bio, int err)
+void cow_read_endio(void *param, struct bio *bio, int err)
 {
 	int ret;
 	struct cow_block *blk = param;
