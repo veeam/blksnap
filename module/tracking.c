@@ -8,6 +8,7 @@
 #include "params.h"
 #include <linux/genhd.h>
 
+#if 0
 int tracking_attach(struct tracker *tracker, struct gendisk *disk);
 void tracking_detach(struct tracker *tracker, struct gendisk *disk);
 
@@ -354,23 +355,6 @@ static int _add_already_tracked(dev_t dev_id, unsigned long long snapshot_id,
 	return SUCCESS;
 }
 
-static int _create_new_tracker(dev_t dev_id, unsigned long long snapshot_id)
-{
-	int result;
-	struct tracker *tracker = NULL;
-
-	result = tracker_create(dev_id, &tracker);
-	if (result != SUCCESS) {
-		pr_err("Failed to create tracker. errno=%d\n", result);
-		return result;
-	}
-
-	tracker->snapshot_id = snapshot_id;
-
-	return SUCCESS;
-}
-
-
 int tracking_add(dev_t dev_id, unsigned long long snapshot_id)
 {
 	int result;
@@ -384,9 +368,15 @@ int tracking_add(dev_t dev_id, unsigned long long snapshot_id)
 		result = _add_already_tracked(dev_id, snapshot_id, tracker);
 		if (result == SUCCESS)
 			result = -EALREADY;
-	} else if (-ENODATA == result)
-		result = _create_new_tracker(dev_id, snapshot_id);
-	else {
+	} else if (-ENODATA == result) {
+		result = tracker_create(dev_id, &tracker);
+		if (result != SUCCESS) {
+			pr_err("Failed to create tracker. errno=%d\n", result);
+			return result;
+		}
+
+		tracker->snapshot_id = snapshot_id;
+	} else {
 		pr_err("Unable to add device [%d:%d] under tracking\n", MAJOR(dev_id),
 			MINOR(dev_id));
 		pr_err("Invalid trackers container. errno=%d\n", result);
@@ -427,9 +417,9 @@ int tracking_remove(dev_t dev_id)
 	return SUCCESS;
 }
 
-int tracking_collect(int max_count, struct cbt_info_s *p_cbt_info, int *p_count)
+int tracking_collect(int max_count, struct cbt_info_s *cbt_info, int *p_count)
 {
-	int res = tracker_enum_cbt_info(max_count, p_cbt_info, p_count);
+	int res = tracker_enum_cbt_info(max_count, cbt_info, p_count);
 
 	if (res == SUCCESS)
 		pr_info("%d devices found under tracking\n", *p_count);
@@ -468,3 +458,4 @@ int tracking_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 
 	return result;
 }
+#endif

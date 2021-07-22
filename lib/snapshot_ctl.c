@@ -87,7 +87,7 @@ int snap_get_tracking(struct snap_ctx* ctx, struct cbt_info_s* cbtInfos, unsigne
 {
     struct ioctl_tracking_collect_s get;
     get.count = *count;
-    get.p_cbt_info = cbtInfos;
+    get.cbt_info = cbtInfos;
 
     if (ioctl(ctx->fd, IOCTL_TRACKING_COLLECT, &get))
         return -1;

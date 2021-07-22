@@ -18,10 +18,10 @@ struct filter_operations {
 struct blk_filter {
 	struct list_head list;
 #if defined(HAVE_BI_BDEV)
-	dev_t	bd_dev;
+	dev_t	dev_id;
 #elif defined(HAVE_BI_BDISK)
 	int	major;		/* major number of disks driver */
-	u8	bi_partno;
+	u8	partno;
 #else
 #error "Invalid kernel configuration"
 #endif
@@ -31,11 +31,10 @@ struct blk_filter {
 
 void filters_write_lock(void );
 void filters_write_unlock(void );
+void filters_read_lock(void );
+void filters_read_unlock(void );
 
-void *filter_find_ctx(struct block_device *bdev);
-int filter_add(struct block_device *bdev,
-		    const struct filter_operations *fops, void *ctx);
+int filter_add(struct block_device *bdev, const struct filter_operations *fops, void *ctx);
 int filter_del(struct block_device *bdev);
 
-int filter_init(void );
-void filter_dine(void );
+int filter_enable(void );

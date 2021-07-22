@@ -46,23 +46,20 @@ static int __init blk_snap_init(void)
 	if (result != SUCCESS)
 		return result;
 
-	result = tracking_init();
-	if (result != SUCCESS)
-		return result;
-
-	result = lp_filter_init();
+	result = tracker_init();
 
 	return result;
 }
 
+/*
+ * Before unload module livepatch should be detached.
+ * echo 0 > /sys/kernel/livepatch/blk_snap_lp/enabled
+ */
 static void __exit blk_snap_exit(void)
 {
 	pr_info("Unloading module\n");
-	/*
-	 * Before unload module livepatch should be detached.
-	 * echo 0 > /sys/kernel/livepatch/blk_snap_lp/enabled
-	 */
-	lp_filter_done();
+
+	tracker_done();
 
 	ctrl_sysfs_done();
 
@@ -71,8 +68,6 @@ static void __exit blk_snap_exit(void)
 	snapstore_device_done();
 	snapstore_done();
 
-	tracker_done();
-	tracking_done();
 
 	snapimage_done();
 

@@ -36,6 +36,11 @@ EXTRA_CFLAGS += $(shell 							\
 		echo -DHAVE_SUBMIT_BIO_NOACCT;					\
 	)
 EXTRA_CFLAGS += $(shell 							\
+	grep -qw "struct super_block *freeze_bdev);"				\
+		$(srctree)/include/linux/blkdev.h &&				\
+		echo -DHAVE_SUPER_BLOCK_FREEZE					\
+	)
+EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -DHAVE_BI_BDEV						\
 	)

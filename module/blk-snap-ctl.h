@@ -51,7 +51,7 @@ struct cbt_info_s {
 struct ioctl_tracking_collect_s {
 	unsigned int count;
 	union {
-		struct cbt_info_s *p_cbt_info;
+		struct cbt_info_s *cbt_info;
 		unsigned long long ull_cbt_info;
 	};
 };

@@ -194,7 +194,6 @@ static int _ioctl_tracking_remove(unsigned long arg)
 		return -ENODATA;
 	}
 	return tracking_remove(MKDEV(dev.major, dev.minor));
-	;
 }
 
 static int _ioctl_tracking_collect(unsigned long arg)
@@ -211,7 +210,7 @@ static int _ioctl_tracking_collect(unsigned long arg)
 		return -ENODATA;
 	}
 
-	if (get.p_cbt_info == NULL) {
+	if (get.cbt_info == NULL) {
 		res = tracking_collect(0x7FFFffff, NULL, &get.count);
 		if (res == SUCCESS) {
 			len = copy_to_user((void *)arg, (void *)&get,
@@ -224,19 +223,19 @@ static int _ioctl_tracking_collect(unsigned long arg)
 			pr_err("Failed to execute tracking_collect. errno=%d\n", res);
 		}
 	} else {
-		struct cbt_info_s *p_cbt_info = NULL;
+		struct cbt_info_s *cbt_info = NULL;
 
-		p_cbt_info = kcalloc(get.count, sizeof(struct cbt_info_s), GFP_KERNEL);
-		if (p_cbt_info == NULL)
+		cbt_info = kcalloc(get.count, sizeof(struct cbt_info_s), GFP_KERNEL);
+		if (cbt_info == NULL)
 			return -ENOMEM;
 
 		do {
-			res = tracking_collect(get.count, p_cbt_info, &get.count);
+			res = tracking_collect(get.count, cbt_info, &get.count);
 			if (res != SUCCESS) {
 				pr_err("Failed to execute tracking_collect. errno=%d\n", res);
 				break;
 			}
-			len = copy_to_user(get.p_cbt_info, p_cbt_info,
+			len = copy_to_user(get.cbt_info, cbt_info,
 					      get.count * sizeof(struct cbt_info_s));
 			if (len != 0) {
 				pr_err("Unable to collect tracking devices: invalid user buffer for CBT info\n");
@@ -254,8 +253,8 @@ static int _ioctl_tracking_collect(unsigned long arg)
 
 		} while (false);
 
-		kfree(p_cbt_info);
-		p_cbt_info = NULL;
+		kfree(cbt_info);
+		cbt_info = NULL;
 	}
 	return res;
 }

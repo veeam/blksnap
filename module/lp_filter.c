@@ -37,9 +37,9 @@ void filters_write_unlock(void )
 };
 
 #if defined(HAVE_BI_BDEV)
-static inline struct blk_filter *filter_find(dev_t bd_dev)
+static inline struct blk_filter *filter_find(dev_t dev_id)
 #elif defined(HAVE_BI_BDISK)
-static inline struct blk_filter *filter_find(int major, int ni_partno)
+static inline struct blk_filter *filter_find(int major, int partno)
 #endif
 {
 	struct blk_filter *flt;
@@ -49,35 +49,16 @@ static inline struct blk_filter *filter_find(int major, int ni_partno)
 	
 	list_for_each_entry(flt, &bd_filters, list) {
 #if defined(HAVE_BI_BDEV)
-		if (bd_dev == flt->bd_dev)
+		if (dev_id == flt->dev_id)
 			return flt;
 #elif defined(HAVE_BI_BDISK)
-		if ((major == flt->major) && (bi_partno == flt->bi_partno))
+		if ((major == flt->major) && (partno == flt->partno))
 			return flt;
 #endif
 	}
 	return NULL;
 }
 
-/**
- * filter_find_ctx - Find filters context
- * @bdev: block device
- *
- * The returned pointer is the private data of the filter. It's can be NULL.
- */
-void *filter_find_ctx(struct block_device *bdev)
-{
-	struct blk_filter *flt;
-
-#if defined(HAVE_BI_BDEV)
-	flt =filter_find(bdev->bd_dev);
-#elif defined(HAVE_BI_BDISK)
-	flt =filter_find(bdev->bd_disk->major, bdev->bd_partno);
-#endif
-	if (flt)
-		return flt->ctx;
-	return NULL;
-}
 
 /**
  * filter_add - Attach a filter to original block device 
@@ -107,7 +88,7 @@ int filter_add(struct block_device *bdev,
 		return -ENOMEM;
 
 #if defined(HAVE_BI_BDEV)
-	flt->bd_dev = bdev->bd_dev;
+	flt->dev_id = bdev->bd_dev;
 #elif defined(HAVE_BI_BDISK)
 	flt->major = bdev->bd_disk->major;
 	flt->bi_partno = bdev->bi_partno;
@@ -149,7 +130,18 @@ int filter_del(struct block_device *bdev)
 	return 0;
 }
 
-static inline bool filters_read_lock(struct bio *bio)
+
+void filters_read_lock(void )
+{
+	percpu_down_read(&bd_filters_lock);	
+}
+
+void filters_read_unlock(void )
+{
+	percpu_up_read(&bd_filters_lock);
+}
+
+static inline bool filters_read_lock_for_bio(struct bio *bio)
 {
 	if (bio->bi_opf & REQ_NOWAIT) {
 		bool locked = percpu_down_read_trylock(&bd_filters_lock);
@@ -161,15 +153,6 @@ static inline bool filters_read_lock(struct bio *bio)
 
 	percpu_down_read(&bd_filters_lock);
 	return true;
-}
-
-/*
- * The block device should be the parameter, since the bio may change
- * during processing by the filter.
- */
-static inline void filters_read_unlock(struct block_device *bdev)
-{
-	percpu_up_read(&bd_filters_lock);
 }
 
 static inline struct blk_filter *flt filter_find_by_bio(const struct bio *bio)
@@ -186,7 +169,7 @@ static int filters_apply(const struct bio *bio)
 	struct blk_filter *flt;
 	int status;
 
-	if (unlikely(!filters_read_lock()))
+	if (unlikely(!filters_read_lock_for_bio(bio)))
 		return FLT_ST_COMPLETE;
 
 	flt = filter_find_by_bio(bio);
@@ -252,21 +235,7 @@ static struct klp_patch patch = {
 	.objs = objs,
 };
 
-int filter_init(void)
+int filter_enable(void)
 {
 	return klp_enable_patch(&patch);
-}
-
-void filter_done(void )
-{
-	while (!list_empty(&bd_filters)) {
-		struct blk_filter *flt;
-
-		flt = list_first_entry(&bd_filters, struct blk_filter, list);
-		
-		if (flt->fops->detach_cb)
-			flt->fops->detach_cb(flt->ctx);
-		list_del(&flt->list);
-		kfree(flt);
-	}
 }
