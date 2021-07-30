@@ -29,11 +29,6 @@ struct blk_filter {
 	void *ctx;
 };
 
-void filters_write_lock(void );
-void filters_write_unlock(void );
-void filters_read_lock(void );
-void filters_read_unlock(void );
-
 int filter_add(struct block_device *bdev, const struct filter_operations *fops, void *ctx);
 int filter_del(struct block_device *bdev);
 

@@ -212,12 +212,77 @@ static int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned in
 	return res;
 }
 
-blk_qc_t _snapimage_submit_bio(struct bio *bio);
-blk_qc_t _snapimage_interpose_bio(struct bio *bio);
+#if 0
+struct bio_vec {
+	struct page	*bv_page;
+	unsigned int	bv_len;
+	unsigned int	bv_offset;
+};
+
+struct bvec_iter {
+	sector_t		bi_sector;	/* device address in 512 byte
+						   sectors */
+	unsigned int		bi_size;	/* residual I/O count */
+
+	unsigned int		bi_idx;		/* current index into bvl_vec */
+
+	unsigned int            bi_bvec_done;	/* number of bytes completed in
+						   current bvec */
+};
+#endif
+blk_qc_t _snapimage_submit_bio(struct bio *bio)
+{
+	blk_qc_t ret = 0;
+#if defined(HAVE_BI_BDISK)
+	struct gendisk *disk = bio->bi_disk;
+#elif defined(HAVE_BI_BDEV)
+	struct gendisk *disk = bio->bi_bdev->bd_disk;
+#endif
+	struct diff_area *diff_area;
+	struct bio_vec bvec;
+	struct bvec_iter iter;
+
+	if (!disk->private_data) {
+		bio_io_error(bio);
+		goto out;
+	}
+
+	/* non-blocking requests are not supported */
+	if (bio->bi_opf & REQ_NOWAIT) {
+		bio_io_error(bio);
+		goto out;
+	}
+
+	diff_area = disk->private_data;
+	bio_for_each_segment(bvec, bio, iter) {
+		blk_status_t status;
+		
+		if (op_is_write(bio_op(bio)))
+			status = diff_area_image_write(diff_area,
+			                        bvec.bv_page, bvec.bv_offset,
+			                        iter.bi_sector, bvec.bv_len);
+		else
+			status = diff_area_image_read(diff_area,
+			                       bvec.bv_page, bvec.bv_offset,
+			                       iter.bi_sector, bvec.bv_len);
+		if (status) {
+			bio->bi_status = status;
+			break;
+		}
+	}
+	//bio->bi_iter
+	//bio->bi_io_vec
+	//bio->bi_end_io
+
+	bio_endio(bio);
+out:
+	return BLK_QC_T_NONE;
+}
 
 const struct block_device_operations snapimage_ops = {
 	.owner = THIS_MODULE,
 	.submit_bio = _snapimage_submit_bio,
+	//.rw_page = _snapimage_rw_page,
 	.open = _snapimage_open,
 	.ioctl = _snapimage_ioctl,
 	.release = _snapimage_close,
@@ -349,7 +414,7 @@ static int _snapimage_processor_thread(void *data)
 		MINOR(image->image_dev));
 	return 0;
 }
-*/
+
 static inline void _snapimage_bio_complete(struct bio *bio, int err)
 {
 	if (err == SUCCESS)
@@ -372,28 +437,7 @@ static void _snapimage_bio_complete_cb(void *complete_param, struct bio *bio, in
 	atomic_dec(&image->own_cnt);
 }
 
-/*static int _snapimage_throttling(struct defer_io *defer_io)
-{
-	return wait_event_interruptible(defer_io->queue_throttle_waiter,
-					redirect_bio_queue_empty(defer_io->dio_queue));
-}*/
 
-blk_qc_t _snapimage_interpose_bio(struct bio *bio)
-{
-
-
-	return BLK_QC_T_NONE;
-}
-
-blk_qc_t _snapimage_submit_bio(struct bio *bio)
-{
-	/*
-	 * Don't do anything, because the reassignment is done in _snapimage_interpose_bio()
-	 */
-
-	return BLK_QC_T_NONE;
-}
-/*
 blk_qc_t _snapimage_submit_bio(struct bio *bio)
 {
 	blk_qc_t result = SUCCESS;
@@ -458,7 +502,8 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 	atomic_dec(&image->own_cnt);
 
 	return result;
-}*/
+}
+*/
 
 struct blk_dev_info {
 	size_t blk_size;
@@ -697,35 +742,6 @@ static int _snapimage_create(dev_t orig_dev_id)
 		pr_info("Snapshot image device capacity %lld bytes",
 			(u64)from_sectors(image->capacity));
 
-		//res = -ENOMEM;
-/*		redirect_bio_queue_init(&image->image_queue);
-
-		{
-			struct task_struct *task =
-				kthread_create(_snapimage_processor_thread, image, disk->disk_name);
-			if (IS_ERR(task)) {
-				res = PTR_ERR(task);
-				pr_err("Failed to create request processing thread for snapshot image device. errno=%d\n",
-				       res);
-				break;
-			}
-			image->rq_processor = task;
-		}
-		init_waitqueue_head(&image->rq_complete_event);
-
-		init_waitqueue_head(&image->rq_proc_event);
-		wake_up_process(image->rq_processor);*/
-		/*
-		 * snapimage - it`s fake device. Its purpose is just to redirect bio to another devices.
-		 * Therefore, the main work is implemented in the  _snapimage_interpose_bio() function.
-		 * blk_interposer allow to schedule the executing of a new child bio.
-		 * Then the child`s bio will complete, the original bio will also be complete.
-		 */
-		image->interposer.ip_disk = disk;
-		image->interposer.ip_submit_bio = _snapimage_interpose_bio;
-		image->interposer.ip_private = image;
-
-		disk->interposer = &image->interposer;
 
 		add_disk(image->disk);
 

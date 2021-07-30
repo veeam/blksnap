@@ -155,12 +155,31 @@ static int _freeze_bdev(struct block_device *bdev, struct super_block **psuperbl
 }
 #endif
 
+static int tracker_load_chunk()
+
+
 static int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
-	int ret = 0;
+	int err = 0;
 	struct tracker *tracker = ctx;
 
-	return ret;
+	if (!op_is_write(bio_op(bio)))
+		return FLT_ST_PASS;
+
+	err = diff_area_copy(tracker->diff_area,
+	                     bio->bi_iter.bi_sector,
+	                     (sector_t)(bio->bi_iter.bi_size >> SECTOR_SHIFT),
+	                     (bool)(bio->bi_opf & REQ_NOWAIT));
+	if (likely(!err))
+		return FLT_ST_PASS;
+
+	if (err == -EAGAIN) {
+		bio_wouldblock_error(bio);
+		return FLT_ST_COMPLETE;
+	}
+
+	pr_err("Failed to copy data to diff storage with error %d\n", err);
+	return FLT_ST_PASS;
 }
 
 static void tracker_detach_cb(void *ctx)
@@ -180,8 +199,6 @@ int tracker_attach(struct tracker *tracker)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *superblock = NULL;
 #endif
-	unsigned int current_flag;
-	
 	bdev = blkdev_get_by_dev(tracker->dev_id, 0, NULL);
 	if (IS_ERR(bdev))
 		return PTR_ERR(bdev);
@@ -194,11 +211,7 @@ int tracker_attach(struct tracker *tracker)
 		       MAJOR(bdev->bd_dev), MINOR(dev->bd_dev));
 #endif
 	
-	filters_write_lock();
-	current_flag = memalloc_noio_save();
 	ret = filter_add(bdev, tracker_fops, tracker);
-	memalloc_noio_restore(current_flag);
-	filters_write_unlock();
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -267,7 +280,6 @@ static int tracker_detach(struct tracker *tracker)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *superblock = NULL;
 #endif
-	unsigned int current_flag;
 
 	bdev = blkdev_get_by_dev(tracker->dev_id, 0, NULL);
 	if (IS_ERR(bdev))
@@ -281,11 +293,7 @@ static int tracker_detach(struct tracker *tracker)
 		       MAJOR(bdev->bd_dev), MINOR(dev->bd_dev));
 #endif
 	
-	filters_write_lock();
-	current_flag = memalloc_noio_save();
 	ret = filter_del(bdev);
-	memalloc_noio_restore(current_flag);
-	filters_write_unlock();
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -562,18 +570,20 @@ int tracker_init(void)
 
 void tracker_done(void)
 {
-	struct tracker *tracker;
-
 	write_lock(&trackers_lock);
 	while (!list_empty(&trackers)) {
-		tracker = list_first_entry(&trackers, struct tracker, list);
+		struct tracker *tracker;
 
+		tracker = list_first_entry(&trackers, struct tracker, list);
 		bdev = blkdev_get_by_dev(tracker->dev_id, 0, NULL);
 		if (!IS_ERR(bdev)) {
-			filters_write_lock();
-			filter_del(bdev);
-			filters_write_unlock();
+			int ret;
 
+			ret = filter_del(bdev);
+			if (ret)
+				pr_err("Failed to detach filter from  device [%d:%d], errno=%d\n",
+			       		MAJOR(tracker->dev_id), MINOR(tracker->dev_id),
+			       		PTR_ERR(ret));
 			blkdev_put(bdev, 0);
 		} else
 			pr_err("Cannot open device [%d:%d], errno=%d\n",

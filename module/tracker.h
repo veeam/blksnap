@@ -9,14 +9,15 @@
 struct tracker {
 	struct list_head link;
 	struct kref refcount;
-	struct blk_range_tree_node range_node;
 	dev_t dev_id;
 
+	//struct blk_range_tree_node range_node;
 	atomic_t is_captured;
 
 	struct cbt_map *cbt_map;
-	struct snapstore_device *snapdev; // only then snapshot captured
-
+	struct diff_area *diff_area;
+	/* struct snapstore_device *snapdev; // only then snapshot captured
+	*/
 	unsigned long long snapshot_id; // current snapshot for this device
 };
 

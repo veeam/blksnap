@@ -60,18 +60,8 @@ static inline struct blk_filter *filter_find(int major, int partno)
 }
 
 
-/**
- * filter_add - Attach a filter to original block device 
- * @bdev: block device
- * @fops: table of filter callbacks
- * @ctx: Filter specific private data
- *
- * Before adding a filter, it is necessary to lock the processing
- * of bio requests of the original device by calling filters_write_lock().
- *
- * The filter_del() function allows to delete the filter from the block device.
- */
-int filter_add(struct block_device *bdev,
+
+static int __filter_add(struct block_device *bdev,
 	       const struct filter_operations *fops, void *ctx)
 {
 	struct blk_filter *flt;
@@ -101,16 +91,34 @@ int filter_add(struct block_device *bdev,
 }
 
 /**
- * bdev_filter_del - Delete filter from the block device
+ * filter_add - Attach a filter to original block device 
  * @bdev: block device
- * @filter_name: unique filters name
+ * @fops: table of filter callbacks
+ * @ctx: Filter specific private data
  *
- * Before deleting a filter, it is necessary to lock the processing
- * of bio requests of the device by calling bdev_filter_lock().
+ * Before adding a filter, it is necessary to lock the processing
+ * of bio requests of the original device by calling filters_write_lock().
  *
- * The filter should be added using the bdev_filter_add() function.
+ * The filter_del() function allows to delete the filter from the block device.
  */
-int filter_del(struct block_device *bdev)
+int filter_add(struct block_device *bdev,
+	       const struct filter_operations *fops, void *ctx)
+{
+	int ret;
+	unsigned int current_flag;
+
+	filters_write_lock();
+	current_flag = memalloc_noio_save();
+		
+	ret = __filter_add(bdev, fops, ctx);
+
+	memalloc_noio_restore(current_flag);
+	filters_write_unlock();
+
+	return ret;
+}
+
+static int __filter_del(struct block_device *bdev)
 {
 	struct blk_filter *flt;
 
@@ -131,6 +139,32 @@ int filter_del(struct block_device *bdev)
 }
 
 
+/**
+ * bdev_filter_del - Delete filter from the block device
+ * @bdev: block device
+ * @filter_name: unique filters name
+ *
+ * Before deleting a filter, it is necessary to lock the processing
+ * of bio requests of the device by calling bdev_filter_lock().
+ *
+ * The filter should be added using the bdev_filter_add() function.
+ */
+int filter_del(struct block_device *bdev)
+{
+	int ret;
+	unsigned int current_flag;
+
+	filters_write_lock();
+	current_flag = memalloc_noio_save();
+
+	ret = __filter_del(bdev);
+
+	memalloc_noio_restore(current_flag);
+	filters_write_unlock();
+
+	return ret;
+}
+
 void filters_read_lock(void )
 {
 	percpu_down_read(&bd_filters_lock);	
@@ -143,13 +177,8 @@ void filters_read_unlock(void )
 
 static inline bool filters_read_lock_for_bio(struct bio *bio)
 {
-	if (bio->bi_opf & REQ_NOWAIT) {
-		bool locked = percpu_down_read_trylock(&bd_filters_lock);
-
-		if (unlikely(!locked))
-			bio_wouldblock_error(bio);
-		return locked;
-	}
+	if (bio->bi_opf & REQ_NOWAIT)
+		return percpu_down_read_trylock(&bd_filters_lock);
 
 	percpu_down_read(&bd_filters_lock);
 	return true;
@@ -169,8 +198,10 @@ static int filters_apply(const struct bio *bio)
 	struct blk_filter *flt;
 	int status;
 
-	if (unlikely(!filters_read_lock_for_bio(bio)))
+	if (unlikely(!filters_read_lock_for_bio(bio))) {
+		bio_wouldblock_error(bio);
 		return FLT_ST_COMPLETE;
+	}
 
 	flt = filter_find_by_bio(bio);
 	if (flt)
@@ -188,13 +219,11 @@ static int filters_apply(const struct bio *bio)
 static blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
 	(blk_qc_t (*)(struct bio *))((unsigned long)(submit_bio_noacct) + CALL_INSTRUCTION_LENGTH);
 
-void cow_write_endio(void *param, struct bio *bio, int err);
-void cow_read_endio(void *param, struct bio *bio, int err);
+
 
 static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 {
-	if ((bio->bi_end_io != cow_write_endio) &&
-	    (bio->bi_end_io != cow_read_endio)) {
+	if (!current->bio_list) {
 		struct bio_list bio_list_on_stack[2];
 		struct bio *new_bio;
 		int status;
@@ -212,7 +241,7 @@ static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 		if (status == FLT_ST_COMPLETE)
 			return BLK_QC_T_NONE;
 	}
-    
+
 	return submit_bio_noacct_notrace(bio);
 }
 

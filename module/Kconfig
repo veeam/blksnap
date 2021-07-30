@@ -16,9 +16,31 @@ config BLK_SNAP
 	  then backup is completed. Change block tracking allows you to
 	  create incremental or differential backups.
 
-config BLK_SNAP_SNAPSTORE_MULTIDEV
-	bool "Multi device snapstore configuration support"
+config BLK_SNAP_CHUNK_MINIMUM_SHIFT
 	depends on BLK_SNAP
+	int "The power of 2 for minimum chunk size"
+	default 16
 	help
+	  The minimum chunk size by default is 65535 KB (shift 16)
+	  It's looks good for block device 128 GB or lower.
+	  In this case, the block device is divided into 2097152 chunks.
 
-	  Allow to create snapstore on multiple block devices.
+config BLK_SNAP_MAXIMUM_CHUNK_COUNT
+	depends on BLK_SNAP
+	int "The limit of the maximum number of chunks"
+	default 2097152
+	help
+	  As the size of the block device grows, the size of the chunk
+	  should also grow. For this purpose, the limit of the maximum number
+	  of chunks is set.
+
+config BLK_SNAP_MAXIMUM_CHUNK_IN_CACHE
+	depends on BLK_SNAP
+	int "The limit of the maximum chunks in memory cache"
+	default 128
+	help
+	  Since reading and writing to snapshots is performed in large chunks,
+	  a cache is implemented to optimize reading small portions of data
+	  from the snapshot image. As the number of chunks in the cache
+	  increases, memory consumption also increases.
+	  The minimum recommended value is four.
