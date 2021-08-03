@@ -44,3 +44,10 @@ config BLK_SNAP_MAXIMUM_CHUNK_IN_CACHE
 	  from the snapshot image. As the number of chunks in the cache
 	  increases, memory consumption also increases.
 	  The minimum recommended value is four.
+
+config BLK_SNAP_DIFF_STORAGE_MINIMUM
+	depends on BLK_SNAP
+	int "The minimum allowable size of the difference storage in sectors"
+	default 2097152
+	help 
+	  When reached, an event is generated about the lack of free space.

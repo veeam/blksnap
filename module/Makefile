@@ -54,4 +54,8 @@ EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_MAXIMUM_CHUNK_COUNT=2097152"
 # The minimum recommended value is four.
 EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_MAXIMUM_CHUNK_IN_CACHE=128"
 
+# The minimum allowable size of the difference storage in sectors
+# When reached, an event is generated about the lack of free space
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM=2097152"
+
 obj-m	 += $(KERNEL_MODULE_NAME).o
