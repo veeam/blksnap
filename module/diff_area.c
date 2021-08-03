@@ -5,56 +5,6 @@
 #include "diff_area.h"
 #include "diff_storage.h"
 
-struct diff_area {
-	struct kref kref;
-	struct block_device *bdev;
-	struct dm_io_client *io_client;
-	/**
-	 * chunk_size_shift - power of 2 for chunk size
-	 * It's allow to set various chunk size for huge and small block device.
-	 */
-	unsigned long long chunk_size_shift;
-	/**
-	 * chunk_count - count of chunks
-	 * the number of chunks into which the block device is divided.
-	 */
-	unsigned long chunk_count;
-	/**
-	 * chunk_map - a map of chunk
-	 * xarray can be too little on x32 systems. This creates a limit
-	 * in the size of supported disks to 256 TB with a chunk size
-	 * of 65536 bytes. In addition, such a large array will take up too
-	 * much space in memory.
-	 * Therefore, the size of the chunk should be selected so that
-	 * the size of the map is not too large, and the index does not
-	 * exceed 32 bits.
-	 */
-	struct xarray chunk_map;
-	/**
-	 * in_process_chunks - a list of chunks that in COW process
-	 */
-	struct list_head in_process_chunks;
-	//rwlock_t chunk_fifo_lock;
-	//size_t chunk_fifo_cnt;
-	/**
-	 * Same diff_area can use one diff_storage for storing his chunks
-	 * 
-	 */
-	struct diff_storage *diff_storage;
-
-	/**
-	 * Reading data from the original block device is performed in the
-	 * context of the thread in which the filtering is performed.
-	 * But storing data to diff storage is performed in workqueue.
-	 * The chunks that need to be stored in diff storage are accumitale
-	 * into the diff_store_changs list.
-	 */
-	struct list_head diff_store_changs;
-	spinlock_t diff_store_changs_lock;
-
-	int error;
-	bool is_corrupted;
-};
 
 static inline unsigned long chunk_size(struct diff_area *diff_area)
 {
@@ -136,6 +86,70 @@ void diff_area_free(struct kref *kref)
 	}
 }
 
+static void __diff_area_chunk_store(struct chunk *chunk);
+static void diff_area_storing_chunks_work(struct work_struct *work)
+{
+	struct diff_area *diff_area = container_of(work, struct diff_area, work);
+	struct chunk *chunk = NULL;
+
+repeat:
+	spin_lock(&diff_area->storing_chunks_lock);
+	chunk = list_first_entry_or_null(&diff_area->storing_chunks, struct chunk, link);
+	if (!chunk) {
+		spin_unlock(&diff_area->storing_chunks_lock);
+		return;
+	}
+	list_del(&chunk->list);
+	spin_unlock(&diff_area->storing_chunks_lock);
+
+	chunk->diff_store = diff_storage_get_store(diff_area->diff_storage,
+	                                           chunk_sectors(diff_area->chunk_size_shift));
+
+	__diff_area_chunk_store(chunk);
+	goto repeat;
+
+}
+
+static void diff_area_caching_chunks_work(struct work_struct *work)
+{
+	struct diff_area *diff_area = container_of(work, struct diff_area, work);
+	struct chunk *chunk = NULL;
+
+
+	while (atomic_read(&diff_area->caching_chunks_count) >
+	       CONFIG_BLK_SNAP_MAXIMUM_CHUNK_IN_CACHE) {
+
+		spin_lock(&diff_area->caching_chunks_lock);
+		chunk = list_first_entry_or_null(&diff_area->caching_chunks, struct chunk, link);
+		if (!chunk) {
+			spin_unlock(&diff_area->caching_chunks_lock);
+			break;
+		}
+		list_del(&chunk->list);
+		spin_unlock(&diff_area->caching_chunks_lock);
+
+		if (!down_write_trylock(&chunk->lock)) {
+			/**
+			 * If a used block is detected, it is moved to the end
+			 * of the queue.
+			 */
+			spin_lock(&diff_area->caching_chunks_lock);
+			list_del(&chunk->list);
+			list_add_tail(&chunk->list, &diff_area->caching_chunks);
+			spin_unlock(&diff_area->caching_chunks_lock);
+
+			continue;
+		}
+
+		diff_buffer_put(&chunk->diff_buffer);
+		chunk->diff_buffer = NULL;
+		chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
+
+		up_write(&chunk->lock);
+		atomic_dec(&diff_area->caching_chunks_count);
+	}
+}
+
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 {
 	int ret = 0;
@@ -175,10 +189,16 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	pr_info("Chunk size %llu bytes\n", chunk_size(diff_area->chunk_size_shift));
 	pr_info("chunk count %lu\n", diff_area->chunk_count);
 
-	xa_init(&diff_area->chunk_map);
-	INIT_LIST_HEAD(&diff_area->chunk_fifo);
-	rwlock_init(&diff_area->chunk_fifo_lock);
 	kref_init(&diff_area->refcount);
+	xa_init(&diff_area->chunk_map);
+
+	INIT_LIST_HEAD(&diff_area->storing_chunks);
+	spin_lock_init(&diff_area->storing_chunks_lock);
+	INIT_WORK(&diff_area->storing_chunks_work, diff_area_storing_chunks_work);
+	
+	INIT_LIST_HEAD(&diff_area->caching_chunks);
+	spin_lock_init(&diff_area->caching_chunks_lock);
+	INIT_WORK(&diff_area->caching_chunks_work, diff_area_caching_chunks_work);
 
 	/**
 	 * Allocating all chunks in advance allows not to do this in
@@ -231,33 +251,43 @@ static inline int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 static inline void chunk_io_failed(struct chunk *chunk, int error)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
-	chunk->diff_area->is_corrupted = true;
 	chunk->diff_area->error = error;
+	barrier();
+	chunk->diff_area->is_corrupted = true;
 	
 	pr_err("Failed to write chunk %lu\n", chunk->number);
 }
 
-static void chunk_notify_write(unsigned long error, void *context)
+static void chunk_notify_store(unsigned long error, void *context)
 {
 	struct chunk *chunk = (struct chunk *)context;
 	struct diff_area *diff_area = chunk->diff_area;
 
 	if (error) {
 		chunk_io_failed(chunk, error);
-		goto out;
+		up_read(&chunk->lock);
+		return;
 	}
-	spin_lock(&chunk->lock);
+
 	chunk_state_set(chunk, CHUNK_ST_STORE_READY);
-	spin_unlock(&chunk->lock);
+
+	spin_lock(&diff_area->caching_chunks_lock);
+	list_add_tail(&chunk->link, &diff_area->caching_chunks);
+	atomic_inc(&diff_area->caching_chunks_count);
+	spin_unlock(&diff_area->caching_chunks_lock);
+
+	up_read(&chunk->lock);
 
 	pr_err("Chunk 0x%lu was wrote\n", chunk->number);
-out:
-	chunk_put(chunk);
+
+	/**
+	 * Initiate the cache clearing process.
+	 */
+	queue_work(system_wq, diff_area->caching_chunks_work); 
 }
 
-static void __diff_area_chunk_write()
+static void __diff_area_chunk_store(struct chunk *chunk)
 {
-	struct chunk *chunk;
 	unsigned long sync_error_bits;
 	struct dm_io_region region;
 	struct dm_io_request reguest;
@@ -265,7 +295,7 @@ static void __diff_area_chunk_write()
 	dm_io_region region = {
 		.bdev = chunk->diff_store->bdev,
 		.sector = chunk->diff_store->sector,
-		.count = chunk->diff_store->count,
+		.count = chunk->sector_count,
 	};
 	dm_io_request reguest = {
 		.bi_op = REQ_OP_WRITE,
@@ -273,49 +303,19 @@ static void __diff_area_chunk_write()
 		.mem.type = DM_IO_PAGE_LIST,
 		.mem.offset = 0,
 		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = chunk_notify_write,
+		.notify.fn = chunk_notify_store,
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
 
 	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
-	if (ret)
+	if (ret) {
 		chunk_io_failed(chunk, ret);
-}
-
-static void chunk_schedule_store(struct chunk *chunk)
-{
-	struct diff_area *diff_area = chunk->diff_area;
-
-	spin_lock(&diff_area->diff_store_chungs_lock);
-	list_add_tail(&chunk->link, &diff_area->diff_store_chungs);
-	spin_lock(&diff_area->diff_store_chungs_unlock);
-
-
-	//INIT_WORK(diff_area->work, __diff_area_chunk_write);
-	//atomic_long_inc(&diff_area->work->data);
-	/**
-	 * I believe that the priority for the completion process of the COW
-	 * algorithm should be high, so that threads writing to block devices
-	 * are preempted by the scheduler.
-	 */
-	queue_work(system_highpri_wq, diff_area->work); 
-	//queue_work(system_wq_hi, work);
-
-	/*
-	chunk->diff_store = diff_storage_get_store(diff_area->diff_storage, chunk_sectors(diff_area));
-	if (!chunk->diff_store) {
-		chunk_io_failed(chunk, -ENOMEM);
-		goto out;
+		up_read(&chunk->lock);
 	}
-
-	error = __diff_area_chunk_write(chunk);
-	if (error)
-		chunk_io_failed(chunk, error)
-	return;*/
 }
 
-static void chunk_notify_read(unsigned long error, void *context)
+static void chunk_notify_load(unsigned long error, void *context)
 {
 	struct chunk *chunk = (struct chunk *)context;
 	struct diff_area *diff_area = chunk->diff_area;
@@ -330,18 +330,29 @@ static void chunk_notify_read(unsigned long error, void *context)
 
 	pr_debug("Chunk 0x%lu was read\n", chunk->number);
 
-	up_write(&chunk->lock);
+	spin_lock(&diff_area->storing_chunks_lock);
+	list_add_tail(&chunk->link, &diff_area->storing_chunks);
+	spin_unlock(&diff_area->storing_chunks_lock);
 
-	chunk_schedule_store(chunk);
+	downgrade_write(&chunk->lock);
+
+	/**
+	 * I believe that the priority of the COW algorithm completion process
+	 * should be high so that the scheduler can preempt other threads to
+	 * complete the write.
+	 */
+	queue_work(system_highpri_wq, diff_area->storing_chunks_work); 
+	//queue_work(system_wq, storing_chunks_work);
+
 }
 
-static int __diff_area_chunk_read(struct chunk *chunk)
+static int __diff_area_chunk_load(struct chunk *chunk)
 {
 	unsigned long sync_error_bits;
 	struct dm_io_region region = {
 		.bdev = chunk->diff_area->bdev,
 		.sector = (sector_t)chunk->number * chunk_sectors(chunk->diff_area),
-		.count = chunk_sectors(chunk->diff_area),
+		.count = chunk->sector_count,
 	};
 	struct dm_io_request reguest = {
 		.bi_op = REQ_OP_READ,
@@ -349,7 +360,7 @@ static int __diff_area_chunk_read(struct chunk *chunk)
 		.mem.type = DM_IO_PAGE_LIST,
 		.mem.offset = 0,
 		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = chunk_notify_read,
+		.notify.fn = chunk_notify_load,
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
@@ -366,13 +377,10 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count
                    bool is_nowait)
 {
 	int ret;
-	sector_t area_sect_first;
-	sector_t area_sect_end;
 	sector_t offset;
 	struct chunk *chunk;
-	LIST_HEAD(chunk_list);
-	int chunk_alloc_count = 0;
-	sector_t __chunk_sectors = chunk_sectors(diff_area->chunk_size_shift);
+	sector_t area_sect_first;
+	sector_t area_sect_end;
 
 	//pr_err("bio sector %lld count %lld\n", sector, count);
 
@@ -402,6 +410,23 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count
 			continue;
 		}
 
+		if (chunk_state_check(CHUNK_ST_BUFFER_READY)) {
+			/**
+			 * The chunk has already been read from original device
+			 * into memory, and need to store it in diff storage.
+			 */
+			chunk_state_set(chunk, CHUNK_ST_DIRTY);
+
+			spin_lock(&diff_area->storing_chunks_lock);
+			list_add_tail(&chunk->link, &diff_area->storing_chunks);
+			spin_unlock(&diff_area->storing_chunks_lock);
+
+			downgrade_write(&chunk->lock);
+
+			queue_work(system_highpri_wq, diff_area->storing_chunks_work); 
+			continue;
+		}
+
 		if (is_nowait) {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO | GFP_NOWAIT);
 			if (ret) {
@@ -416,7 +441,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count
 			}
 		}
 
-		ret = __diff_area_chunk_read(chunk);
+		ret = __diff_area_chunk_load(chunk);
 		if (ret) {
 			up_write(chunk);
 			return ret;
@@ -424,27 +449,62 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count
 	}
 
 	return 0;
-
-fail_free_chunk_list:
-	while((chunk = list_first_entry_or_null(&chunk_list, struct chunk, link))) {
-		list_del(&chunk->link);
-		chunk_put(chunk);
-	}
-	return ret;
 }
 
+void diff_area_image_context_init(struct diff_area_image_context *image_ctx,
+                                  void *disks_private_data)
+{
+	image_ctx->number = 0;
+	image_ctx->chunk = NULL;
+	image_ctx->diff_area = disk->private_data;
+	diff_area_get(image_ctx->diff_area);
+}
 
+void diff_area_image_context_done(struct diff_area_image_context *image_ctx)
+{
+	if (image_ctx->chunk)
+		up_write(&chunk->lock);
+	diff_area_put(diff_area);
+}
+
+static int diff_area_image_context_warmup(struct diff_area_image_context *image_ctx,
+                                          sector_t sector)
+{
+	struct diff_area *diff_area = image_ctx->diff_area;
+
+	if (image_ctx->number != chunk_number(diff_area, sector) ) {
+		/**
+		 * If the sector falls into a new chunk, then we release
+		 * the old chunk.
+		 */
+		if (image_ctx->chunk) {
+			up_write(&image_ctx->chunk->lock);
+			image_ctx->chunk = NULL;
+		}
+
+	}
+	if (!image_ctx->chunk) {
+		/**
+		 *  And take a new one.
+		 */
+		image_ctx->number = chunk_number(diff_area, sector);
+
+		image_ctx->chunk = xa_load(&diff_area->chunk_map, image_ctx->number);
+		if (unlikely(!image_ctx->chunk))
+			return -EINVAL;
+
+		down_write(&image_ctx->chunk->lock);
+
+		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY))
+
+	}
+}
 blk_status_t diff_area_image_write(struct diff_area *diff_area,
 				   struct page *page, unsigned int page_off,
 				   sector_t sector, unsigned int len)
 {
-	unsigned long number = chunk_number(diff_area, sector);
+	diff_area_image_context_warmup()
 
-	chunk = xa_load(&diff_area->chunk_map, number);
-	if (!chunk) {
-		/* Chunk should be read */
-
-	}
 }
 
 blk_status_t diff_area_image_read(struct diff_area *diff_area,

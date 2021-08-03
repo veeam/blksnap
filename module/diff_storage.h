@@ -7,6 +7,7 @@
  * Describes the location of the chunk on difference storage.
  */
 struct diff_store {
+	struct list_head link;
 	struct block_device *bdev;
 	sector_t sector;
 	sector_t count;

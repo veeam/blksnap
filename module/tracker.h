@@ -11,14 +11,10 @@ struct tracker {
 	struct kref refcount;
 	dev_t dev_id;
 
-	//struct blk_range_tree_node range_node;
-	atomic_t is_captured;
+	atomic_t is_busy_with_snapshot;
 
 	struct cbt_map *cbt_map;
 	struct diff_area *diff_area;
-	/* struct snapstore_device *snapdev; // only then snapshot captured
-	*/
-	unsigned long long snapshot_id; // current snapshot for this device
 };
 
 int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size);

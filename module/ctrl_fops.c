@@ -661,15 +661,16 @@ static struct blk_snap_ioctl_table blk_snap_ioctl_table[] = {
 	{ (IOCTL_SNAPSHOT_CREATE), _ioctl_snapshot_create },
 	{ (IOCTL_SNAPSHOT_DESTROY), _ioctl_snapshot_destroy },
 	{ (IOCTL_SNAPSHOT_ERRNO), _ioctl_snapshot_errno },
+	{ (IOCTL_SNAPSHOT_STORAGE), _ioctl_snapstore_file_multidev },
 
-	{ (IOCTL_SNAPSTORE_CREATE), _ioctl_snapstore_create },
-	{ (IOCTL_SNAPSTORE_FILE), _ioctl_snapstore_file },
-	{ (IOCTL_SNAPSTORE_MEMORY), _ioctl_snapstore_memory },
-	{ (IOCTL_SNAPSTORE_CLEANUP), _ioctl_snapstore_cleanup },
-#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
+//	{ (IOCTL_SNAPSTORE_CREATE), _ioctl_snapstore_create },
+//	{ (IOCTL_SNAPSTORE_FILE), _ioctl_snapstore_file },
+//	{ (IOCTL_SNAPSTORE_MEMORY), _ioctl_snapstore_memory },
+//	{ (IOCTL_SNAPSTORE_CLEANUP), _ioctl_snapstore_cleanup },
+
 	{ (IOCTL_SNAPSTORE_FILE_MULTIDEV), _ioctl_snapstore_file_multidev },
-#endif
-	{ (IOCTL_COLLECT_SNAPSHOT_IMAGES), _ioctl_collect_snapimages },
+
+
 	{ 0, NULL }
 };
 

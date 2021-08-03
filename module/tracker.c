@@ -8,7 +8,7 @@
 LIST_HEAD(trackers);
 DEFINE_RWLOCK(trackers_lock);
 
-static void tracker_free_cb(struct kref *kref)
+static void tracker_free(struct kref *kref)
 {
 	struct tracker *tracker = container_of(kref, struct tracker, refcount);
 
@@ -32,7 +32,7 @@ static inline void tracker_get(struct tracker *tracker);
 
 static inline void tracker_put(struct tracker *tracker)
 {
-	kref_put(&tracker->refcount, tracker_free_cb);
+	kref_put(&tracker->refcount, tracker_free);
 }
 
 struct tracker *tracker_get_by_dev_id(dev_t dev_id)
@@ -155,9 +155,6 @@ static int _freeze_bdev(struct block_device *bdev, struct super_block **psuperbl
 }
 #endif
 
-static int tracker_load_chunk()
-
-
 static int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
@@ -238,7 +235,7 @@ static int tracker_new(dev_t dev_id, unsigned long long snapshot_id)
 		return = -ENOMEM;
 
 	kref_init(&tracker->refcount);
-	atomic_set(&tracker->is_captured, false);
+	atomic_set(&tracker->is_busy_with_snapshot, false);
 	tracker->dev_d = dev_id;
 	tracker->snapshot_id = 0;
 
@@ -348,7 +345,7 @@ void tracker_cbt_bitmap_unlock(struct tracker *tracker)
 		cbt_map_read_unlock(tracker->cbt_map);
 }
 
-int _tracker_capture_snapshot(struct tracker *tracker)
+int __tracker_capture_snapshot(struct tracker *tracker)
 {
 	struct block_device* bdev = NULL;
 	int result = SUCCESS;
@@ -358,17 +355,10 @@ int _tracker_capture_snapshot(struct tracker *tracker)
 	if (!tracker->snapdev)
 		return -ENODEV;
 
-	/*result = defer_io_create(tracker->dev_id, tracker->target_dev, &tracker->defer_io);
-	if (result != SUCCESS) {
-		pr_err("Failed to create defer IO processor\n");
-		return result;
-	}*/
 
 
-	capacity = part_nr_sects_read(bdev->bd_part);
 
-
-	atomic_set(&tracker->is_captured, true);
+	atomic_set(&tracker->is_busy_with_snapshot, true);
 
 	if (tracker->cbt_map != NULL) {
 
@@ -422,6 +412,8 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 			ret = cbt_map_reset(tracker->cbt_map, sect_in_block_degree, capacity);
 		}
 
+		tracker->diff_area = diff_area_new();
+
 		_freeze_bdev(tracker->dev_id, bdev, &superblock);
 		{/* filesystem locked */
 			struct gendisk *disk = bdev->bd_disk;
@@ -430,7 +422,7 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 			blk_mq_quiesce_queue(disk->queue);
 
 			{/* disk queue locked */
-				ret = _tracker_capture_snapshot(tracker);
+				ret = __tracker_capture_snapshot(tracker);
 				if (ret != SUCCESS)
 					pr_err("Failed to capture snapshot for device [%d:%d]\n",
 					       MAJOR(dev_id), MINOR(dev_id));
@@ -484,7 +476,7 @@ void _tracker_release_snapshot(struct tracker *tracker)
 		blk_mq_freeze_queue(disk->queue);
 		blk_mq_quiesce_queue(disk->queue);
 		{/* disk queue locked */
-			atomic_set(&tracker->is_captured, false);
+			atomic_set(&tracker->is_busy_with_snapshot, false);
 
 			tracker->defer_io = NULL;
 		}
@@ -518,7 +510,7 @@ void tracker_release_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 		_tracker_release_snapshot(tracker);
 	}
 }
-
+#if 0
 void tracker_cow(struct tracker *tracker, sector_t start, sector_t cnt)
 {
 	int ret = 0;
@@ -562,7 +554,7 @@ void tracker_cow(struct tracker *tracker, sector_t start, sector_t cnt)
 
 	return ret;
 }
-
+#endif
 int tracker_init(void)
 {
 	filter_enable();
