@@ -46,6 +46,8 @@ struct chunk {
 	 * this is especially true for the last piece.
 	 */
 	sector_t sector_count; 
+
+	atomic_t state;
 	/**
 	 * lock - syncs access to the chunks fields: state, diff_buffer and
 	 * diff_store.
@@ -60,7 +62,7 @@ struct chunk {
 	 * the snapshot image block device with the FMODE_EXCL parameter.
 	 */
 	struct rw_semaphore lock; 
-	int state;
+
 	struct diff_buffer *diff_buffer;
 	struct diff_store *diff_store;
 };
@@ -69,17 +71,17 @@ unsigned long long chunk_calculate_optimal_size_shift(struct block_device *bdev)
 
 static inline void chunk_state_set(struct chunk* chunk, int st)
 {
-	chunk->state |= (1 << st);
+	atomic_or(&chunk->state, (1 << st));
 };
 
 static inline void chunk_state_unset(struct chunk* chunk, int st)
 {
-	chunk->state &= ~(1 << st);
+	atomic_and(&chunk->state, ~(1 << st));
 };
 
 static inline bool chunk_state_check(struct chunk* chunk, int st)
 {
-	return (chunk->state & (1 << st));
+	return atomic_read(chunk->state) & (1 << st);
 };
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
