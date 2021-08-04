@@ -39,7 +39,7 @@ static int _cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_b
 	cbt_map->state_changed_sectors = 0;
 	cbt_map->state_dirty_sectors = 0;
 
-	return SUCCESS;
+	return 0;
 }
 
 static void _cbt_map_deallocate(struct cbt_map *cbt_map)
@@ -85,7 +85,7 @@ struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t d
 	if (cbt_map == NULL)
 		return NULL;
 
-	if (_cbt_map_allocate(cbt_map, cbt_sect_in_block_degree, device_capacity) != SUCCESS) {
+	if (_cbt_map_allocate(cbt_map, cbt_sect_in_block_degree, device_capacity)) {
 		cbt_map_destroy(cbt_map);
 		return NULL;
 	}
@@ -140,7 +140,7 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt,
 		 u8 snap_number, struct big_buffer *map)
 {
-	int res = SUCCESS;
+	int res = 0;
 	size_t cbt_block;
 	size_t cbt_block_first = (size_t)(sector_start >> cbt_map->sect_in_block_degree);
 	size_t cbt_block_last = (size_t)((sector_start + sector_cnt - 1) >>
@@ -151,13 +151,13 @@ static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t
 			u8 num;
 
 			res = big_buffer_byte_get(map, cbt_block, &num);
-			if (res == SUCCESS)
+			if (!res)
 				if (num < snap_number)
 					res = big_buffer_byte_set(map, cbt_block, snap_number);
 		} else
 			res = -EINVAL;
 
-		if (res != SUCCESS) {
+		if (res) {
 			pr_err("Block index is too large. #%zu was demanded, map size %zu\n",
 			       cbt_block, cbt_map->map_size);
 			break;
@@ -168,7 +168,7 @@ static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t
 
 int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt)
 {
-	int res = SUCCESS;
+	int res = 0;
 
 	spin_lock(&cbt_map->locker);
 
@@ -182,13 +182,13 @@ int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_
 
 int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt)
 {
-	int res = SUCCESS;
+	int res = 0;
 
 	spin_lock(&cbt_map->locker);
 
 	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
-	if (res == SUCCESS)
+	if (!res)
 		res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 				   (u8)cbt_map->snap_number_previous, cbt_map->read_map);
 	cbt_map->state_dirty_sectors += sector_cnt;

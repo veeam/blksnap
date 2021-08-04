@@ -59,7 +59,7 @@ out:
 
 int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_count)
 {
-	int result = SUCCESS;
+	int result = 0;
 	int count = 0;
 
 	read_lock(&trackers_lock);
@@ -99,7 +99,7 @@ int tracker_enum_cbt_info(int max_count, struct cbt_info_s *p_cbt_info, int *p_c
 	}
 	read_unlock(&trackers_lock);
 
-	if (result == SUCCESS)
+	if (!result)
 		if (count == 0)
 			result = -ENODATA;
 
@@ -115,10 +115,10 @@ static void _thaw_bdev(dev_t dev_id, struct block_device *bdev, struct super_blo
 	if (superblock == NULL)
 		return;
 
-	if (thaw_bdev(bdev, superblock) == SUCCESS)
-		pr_info("Device [%d:%d] was unfrozen\n", MAJOR(dev_id), MINOR(dev_id));
-	else
+	if (thaw_bdev(bdev, superblock))
 		pr_err("Failed to unfreeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
+	else
+		pr_info("Device [%d:%d] was unfrozen\n", MAJOR(dev_id), MINOR(dev_id));
 }
 
 static int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
@@ -128,7 +128,7 @@ static int _freeze_bdev(struct block_device *bdev, struct super_block **psuperbl
 	if (bdev->bd_super == NULL) {
 		pr_warn("Unable to freeze device [%d:%d]: no superblock was found\n",
 			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-		return SUCCESS;
+		return 0;
 	}
 
 	superblock = freeze_bdev(bdev);
@@ -151,7 +151,7 @@ static int _freeze_bdev(struct block_device *bdev, struct super_block **psuperbl
 	        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	*psuperblock = superblock;
 
-	return SUCCESS;
+	return 0;
 }
 #endif
 
@@ -318,7 +318,7 @@ void tracker_cbt_bitmap_set(struct tracker *tracker, sector_t sector, sector_t s
 	}
 	*/
 
-	if (cbt_map_set(tracker->cbt_map, sector, sector_cnt) != SUCCESS) { //cbt corrupt
+	if (cbt_map_set(tracker->cbt_map, sector, sector_cnt)) { //cbt corrupt
 		pr_warn("CBT fault detected\n");
 		tracker->cbt_map->active = false;
 		return;
@@ -348,7 +348,7 @@ void tracker_cbt_bitmap_unlock(struct tracker *tracker)
 int __tracker_capture_snapshot(struct tracker *tracker)
 {
 	struct block_device* bdev = NULL;
-	int result = SUCCESS;
+	int result = 0;
 
 	tracker->snapdev = snapstore_device_get_resource(
 		snapstore_device_find_by_dev_id(tracker->dev_id));
@@ -378,7 +378,7 @@ int __tracker_capture_snapshot(struct tracker *tracker)
 
 int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 {
-	int ret = SUCCESS;
+	int ret = 0;
 	int inx = 0;
 
 	//to do: redesign needed.
@@ -396,7 +396,7 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 			break;
 
 		ret = tracker_get(bdev, &tracker);
-		if (ret != SUCCESS) {
+		if (ret != 0) {
 			pr_err("Unable to capture snapshot: cannot find device [%d:%d]\n",
 			       MAJOR(dev_id), MINOR(dev_id));
 			break;
@@ -423,7 +423,7 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 
 			{/* disk queue locked */
 				ret = __tracker_capture_snapshot(tracker);
-				if (ret != SUCCESS)
+				if (ret != 0)
 					pr_err("Failed to capture snapshot for device [%d:%d]\n",
 					       MAJOR(dev_id), MINOR(dev_id));
 			}
@@ -434,7 +434,7 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 
 		blk_dev_close(bdev);
 	}
-	if (ret != SUCCESS)
+	if (ret)
 		return ret;
 
 	for (inx = 0; inx < dev_id_set_size; ++inx) {
@@ -442,7 +442,7 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 		dev_t dev_id = dev_id_set[inx];
 
 		ret = tracker_find_by_dev_id(dev_id, &tracker);
-		if (ret != SUCCESS) {
+		if (ret) {
 			pr_err("Unable to capture snapshot: cannot find device [%d:%d]\n",
 			       MAJOR(dev_id), MINOR(dev_id));
 			continue;
@@ -456,7 +456,7 @@ int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 		}
 	}
 
-	if (ret != SUCCESS) {
+	if (ret) {
 		pr_err("Failed to capture snapshot. errno=%d\n", ret);
 
 		tracker_release_snapshot(dev_id_set, dev_id_set_size);
@@ -540,7 +540,7 @@ void tracker_cow(struct tracker *tracker, sector_t start, sector_t cnt)
 		if (ret == -EALREADY) /* Block already reading or was read */
 			continue;
 
-		if (unlikely(ret != 0))
+		if (unlikely(ret))
 			break;
 
 		ret = blk_submit_pages(snapdev->orig_bdev, READ, 0, blk->page_array,
@@ -592,7 +592,7 @@ void tracker_done(void)
 static int _add_already_tracked(dev_t dev_id, unsigned long long snapshot_id,
 				struct tracker *tracker)
 {
-	int result = SUCCESS;
+	int result = 0;
 	bool cbt_reset_needed = false;
 
 	if ((snapshot_id != 0ull) && (tracker->snapshot_id == 0ull))
@@ -608,7 +608,7 @@ static int _add_already_tracked(dev_t dev_id, unsigned long long snapshot_id,
 
 		// skip snapshot id
 		tracker->snapshot_id = snapshot_id;
-		return SUCCESS;
+		return 0;
 	}
 
 	if (!tracker->cbt_map->active) {
@@ -622,19 +622,19 @@ static int _add_already_tracked(dev_t dev_id, unsigned long long snapshot_id,
 	}
 
 	if (!cbt_reset_needed)
-		return SUCCESS;
+		return 0;
 
 	//_tracker_remove(tracker);
 	//result = _tracker_create(tracker, dev_id);
 	result = tracker_cbt_reset(tracker);
-	if (result != SUCCESS) {
+	if (result) {
 		pr_err("Failed to create tracker. errno=%d\n", result);
 		return result;
 	}
 
 	tracker->snapshot_id = snapshot_id;
 
-	return SUCCESS;
+	return 0;
 }
 
 int tracking_add(dev_t dev_id, unsigned long long snapshot_id)
@@ -649,7 +649,7 @@ int tracking_add(dev_t dev_id, unsigned long long snapshot_id)
 		pr_info("Device [%d:%d] is already under tracking\n",
 		        MAJOR(dev_id), MINOR(dev_id));
 		result = _add_already_tracked(dev_id, snapshot_id, tracker);
-		if (result == SUCCESS)
+		if (!result)
 			result = -EALREADY;
 
 		tracker_put(tracker);
@@ -720,14 +720,15 @@ out:
 
 int tracking_collect(int max_count, struct cbt_info_s *cbt_info, int *p_count)
 {
-	int res = tracker_enum_cbt_info(max_count, cbt_info, p_count);
+	int res;
 
-	if (res == SUCCESS)
+	res = tracker_enum_cbt_info(max_count, cbt_info, p_count);
+	if (!res)
 		pr_info("%d devices found under tracking\n", *p_count);
 	else if (res == -ENODATA) {
 		pr_info("There are no devices under tracking\n");
 		*p_count = 0;
-		res = SUCCESS;
+		res = 0;
 	} else
 		pr_err("Failed to collect devices under tracking. errno=%d", res);
 

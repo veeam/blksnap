@@ -19,20 +19,24 @@
 
 int blk_snap_major; //zero by default
 
-const struct file_operations ctrl_fops = { .owner = THIS_MODULE,
-					   .read = ctrl_read,
-					   .write = ctrl_write,
-					   .open = ctrl_open,
-					   .release = ctrl_release,
-					   .poll = ctrl_poll,
-					   .unlocked_ioctl = ctrl_unlocked_ioctl };
+const struct file_operations ctrl_fops = {
+	.owner = THIS_MODULE,
+	//.read = ctrl_read,
+	//.write = ctrl_write,
+	.open = ctrl_open,
+	.release = ctrl_release,
+	//.poll = ctrl_poll,
+	.unlocked_ioctl = ctrl_unlocked_ioctl
+};
 
-atomic_t dev_open_cnt = ATOMIC_INIT(0);
-
-const struct ioctl_getversion_s version = { .major = FILEVER_MAJOR,
-					    .minor = FILEVER_MINOR,
-					    .revision = FILEVER_REVISION,
-					    .build = 0 };
+const struct blk_snap_version version = {
+	.major = FILEVER_MAJOR,
+	.minor = FILEVER_MINOR,
+	.revision = FILEVER_REVISION,
+	.build = 0
+	.compatibility_flags = 0,
+	.modification_name = {0}
+};
 
 int get_blk_snap_major(void)
 {
@@ -51,15 +55,14 @@ int ctrl_init(void)
 
 	blk_snap_major = ret;
 	pr_info("Module major [%d]\n", blk_snap_major);
-	return SUCCESS;
+	return 0;
 }
 
 void ctrl_done(void)
 {
 	unregister_chrdev(blk_snap_major, MODULE_NAME);
-	ctrl_pipe_done();
 }
-
+/*
 ssize_t ctrl_read(struct file *fl, char __user *buffer, size_t length, loff_t *offset)
 {
 	ssize_t bytes_read = 0;
@@ -101,38 +104,18 @@ unsigned int ctrl_poll(struct file *fl, struct poll_table_struct *wait)
 
 	return ctrl_pipe_poll(pipe);
 }
-
+*/
 int ctrl_open(struct inode *inode, struct file *fl)
 {
-	fl->f_pos = 0;
-
-	if (false == try_module_get(THIS_MODULE))
+	if (!try_module_get(THIS_MODULE))
 		return -EINVAL;
 
-	fl->private_data = (void *)ctrl_pipe_new();
-	if (fl->private_data == NULL) {
-		pr_err("Failed to open ctrl file\n");
-		return -ENOMEM;
-	}
-
-	atomic_inc(&dev_open_cnt);
-
-	return SUCCESS;
+	return 0;
 }
 
 int ctrl_release(struct inode *inode, struct file *fl)
 {
-	int result = SUCCESS;
-
-	if (atomic_read(&dev_open_cnt) > 0) {
-		module_put(THIS_MODULE);
-		ctrl_pipe_put_resource((struct ctrl_pipe *)fl->private_data);
-
-		atomic_dec(&dev_open_cnt);
-	} else {
-		pr_err("Unable to close ctrl file: the file is already closed\n");
-		result = -EALREADY;
-	}
+	module_put(THIS_MODULE);
 
 	return result;
 }
@@ -148,12 +131,12 @@ static int _ioctl_compatibility_flags(unsigned long arg)
 	param.flags |= BLK_SNAP_COMPATIBILITY_MULTIDEV;
 #endif
 	len = copy_to_user((void *)arg, &param, sizeof(struct ioctl_compatibility_flags_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to get compatibility flags: invalid user buffer\n");
 		return -EINVAL;
 	}
 
-	return SUCCESS;
+	return 0;
 }
 
 static int _ioctl_get_version(unsigned long arg)
@@ -163,12 +146,12 @@ static int _ioctl_get_version(unsigned long arg)
 	pr_info("Get version\n");
 
 	len = copy_to_user((void *)arg, &version, sizeof(struct ioctl_getversion_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to get version: invalid user buffer\n");
 		return -ENODATA;
 	}
 
-	return SUCCESS;
+	return 0;
 }
 
 static int _ioctl_tracking_add(unsigned long arg)
@@ -177,7 +160,7 @@ static int _ioctl_tracking_add(unsigned long arg)
 	struct ioctl_dev_id_s dev;
 
 	len = copy_from_user(&dev, (void *)arg, sizeof(struct ioctl_dev_id_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to add device under tracking: invalid user buffer\n");
 		return -ENODATA;
 	}
@@ -205,17 +188,17 @@ static int _ioctl_tracking_collect(unsigned long arg)
 	pr_info("Collecting tracking devices:\n");
 
 	len = copy_from_user(&get, (void *)arg, sizeof(struct ioctl_tracking_collect_s));
-	if (len  != 0) {
+	if (len) {
 		pr_err("Unable to collect tracking devices: invalid user buffer\n");
 		return -ENODATA;
 	}
 
 	if (get.cbt_info == NULL) {
 		res = tracking_collect(0x7FFFffff, NULL, &get.count);
-		if (res == SUCCESS) {
+		if (!res) {
 			len = copy_to_user((void *)arg, (void *)&get,
 					   sizeof(struct ioctl_tracking_collect_s));
-			if (len != 0) {
+			if (len) {
 				pr_err("Unable to collect tracking devices: invalid user buffer for arguments\n");
 				res = -ENODATA;
 			}
@@ -231,13 +214,13 @@ static int _ioctl_tracking_collect(unsigned long arg)
 
 		do {
 			res = tracking_collect(get.count, cbt_info, &get.count);
-			if (res != SUCCESS) {
+			if (res) {
 				pr_err("Failed to execute tracking_collect. errno=%d\n", res);
 				break;
 			}
 			len = copy_to_user(get.cbt_info, cbt_info,
 					      get.count * sizeof(struct cbt_info_s));
-			if (len != 0) {
+			if (len) {
 				pr_err("Unable to collect tracking devices: invalid user buffer for CBT info\n");
 				res = -ENODATA;
 				break;
@@ -245,7 +228,7 @@ static int _ioctl_tracking_collect(unsigned long arg)
 
 			len = copy_to_user((void *)arg, (void *)&get,
 					   sizeof(struct ioctl_tracking_collect_s));
-			if (len != 0) {
+			if (len) {
 				pr_err("Unable to collect tracking devices: invalid user buffer for arguments\n");
 				res = -ENODATA;
 				break;
@@ -265,11 +248,11 @@ static int _ioctl_tracking_block_size(unsigned long arg)
 	unsigned int blk_sz = change_tracking_block_size();
 
 	len = copy_to_user((void *)arg, &blk_sz, sizeof(unsigned int));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to get tracking block size: invalid user buffer for arguments\n");
 		return -ENODATA;
 	}
-	return SUCCESS;
+	return 0;
 }
 
 static int _ioctl_tracking_read_cbt_map(unsigned long arg)
@@ -280,7 +263,7 @@ static int _ioctl_tracking_read_cbt_map(unsigned long arg)
 
 	len = copy_from_user(&readbitmap, (void *)arg,
 				sizeof(struct ioctl_tracking_read_cbt_bitmap_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to read CBT map: invalid user buffer\n");
 		return -ENODATA;
 	}
@@ -296,7 +279,7 @@ static int _ioctl_tracking_mark_dirty_blocks(unsigned long arg)
 	struct ioctl_tracking_mark_dirty_blocks_s param;
 	struct block_range_s *p_dirty_blocks;
 	size_t buffer_size;
-	int result = SUCCESS;
+	int result = 0;
 
 	len = copy_from_user(&param, (void *)arg,
 			     sizeof(struct ioctl_tracking_mark_dirty_blocks_s));
@@ -316,7 +299,7 @@ static int _ioctl_tracking_mark_dirty_blocks(unsigned long arg)
 		dev_t image_dev_id;
 
 		len = copy_from_user(p_dirty_blocks, (void *)param.p_dirty_blocks, buffer_size);
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to mark dirty blocks: invalid user buffer\n");
 			result = -ENODATA;
 			break;
@@ -339,7 +322,7 @@ static int _ioctl_snapshot_create(unsigned long arg)
 	struct ioctl_dev_id_s *pk_dev_id = NULL;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_snapshot_create_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}
@@ -359,7 +342,7 @@ static int _ioctl_snapshot_create(unsigned long arg)
 
 		len = copy_from_user(pk_dev_id, (void *)param.p_dev_id,
 				     param.count * sizeof(struct ioctl_dev_id_s));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to create snapshot: invalid user buffer for parameters\n");
 			status = -ENODATA;
 			break;
@@ -386,9 +369,9 @@ static int _ioctl_snapshot_create(unsigned long arg)
 	kfree(pk_dev_id);
 	pk_dev_id = NULL;
 
-	if (status == SUCCESS) {
+	if (!status) {
 		len = copy_to_user((void *)arg, &param, sizeof(struct ioctl_snapshot_create_s));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to create snapshot: invalid user buffer\n");
 			status = -ENODATA;
 		}
@@ -403,7 +386,7 @@ static int _ioctl_snapshot_destroy(unsigned long arg)
 	unsigned long long param;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(unsigned long long));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to destroy snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}
@@ -425,13 +408,13 @@ static inline dev_t _snapstore_dev(struct ioctl_dev_id_s *dev_id)
 static int _ioctl_snapstore_create(unsigned long arg)
 {
 	unsigned long len;
-	int res = SUCCESS;
+	int res = 0;
 	struct ioctl_snapstore_create_s param;
 	size_t inx = 0;
 	dev_t *dev_id_set = NULL;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_snapstore_create_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to create snapstore: invalid user buffer\n");
 		return -EINVAL;
 	}
@@ -444,7 +427,7 @@ static int _ioctl_snapstore_create(unsigned long arg)
 		struct ioctl_dev_id_s dev_id;
 
 		len = copy_from_user(&dev_id, param.p_dev_id + inx, sizeof(struct ioctl_dev_id_s));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to create snapstore: ");
 			pr_err("invalid user buffer for parameters\n");
 
@@ -455,7 +438,7 @@ static int _ioctl_snapstore_create(unsigned long arg)
 		dev_id_set[inx] = MKDEV(dev_id.major, dev_id.minor);
 	}
 
-	if (res == SUCCESS)
+	if (!res)
 		res = snapstore_create((uuid_t *)param.id, _snapstore_dev(&param.snapstore_dev_id),
 				       dev_id_set, (size_t)param.count);
 
@@ -467,7 +450,7 @@ static int _ioctl_snapstore_create(unsigned long arg)
 static int _ioctl_snapstore_file(unsigned long arg)
 {
 	unsigned long len;
-	int res = SUCCESS;
+	int res = 0;
 	struct ioctl_snapstore_file_add_s param;
 	struct big_buffer *ranges = NULL;
 	size_t ranges_buffer_size;
@@ -503,7 +486,7 @@ static int _ioctl_snapstore_file(unsigned long arg)
 static int _ioctl_snapstore_memory(unsigned long arg)
 {
 	unsigned long len;
-	int res = SUCCESS;
+	int res = 0;
 	struct ioctl_snapstore_memory_limit_s param;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_snapstore_memory_limit_s));
@@ -519,11 +502,11 @@ static int _ioctl_snapstore_memory(unsigned long arg)
 static int _ioctl_snapstore_cleanup(unsigned long arg)
 {
 	unsigned long len;
-	int res = SUCCESS;
+	int res = 0;
 	struct ioctl_snapstore_cleanup_s param;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_snapstore_cleanup_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to perform snapstore cleanup: invalid user buffer\n");
 		return -EINVAL;
 	}
@@ -531,9 +514,8 @@ static int _ioctl_snapstore_cleanup(unsigned long arg)
 	pr_info("Cleanup snapstore %pUB\n", (uuid_t *)param.id);
 	res = snapstore_cleanup((uuid_t *)param.id, &param.filled_bytes);
 
-	if (res == SUCCESS) {
-		if (0 !=
-		    copy_to_user((void *)arg, &param, sizeof(struct ioctl_snapstore_cleanup_s))) {
+	if (!res) {
+		if (copy_to_user((void *)arg, &param, sizeof(struct ioctl_snapstore_cleanup_s))) {
 			pr_err("Unable to perform snapstore cleanup: invalid user buffer\n");
 			res = -ENODATA;
 		}
@@ -546,14 +528,14 @@ static int _ioctl_snapstore_cleanup(unsigned long arg)
 static int _ioctl_snapstore_file_multidev(unsigned long arg)
 {
 	unsigned long len;
-	int res = SUCCESS;
+	int res = 0;
 	struct ioctl_snapstore_file_add_multidev_s param;
 	struct big_buffer *ranges = NULL; //struct ioctl_range_s* ranges = NULL;
 	size_t ranges_buffer_size;
 
 	len = copy_from_user(&param, (void *)arg,
 				sizeof(struct ioctl_snapstore_file_add_multidev_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to add file to multidev snapstore: invalid user buffer\n");
 		return -EINVAL;
 	}
@@ -599,7 +581,7 @@ static int _ioctl_snapshot_errno(unsigned long arg)
 	struct ioctl_snapshot_errno_s param;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_dev_id_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable failed to get snapstore error code: invalid user buffer\n");
 		return -EINVAL;
 	}
@@ -607,26 +589,26 @@ static int _ioctl_snapshot_errno(unsigned long arg)
 	res = snapstore_device_errno(MKDEV(param.dev_id.major, param.dev_id.minor),
 				     &param.err_code);
 
-	if (res != SUCCESS)
+	if (res)
 		return res;
 
 	len = copy_to_user((void *)arg, &param, sizeof(struct ioctl_snapshot_errno_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to get snapstore error code: invalid user buffer\n");
 		return -EINVAL;
 	}
 
-	return SUCCESS;
+	return 0;
 }
 
 static int _ioctl_collect_snapimages(unsigned long arg)
 {
 	unsigned long len;
-	int status = SUCCESS;
+	int status = 0;
 	struct ioctl_collect_snapshot_images_s param;
 
 	len = copy_from_user(&param, (void *)arg, sizeof(struct ioctl_collect_snapshot_images_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to collect snapshot images: invalid user buffer\n");
 		return -ENODATA;
 	}
@@ -634,7 +616,7 @@ static int _ioctl_collect_snapimages(unsigned long arg)
 	status = snapimage_collect_images(param.count, param.p_image_info, &param.count);
 
 	len = copy_to_user((void *)arg, &param, sizeof(struct ioctl_collect_snapshot_images_s));
-	if (len != 0) {
+	if (len) {
 		pr_err("Unable to collect snapshot images: invalid user buffer\n");
 		return -ENODATA;
 	}
@@ -648,30 +630,19 @@ struct blk_snap_ioctl_table {
 };
 
 static struct blk_snap_ioctl_table blk_snap_ioctl_table[] = {
-	{ (IOCTL_COMPATIBILITY_FLAGS), _ioctl_compatibility_flags },
-	{ (IOCTL_GETVERSION), _ioctl_get_version },
-
-	{ (IOCTL_TRACKING_ADD), _ioctl_tracking_add },
-	{ (IOCTL_TRACKING_REMOVE), _ioctl_tracking_remove },
-	{ (IOCTL_TRACKING_COLLECT), _ioctl_tracking_collect },
-	{ (IOCTL_TRACKING_BLOCK_SIZE), _ioctl_tracking_block_size },
-	{ (IOCTL_TRACKING_READ_CBT_BITMAP), _ioctl_tracking_read_cbt_map },
-	{ (IOCTL_TRACKING_MARK_DIRTY_BLOCKS), _ioctl_tracking_mark_dirty_blocks },
-
-	{ (IOCTL_SNAPSHOT_CREATE), _ioctl_snapshot_create },
-	{ (IOCTL_SNAPSHOT_DESTROY), _ioctl_snapshot_destroy },
-	{ (IOCTL_SNAPSHOT_ERRNO), _ioctl_snapshot_errno },
-	{ (IOCTL_SNAPSHOT_STORAGE), _ioctl_snapstore_file_multidev },
-
-//	{ (IOCTL_SNAPSTORE_CREATE), _ioctl_snapstore_create },
-//	{ (IOCTL_SNAPSTORE_FILE), _ioctl_snapstore_file },
-//	{ (IOCTL_SNAPSTORE_MEMORY), _ioctl_snapstore_memory },
-//	{ (IOCTL_SNAPSTORE_CLEANUP), _ioctl_snapstore_cleanup },
-
-	{ (IOCTL_SNAPSTORE_FILE_MULTIDEV), _ioctl_snapstore_file_multidev },
-
-
-	{ 0, NULL }
+	{(IOCTL_BLK_SNAP_VERSION),			ioctl_version},
+	{(IOCTL_BLK_SNAP_TRACKING_ADD),			ioctl_tracking_add},
+	{(IOCTL_BLK_SNAP_TRACKING_REMOVE),		ioctl_tracking_remove},
+	{(IOCTL_BLK_SNAP_TRACKING_COLLECT),		ioctl_tracking_collect},
+	{(IOCTL_BLK_SNAP_TRACKING_READ_CBT_BITMAP),	ioctl_tracking_read_cbt_map},
+	{(IOCTL_BLK_SNAP_TRACKING_MARK_DIRTY_BLOCKS),	ioctl_tracking_mark_dirty_blocks},
+	{(IOCTL_BLK_SNAP_SNAPSHOT_CREATE),		ioctl_snapshot_create},
+	{(IOCTL_BLK_SNAP_SNAPSHOT_DESTROY),		ioctl_snapshot_destroy},
+	{(IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE),	ioctl_snapshot_append_storage},
+	{(IOCTL_BLK_SNAP_SNAPSHOT_TAKE), 		ioctl_snapshot_take},
+	{(IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT),		ioctl_snapshot_wait_event},
+	{(IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES),	ioctl_snapshot_collect_images},
+	{0, NULL}
 };
 
 long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -679,7 +650,7 @@ long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	long status = -ENOTTY;
 	size_t inx = 0;
 
-	while (blk_snap_ioctl_table[inx].cmd != 0) {
+	while (blk_snap_ioctl_table[inx].cmd) {
 		if (blk_snap_ioctl_table[inx].cmd == cmd) {
 			status = blk_snap_ioctl_table[inx].fn(arg);
 			break;

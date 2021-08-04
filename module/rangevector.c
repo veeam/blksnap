@@ -81,5 +81,5 @@ int rangevector_add(struct rangevector *rangevector, struct blk_range *rg)
 	blk_range_rb_insert(range_node, &rangevector->root);
 	up_write(&rangevector->lock);
 
-	return SUCCESS;
+	return 0;
 }

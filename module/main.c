@@ -16,34 +16,34 @@
 
 static int __init blk_snap_init(void)
 {
-	int result = SUCCESS;
+	int result = 0;
 
 	pr_info("Loading\n");
 
 	params_check();
 
 	result = ctrl_init();
-	if (result != SUCCESS)
+	if (result)
 		return result;
 
 	result = blk_bioset_create();
-	if (result != SUCCESS)
+	if (result)
 		return result;
 
 	result = blk_redirect_bioset_create();
-	if (result != SUCCESS)
+	if (result)
 		return result;
 
 	result = blk_deferred_bioset_create();
-	if (result != SUCCESS)
+	if (result)
 		return result;
 
 	result = snapimage_init();
-	if (result != SUCCESS)
+	if (result)
 		return result;
 
 	result = ctrl_sysfs_init();
-	if (result != SUCCESS)
+	if (result)
 		return result;
 
 	result = tracker_init();
@@ -67,7 +67,6 @@ static void __exit blk_snap_exit(void)
 
 	snapstore_device_done();
 	snapstore_done();
-
 
 	snapimage_done();
 

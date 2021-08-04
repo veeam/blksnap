@@ -28,13 +28,13 @@ int ctrl_sysfs_init(void)
 	if (IS_ERR(blk_snap_class)) {
 		res = PTR_ERR(blk_snap_class);
 
-		pr_err("Bad class create. errno=%d\n", 0 - res);
+		pr_err("Bad class create. errno=%d\n", res);
 		return res;
 	}
 
 	pr_info("Create 'major' sysfs attribute\n");
 	res = class_create_file(blk_snap_class, &class_attr_major);
-	if (res != SUCCESS) {
+	if (res) {
 		pr_err("Failed to create 'major' sysfs file\n");
 
 		class_destroy(blk_snap_class);

@@ -16,24 +16,24 @@ static int _snapshot_remove_device(dev_t dev_id)
 	struct tracker *tracker = NULL;
 
 	result = tracker_find_by_dev_id(dev_id, &tracker);
-	if (result != SUCCESS) {
+	if (result) {
 		if (result == -ENODEV)
 			pr_err("Cannot find device by device id=[%d:%d]\n", MAJOR(dev_id),
 			       MINOR(dev_id));
 		else
 			pr_err("Failed to find device by device id=[%d:%d]\n", MAJOR(dev_id),
 			       MINOR(dev_id));
-		return SUCCESS;
+		return 0;
 	}
 
-	if (result != SUCCESS)
+	if (result)
 		return result;
 
 	tracker->snapshot_id = 0ull;
 
 	pr_info("Device [%d:%d] successfully removed from snapshot\n", MAJOR(dev_id),
 		MINOR(dev_id));
-	return SUCCESS;
+	return 0;
 }
 
 static void _snapshot_cleanup(struct snapshot *snapshot)
@@ -42,7 +42,7 @@ static void _snapshot_cleanup(struct snapshot *snapshot)
 
 	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
 
-		if (_snapshot_remove_device(snapshot->dev_id_set[inx]) != SUCCESS)
+		if (_snapshot_remove_device(snapshot->dev_id_set[inx]) != 0)
 			pr_err("Failed to remove device [%d:%d] from snapshot\n",
 			       MAJOR(snapshot->dev_id_set[inx]), MINOR(snapshot->dev_id_set[inx]));
 	}
@@ -101,7 +101,7 @@ static int _snapshot_new(dev_t *p_dev, int count, struct snapshot **pp_snapshot)
 
 	*pp_snapshot = p_snapshot;
 
-	return SUCCESS;
+	return 0;
 }
 
 void snapshot_done(void)
@@ -129,7 +129,7 @@ int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		    unsigned long long *p_snapshot_id)
 {
 	struct snapshot *snapshot = NULL;
-	int result = SUCCESS;
+	int result = 0;
 	unsigned int inx;
 
 	pr_info("Create snapshot for devices:\n");
@@ -137,7 +137,7 @@ int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		pr_info("\t%d:%d\n", MAJOR(dev_id_set[inx]), MINOR(dev_id_set[inx]));
 
 	result = _snapshot_new(dev_id_set, dev_id_set_size, &snapshot);
-	if (result != SUCCESS) {
+	if (result) {
 		pr_err("Unable to create snapshot: failed to allocate snapshot structure\n");
 		return result;
 	}
@@ -149,26 +149,26 @@ int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 
 			result = tracking_add(dev_id, snapshot->id);
 			if (result == -EALREADY)
-				result = SUCCESS;
-			else if (result != SUCCESS) {
+				result = 0;
+			else if (result != 0) {
 				pr_err("Unable to create snapshot\n");
 				pr_err("Failed to add device [%d:%d] to snapshot tracking\n",
 				       MAJOR(dev_id), MINOR(dev_id));
 				break;
 			}
 		}
-		if (result != SUCCESS)
+		if (result)
 			break;
 
 		result = tracker_capture_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
-		if (result != SUCCESS) {
+		if (result) {
 			pr_err("Unable to create snapshot: failed to capture snapshot [0x%llx]\n",
 			       snapshot->id);
 			break;
 		}
 
 		result = snapimage_create_for(snapshot->dev_id_set, snapshot->dev_id_set_size);
-		if (result != SUCCESS) {
+		if (result) {
 			pr_err("Unable to create snapshot\n");
 			pr_err("Failed to create snapshot image devices\n");
 
@@ -180,7 +180,7 @@ int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 		pr_info("Snapshot [0x%llx] was created\n", snapshot->id);
 	} while (false);
 
-	if (result != SUCCESS) {
+	if (result) {
 		pr_info("Snapshot [0x%llx] cleanup\n", snapshot->id);
 
 		down_write(&snapshots_lock);
@@ -221,5 +221,5 @@ int snapshot_destroy(unsigned long long snapshot_id)
 	}
 
 	_snapshot_destroy(snapshot);
-	return SUCCESS;
+	return 0;
 }

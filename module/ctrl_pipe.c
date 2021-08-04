@@ -49,7 +49,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 					  size_t length)
 {
 	unsigned long len;
-	int result = SUCCESS;
+	int result = 0;
 	ssize_t processed = 0;
 	char *kernel_buffer;
 
@@ -134,14 +134,14 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 			result = snapstore_create(unique_id, _snapstore_dev(snapstore_dev_id),
 						  dev_set, dev_id_set_length);
 			kfree(dev_set);
-			if (result != SUCCESS) {
+			if (result) {
 				pr_err("Failed to create snapstore\n");
 				break;
 			}
 
 			result = snapstore_stretch_initiate(
 				unique_id, pipe, (sector_t)to_sectors(stretch_empty_limit));
-			if (result != SUCCESS) {
+			if (result) {
 				pr_err("Failed to initiate stretch snapstore %pUB\n", unique_id);
 				break;
 			}
@@ -150,7 +150,7 @@ static ssize_t ctrl_pipe_command_initiate(struct ctrl_pipe *pipe, const char __u
 	kfree(kernel_buffer);
 	ctrl_pipe_request_acknowledge(pipe, result);
 
-	if (result == SUCCESS)
+	if (!result)
 		return processed;
 	return result;
 }
@@ -159,7 +159,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 					      size_t length)
 {
 	unsigned long len;
-	int result = SUCCESS;
+	int result = 0;
 	ssize_t processed = 0;
 	struct big_buffer *ranges = NULL;
 
@@ -176,7 +176,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 			break;
 		}
 		len = copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -191,7 +191,7 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 			break;
 		}
 		len = copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -223,20 +223,17 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 		}
 		processed += ranges_buffer_size;
 
-		{
-			result = snapstore_add_file(&unique_id, ranges, ranges_length);
 
-			if (result != SUCCESS) {
-				pr_err("Failed to add file to snapstore\n");
-				result = -ENODEV;
-				break;
-			}
+		if (snapstore_add_file(&unique_id, ranges, ranges_length)) {
+			pr_err("Failed to add file to snapstore\n");
+			result = -ENODEV;
+			break;
 		}
 	} while (false);
 	if (ranges)
 		big_buffer_free(ranges);
 
-	if (result == SUCCESS)
+	if (!result)
 		return processed;
 	return result;
 }
@@ -246,7 +243,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 						       const char __user *buffer, size_t length)
 {
 	unsigned long len;
-	int result = SUCCESS;
+	int result = 0;
 	ssize_t processed = 0;
 	struct big_buffer *ranges = NULL;
 
@@ -265,7 +262,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 			break;
 		}
 		len = copy_from_user(&unique_id, buffer + processed, sizeof(uuid_t));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -279,7 +276,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 			break;
 		}
 		len = copy_from_user(&snapstore_major, buffer + processed, sizeof(unsigned int));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -287,7 +284,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		processed += sizeof(unsigned int);
 
 		len = copy_from_user(&snapstore_minor, buffer + processed, sizeof(unsigned int));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -302,7 +299,7 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 			break;
 		}
 		len = copy_from_user(&ranges_length, buffer + processed, sizeof(unsigned int));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;
@@ -334,22 +331,21 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 		}
 		processed += ranges_buffer_size;
 
-		{
-			result = snapstore_add_multidev(&unique_id,
-							MKDEV(snapstore_major, snapstore_minor),
-							ranges, ranges_length);
 
-			if (result != SUCCESS) {
-				pr_err("Failed to add file to snapstore\n");
-				result = -ENODEV;
-				break;
-			}
+		result = snapstore_add_multidev(&unique_id,
+						MKDEV(snapstore_major, snapstore_minor),
+						ranges, ranges_length);
+
+		if (result) {
+			pr_err("Failed to add file to snapstore\n");
+			result = -ENODEV;
+			break;
 		}
 	} while (false);
 	if (ranges)
 		big_buffer_free(ranges);
 
-	if (result == SUCCESS)
+	if (!result)
 		return processed;
 
 	return result;
@@ -466,7 +462,7 @@ ssize_t ctrl_pipe_write(struct ctrl_pipe *pipe, const char __user *buffer, size_
 			break;
 		}
 		len = copy_from_user(&command, buffer + processed, sizeof(unsigned int));
-		if (len != 0) {
+		if (len) {
 			pr_err("Unable to write to pipe: invalid user buffer\n");
 			processed = -EINVAL;
 			break;

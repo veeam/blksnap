@@ -17,7 +17,7 @@ int inc_snapstore_block_size_pow(void)
 		return -EFAULT;
 
 	++snapstore_block_size_pow;
-	return SUCCESS;
+	return 0;
 }
 
 int get_change_tracking_block_size_pow(void)

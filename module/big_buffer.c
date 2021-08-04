@@ -14,7 +14,7 @@ static inline size_t page_count_calc(size_t buffer_size)
 
 struct big_buffer *big_buffer_alloc(size_t buffer_size, int gfp_opt)
 {
-	int res = SUCCESS;
+	int res = 0;
 	struct big_buffer *bbuff;
 	size_t count;
 	size_t inx;
@@ -36,7 +36,7 @@ struct big_buffer *big_buffer_alloc(size_t buffer_size, int gfp_opt)
 		bbuff->pg[inx] = page_address(pg);
 	}
 
-	if (res != SUCCESS) {
+	if (res) {
 		big_buffer_free(bbuff);
 		return NULL;
 	}
@@ -67,12 +67,12 @@ size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset, struct big_
 	size_t processed_len = 0;
 	size_t unordered = offset & (PAGE_SIZE - 1);
 
-	if (unordered != 0) { //first
+	if (unordered) { //first
 		size_t page_len = min_t(size_t, (PAGE_SIZE - unordered), length);
 
 		left_data_length = copy_to_user(dst_user + processed_len,
 						bbuff->pg[page_inx] + unordered, page_len);
-		if (left_data_length != 0) {
+		if (left_data_length) {
 			pr_err("Failed to copy data from big_buffer to user buffer\n");
 			return processed_len;
 		}
@@ -86,7 +86,7 @@ size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset, struct big_
 
 		left_data_length =
 			copy_to_user(dst_user + processed_len, bbuff->pg[page_inx], page_len);
-		if (left_data_length != 0) {
+		if (left_data_length) {
 			pr_err("Failed to copy data from big_buffer to user buffer\n");
 			break;
 		}
@@ -106,12 +106,12 @@ size_t big_buffer_copy_from_user(const char __user *src_user, size_t offset,
 	size_t processed_len = 0;
 	size_t unordered = offset & (PAGE_SIZE - 1);
 
-	if (unordered != 0) { //first
+	if (unordered) { //first
 		size_t page_len = min_t(size_t, (PAGE_SIZE - unordered), length);
 
 		left_data_length = copy_from_user(bbuff->pg[page_inx] + unordered,
 						  src_user + processed_len, page_len);
-		if (left_data_length != 0) {
+		if (left_data_length) {
 			pr_err("Failed to copy data from user buffer to big_buffer\n");
 			return processed_len;
 		}
@@ -125,7 +125,7 @@ size_t big_buffer_copy_from_user(const char __user *src_user, size_t offset,
 
 		left_data_length =
 			copy_from_user(bbuff->pg[page_inx], src_user + processed_len, page_len);
-		if (left_data_length != 0) {
+		if (left_data_length) {
 			pr_err("Failed to copy data from user buffer to big_buffer\n");
 			break;
 		}
@@ -176,7 +176,7 @@ int big_buffer_byte_get(struct big_buffer *bbuff, size_t inx, u8 *value)
 
 	*value = bbuff->pg[page_inx][byte_pos];
 
-	return SUCCESS;
+	return 0;
 }
 
 int big_buffer_byte_set(struct big_buffer *bbuff, size_t inx, u8 value)
@@ -189,5 +189,5 @@ int big_buffer_byte_set(struct big_buffer *bbuff, size_t inx, u8 value)
 
 	bbuff->pg[page_inx][byte_pos] = value;
 
-	return SUCCESS;
+	return 0;
 }
