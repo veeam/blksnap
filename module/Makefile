@@ -1,10 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
 KERNEL_MODULE_NAME := blk-snap-lp
 
-$(KERNEL_MODULE_NAME)-y += blk_util.o
 $(KERNEL_MODULE_NAME)-y += cbt_map.o
 $(KERNEL_MODULE_NAME)-y += ctrl_fops.o
-$(KERNEL_MODULE_NAME)-y += ctrl_pipe.o
 $(KERNEL_MODULE_NAME)-y += ctrl_sysfs.o
 $(KERNEL_MODULE_NAME)-y += main.o
 $(KERNEL_MODULE_NAME)-y += params.o

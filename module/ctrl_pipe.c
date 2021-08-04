@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+#if 0
 #define BLK_SNAP_SECTION "-ctrl"
 #include "common.h"
 #include "ctrl_pipe.h"
@@ -238,7 +239,6 @@ static ssize_t ctrl_pipe_command_next_portion(struct ctrl_pipe *pipe, const char
 	return result;
 }
 
-#ifdef CONFIG_BLK_SNAP_SNAPSTORE_MULTIDEV
 static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 						       const char __user *buffer, size_t length)
 {
@@ -350,7 +350,6 @@ static ssize_t ctrl_pipe_command_next_portion_multidev(struct ctrl_pipe *pipe,
 
 	return result;
 }
-#endif
 
 static void ctrl_pipe_release_cb(struct kref *kref)
 {
@@ -556,3 +555,4 @@ void ctrl_pipe_request_terminate(struct ctrl_pipe *pipe, unsigned long long fill
 
 	ctrl_pipe_push_request(pipe, cmd, 3);
 }
+#endif

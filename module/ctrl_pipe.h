@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+#if 0
 #pragma once
 
 #include <linux/kref.h>
@@ -32,3 +33,4 @@ void ctrl_pipe_request_halffill(struct ctrl_pipe *pipe, unsigned long long fille
 void ctrl_pipe_request_overflow(struct ctrl_pipe *pipe, unsigned int error_code,
 				unsigned long long filled_status);
 void ctrl_pipe_request_terminate(struct ctrl_pipe *pipe, unsigned long long filled_status);
+#endif

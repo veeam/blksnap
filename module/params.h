@@ -19,11 +19,11 @@ static inline sector_t snapstore_block_mask(void)
 	return snapstore_block_size() - 1ull;
 };
 
-int get_change_tracking_block_size_pow(void);
+int get_tracker_block_size_pow(void);
 
-static inline unsigned int change_tracking_block_size(void)
+static inline unsigned int tracker_block_size(void)
 {
-	return 1 << get_change_tracking_block_size_pow();
+	return 1 << get_tracker_block_size_pow();
 };
 
 void params_check(void);

@@ -1207,40 +1207,6 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 	return res;
 }
 
-int snapimage_mark_dirty_blocks(dev_t image_dev_id, struct block_range_s *block_ranges,
-				unsigned int count)
-{
-	size_t inx = 0;
-	int res = 0;
 
-	pr_info("Marking [%d] dirty blocks for image device [%d:%d]\n", count, MAJOR(image_dev_id),
-		MINOR(image_dev_id));
-
-	down_read(&snap_image_destroy_lock);
-	do {
-		struct snapimage *image = snapimage_find(image_dev_id);
-
-		if (image == NULL) {
-			pr_err("Cannot find device [%d:%d]\n", MAJOR(image_dev_id),
-			       MINOR(image_dev_id));
-			res = -ENODEV;
-			break;
-		}
-
-		for (inx = 0; inx < count; ++inx) {
-			sector_t ofs = (sector_t)block_ranges[inx].ofs;
-			sector_t cnt = (sector_t)block_ranges[inx].cnt;
-
-			res = cbt_map_set_both(image->cbt_map, ofs, cnt);
-			if (res != 0) {
-				pr_err("Failed to set CBT table. errno=%d\n", res);
-				break;
-			}
-		}
-	} while (false);
-	up_read(&snap_image_destroy_lock);
-
-	return res;
-}
 
 #endif

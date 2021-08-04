@@ -38,24 +38,24 @@ struct blk_snap_version {
  * Next, a number of ioctls will describe the interface for the CBT mechanism.
  */
 
-struct blk_snap_tracking_add {
+struct blk_snap_tracker_add {
 	__u32 dev_id;	
 };
 /**
  * This ioctl adds a device for tracking. From now on, all write bio requests
  * will be registered in the CBT table for this device.
  */
-#define IOCTL_BLK_SNAP_TRACKING_ADD \
-	_IOW(BLK_SNAP, 2, struct blk_snap_tracking_add)
+#define IOCTL_BLK_SNAP_TRACKER_ADD \
+	_IOW(BLK_SNAP, 1, struct blk_snap_tracker_add)
 
-struct blk_snap_tracking_remove {
+struct blk_snap_tracker_remove {
 	__u32 dev_id;	
 };
 /**
  * Removes the device from tracking changes.
  */
-#define IOCTL_BLK_SNAP_TRACKING_REMOVE \
-	_IOW(BLK_SNAP, 3, struct blk_snap_tracking_remove)
+#define IOCTL_BLK_SNAP_TRACKER_REMOVE \
+	_IOW(BLK_SNAP, 2, struct blk_snap_tracker_remove)
 
 struct blk_snap_cbt_info {
 	__u32 dev_id;
@@ -65,7 +65,7 @@ struct blk_snap_cbt_info {
 	__u8 generationId[16];
 	__u8 snap_number;
 };
-struct blk_snap_tracking_collect {
+struct blk_snap_tracker_collect {
 	__u32 count;
 	struct blk_snap_cbt_info *cbt_info_array;
 };
@@ -74,10 +74,10 @@ struct blk_snap_tracking_collect {
  * This ioctl duplicates displays the same information that the module outputs
  * to sysfs for each device under tracking.
  */
-#define IOCTL_BLK_SNAP_TRACKING_COLLECT \
-	_IOW(BLK_SNAP, 4, struct blk_snap_tracking_collect)
+#define IOCTL_BLK_SNAP_TRACKER_COLLECT \
+	_IOW(BLK_SNAP, 3, struct blk_snap_tracker_collect)
 
-struct blk_snap_tracking_read_cbt_bitmap {
+struct blk_snap_tracker_read_cbt_bitmap {
 	__u32 dev_id;
 	__u32 offset;
 	__u32 length;
@@ -87,15 +87,15 @@ struct blk_snap_tracking_read_cbt_bitmap {
  * This ioctl allows to read the table of changes. Sysfs also has a file that
  * allows to read this table.
  */
-#define IOCTL_BLK_SNAP_TRACKING_READ_CBT_BITMAP \
-	_IOR(BLK_SNAP, 5, struct blk_snap_tracking_read_cbt_bitmap)
+#define IOCTL_BLK_SNAP_TRACKER_READ_CBT_BITMAP \
+	_IOR(BLK_SNAP, 4, struct blk_snap_tracker_read_cbt_bitmap)
 
 struct blk_snap_block_range {
 	__u64 sector_offset;
 	__u64 sector_count;
 };
 
-struct blk_snap_tracking_mark_dirty_blocks {
+struct blk_snap_tracker_mark_dirty_blocks {
 	__u32 dev_id;
 	__u32 count;
 	struct blk_snap_block_range *dirty_blocks_array;
@@ -104,8 +104,8 @@ struct blk_snap_tracking_mark_dirty_blocks {
  * There are cases when some blocks need to be marked as changed.
  * This ioctl allows to do this.
  */
-#define IOCTL_BLK_SNAP_TRACKING_MARK_DIRTY_BLOCKS \
-	_IOR(BLK_SNAP, 7, struct blk_snap_tracking_mark_dirty_blocks)
+#define IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS \
+	_IOR(BLK_SNAP, 5, struct blk_snap_tracker_mark_dirty_blocks)
 
 /**
  * Next, there will be a description of the interface for working with snapshots.
@@ -123,7 +123,7 @@ struct blk_snap_snapshot_create {
  * that one block device can only be included in one snapshot.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_CREATE \
-	_IOW(BLK_SNAP, 16, struct blk_snap_snapshot_create)
+	_IOW(BLK_SNAP, 6, struct blk_snap_snapshot_create)
 
 struct blk_snap_snapshot_destroy {
 	__u8 id[16];
@@ -132,7 +132,7 @@ struct blk_snap_snapshot_destroy {
  * Destroys all snapshot structures and releases all its allocated resources.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_DESTROY \
-	_IOR(BLK_SNAP, 17, struct blk_snap_snapshot_destroy)
+	_IOR(BLK_SNAP, 7, struct blk_snap_snapshot_destroy)
 
 struct blk_snap_snapshot_append_storage {
 	__u8 id[16];
@@ -147,7 +147,7 @@ struct blk_snap_snapshot_append_storage {
  * difference storage while holding the snapshot.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE \
-	_IOW(BLK_SNAP, 18, struct blk_snap_snapshot_append_storage)
+	_IOW(BLK_SNAP, 8, struct blk_snap_snapshot_append_storage)
 
 struct blk_snap_snapshot_take {
 	__u8 id[16];
@@ -158,14 +158,14 @@ struct blk_snap_snapshot_take {
  * devices should be added to the difference storage.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_TAKE \
-	_IOR(BLK_SNAP, 19, struct blk_snap_snapshot_take)
+	_IOR(BLK_SNAP, 9, struct blk_snap_snapshot_take)
 
 struct blk_snap_snapshot_event {
-	__u8 id[16];
-	__u32 wait_timeout_ms;
-	__u32 time_label;
-	__u32 event_code;
-	__u8 event_data[0]; /* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
+	__u8 id[16];		/* in */
+	__u32 timeout_ms;	/* in */
+	__u32 time_label;	/* other fields for output */
+	__u32 code;
+	__u8  data[0];		/* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
 };
 /**
  * While holding the snapshot, the kernel module can transmit information about
@@ -174,7 +174,7 @@ struct blk_snap_snapshot_event {
  * user's thread is in a state of interruptable sleep.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT \
-	_IOW(BLK_SNAP, 20, PAGE_SIZE)
+	_IOW(BLK_SNAP, 10, PAGE_SIZE)
 
 struct blk_snap_event_low_free_space {
 	__u64 sectors_left;
@@ -221,4 +221,4 @@ struct blk_snap_snapshot_collect_images {
  * This information can also be obtained from files from sysfs.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES \
-	_IOW(BLK_SNAP, 21, struct blk_snap_snapshot_collect_images)
+	_IOW(BLK_SNAP, 11, struct blk_snap_snapshot_collect_images)

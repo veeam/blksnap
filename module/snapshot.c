@@ -70,38 +70,23 @@ static void _snapshot_destroy(struct snapshot *snapshot)
 }
 
 
-static int _snapshot_new(dev_t *p_dev, int count, struct snapshot **pp_snapshot)
+static struct snapshot * _snapshot_new(dev_t *p_dev, int count)
 {
-	struct snapshot *p_snapshot = NULL;
+	struct snapshot *snapshot = NULL;
 	dev_t *snap_set = NULL;
 
-	p_snapshot = kzalloc(sizeof(struct snapshot), GFP_KERNEL);
-	if (p_snapshot == NULL)
-		return -ENOMEM;
+	snapshot = kzalloc(sizeof(struct snapshot), GFP_KERNEL);
+	if (snapshot == NULL)
+		return ERR_PTR(-ENOMEM);
 
-	INIT_LIST_HEAD(&p_snapshot->link);
-
-	p_snapshot->id = (unsigned long)(p_snapshot);
-
-	snap_set = kcalloc(count, sizeof(dev_t), GFP_KERNEL);
-	if (snap_set == NULL) {
-		kfree(p_snapshot);
-
-		pr_err("Unable to create snapshot: faile to allocate memory for snapshot map\n");
-		return -ENOMEM;
-	}
-	memcpy(snap_set, p_dev, sizeof(dev_t) * count);
-
-	p_snapshot->dev_id_set_size = count;
-	p_snapshot->dev_id_set = snap_set;
+	INIT_LIST_HEAD(&snapshot->link);
+	uuid_gen(snapshot->id);
 
 	down_write(&snapshots_lock);
-	list_add_tail(&snapshots, &p_snapshot->link);
+	list_add_tail(&snapshots, &snapshot->link);
 	up_write(&snapshots_lock);
 
-	*pp_snapshot = p_snapshot;
-
-	return 0;
+	return snapshot;
 }
 
 void snapshot_done(void)
@@ -126,7 +111,7 @@ void snapshot_done(void)
 }
 
 int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
-		    unsigned long long *p_snapshot_id)
+		    uuid_t *snapshot_id)
 {
 	struct snapshot *snapshot = NULL;
 	int result = 0;
@@ -136,59 +121,57 @@ int snapshot_create(dev_t *dev_id_set, unsigned int dev_id_set_size,
 	for (inx = 0; inx < dev_id_set_size; ++inx)
 		pr_info("\t%d:%d\n", MAJOR(dev_id_set[inx]), MINOR(dev_id_set[inx]));
 
-	result = _snapshot_new(dev_id_set, dev_id_set_size, &snapshot);
-	if (result) {
+	snapshot = _snapshot_new();
+	if (IS_ERR(snapshot)) {
 		pr_err("Unable to create snapshot: failed to allocate snapshot structure\n");
-		return result;
+		return PTR_ERR(snapshot);
 	}
 
-	do {
-		result = -ENODEV;
-		for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
-			dev_t dev_id = snapshot->dev_id_set[inx];
-
-			result = tracking_add(dev_id, snapshot->id);
-			if (result == -EALREADY)
-				result = 0;
-			else if (result != 0) {
-				pr_err("Unable to create snapshot\n");
-				pr_err("Failed to add device [%d:%d] to snapshot tracking\n",
-				       MAJOR(dev_id), MINOR(dev_id));
-				break;
-			}
-		}
-		if (result)
-			break;
-
-		result = tracker_capture_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
-		if (result) {
-			pr_err("Unable to create snapshot: failed to capture snapshot [0x%llx]\n",
-			       snapshot->id);
-			break;
-		}
-
-		result = snapimage_create_for(snapshot->dev_id_set, snapshot->dev_id_set_size);
-		if (result) {
+	result = -ENODEV;
+	for (inx = 0; inx < snapshot->dev_id_set_size; ++inx) {
+		dev_t dev_id = snapshot->dev_id_set[inx];
+		/*
+		-->> I'm staying here. <<--
+		*/
+		tracker = tracker_get_by_dev_id(dev_id);
+		result = tracker_add(dev_id);
+		if (result && (result != -EALREADY)){
 			pr_err("Unable to create snapshot\n");
-			pr_err("Failed to create snapshot image devices\n");
-
-			tracker_release_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
-			break;
+			pr_err("Failed to add device [%d:%d] to snapshot tracking\n",
+			       MAJOR(dev_id), MINOR(dev_id));
+			goto fail;
 		}
-
-		*p_snapshot_id = snapshot->id;
-		pr_info("Snapshot [0x%llx] was created\n", snapshot->id);
-	} while (false);
-
-	if (result) {
-		pr_info("Snapshot [0x%llx] cleanup\n", snapshot->id);
-
-		down_write(&snapshots_lock);
-		list_del(&snapshot->link);
-		up_write(&snapshots_lock);
-
-		_snapshot_cleanup(snapshot);
 	}
+
+
+	result = tracker_capture_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
+	if (result) {
+		pr_err("Unable to create snapshot: failed to capture snapshot [0x%llx]\n",
+		       snapshot->id);
+		goto fail;
+	}
+
+	result = snapimage_create_for(snapshot->dev_id_set, snapshot->dev_id_set_size);
+	if (result) {
+		pr_err("Unable to create snapshot\n");
+		pr_err("Failed to create snapshot image devices\n");
+
+		tracker_release_snapshot(snapshot->dev_id_set, snapshot->dev_id_set_size);
+		goto fail;
+	}
+
+	uuid_copy(snapshot_id, snapshot->id);
+	pr_info("Snapshot [0x%llx] was created\n", snapshot->id);
+
+	return 0;
+fail:
+	pr_info("Snapshot [0x%llx] cleanup\n", snapshot->id);
+
+	down_write(&snapshots_lock);
+	list_del(&snapshot->link);
+	up_write(&snapshots_lock);
+
+	_snapshot_cleanup(snapshot);
 	return result;
 }
 
@@ -223,3 +206,6 @@ int snapshot_destroy(unsigned long long snapshot_id)
 	_snapshot_destroy(snapshot);
 	return 0;
 }
+
+
+snapshot_
