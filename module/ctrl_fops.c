@@ -311,7 +311,7 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 	return 0;
 }
 
-static int ioctl_collect_snapimages(unsigned long arg)
+static int ioctl_snapshot_collect_images(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_collect_images karg;
@@ -321,7 +321,7 @@ static int ioctl_collect_snapimages(unsigned long arg)
 		return -ENODATA;
 	}
 
-	ret = snapshot_collect_images(karg.count, karg.image_info_array, &karg.count);
+	ret = snapshot_collect_images(karg.image_info_array, &karg.count);
 
 	if (copy_to_user((void *)arg, &karg, sizeof(karg))) {
 		pr_err("Unable to collect snapshot images: invalid user buffer\n");
