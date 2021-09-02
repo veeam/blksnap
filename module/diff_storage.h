@@ -56,7 +56,8 @@ void diff_storage_get(struct diff_storage *diff_storage)
 };
 void diff_storage_put(struct diff_storage *diff_storage)
 {
-	kref_put(diff_storage->kref, diff_storage_free);
+	if (likely(diff_storage))
+		kref_put(diff_storage->kref, diff_storage_free);
 };
 
 

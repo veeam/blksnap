@@ -3,31 +3,54 @@
 #include "common.h"
 #include "cbt_map.h"
 
-static int _cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
-		     sector_t device_capacity)
+static inline unsigned long long __count_by_shift(sector_t capacity, unsigned long long shift)
 {
-	sector_t size_mod;
+	return round_up(capacity, 1ull << (shift - SECTOR_SHIFT)) >> (shift - SECTOR_SHIFT);
+}
 
-	cbt_map->sect_in_block_degree = cbt_sect_in_block_degree;
-	cbt_map->device_capacity = device_capacity;
-	cbt_map->map_size = (device_capacity >> (sector_t)cbt_sect_in_block_degree);
+static void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
+{
+	unsigned long long shift;
+	unsigned long long count;
 
-	pr_info("Allocate CBT map of %zu\n", cbt_map->map_size);
+	if (get_tracker_block_size_pow()) {
+		/**
+		 * The tracking block size was set explicitly.
+		 */
+		shift = get_tracker_block_size_pow() - SECTOR_SHIFT;
+		count = __count_by_shift(cbt_map->device_capacity, shift);
+	} else {
+		/**
+		 * The size of the tracking block is calculated based on the size of the disk
+		 * so that the CBT table does not exceed a reasonable size. 
+		 */
+		shift = CONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT;
+		count = __count_by_shift(cbt_map->device_capacity, shift);
 
-	size_mod = (device_capacity & ((sector_t)(1 << cbt_sect_in_block_degree) - 1));
-	if (size_mod)
-		cbt_map->map_size++;
+		while (count > CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT) {
+			shift = shift << 1;
+			count = __count_by_shift(cbt_map->device_capacity, shift);
+		}
+	}
 
-	cbt_map->read_map = big_buffer_alloc(cbt_map->map_size, GFP_KERNEL);
+	cbt_map->blk_size_shift = shift;
+	cbt_map->blk_count = count;
+}
+
+static int cbt_map_allocate(struct cbt_map *cbt_map)
+{
+	pr_info("Allocate CBT map of %zu\n", cbt_map->blk_count);
+
+	cbt_map->read_map = big_buffer_alloc(cbt_map->blk_count, GFP_KERNEL);
 	if (cbt_map->read_map != NULL)
 		big_buffer_memset(cbt_map->read_map, 0);
 
-	cbt_map->write_map = big_buffer_alloc(cbt_map->map_size, GFP_KERNEL);
+	cbt_map->write_map = big_buffer_alloc(cbt_map->blk_count, GFP_KERNEL);
 	if (cbt_map->write_map != NULL)
 		big_buffer_memset(cbt_map->write_map, 0);
 
 	if ((cbt_map->read_map == NULL) || (cbt_map->write_map == NULL)) {
-		pr_err("Cannot allocate CBT map. map_size=%zu\n", cbt_map->map_size);
+		pr_err("Cannot allocate CBT map. blk_count=%zu\n", cbt_map->blk_count);
 		return -ENOMEM;
 	}
 
@@ -42,7 +65,7 @@ static int _cbt_map_allocate(struct cbt_map *cbt_map, unsigned int cbt_sect_in_b
 	return 0;
 }
 
-static void _cbt_map_deallocate(struct cbt_map *cbt_map)
+static void cbt_map_deallocate(struct cbt_map *cbt_map)
 {
 	cbt_map->active = false;
 
@@ -57,27 +80,30 @@ static void _cbt_map_deallocate(struct cbt_map *cbt_map)
 	}
 }
 
-int cbt_map_reset(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
-		  sector_t device_capacity)
+int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity)
 {
-	_cbt_map_deallocate(cbt_map);
+	cbt_map_deallocate(cbt_map);
 
-	return _cbt_map_allocate(cbt_map, cbt_sect_in_block_degree, device_capacity);
+	cbt_map->device_capacity = device_capacity;
+	cbt_map_calculate_block_size(cbt_map);
+
+	return cbt_map_allocate(cbt_map);
 }
 
 static void cbt_map_destroy(struct cbt_map *cbt_map)
 {
 	pr_info("CBT map destroy\n");
 	if (cbt_map != NULL) {
-		_cbt_map_deallocate(cbt_map);
-
+		cbt_map_deallocate(cbt_map);
 		kfree(cbt_map);
 	}
 }
 
-struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t device_capacity)
+
+struct cbt_map *cbt_map_create(struct block_device* bdev)
 {
 	struct cbt_map *cbt_map = NULL;
+	unsigned int cbt_sect_in_block_degree;
 
 	pr_info("CBT map create\n");
 
@@ -85,7 +111,10 @@ struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t d
 	if (cbt_map == NULL)
 		return NULL;
 
-	if (_cbt_map_allocate(cbt_map, cbt_sect_in_block_degree, device_capacity)) {
+	cbt_map->device_capacity = bdev_nr_sectors(bdev);
+	cbt_map_calculate_block_size(cbt_map);
+
+	if (cbt_map_allocate(cbt_map)) {
 		cbt_map_destroy(cbt_map);
 		return NULL;
 	}
@@ -112,7 +141,7 @@ struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map)
 
 void cbt_map_put_resource(struct cbt_map *cbt_map)
 {
-	if (cbt_map)
+	if (likely(cbt_map))
 		kref_put(&cbt_map->refcount, _cbt_map_destroy_cb);
 }
 
@@ -142,12 +171,12 @@ static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t
 {
 	int res = 0;
 	size_t cbt_block;
-	size_t cbt_block_first = (size_t)(sector_start >> cbt_map->sect_in_block_degree);
+	size_t cbt_block_first = (size_t)(sector_start >> cbt_map->blk_size_shift);
 	size_t cbt_block_last = (size_t)((sector_start + sector_cnt - 1) >>
-					 cbt_map->sect_in_block_degree); //inclusive
+					 cbt_map->blk_size_shift); //inclusive
 
 	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last; ++cbt_block) {
-		if (cbt_block < cbt_map->map_size) {
+		if (cbt_block < cbt_map->blk_count) {
 			u8 num;
 
 			res = big_buffer_byte_get(map, cbt_block, &num);
@@ -159,7 +188,7 @@ static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t
 
 		if (res) {
 			pr_err("Block index is too large. #%zu was demanded, map size %zu\n",
-			       cbt_block, cbt_map->map_size);
+			       cbt_block, cbt_map->blk_count);
 			break;
 		}
 	}
@@ -197,12 +226,12 @@ int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start, sector_t se
 	return res;
 }
 
-size_t cbt_map_read_to_user(struct cbt_map *cbt_map, void __user *user_buff, size_t offset,
+size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buff, size_t offset,
 			    size_t size)
 {
 	size_t readed = 0;
 	size_t left_size;
-	size_t real_size = min((cbt_map->map_size - offset), size);
+	size_t real_size = min((cbt_map->blk_count - offset), size);
 
 	left_size = real_size -
 		    big_buffer_copy_to_user(user_buff, offset, cbt_map->read_map, real_size);

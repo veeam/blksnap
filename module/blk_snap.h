@@ -38,30 +38,22 @@ struct blk_snap_version {
  * Next, a number of ioctls will describe the interface for the CBT mechanism.
  */
 
-struct blk_snap_tracker_add {
-	__u32 dev_id;	
-};
-/**
- * This ioctl adds a device for tracking. From now on, all write bio requests
- * will be registered in the CBT table for this device.
- */
-#define IOCTL_BLK_SNAP_TRACKER_ADD \
-	_IOW(BLK_SNAP, 1, struct blk_snap_tracker_add)
-
 struct blk_snap_tracker_remove {
-	__u32 dev_id;	
+	__u32 dev_id;
 };
 /**
  * Removes the device from tracking changes.
+ * Adding a device for tracking is performed when creating a snapshot
+ * that includes this device.
  */
 #define IOCTL_BLK_SNAP_TRACKER_REMOVE \
-	_IOW(BLK_SNAP, 2, struct blk_snap_tracker_remove)
+	_IOW(BLK_SNAP, 1, struct blk_snap_tracker_remove)
 
 struct blk_snap_cbt_info {
 	__u32 dev_id;
-	__u32 block_size;
+	__u32 blk_size;
 	__u64 device_capacity;
-	__u32 cbt_map_size;
+	__u32 blk_count;
 	__u8 generationId[16];
 	__u8 snap_number;
 };
@@ -75,7 +67,7 @@ struct blk_snap_tracker_collect {
  * to sysfs for each device under tracking.
  */
 #define IOCTL_BLK_SNAP_TRACKER_COLLECT \
-	_IOW(BLK_SNAP, 3, struct blk_snap_tracker_collect)
+	_IOW(BLK_SNAP, 2, struct blk_snap_tracker_collect)
 
 struct blk_snap_tracker_read_cbt_bitmap {
 	__u32 dev_id;
@@ -88,7 +80,7 @@ struct blk_snap_tracker_read_cbt_bitmap {
  * allows to read this table.
  */
 #define IOCTL_BLK_SNAP_TRACKER_READ_CBT_BITMAP \
-	_IOR(BLK_SNAP, 4, struct blk_snap_tracker_read_cbt_bitmap)
+	_IOR(BLK_SNAP, 3, struct blk_snap_tracker_read_cbt_bitmap)
 
 struct blk_snap_block_range {
 	__u64 sector_offset;
@@ -105,7 +97,7 @@ struct blk_snap_tracker_mark_dirty_blocks {
  * This ioctl allows to do this.
  */
 #define IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS \
-	_IOR(BLK_SNAP, 5, struct blk_snap_tracker_mark_dirty_blocks)
+	_IOR(BLK_SNAP, 4, struct blk_snap_tracker_mark_dirty_blocks)
 
 /**
  * Next, there will be a description of the interface for working with snapshots.
@@ -123,7 +115,7 @@ struct blk_snap_snapshot_create {
  * that one block device can only be included in one snapshot.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_CREATE \
-	_IOW(BLK_SNAP, 6, struct blk_snap_snapshot_create)
+	_IOW(BLK_SNAP, 5, struct blk_snap_snapshot_create)
 
 struct blk_snap_snapshot_destroy {
 	__u8 id[16];
@@ -132,7 +124,7 @@ struct blk_snap_snapshot_destroy {
  * Destroys all snapshot structures and releases all its allocated resources.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_DESTROY \
-	_IOR(BLK_SNAP, 7, struct blk_snap_snapshot_destroy)
+	_IOR(BLK_SNAP, 6, struct blk_snap_snapshot_destroy)
 
 struct blk_snap_snapshot_append_storage {
 	__u8 id[16];
@@ -147,7 +139,7 @@ struct blk_snap_snapshot_append_storage {
  * difference storage while holding the snapshot.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE \
-	_IOW(BLK_SNAP, 8, struct blk_snap_snapshot_append_storage)
+	_IOW(BLK_SNAP, 7, struct blk_snap_snapshot_append_storage)
 
 struct blk_snap_snapshot_take {
 	__u8 id[16];
@@ -158,7 +150,7 @@ struct blk_snap_snapshot_take {
  * devices should be added to the difference storage.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_TAKE \
-	_IOR(BLK_SNAP, 9, struct blk_snap_snapshot_take)
+	_IOR(BLK_SNAP, 8, struct blk_snap_snapshot_take)
 
 struct blk_snap_snapshot_event {
 	__u8 id[16];		/* in */
@@ -174,7 +166,17 @@ struct blk_snap_snapshot_event {
  * user's thread is in a state of interruptable sleep.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT \
-	_IOW(BLK_SNAP, 10, PAGE_SIZE)
+	_IOW(BLK_SNAP, 9, PAGE_SIZE)
+
+/**
+ * 
+ */
+#define BLK_SNAP_EVENT_MSG_ERROR 0x30
+
+/**
+ * 
+ */
+#define BLK_SNAP_EVENT_MSG_WARNING 0x31
 
 struct blk_snap_event_low_free_space {
 	__u64 sectors_left;
@@ -207,7 +209,7 @@ struct blk_snap_event_overflow {
 struct blk_snap_image_info {
 	
 	__u32 original_dev_id;
-	__u32  snapshot_dev_id;
+	__u32 image_dev_id;
 };
 struct blk_snap_snapshot_collect_images {
 	__u8 id[16];
@@ -221,4 +223,4 @@ struct blk_snap_snapshot_collect_images {
  * This information can also be obtained from files from sysfs.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES \
-	_IOW(BLK_SNAP, 11, struct blk_snap_snapshot_collect_images)
+	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_collect_images)

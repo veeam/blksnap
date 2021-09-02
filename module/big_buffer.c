@@ -59,8 +59,8 @@ void big_buffer_free(struct big_buffer *bbuff)
 	kfree(bbuff);
 }
 
-size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset, struct big_buffer *bbuff,
-			       size_t length)
+size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset,
+			       struct big_buffer *bbuff, size_t length)
 {
 	size_t left_data_length;
 	int page_inx = offset / PAGE_SIZE;

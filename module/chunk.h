@@ -22,7 +22,8 @@ void diff_buffer_get(struct diff_buffer *diff_buffer)
 };
 void diff_buffer_put(struct diff_buffer *diff_buffer)
 {
-	kref_put(diff_buffer->kref, diff_buffer_free);
+	if (likely(diff_buffer))
+		kref_put(diff_buffer->kref, diff_buffer_free);
 };
 
 
@@ -92,7 +93,8 @@ static inline void chunk_get(struct chunk *chunk)
 };
 static inline void chunk_put(struct chunk *chunk)
 {
-	kref_put(&chunk->refcount, chunk_free);
+	if (likely(chunk))
+		kref_put(&chunk->refcount, chunk_free);
 };
 
 

@@ -53,7 +53,7 @@ static void snapimage_free(struct snapimage *image)
 	}
 
 	spin_lock(&snapimage_minors_lock);
-	bitmap_clear(snapimage_minors, MINOR(image->image_dev), 1u);
+	bitmap_clear(snapimage_minors, MINOR(image->image_dev_id), 1u);
 	spin_unlock(&snapimage_minors_lock);
 
 	kfree(image);
@@ -70,12 +70,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area, struct cbt_map *
 
 	pr_info("Create snapshot image for device [%d:%d]\n",
 	        MAJOR(original_dev_id), MINOR(original_dev_id));
-
-	res = blk_dev_get_info(original_dev_id, &original_dev_info);
-	if (res) {
-		pr_err("Failed to obtain original device info\n");
-		return res;
-	}
 
 	res = tracker_find_by_dev_id(orig_dev_id, &tracker);
 	if (res) {
@@ -107,9 +101,9 @@ struct snapimage *snapimage_create(struct diff_area *diff_area, struct cbt_map *
 	image->cbt_map = cbt_map_get(cbt_map);
 
 	image->capacity = cbt_map->device_capacity;
-	image->image_dev = MKDEV(snapimage_major, minor);
+	image->image_dev_id = MKDEV(snapimage_major, minor);
 	pr_info("Snapshot image device id [%d:%d]\n",
-	        MAJOR(image->image_dev),MINOR(image->image_dev));
+	        MAJOR(image->image_dev_id),MINOR(image->image_dev_id));
 
 	//mutex_init(&image->open_locker);
 	//image->open_bdev = NULL;
@@ -290,8 +284,8 @@ static int _snapimage_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 			break;
 		}
 
-		pr_info("Getting geo for snapshot image device [%d:%d]\n", MAJOR(image->image_dev),
-			MINOR(image->image_dev));
+		pr_info("Getting geo for snapshot image device [%d:%d]\n", MAJOR(image->image_dev_id),
+			MINOR(image->image_dev_id));
 
 		geo->start = 0;
 		if (image->capacity > 63) {
@@ -381,7 +375,7 @@ static int _snapimage_ioctl(struct block_device *bdev, fmode_t mode, unsigned in
 		default:
 			pr_info("Snapshot image ioctl receive unsupported command\n");
 			pr_info("Device [%d:%d], command 0x%x, arg 0x%lx\n",
-				MAJOR(image->image_dev), MINOR(image->image_dev), cmd, arg);
+				MAJOR(image->image_dev_id), MINOR(image->image_dev_id), cmd, arg);
 
 			res = -ENOTTY; /* unknown command */
 		}
@@ -545,8 +539,8 @@ static int _snapimage_processor_thread(void *data)
 {
 	struct snapimage *image = data;
 
-	pr_info("Snapshot image thread for device [%d:%d] start\n", MAJOR(image->image_dev),
-		MINOR(image->image_dev));
+	pr_info("Snapshot image thread for device [%d:%d] start\n", MAJOR(image->image_dev_id),
+		MINOR(image->image_dev_id));
 
 	add_disk(image->disk);
 
@@ -571,8 +565,8 @@ static int _snapimage_processor_thread(void *data)
 	while (!redirect_bio_queue_empty(image->image_queue))
 		_snapimage_processing(image);
 
-	pr_info("Snapshot image thread for device [%d:%d] complete", MAJOR(image->image_dev),
-		MINOR(image->image_dev));
+	pr_info("Snapshot image thread for device [%d:%d] complete", MAJOR(image->image_dev_id),
+		MINOR(image->image_dev_id));
 	return 0;
 }
 
@@ -787,7 +781,7 @@ static void _snapimage_destroy(struct snapimage *image)
 	}
 
 	spin_lock(&snapimage_minors_lock);
-	bitmap_clear(snapimage_minors, MINOR(image->image_dev), 1u);
+	bitmap_clear(snapimage_minors, MINOR(image->image_dev_id), 1u);
 	spin_unlock(&snapimage_minors_lock);
 }
 
@@ -841,9 +835,9 @@ static int _snapimage_create(dev_t orig_dev_id)
 		image->cbt_map = cbt_map_get_resource(tracker->cbt_map);
 		image->orig_dev_id = orig_dev_id;
 
-		image->image_dev = MKDEV(snapimage_major, minor);
-		pr_info("Snapshot image device id [%d:%d]\n", MAJOR(image->image_dev),
-			MINOR(image->image_dev));
+		image->image_dev_id = MKDEV(snapimage_major, minor);
+		pr_info("Snapshot image device id [%d:%d]\n", MAJOR(image->image_dev_id),
+			MINOR(image->image_dev_id));
 
 		atomic_set(&image->own_cnt, 0);
 
@@ -1141,10 +1135,10 @@ int snapimage_collect_images(int count, struct image_info_s *p_user_image_info, 
 				image_info_array[inx].original_dev_id.minor =
 					MINOR(img->orig_dev_id);
 
-				image_info_array[inx].snapshot_dev_id.major =
-					MAJOR(img->image_dev);
-				image_info_array[inx].snapshot_dev_id.minor =
-					MINOR(img->image_dev);
+				image_info_array[inx].image_dev_id.major =
+					MAJOR(img->image_dev_id);
+				image_info_array[inx].image_dev_id.minor =
+					MINOR(img->image_dev_id);
 
 				++inx;
 				if (inx > real_count)

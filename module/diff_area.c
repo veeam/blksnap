@@ -35,8 +35,13 @@ static inline void __recalculate_last_chunk_size(struct chunk *chunk)
 	struct diff_area *diff_area = chunk->diff_area;
 	sector_t capacity;
 
-	capacity = part_nr_sects_read(diff_area->bdev->bd_part);
+	capacity = bdev_nr_sectors(diff_area->bdev);
 	chunk->sector_count = capacity - round_down(capacity, chunk->sector_count);
+}
+
+static inline unsigned long long __count_by_shift(sector_t capacity, unsigned long long shift)
+{
+	return round_up(capacity, 1ull << (shift - SECTOR_SHIFT)) >> (shift - SECTOR_SHIFT);
 }
 
 static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
@@ -47,13 +52,12 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	sector_t min_io_sect;
 
 	min_io_sect = (sector_t)(bdev_io_min(diff_area->bdev) >> SECTOR_SHIFT);
-	capacity = part_nr_sects_read(diff_area->bdev->bd_part);
+	capacity = bdev_nr_sectors(diff_area->bdev);
 
-	count = round_up(capacity, 1 << (shift - SECTOR_SHIFT)) >> (shift - SECTOR_SHIFT);
-	while ((count > CONFIG_BLK_SNAP_MAXIMUM_CHUNK_COUNT) ||
-		(chunk_sectors(shift) < min_io_sect)) {
+	count = __count_by_shift(capacity, shift);
+	while ((count > CONFIG_BLK_SNAP_MAXIMUM_CHUNK_COUNT) || (chunk_sectors(shift) < min_io_sect)) {
 		shift = shift << 1;
-		count = round_up(capacity, 1 << (shift - SECTOR_SHIFT)) >> (shift - SECTOR_SHIFT);
+		count = __count_by_shift(capacity, shift);
 	}
 
 	diff_area->chunk_size_shift = shift;

@@ -6,7 +6,7 @@
 struct snapimage {
 	struct list_head link;
 	struct kref kref;
-	dev_t image_dev;
+	dev_t image_dev_id;
 	sector_t capacity;
 
 

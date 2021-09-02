@@ -80,7 +80,8 @@ static inline void diff_area_get(struct diff_area *diff_area)
 };
 static inline void diff_area_put(struct diff_area *diff_area)
 {
-	kref_put(diff_area->kref, diff_area_free);
+	if (likely(diff_area))
+		kref_put(diff_area->kref, diff_area_free);
 };
 
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count

@@ -16,9 +16,27 @@ config BLK_SNAP
 	  then backup is completed. Change block tracking allows you to
 	  create incremental or differential backups.
 
+config BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT
+	depends on BLK_SNAP
+	int "The power of 2 for minimum trackings block size"
+	default 16
+	help
+	  The minimum tracjing block size by default is 65535 KB (shift 16)
+	  It's looks good for block device 128 GB or lower.
+	  In this case, the block device is divided into 2097152 chunks.
+
+config BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT
+	depends on BLK_SNAP
+	int "The limit of the maximum number of trackings blocks"
+	default 2097152
+	help
+	  As the size of the block device grows, the size of the tracking block
+	  size should also grow. For this purpose, the limit of the maximum
+	  number of block size is set.
+
 config BLK_SNAP_CHUNK_MINIMUM_SHIFT
 	depends on BLK_SNAP
-	int "The power of 2 for minimum chunk size"
+	int "The power of 2 for minimum snapshots chunk size"
 	default 16
 	help
 	  The minimum chunk size by default is 65535 KB (shift 16)
@@ -27,7 +45,7 @@ config BLK_SNAP_CHUNK_MINIMUM_SHIFT
 
 config BLK_SNAP_MAXIMUM_CHUNK_COUNT
 	depends on BLK_SNAP
-	int "The limit of the maximum number of chunks"
+	int "The limit of the maximum number of snapshots chunks"
 	default 2097152
 	help
 	  As the size of the block device grows, the size of the chunk

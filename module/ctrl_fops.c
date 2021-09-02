@@ -83,18 +83,6 @@ static int ioctl_version(unsigned long arg)
 	return 0;
 }
 
-static int ioctl_tracker_add(unsigned long arg)
-{
-	struct blk_snap_tracker_add karg;
-
-	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
-		pr_err("Unable to add device under tracking: invalid user buffer\n");
-		return -ENODATA;
-	}
-
-	return tracker_add((dev_t)karg.dev_id);
-}
-
 static int ioctl_tracker_remove(unsigned long arg)
 {
 	struct blk_snap_tracker_remove karg;
@@ -103,10 +91,10 @@ static int ioctl_tracker_remove(unsigned long arg)
 		pr_err("Unable to remove device from tracking: invalid user buffer\n");
 		return -ENODATA;
 	}
-	return tracker_remove((dev_t)karg.dev_id));
+	return tracker_remove((dev_t)karg.dev_id);
 }
 
-static int _ioctl_tracker_collect(unsigned long arg)
+static int ioctl_tracker_collect(unsigned long arg)
 {
 	int res;
 	struct blk_snap_tracker_collect karg;
@@ -119,16 +107,21 @@ static int _ioctl_tracker_collect(unsigned long arg)
 		return -ENODATA;
 	}
 
-	if (karg.cbt_info_array == NULL) {
-		res = tracker_collect(0x7fffffff, NULL, &karg.count);
-		if (!res) {
-			if (copy_to_user((void *)arg, (void *)&karg, sizeof(karg))) {
-				pr_err("Unable to collect tracking devices: invalid user buffer for arguments\n");
-				res = -ENODATA;
-			}
-		} else
+	if (!karg.cbt_info_array) {
+		/**
+		 * If the buffer is empty, this is a request to determine
+		 *  the number of trackers.
+		 */ 
+		res = tracker_collect(0, NULL, &karg.count);
+		if (res) {
 			pr_err("Failed to execute tracker_collect. errno=%d\n", res);
-		return res;
+			return res;
+		}
+		if (copy_to_user((void *)arg, (void *)&karg, sizeof(karg))) {
+			pr_err("Unable to collect tracking devices: invalid user buffer for arguments\n");
+			return -ENODATA;
+		}
+		return 0;
 	}
 
 	cbt_info = kcalloc(karg.count, sizeof(struct blk_snap_cbt_info), GFP_KERNEL);
@@ -168,7 +161,7 @@ static int ioctl_tracker_read_cbt_map(unsigned long arg)
 	}
 
 	return tracker_read_cbt_bitmap((dev_t)karg.dev_id, karg.offset, karg.length,
-					(void *)karg.buff);
+					(char __user*)karg.buff);
 }
 
 static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
@@ -218,16 +211,15 @@ static int ioctl_snapshot_create(unsigned long arg)
 	}
 
 	ret = snapshot_create(dev_id_array, karg.count, &karg.id);
-	kfree(dev_id_array);
-
 	if (ret)
-		return;
+		goto out;
 
 	if (copy_to_user((void *)arg, &karg, sizeof(karg))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		ret = -ENODATA;
 	}
-
+out:
+	kfree(dev_id_array);
 	return ret;
 }
 
@@ -337,7 +329,6 @@ struct ioctl_table {
 
 static const struct ioctl_table ioctl_table[] = {
 	ioctl_version,
-	ioctl_tracker_add,
 	ioctl_tracker_remove,
 	ioctl_tracker_collect,
 	ioctl_tracker_read_cbt_map,

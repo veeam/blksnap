@@ -10,9 +10,9 @@ struct cbt_map {
 
 	spinlock_t locker;
 
-	size_t sect_in_block_degree;
+	size_t blk_size_shift;
+	size_t blk_count;
 	sector_t device_capacity;
-	size_t map_size;
 
 	struct big_buffer *read_map;
 	struct big_buffer *write_map;
@@ -29,9 +29,8 @@ struct cbt_map {
 	sector_t state_dirty_sectors;
 };
 
-struct cbt_map *cbt_map_create(unsigned int cbt_sect_in_block_degree, sector_t device_capacity);
-int cbt_map_reset(struct cbt_map *cbt_map, unsigned int cbt_sect_in_block_degree,
-		  sector_t device_capacity);
+struct cbt_map *cbt_map_create(struct block_device* bdev);
+int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity);
 
 struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map);
 void cbt_map_put_resource(struct cbt_map *cbt_map);
@@ -40,7 +39,7 @@ void cbt_map_switch(struct cbt_map *cbt_map);
 int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt);
 int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt);
 
-size_t cbt_map_read_to_user(struct cbt_map *cbt_map, void __user *user_buffer, size_t offset,
+size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buffer, size_t offset,
 			    size_t size);
 
 static inline void cbt_map_read_lock(struct cbt_map *cbt_map)
@@ -61,4 +60,9 @@ static inline void cbt_map_write_lock(struct cbt_map *cbt_map)
 static inline void cbt_map_write_unlock(struct cbt_map *cbt_map)
 {
 	up_write(&cbt_map->rw_lock);
+};
+
+static inline size_t cbt_map_blk_size(struct cbt_map *cbt_map)
+{
+	return 1 << (cbt_map->blk_size_shift + SECTOR_SHIFT);
 };
