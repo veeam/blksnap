@@ -52,6 +52,9 @@ struct diff_storage *diff_storage_new(void)
 	INIT_LIST_HEAD(&diff_storage->bdevs);
 	INIT_LIST_HEAD(&diff_storage->empty_blocks);
 	INIT_LIST_HEAD(&diff_storage->filled_blocks);
+
+	event_queue_init(&diff_storage->event_queue);
+
 	return diff_storage;
 }
 
@@ -76,6 +79,8 @@ void diff_storage_free(struct kref *kref)
 		list_del(storage_bdev);
 		kfree(storage_bdev);
 	}
+
+	event_queue_done(&diff_storage->event_queue);
 }
 
 
@@ -135,12 +140,16 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	storage_block->bdev = bdev;
 	storage_block->sector = sector;
 	storage_block->count = count;
-	
 
 	spin_lock(&diff_storage->lock);
 	list_add_tail(&storage_block->link, &diff_storage->storage_empty_blocks);
-	diff_storage->empty_count += count;
+	diff_storage->capacity += count;
+	sectors_left = diff_storage->capacity - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
+
+	if (atomic_read(&diff_storage->low_space_flag) &&
+	    (diff_storage->capacity >= diff_storage->requested))
+		atomic_set(&diff_storage->low_space_flag, 0);
 }
 
 struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sector_t count)
@@ -148,6 +157,10 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	int ret = 0;
 	struct diff_store *diff_store;
 	struct storage_block *storage_block;
+	sector_t sectors_left;
+
+	if (atomic_read(diff_storage->overflow))
+		return ERR_PTR(-ENOSPC);
 
 	diff_store = kzalloc(sizeof(struct diff_store), GFP_KERNEL);
 	if (!diff_store)
@@ -157,6 +170,11 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	do {
 		storage_block = list_first_entry_or_null(&diff_storage->storage_empty_blocks, struct storage_block, link);
 		if (!storage_block) {
+			/**
+			 *
+			 *
+			 */
+			atomic_inc(&diff_storage->overflow_flag);
 			ret = -ENOSPC;
 			break;
 		}
@@ -167,7 +185,7 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 			diff_store.count = count;
 
 			storage_block->used += count;
-			diff_storage->filled_count += count;
+			diff_storage->filled += count;
 			break;
 		}
 		list_del(&storage_block->link);
@@ -179,13 +197,26 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		 * We believe that the storage blocks are large enough
 		 * to accommodate several pieces entirely.
 		 */
-		diff_storage->filled_count += (storage_block->count - storage_block->used);
+		diff_storage->filled += (storage_block->count - storage_block->used);
 	} while (1);
+	sectors_left = diff_storage->requested - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
 
 	if (ret) {
 		kfree(diff_store);
 		return ERR_PTR(ret);
+	}
+
+	if ((sectors_left <= (CONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM >> SECTOR_SHIFT)) &&
+	    (atomic_inc_return(diff_storage->low_space_flag) == 1)) {
+		struct blk_snap_event_low_free_space data = {
+			.requested_nr_sect = CONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM >> SECTOR_SHIFT;
+		};
+
+		diff_storage->requested += data.requested_nr_sect;
+		event_gen(&diff_storage->event_queue,
+			BLK_SNAP_EVENT_LOW_FREE_SPACE,
+			data, sizeof(data));
 	}
 
 	return diff_store;

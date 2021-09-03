@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
-
+#include "event_queue.h"
 
 struct dm_io_client;
 struct diff_storage;
 
 struct diff_area {
 	struct kref kref;
-	struct block_device *bdev;
+	struct block_device *orig_bdev;
 	struct dm_io_client *io_client;
 	/**
 	 * chunk_size_shift - power of 2 for chunk size
@@ -68,11 +68,10 @@ struct diff_area {
 	 */
 	struct work_struct caching_chunks_work;
 
-	int error;
-	bool is_corrupted;
+	atomic_t corrupted_flag;
 };
 
-struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage);
+struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage, struct event_queue *event_queue);
 void diff_area_free(struct kref *kref);
 static inline void diff_area_get(struct diff_area *diff_area)
 {

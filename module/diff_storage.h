@@ -1,10 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
-
+#include "event_queue.h"
 
 /**
- * struct diff_store - Difference store
- * Describes the location of the chunk on difference storage.
+
  */
 struct diff_store {
 	struct list_head link;
@@ -17,7 +16,10 @@ struct diff_store *diff_store_new(struct block_device *bdev, sector_t sector, se
 void diff_store_free(struct diff_store *diff_store);
 
 
-
+/**
+ * struct diff_storage - Difference storage
+ * Describes the location of the chunk on difference storage.
+ */
 struct diff_storage
 {
 	struct kref kref;
@@ -42,8 +44,27 @@ struct diff_storage
 	 */
 	struct list_head storage_filled_blocks;
 
-	sector_t empty_count;
-	sector_t filled_count;
+	/**
+	 * capacity - total amount of available storage space.
+	 */
+	sector_t capacity;
+	/**
+	 * filled - the number of sectors already filled in.
+	 */
+	sector_t filled;
+	/**
+	 * requested - the number of sectors already requested from user-space.
+	 */
+	sector_t requested;
+
+	atomic_t low_space_flag;
+
+	atomic_t overflow_flag;
+	/**
+	 * diff storage and his owner can notify his snapshot about events like
+	 * snapshot overflow, low free space and snapshot terminated .
+	 */
+	struct event_queue event_queue;
 }
 
 

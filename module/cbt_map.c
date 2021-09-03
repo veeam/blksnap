@@ -57,7 +57,7 @@ static int cbt_map_allocate(struct cbt_map *cbt_map)
 	cbt_map->snap_number_previous = 0;
 	cbt_map->snap_number_active = 1;
 	generate_random_uuid(cbt_map->generationId.b);
-	cbt_map->active = true;
+	cbt_map->is_corrupted = false;
 
 	cbt_map->state_changed_sectors = 0;
 	cbt_map->state_dirty_sectors = 0;
@@ -67,7 +67,7 @@ static int cbt_map_allocate(struct cbt_map *cbt_map)
 
 static void cbt_map_deallocate(struct cbt_map *cbt_map)
 {
-	cbt_map->active = false;
+	cbt_map->is_corrupted = false;
 
 	if (cbt_map->read_map != NULL) {
 		big_buffer_free(cbt_map->read_map);
@@ -86,6 +86,7 @@ int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity)
 
 	cbt_map->device_capacity = device_capacity;
 	cbt_map_calculate_block_size(cbt_map);
+	cbt_map->is_corrupted = false;
 
 	return cbt_map_allocate(cbt_map);
 }
@@ -120,8 +121,9 @@ struct cbt_map *cbt_map_create(struct block_device* bdev)
 	}
 
 	spin_lock_init(&cbt_map->locker);
-	init_rwsem(&cbt_map->rw_lock);
+	//init_rwsem(&cbt_map->rw_lock);
 	kref_init(&cbt_map->refcount);
+	cbt_map->is_corrupted = false;
 
 	return cbt_map;
 }
@@ -166,30 +168,36 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 	spin_unlock(&cbt_map->locker);
 }
 
-static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt,
+static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt,
 		 u8 snap_number, struct big_buffer *map)
 {
 	int res = 0;
+	u8 num;
 	size_t cbt_block;
 	size_t cbt_block_first = (size_t)(sector_start >> cbt_map->blk_size_shift);
 	size_t cbt_block_last = (size_t)((sector_start + sector_cnt - 1) >>
 					 cbt_map->blk_size_shift); //inclusive
 
 	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last; ++cbt_block) {
-		if (cbt_block < cbt_map->blk_count) {
-			u8 num;
-
-			res = big_buffer_byte_get(map, cbt_block, &num);
-			if (!res)
-				if (num < snap_number)
-					res = big_buffer_byte_set(map, cbt_block, snap_number);
-		} else
-			res = -EINVAL;
-
-		if (res) {
+		if (unlikely(cbt_block >= cbt_map->blk_count)) {
 			pr_err("Block index is too large. #%zu was demanded, map size %zu\n",
 			       cbt_block, cbt_map->blk_count);
+			res = -EINVAL;
 			break;
+		}
+
+		res = big_buffer_byte_get(map, cbt_block, &num);
+		if (unlikely(res)) {
+			pr_err("CBT table out of range\n");
+			break;
+		}
+
+		if (num < snap_number) {
+			res = big_buffer_byte_set(map, cbt_block, snap_number);
+			if (unlikely(res)) {
+				pr_err("CBT table out of range\n");
+				break;
+			}
 		}
 	}
 	return res;
@@ -197,32 +205,41 @@ static int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t
 
 int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt)
 {
-	int res = 0;
+	int res;
 
 	spin_lock(&cbt_map->locker);
-
-	res = _cbt_map_set(cbt_map, sector_start, sector_cnt, (u8)cbt_map->snap_number_active,
-			   cbt_map->write_map);
-	cbt_map->state_changed_sectors += sector_cnt;
-
+	if (unlikely(cbt_map->is_corrupted)) {
+		spin_unlock(&cbt_map->locker);
+		return -EINVAL;
+	}
+	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
+			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
+	if (res)
+		cbt_map->is_corrupted;
+	else
+		cbt_map->state_changed_sectors += sector_cnt;
 	spin_unlock(&cbt_map->locker);
+
 	return res;
 }
 
 int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start, sector_t sector_cnt)
 {
-	int res = 0;
+	int res;
 
 	spin_lock(&cbt_map->locker);
-
+	if (unlikely(cbt_map->is_corrupted)) {
+		spin_unlock(&cbt_map->locker);
+		return -EINVAL;
+	}
 	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
 	if (!res)
 		res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 				   (u8)cbt_map->snap_number_previous, cbt_map->read_map);
 	cbt_map->state_dirty_sectors += sector_cnt;
-
 	spin_unlock(&cbt_map->locker);
+
 	return res;
 }
 
@@ -232,6 +249,11 @@ size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buff, siz
 	size_t readed = 0;
 	size_t left_size;
 	size_t real_size = min((cbt_map->blk_count - offset), size);
+
+	if (unlikely(cbt_map->is_corrupted)) {
+		pr_err("CBT table was corrupted\n");
+		return -EFAULT;
+	}
 
 	left_size = real_size -
 		    big_buffer_copy_to_user(user_buff, offset, cbt_map->read_map, real_size);

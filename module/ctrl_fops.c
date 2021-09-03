@@ -110,7 +110,7 @@ static int ioctl_tracker_collect(unsigned long arg)
 	if (!karg.cbt_info_array) {
 		/**
 		 * If the buffer is empty, this is a request to determine
-		 *  the number of trackers.
+		 * the number of trackers.
 		 */ 
 		res = tracker_collect(0, NULL, &karg.count);
 		if (res) {

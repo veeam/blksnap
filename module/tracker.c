@@ -47,63 +47,24 @@ out:
 	return result;
 }
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-static void _thaw_bdev(dev_t dev_id, struct block_device *bdev, struct super_block *superblock)
-{
-	if (superblock == NULL)
-		return;
-
-	if (thaw_bdev(bdev, superblock))
-		pr_err("Failed to unfreeze device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
-	else
-		pr_info("Device [%d:%d] was unfrozen\n", MAJOR(dev_id), MINOR(dev_id));
-}
-
-static int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
-{
-	struct super_block *superblock;
-
-	if (bdev->bd_super == NULL) {
-		pr_warn("Unable to freeze device [%d:%d]: no superblock was found\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-		return 0;
-	}
-
-	superblock = freeze_bdev(bdev);
-	if (IS_ERR_OR_NULL(superblock)) {
-		int result;
-
-		pr_err("Failed to freeze device [%d:%d]\n",
-		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-
-		if (superblock == NULL)
-			result = -ENODEV;
-		else {
-			result = PTR_ERR(superblock);
-			pr_err("Error code: %d\n", result);
-		}
-		return result;
-	}
-
-	pr_info("Device [%d:%d] was frozen\n",
-	        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	*psuperblock = superblock;
-
-	return 0;
-}
-#endif
-
 static int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
 	struct tracker *tracker = ctx;
+	sector_t sector = bio->bi_iter.bi_sector;
+	sector_t count = (sector_t)(bio->bi_iter.bi_size >> SECTOR_SHIFT);
 
 	if (!op_is_write(bio_op(bio)))
 		return FLT_ST_PASS;
 
-	err = diff_area_copy(tracker->diff_area,
-	                     bio->bi_iter.bi_sector,
-	                     (sector_t)(bio->bi_iter.bi_size >> SECTOR_SHIFT),
+	err = cbt_map_set(tracker->cbt_map, sector, count);
+	if (unlikely(err))
+		return FLT_ST_PASS;
+
+	if (!atomic_read(tracker->is_busy_with_snapshot))
+		return FLT_ST_PASS;
+
+	err = diff_area_copy(tracker->diff_area, sector, count,
 	                     (bool)(bio->bi_opf & REQ_NOWAIT));
 	if (likely(!err))
 		return FLT_ST_PASS;
@@ -127,9 +88,18 @@ const struct filter_operations *tracker_fops = {
 	.detach_cb = tracker_detach_cb;
 }
 
-int tracker_freeze(struct tracker *tracker)
+enum filter_cmd {
+	filter_cmd_add,
+	filter_cmd_del
+};
+
+static int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd)
 {
+	int ret;
 	struct block_device* bdev;
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	struct super_block *superblock = NULL;
+#endif
 
 	bdev = blkdev_get_by_dev(tracker->dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
@@ -139,50 +109,33 @@ int tracker_freeze(struct tracker *tracker)
 	}
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_freeze_bdev(bdev, &tracker->freeze_superblock);
+	_freeze_bdev(bdev, psuperblock);
 #else
 	if (freeze_bdev(bdev))
 		pr_err("Failed to freeze device [%d:%d]\n",
-		       MAJOR(bdev->bd_dev), MINOR(dev->bd_dev));
+		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 #endif
-	tracker->freeze_bdev = bdev;
-	return 0;
-}
 
-void tracker_thaw(struct tracker *tracker)
-{
-	struct block_device* bdev;
+	switch (flt_cmd) {
+	case filter_cmd_add:
+		ret = filter_add(bdev, tracker_fops, tracker);
+		break;
+	case filter_cmd_del:
+		ret = filter_del(bdev);
+		break;
+	default:
+		ret = -EINVAL;
+	}
 
-	if (unlikely(!tracker))
-		return;
-
-	bdev = tracker->freeze_bdev;
-	if (unlikely(!bdev))
-		return;
-
-	tracker->freeze_bdev = NULL;
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_thaw_bdev(bdev, tracker->freeze_superblock);
+	_thaw_bdev(bdev, superblock);
 #else
 	if (thaw_bdev(bdev))
 		pr_err("Failed to thaw device [%d:%d]\n",
-		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+		       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
+
 	blkdev_put(bdev, 0);
-}
-
-static int tracker_attach(struct tracker *tracker)
-{
-	int ret;
-
-	ret = tracker_freeze(tracker);
-	if (ret)
-		return ret;
-	
-	ret = filter_add(tracker->freeze_bdev, tracker_fops, tracker);
-
-	tracker_thaw(tracker);
-
 	return ret;
 }
 
@@ -223,25 +176,10 @@ static int tracker_new(dev_t dev_id, unsigned long long snapshot_id)
 	if (ret) {
 		tracker_put(tracker);
 		*ptracker = NULL;
-	} else {
+	} else
 		*ptracker = tracker;
-	}
+
 	blkdev_put(bdev, 0);
-
-	return ret;
-}
-
-static int tracker_detach(struct tracker *tracker)
-{
-	int ret;
-
-	ret = tracker_freeze(tracker);
-	if (ret)
-		return ret;
-	
-	ret = filter_del(tracker->freeze_bdev);
-
-	tracker_thaw(tracker);
 
 	return ret;
 }
@@ -433,98 +371,41 @@ void tracker_release_snapshot(dev_t *dev_id_set, int dev_id_set_size)
 }
 */
 
-
-static int tracker_initialize(dev_t dev_id, struct tracker *tracker)
+int tracker_take_snapshot(struct tracker *tracker)
 {
-	int result = 0;
+	int ret = 0;
 	bool cbt_reset_needed = false;
 
-	if (!tracker->cbt_map->active) {
+	if (tracker->cbt_map->is_corrupted) {
 		cbt_reset_needed = true;
-		pr_warn("Nonactive CBT table detected. CBT fault\n");
+		pr_warn("Corrupted CBT table detected. CBT fault\n");
 	}
 
-	if (tracker->cbt_map->device_capacity != bdev_nr_sectors(tracker->target_dev)) {
+	if (tracker->cbt_map->device_capacity != bdev_nr_sectors(tracker->diff_area->orig_bdev)) {
 		cbt_reset_needed = true;
 		pr_warn("Device resize detected. CBT fault\n");
 	}
 
-	if (!cbt_reset_needed)
-		return 0;
+	if (cbt_reset_needed) {
+		ret = cbt_map_reset(tracker->cbt_map);
+		if (ret)
+			pr_err("Failed to create tracker. errno=%d\n", ret);
+	} else
+		cbt_map_switch(tracker->cbt_map);
 
-	result = tracker_cbt_reset(tracker);
-	if (result) {
-		pr_err("Failed to create tracker. errno=%d\n", result);
-		return result;
-	}
+	atomic_set(&tracker->is_busy_with_snapshot, true);
 
-	return 0;
-}
-
-int tracker_take_snapshot(struct tracker *tracker)
-{
-	if (!tracker)
-		return 0;
-
-	result = tracker_initialize(dev_id, tracker);
-	if (result) {
-		pr_err("Failed to initialize tracker. errno=%d\n", PTR_ERR(tracker));
-		return PTR_ERR(result);
-	}
-
+	return ret;
 }
 
 void tracker_release_snapshot(struct tracker *tracker)
 {
 	if (!tracker)
 		return;
+
+	atomic_set(&tracker->is_busy_with_snapshot, false);
 }
 
-#if 0
-void tracker_cow(struct tracker *tracker, sector_t start, sector_t cnt)
-{
-	int ret = 0;
-	uint64_t blk_inx;
-	uint64_t blk_start;
-	uint64_t blk_last;
-	struct snapstore_device *snapdev = tracker->snapdev;
-
-	if (unlikely(snapstore_device_is_corrupted(snapdev)))
-		return;
-
-	blk_start = start >> snapstore_block_shift();
-	blk_last = (start + cnt) >> snapstore_block_shift();
-	if (((start + cnt) & snapstore_block_mask()) == 0)
-		--blk_last;
-
-	for (blk_inx = blk_start; blk_inx <= blk_last; ++blk_inx) {
-		struct cow_block *blk;
-
-		blk = snapstore_device_take_cow_block(snapdev, blk_inx);
-		if (unlikely(IS_ERR(blk))) {
-			ret = PTR_ERR(blk);
-			break;
-		}
-
-		ret = cow_block_update_state(blk, cow_state_empty, cow_state_reading);
-		if (ret == -EALREADY) /* Block already reading or was read */
-			continue;
-
-		if (unlikely(ret))
-			break;
-
-		ret = blk_submit_pages(snapdev->orig_bdev, READ, 0, blk->page_array,
-					     blk->rg.ofs, blk->rg.cnt, &blk->bio_cnt, blk, _read_endio);
-		if (unlikely(ret))
-			break;
-	}
-
-	if (unlikely(ret))
-		snapstore_device_set_corrupted(snapdev, ret);
-
-	return ret;
-}
-#endif
 int tracker_init(void)
 {
 	filter_enable();
@@ -577,7 +458,7 @@ struct tracker * tracker_create_or_get(dev_t dev_id)
 		return tracker;
 	}
 
-	result = tracker_attach(tracker);
+	ret = tracker_filter(tracker, filter_cmd_add);
 	if (result) {
 		pr_err("Failed to attach tracker. errno=%d\n", result);
 		tracker_put(tracker);
@@ -601,21 +482,22 @@ int tracker_remove(dev_t dev_id)
 	tracker = tracker_get_by_dev_id(dev_id);
 	if (!tracker) {
 		pr_err("Unable to remove device [%d:%d] from tracking: ",
-		       MAJOR(dev_id), MINOR(dev_id));
+			MAJOR(dev_id), MINOR(dev_id));
 		return -ENODATA;
 	}
 
 	if (atomic_read(tracker->is_busy_with_snapshot)) {
 		pr_err("Unable to remove device [%d:%d] from tracking: ",
-		       MAJOR(dev_id), MINOR(dev_id));
+			MAJOR(dev_id), MINOR(dev_id));
 		pr_err("snapshot [0x%llx] already exist\n", tracker->snapshot_id);
 		ret = -EBUSY;
 		goto out;
 	}
 
-	ret = tracker_detach(tracker);
+	ret = tracker_filter(tracker, filter_cmd_del);
 	if (ret)
-		pr_err("Failed to remove tracker for device ");
+		pr_err("Failed to remove tracker from device [%d:%d]",
+			MAJOR(dev_id), MINOR(dev_id));
 
 	write_lock(&trackers_lock);
 	list_add_tail(&trackers, tracker);

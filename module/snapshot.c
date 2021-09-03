@@ -12,7 +12,7 @@ DECLARE_RWSEM(snapshots_lock);
 void snapshot_free(struct kref *kref)
 {
 	struct snapshot *snapshot = container_of(kref, struct snapshot, kref);
-	struct snapshot_event *event;
+	struct event *event;
 	int inx;
 
 	for (inx = 0; inx < snapshot->count; ++inx) {
@@ -23,9 +23,18 @@ void snapshot_free(struct kref *kref)
 	kfree(snapshot->snapimage_array);
 
 	for (inx = 0; inx < snapshot->count; ++inx) {
-		if (!snapshot->tracker_array[inx])
+		struct tracker *tracker = snapshot->tracker_array[inx];
+
+		if (!tracker)
 			continue;
-		tracker_freeze(snapshot->tracker_array[inx]);
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_freeze_bdev(tracker->diff_area->orig_bdev, &snapshot->superblock_array[inx]);
+#else
+		if (freeze_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to freeze device [%d:%d]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
 	}
 
 	for (inx = 0; inx < snapshot->count; ++inx) {
@@ -35,19 +44,22 @@ void snapshot_free(struct kref *kref)
 	}
 
 	for (inx = 0; inx < snapshot->count; ++inx) {
-		if (!snapshot->tracker_array[inx])
+		struct tracker *tracker = snapshot->tracker_array[inx];
+
+		if (!tracker)
 			continue;
-		tracker_thaw(snapshot->tracker_array[inx]);
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_thaw_bdev(tracker->diff_area->orig_bdev, snapshot->superblock_array[inx]);
+#else
+		if (thaw_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to thaw device [%d:%d]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
 	}
 
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_put(snapshot->tracker_array[inx]);
 	kfree(snapshot->tracker_array);
-
-	while ((event = list_first_entry_or_null(&snapshot->events, struct snapshot_event, link))) {
-		list_del(&event->link);
-		kfree(event);
-	}
 
 	if (snapshot->diff_storage)
 		diff_storage_put(snapshot->diff_storage);
@@ -104,6 +116,16 @@ static struct snapshot * snapshot_new(unsigned int count)
 		return ERR_PTR(-ENOMEM);
 	}
 
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	snapshot->superblock_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
+	if (!snapshot->superblock_array) {
+		kfree(snapshot->snapimage_array);
+		kfree(snapshot->tracker_array);
+		snapshot_put(snapshot);
+		return ERR_PTR(-ENOMEM);
+	}
+
+#endif
 	INIT_LIST_HEAD(&snapshot->link);
 	kref_init(&snapshot->kref);
 	uuid_gen(snapshot->id);
@@ -146,6 +168,8 @@ int snapshot_create(dev_t *dev_id_array, unsigned int count, uuid_t *id)
 
 	ret = -ENODEV;
 	for (inx = 0; inx < snapshot->count; ++inx) {
+		struct tracker *tracker;
+
 		tracker = tracker_create_or_get(dev_id_array[inx]);
 		if (IS_ERR(tracker)){
 			pr_err("Unable to create snapshot\n");
@@ -155,7 +179,7 @@ int snapshot_create(dev_t *dev_id_array, unsigned int count, uuid_t *id)
 			goto fail;
 		}
 
-		snapshot.tracker_array[inx] = tracker;
+		snapshot->tracker_array[inx] = tracker;
 	}
 
 	uuid_copy(id, snapshot->id);
@@ -201,7 +225,9 @@ int snapshot_destroy(uuid_t *id)
 
 	down_read(&snapshots_lock);
 	if (!list_empty(&snapshots)) {
-		list_for_each_entry(snapshot, &snapshots, link) {
+		struct snapshot *_snap = NULL;
+
+		list_for_each_entry(_snap, &snapshots, link) {
 			if (_snap->id == id) {
 				snapshot = _snap;
 				list_del(&snapshot->link);
@@ -221,6 +247,20 @@ int snapshot_destroy(uuid_t *id)
 	return 0;
 }
 
+int snapshot_append_storage(uuid_t *id, dev_t dev_id, sector_t sector, sector_t count)
+{
+	int ret = 0;
+	struct snapshot *snapshot;
+
+	snapshot = snapshot_get_by_id(id);
+	if (!snapshot)
+		return -ESRCH;
+
+	ret = diff_storage_append_block(snapshot->diff_storage, dev_id, sector, count);
+
+	snapshot_put(snapshot);
+	return ret;
+}
 
 int snapshot_take(uuid_t *id)
 {
@@ -228,15 +268,40 @@ int snapshot_take(uuid_t *id)
 	struct snapshot *snapshot;
 	int inx;
 
-	snapshot = snapshot_get_by_id(uuid_t *id);
+	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return -ESRCH;
 
+	/* allocate diff area for each device in snapshot */
+	for (inx = 0; inx < snapshot->count; inx++) {
+		struct tracker *tracker = snapshot->tracker_array[inx];
+		struct diff_area *diff_area;
+
+		if (!tracker)
+			continue;
+
+		diff_area = diff_area_new(tracker->dev_id, snapshot->diff_storage, &snapshot->event_queue);
+		if (IS_ERR(diff_area)) {
+			ret = PTR_ERR(diff_area);
+			goto fail;
+		}
+
+		tracker->diff_area = diff_area;
+	}
 
 	for (inx = 0; inx < snapshot->count; inx++) {
-		if (!snapshot->tracker_array[inx])
+		struct tracker *tracker = snapshot->tracker_array[inx];
+
+		if (!tracker)
 			continue;
-		tracker_freeze(snapshot->tracker_array[inx]);
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_freeze_bdev(tracker->diff_area->orig_bdev, &snapshot->superblock_array[inx]);
+#else
+		if (freeze_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to freeze device [%d:%d]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
 	}
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (!snapshot->tracker_array[inx])
@@ -250,13 +315,29 @@ int snapshot_take(uuid_t *id)
 	}
 
 	for (inx = 0; inx < snapshot->count; inx++) {
-		if (!snapshot->tracker_array[inx])
+		struct tracker *tracker = snapshot->tracker_array[inx];
+
+		if (!tracker)
 			continue;
-		tracker_thaw(snapshot->tracker_array[inx]);
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_thaw_bdev(tracker->diff_area->orig_bdev, snapshot->superblock_array[inx]);
+#else
+		if (thaw_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to thaw device [%d:%d]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
+
+		if (snapstore_device_is_corrupted(tracker->snapdev)) {
+			pr_err("Unable to freeze devices [%d:%d]: snapshot data is corrupted\n",
+			       MAJOR(dev_id), MINOR(dev_id));
+			ret = -EDEADLK;
+			break;
+		}
 	}
 	for (inx = 0; inx < snapshot->count; inx++) {
-		struct tracker *tracker = snapshot->tracker_array[inx];
 		struct snapimage *snapimage;
+		struct tracker *tracker = snapshot->tracker_array[inx];
 
 		snapimage = snapimage_create(tracker->diff_area, tracker->cbt_map);
 		if (IS_ERR(snapimage)) {
@@ -268,64 +349,65 @@ int snapshot_take(uuid_t *id)
 		snapshot->snapimage_array[inx] = snapimage;
 	}
 
-	snapshot_put(snapshot);
-	return ret;
+	goto out;
 fail:
+	pr_err("Unable to take snapshot: failed to capture snapshot %pUb\n",
+	       snapshot->id);
+	/* release all taken snapshots */
 	while ((--inx) >= 0) {
 		if (!snapshot->tracker_array[inx])
 			continue;
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
 	}
+	/* thaw all freeze devices */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (!snapshot->tracker_array[inx])
 			continue;
 		tracker_thaw(snapshot->tracker_array[inx]);
 	}
+	/* release all diff_area */
+	for (inx = 0; inx < snapshot->count; inx++) {
+		struct tracker *tracker = snapshot->tracker_array[inx];
+
+		if (!tracker)
+			continue;
+		if (tracker->diff_area)
+			diff_area_put(tracker->diff_area);
+	}
+out:
 	snapshot_put(snapshot);
 	return ret;
 }
 
-int snapshot_generate_event(struct snapshot *snapshot, int code, const void *data, int data_size)
+
+int snapshot_wait_event(uuid_t *id, unsigned int timeout_ms, size_t data_size,
+			ktime_t *time_label, unsigned int *code, u8 *data)
 {
-	struct snapshot_event *ev;
+	struct snapshot *snapshot;
+	struct event *event;
 
-	ev = kzalloc(sizeof(struct snapshot_event) + data_size, GFP_NOIO);
-	if (!ev)
-		return -ENOMEM;
-	
-	ev->time = ktime_get();
-	ev->code = code;
-	memcpy(ev->data, data, data_size);
+	snapshot = snapshot_get_by_id(uuid_t *id);
+	if (!snapshot)
+		return -ESRCH;
 
-	spin_lock(&snapshot->events_lock);
-	list_add_tail(&ev->link, &snapshot->events);
-	spin_unlock(&snapshot->events_lock);
-	//todo: wake up waiters
+	event = event_wait(&snapshot->event_queue, timeout_ms);
+	if (IS_ERR(event)) {
+		ret = PTR_ERR(event);
+		goto out;
+	}
 
-}
+	if (unlikely(data_size < event->data_size))
+		ret = -ENOSPC;
+	else {
+		*time_label = event->time;
+		*code = event->code;
+		memcpy(*data, event->data, event->data_size);
+	}
 
-int snapshot_generate_msg(struct snapshot *snapshot, int code, const char *fmt, ...)
-{
-	va_list args;
-	char *data;
-	int data_size = PAGE_SIZE - sizeof(struct snapshot_event);
-
-	data = kzalloc(data_size, GFP_NOIO);
-	if (!ev)
-		return -ENOMEM;
-
-	va_start(args, fmt);
-	data_size = vsnprintf(data, data_size, fmt, args);
-	va_end(args);
-
-	ret = snapshot_generate_event(snapshot, code, data, data_size);
-	kfree(data);
+	kfree(event);
+out:
+	snapshot_put(snapshot);
 	return ret;
-}
-
-struct snapshot_event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms)
-{
-
 }
 
 int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_image_info_array,

@@ -179,7 +179,7 @@ struct blk_snap_snapshot_event {
 #define BLK_SNAP_EVENT_MSG_WARNING 0x31
 
 struct blk_snap_event_low_free_space {
-	__u64 sectors_left;
+	__u64 requested_nr_sect;
 };
 /**
  * If the free space in the difference storage is reduced to the specified
@@ -187,8 +187,9 @@ struct blk_snap_event_low_free_space {
  */
 #define BLK_SNAP_EVENT_LOW_FREE_SPACE 0x41
 
-struct blk_snap_event_overflow {
-	__u32 image_dev_id;
+struct blk_snap_event_corrupted {
+	__u32 orig_dev_id;
+	__i32 errno;
 };
 /**
  * If a chunk could not be allocated when trying to save data to difference
@@ -197,7 +198,7 @@ struct blk_snap_event_overflow {
  * error. If the snapshot image has been read to the end by this time, the
  * backup process is considered successful.
  */
-#define BLK_SNAP_EVENT_OVERFLOW 0x42
+#define BLK_SNAP_EVENT_CORRUPTED 0x42
 /**
  * If the event reader thread is still waiting for an event when the snapshot
  * is destroyed, it will receive this event.

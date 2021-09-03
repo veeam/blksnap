@@ -1,15 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
 
-
-struct snapshot_event {
-	struct list_head link;
-	ktime_t time;
-	int code;
-	size_t data_size;
-	char data[1]; /* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
-};
-
 struct snapshot {
 	struct list_head link;
 	struct kref kref;
@@ -17,12 +8,13 @@ struct snapshot {
 
 	struct rw_semaphore lock;
 	struct diff_storage *diff_storage;
-	struct list_head events;
-	spinlock_t events_lock;
 
 	int count;
 	struct tracker *tracker_array;
 	struct snapimage *snapimage_array;
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	struct super_block *superblock_array;
+#endif
 };
 
 void snapshot_done(void);
@@ -36,7 +28,3 @@ int snapshot_collect_images(uuid_t *id,
 			    struct blk_snap_image_info __user *image_info_array,
 			    unsigned int *pcount);
 
-int snapshot_generate_event(struct snapshot *snapshot, int code,
-			    const void *data, int data_size);
-int snapshot_generate_msg(struct snapshot *snapshot, int code,
-			  const char *fmt, ...);

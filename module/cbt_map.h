@@ -21,9 +21,9 @@ struct cbt_map {
 	unsigned long snap_number_previous;
 	uuid_t generationId;
 
-	bool active;
+	bool is_corrupted;
 
-	struct rw_semaphore rw_lock;
+	//struct rw_semaphore rw_lock;
 
 	sector_t state_changed_sectors;
 	sector_t state_dirty_sectors;
@@ -41,7 +41,7 @@ int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start, sector_t se
 
 size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buffer, size_t offset,
 			    size_t size);
-
+/*
 static inline void cbt_map_read_lock(struct cbt_map *cbt_map)
 {
 	down_read(&cbt_map->rw_lock);
@@ -61,7 +61,7 @@ static inline void cbt_map_write_unlock(struct cbt_map *cbt_map)
 {
 	up_write(&cbt_map->rw_lock);
 };
-
+*/
 static inline size_t cbt_map_blk_size(struct cbt_map *cbt_map)
 {
 	return 1 << (cbt_map->blk_size_shift + SECTOR_SHIFT);

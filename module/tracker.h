@@ -15,11 +15,6 @@ struct tracker {
 
 	struct cbt_map *cbt_map;
 	struct diff_area *diff_area;
-
-	struct block_device* freeze_bdev;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	struct super_block *freeze_superblock = NULL;
-#endif
 };
 
 void tracker_free(struct kref *kref);
@@ -54,8 +49,50 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 int tracker_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_ranges,
 				unsigned int count);
 
-int tracker_freeze(struct tracker *tracker);
-void tracker_thaw(struct tracker *tracker);
 int tracker_take_snapshot(struct tracker *tracker);
 void tracker_release_snapshot(struct tracker *tracker);
 
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+static inline int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
+{
+	struct super_block *superblock;
+
+	if (bdev->bd_super == NULL) {
+		pr_warn("Unable to freeze device [%d:%d]: no superblock was found\n",
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+		return 0;
+	}
+
+	superblock = freeze_bdev(bdev);
+	if (IS_ERR_OR_NULL(superblock)) {
+		int result;
+
+		pr_err("Failed to freeze device [%d:%d]\n",
+		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+
+		if (superblock == NULL)
+			result = -ENODEV;
+		else {
+			result = PTR_ERR(superblock);
+			pr_err("Error code: %d\n", result);
+		}
+		return result;
+	}
+
+	pr_info("Device [%d:%d] was frozen\n",
+	        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	*psuperblock = superblock;
+
+	return 0;
+}
+static inline void _thaw_bdev(struct block_device *bdev, struct super_block *superblock)
+{
+	if (superblock == NULL)
+		return;
+
+	if (thaw_bdev(bdev, superblock))
+		pr_err("Failed to unfreeze device [%d:%d]\n", MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	else
+		pr_info("Device [%d:%d] was unfrozen\n", MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+}
+#endif

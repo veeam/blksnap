@@ -21,12 +21,12 @@ static inline unsigned long chunk_pages(struct diff_area *diff_area)
 static inline unsigned long chunk_number(struct diff_area *diff_area, sector_t sector)
 {
 	sector_t number = (offset >> (diff_area->chunk_size_shift - SECTOR_SHIFT));
-
+/*
 	if (unlikely(number > CONFIG_BLK_SNAP_MAXIMUM_CHUNK_COUNT)) {
 		WARN("The number of the chunk has exceeded the acceptable limit");
 		diff_area->is_corrupted = true;
 	}
-	
+*/
 	return (unsigned long)number;
 };
 
@@ -35,7 +35,7 @@ static inline void __recalculate_last_chunk_size(struct chunk *chunk)
 	struct diff_area *diff_area = chunk->diff_area;
 	sector_t capacity;
 
-	capacity = bdev_nr_sectors(diff_area->bdev);
+	capacity = bdev_nr_sectors(diff_area->orig_bdev);
 	chunk->sector_count = capacity - round_down(capacity, chunk->sector_count);
 }
 
@@ -51,8 +51,8 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	sector_t capacity;
 	sector_t min_io_sect;
 
-	min_io_sect = (sector_t)(bdev_io_min(diff_area->bdev) >> SECTOR_SHIFT);
-	capacity = bdev_nr_sectors(diff_area->bdev);
+	min_io_sect = (sector_t)(bdev_io_min(diff_area->orig_bdev) >> SECTOR_SHIFT);
+	capacity = bdev_nr_sectors(diff_area->orig_bdev);
 
 	count = __count_by_shift(capacity, shift);
 	while ((count > CONFIG_BLK_SNAP_MAXIMUM_CHUNK_COUNT) || (chunk_sectors(shift) < min_io_sect)) {
@@ -84,9 +84,9 @@ void diff_area_free(struct kref *kref)
 		diff_area->io_client = NULL;
 	}
 
-	if (diff_area->bdev) {
-		blkdev_put(diff_area->bdev);
-		diff_area->bdev = NULL;
+	if (diff_area->orig_bdev) {
+		blkdev_put(diff_area->orig_bdev);
+		diff_area->orig_bdev = NULL;
 	}
 }
 
@@ -108,6 +108,10 @@ repeat:
 
 	chunk->diff_store = diff_storage_get_store(diff_area->diff_storage,
 	                                           chunk_sectors(diff_area->chunk_size_shift));
+	if (unlikely(IS_ERR(chunk->diff_store))) {
+		diff_area_set_corrupted(diff_area);
+		return;
+	}
 
 	__diff_area_chunk_store(chunk);
 	goto repeat;
@@ -154,7 +158,7 @@ static void diff_area_caching_chunks_work(struct work_struct *work)
 	}
 }
 
-struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
+struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage, struct event_queue *event_queue)
 {
 	int ret = 0;
 	struct diff_area *diff_area = NULL;
@@ -185,9 +189,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	diff_area->bdev = bdev;
+	diff_area->orig_bdev = bdev;
 	diff_area->io_client = cli;
 	diff_area->diff_storage = diff_storage;
+	diff_area->event_queue = event_queue;
 
 	diff_area_calculate_chunk_size(diff_area);
 	pr_info("Chunk size %llu bytes\n", chunk_size(diff_area->chunk_size_shift));
@@ -234,6 +239,8 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	}
 
 	__recalculate_last_chunk_size(chunk);
+
+	atomic_set(&diff_area->corrupted_flag, 0);
 	return diff_area;
 }
 
@@ -255,10 +262,7 @@ static inline int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 static inline void chunk_io_failed(struct chunk *chunk, int error)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
-	chunk->diff_area->error = error;
-	barrier();
-	chunk->diff_area->is_corrupted = true;
-	
+	diff_area_set_corrupted(chunk->diff_area, error);
 	pr_err("Failed to write chunk %lu\n", chunk->number);
 }
 
@@ -354,7 +358,7 @@ static int __diff_area_chunk_load(struct chunk *chunk)
 {
 	unsigned long sync_error_bits;
 	struct dm_io_region region = {
-		.bdev = chunk->diff_area->bdev,
+		.bdev = chunk->diff_area->orig_bdev,
 		.sector = (sector_t)chunk->number * chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
@@ -517,3 +521,51 @@ blk_status_t diff_area_image_read(struct diff_area *diff_area,
 {
 
 }
+
+/*
+bool diff_area_is_corrupted(struct diff_area *diff_area)
+{
+	if (unlikely(diff_area->is_corrupted)) {
+		if (unlikely(atomic_inc_return(&diff_area->req_failed_cnt) == 1))
+			pr_err("Snapshot device is corrupted for [%d:%d]\n",
+				MAJOR(diff_area->orig_dev->bd_dev),
+				MINOR(diff_area->orig_dev->bd_dev));
+
+		return true;
+	}
+
+	return false;
+}
+*/
+
+void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
+{
+	if (atomic_inc_return(&diff_area->corrupted_flag) == 1) {
+		struct blk_snap_event_overflow data = {
+			.orig_dev_id = diff_area->orig_bdev->bd_dev;
+			.errno = abs(err_code);
+		};
+
+		event_gen(&diff_storage->event_queue,
+			BLK_SNAP_EVENT_CORRUPTED,
+			data, sizeof(data));
+
+		pr_err("Set snapshot device is corrupted for [%d:%d] with error code %d.\n",
+		       MAJOR(data.orig_dev_id),
+		       MINOR(data.orig_dev_id),
+		       data.errno);
+	}
+}
+/*
+int diff_area_errno(dev_t dev_id, int *p_err_code)
+{
+	struct diff_area *diff_area;
+
+	diff_area = snapstore_device_find_by_dev_id(dev_id);
+	if (!diff_area)
+		return -ENODATA;
+
+	*p_err_code = snapstore_device->err_code;
+	return SUCCESS;
+}
+*/
