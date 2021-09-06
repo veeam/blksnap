@@ -22,11 +22,11 @@ void event_queue_done(struct event_queue *event_queue)
 	spin_unlock(&event_queue->lock);
 }
 
-int event_gen(struct event_queue *event_queue, int code, const void *data, int data_size)
+int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void *data, int data_size)
 {
 	struct event *event;
 
-	event = kzalloc(sizeof(struct event) + data_size, GFP_NOIO);
+	event = kzalloc(sizeof(struct event) + data_size, flags);
 	if (!ev)
 		return -ENOMEM;
 
@@ -42,13 +42,13 @@ int event_gen(struct event_queue *event_queue, int code, const void *data, int d
 
 }
 
-int event_gen_msg(struct event_queue *event_queue, int code, const char *fmt, ...)
+int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const char *fmt, ...)
 {
 	va_list args;
 	char *data;
 	int data_size = PAGE_SIZE - sizeof(struct event);
 
-	data = kzalloc(data_size, GFP_NOIO);
+	data = kzalloc(data_size, flags);
 	if (!ev)
 		return -ENOMEM;
 
@@ -56,7 +56,7 @@ int event_gen_msg(struct event_queue *event_queue, int code, const char *fmt, ..
 	data_size = vsnprintf(data, data_size, fmt, args);
 	va_end(args);
 
-	ret = event_gen(snapshot, code, data, data_size);
+	ret = event_gen(snapshot, flags, code, data, data_size);
 	kfree(data);
 	return ret;
 }

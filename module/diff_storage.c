@@ -214,7 +214,7 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		};
 
 		diff_storage->requested += data.requested_nr_sect;
-		event_gen(&diff_storage->event_queue,
+		event_gen(&diff_storage->event_queue, GFP_NOIO, 
 			BLK_SNAP_EVENT_LOW_FREE_SPACE,
 			data, sizeof(data));
 	}

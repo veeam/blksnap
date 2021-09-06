@@ -5,6 +5,7 @@ struct snapshot {
 	struct list_head link;
 	struct kref kref;
 	uuid_t id;
+	bool is_taken;
 
 	struct rw_semaphore lock;
 	struct diff_storage *diff_storage;

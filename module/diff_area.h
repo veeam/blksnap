@@ -71,7 +71,8 @@ struct diff_area {
 	atomic_t corrupted_flag;
 };
 
-struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage, struct event_queue *event_queue);
+struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage,
+                                struct event_queue *event_queue);
 void diff_area_free(struct kref *kref);
 static inline void diff_area_get(struct diff_area *diff_area)
 {
@@ -82,7 +83,10 @@ static inline void diff_area_put(struct diff_area *diff_area)
 	if (likely(diff_area))
 		kref_put(diff_area->kref, diff_area_free);
 };
-
+static inline bool diff_area_is_corrupted(struct diff_area *diff_area)
+{
+	return !!atomic_read(&diff_area->corrupted_flag);
+};
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count
                    bool is_nowait);
 

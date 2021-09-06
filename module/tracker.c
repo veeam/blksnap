@@ -61,7 +61,7 @@ static int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	if (unlikely(err))
 		return FLT_ST_PASS;
 
-	if (!atomic_read(tracker->is_busy_with_snapshot))
+	if (!atomic_read(tracker->snapshot_is_taken))
 		return FLT_ST_PASS;
 
 	err = diff_area_copy(tracker->diff_area, sector, count,
@@ -152,7 +152,7 @@ static int tracker_new(dev_t dev_id, unsigned long long snapshot_id)
 		return = -ENOMEM;
 
 	kref_init(&tracker->refcount);
-	atomic_set(&tracker->is_busy_with_snapshot, false);
+	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->dev_d = dev_id;
 	tracker->snapshot_id = 0;
 
@@ -184,193 +184,6 @@ static int tracker_new(dev_t dev_id, unsigned long long snapshot_id)
 	return ret;
 }
 
-
-/*
-bool tracker_cbt_bitmap_lock(struct tracker *tracker)
-{
-	if (tracker->cbt_map == NULL)
-		return false;
-
-	cbt_map_read_lock(tracker->cbt_map);
-	if (!tracker->cbt_map->active) {
-		cbt_map_read_unlock(tracker->cbt_map);
-		return false;
-	}
-
-	return true;
-}
-
-void tracker_cbt_bitmap_unlock(struct tracker *tracker)
-{
-	if (tracker->cbt_map)
-		cbt_map_read_unlock(tracker->cbt_map);
-}
-*/
-/*
-int __tracker_capture_snapshot(struct tracker *tracker)
-{
-	struct block_device* bdev = NULL;
-	int result = 0;
-
-	tracker->snapdev = snapstore_device_get_resource(
-		snapstore_device_find_by_dev_id(tracker->dev_id));
-	if (!tracker->snapdev)
-		return -ENODEV;
-
-
-
-
-	atomic_set(&tracker->is_busy_with_snapshot, true);
-
-	if (tracker->cbt_map != NULL) {
-
-		cbt_map_write_lock(tracker->cbt_map);
-		cbt_map_switch(tracker->cbt_map);
-		cbt_map_write_unlock(tracker->cbt_map);
-
-		pr_info("Snapshot captured for device [%d:%d]. New snap number %ld\n",
-			MAJOR(tracker->dev_id), MINOR(tracker->dev_id),
-			tracker->cbt_map->snap_number_active);
-	}
-
-
-
-	return result;
-}
-
-int tracker_capture_snapshot(dev_t *dev_id_set, int dev_id_set_size)
-{
-	int ret = 0;
-	int inx = 0;
-
-	//to do: redesign needed.
-	// should be opened all block device in same time.
-
-	for (inx = 0; inx < dev_id_set_size; ++inx) {
-		struct super_block *superblock = NULL;
-		struct tracker *tracker = NULL;
-		dev_t dev_id = dev_id_set[inx];
-		sector_t capacity;
-		struct block_device *bdev = NULL;
-
-		ret = blk_dev_open(tracker->dev_id, &bdev);
-		if (ret)
-			break;
-
-		ret = tracker_get(bdev, &tracker);
-		if (ret != 0) {
-			pr_err("Unable to capture snapshot: cannot find device [%d:%d]\n",
-			       MAJOR(dev_id), MINOR(dev_id));
-			break;
-		}
-
-		// checking that the device capacity has been changed from the previous snapshot
-		capacity = bdev_nr_sectors(bdev);
-		if (tracker->cbt_map->device_capacity != capacity) {
-			pr_warn("Device resize detected\n");
-			ret = cbt_map_reset(tracker->cbt_map, capacity);
-		}
-
-		tracker->diff_area = diff_area_new();
-
-		_freeze_bdev(tracker->dev_id, bdev, &superblock);
-		{
-			struct gendisk *disk = bdev->bd_disk;
-
-			blk_mq_freeze_queue(disk->queue);
-			blk_mq_quiesce_queue(disk->queue);
-
-			{
-				ret = __tracker_capture_snapshot(tracker);
-				if (ret != 0)
-					pr_err("Failed to capture snapshot for device [%d:%d]\n",
-					       MAJOR(dev_id), MINOR(dev_id));
-			}
-			blk_mq_unquiesce_queue(disk->queue);
-			blk_mq_unfreeze_queue(disk->queue);
-		}
-		_thaw_bdev(tracker->dev_id, bdev, superblock);
-
-		blk_dev_close(bdev);
-	}
-	if (ret)
-		return ret;
-
-	for (inx = 0; inx < dev_id_set_size; ++inx) {
-		struct tracker *tracker = NULL;
-		dev_t dev_id = dev_id_set[inx];
-
-		ret = tracker_find_by_dev_id(dev_id, &tracker);
-		if (ret) {
-			pr_err("Unable to capture snapshot: cannot find device [%d:%d]\n",
-			       MAJOR(dev_id), MINOR(dev_id));
-			continue;
-		}
-
-		if (snapstore_device_is_corrupted(tracker->snapdev)) {
-			pr_err("Unable to freeze devices [%d:%d]: snapshot data is corrupted\n",
-			       MAJOR(dev_id), MINOR(dev_id));
-			ret = -EDEADLK;
-			break;
-		}
-	}
-
-	if (ret) {
-		pr_err("Failed to capture snapshot. errno=%d\n", ret);
-
-		tracker_release_snapshot(dev_id_set, dev_id_set_size);
-	}
-	return ret;
-}
-
-void _tracker_release_snapshot(struct tracker *tracker)
-{
-	struct super_block *superblock = NULL;
-	struct defer_io *defer_io = tracker->defer_io;
-
-	_freeze_bdev(tracker->snapshot_device &superblock);
-	{
-		struct gendisk *disk = tracker->target_dev->bd_disk;
-
-		blk_mq_freeze_queue(disk->queue);
-		blk_mq_quiesce_queue(disk->queue);
-		{
-			atomic_set(&tracker->is_busy_with_snapshot, false);
-
-			tracker->defer_io = NULL;
-		}
-		blk_mq_unquiesce_queue(disk->queue);
-		blk_mq_unfreeze_queue(disk->queue);
-	}
-	_thaw_bdev(tracker->dev_id, tracker->target_dev, superblock);
-
-	defer_io_stop(defer_io);
-	defer_io_put_resource(defer_io);
-}
-
-void tracker_release_snapshot(dev_t *dev_id_set, int dev_id_set_size)
-{
-	int inx;
-
-	for (inx = 0; inx < dev_id_set_size; ++inx) {
-		int status;
-		struct tracker *tracker = NULL;
-		dev_t dev = dev_id_set[inx];
-
-		//to do: redisign needed
-		tracker = tracker_get_by_dev_id(dev);
-		if (!tracker) {
-			pr_err("Unable to release snapshot: cannot find tracker for device [%d:%d]\n",
-			       MAJOR(dev), MINOR(dev));
-			continue;
-			
-		}
-
-		_tracker_release_snapshot(tracker);
-	}
-}
-*/
-
 int tracker_take_snapshot(struct tracker *tracker)
 {
 	int ret = 0;
@@ -388,14 +201,16 @@ int tracker_take_snapshot(struct tracker *tracker)
 
 	if (cbt_reset_needed) {
 		ret = cbt_map_reset(tracker->cbt_map);
-		if (ret)
+		if (ret) {
 			pr_err("Failed to create tracker. errno=%d\n", ret);
-	} else
-		cbt_map_switch(tracker->cbt_map);
+			return ret;
+		}
+	}
 
-	atomic_set(&tracker->is_busy_with_snapshot, true);
+	cbt_map_switch(tracker->cbt_map);
+	atomic_set(&tracker->snapshot_is_taken, true);
 
-	return ret;
+	return 0;
 }
 
 void tracker_release_snapshot(struct tracker *tracker)
@@ -403,7 +218,10 @@ void tracker_release_snapshot(struct tracker *tracker)
 	if (!tracker)
 		return;
 
-	atomic_set(&tracker->is_busy_with_snapshot, false);
+	if (!!atomic_read(&tracker->snapshot_is_taken))
+		return;
+
+	atomic_set(&tracker->snapshot_is_taken, false);
 }
 
 int tracker_init(void)
@@ -486,7 +304,7 @@ int tracker_remove(dev_t dev_id)
 		return -ENODATA;
 	}
 
-	if (atomic_read(tracker->is_busy_with_snapshot)) {
+	if (atomic_read(tracker->snapshot_is_taken)) {
 		pr_err("Unable to remove device [%d:%d] from tracking: ",
 			MAJOR(dev_id), MINOR(dev_id));
 		pr_err("snapshot [0x%llx] already exist\n", tracker->snapshot_id);
@@ -521,7 +339,7 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 		pr_err("device not found\n");
 		return -ENODATA;
 
-	if (atomic_read(&tracker->is_busy_with_snapshot))
+	if (atomic_read(&tracker->snapshot_is_taken))
 		ret = cbt_map_read_to_user(tracker->cbt_map, user_buff, offset, length);
 	else {
 		pr_err("Unable to read CBT bitmap for device [%d:%d]: ",

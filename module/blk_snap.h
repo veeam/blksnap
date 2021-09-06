@@ -209,7 +209,7 @@ struct blk_snap_event_corrupted {
 
 struct blk_snap_image_info {
 	
-	__u32 original_dev_id;
+	__u32 orig_dev_id;
 	__u32 image_dev_id;
 };
 struct blk_snap_snapshot_collect_images {

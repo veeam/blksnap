@@ -11,7 +11,7 @@ struct tracker {
 	struct kref refcount;
 	dev_t dev_id;
 
-	atomic_t is_busy_with_snapshot;
+	atomic_t snapshot_is_taken;
 
 	struct cbt_map *cbt_map;
 	struct diff_area *diff_area;

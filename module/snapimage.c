@@ -6,8 +6,6 @@
 
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
-//#include <linux/hdreg.h>
-
 
 #define SNAPIMAGE_MAX_DEVICES 2048
 
@@ -15,16 +13,42 @@ int snapimage_major;
 unsigned long *snapimage_minors;
 DEFINE_SPINLOCK(snapimage_minors_lock);
 
-//LIST_HEAD(snap_images);
-//DECLARE_RWSEM(snap_images_lock);
-//DECLARE_RWSEM(snap_image_destroy_lock);
+static blk_status_t snapimage_write_rq(struct request *rq)
+{
+	blk_status_t status = BLK_STS_OK;
+	struct snapimage *image = rq->q->queuedata;
+	struct bio_vec bvec;
+	struct req_iterator iter;
+	sector_t pos = blk_rq_pos(rq);
+	unsigned int bytes = blk_rq_bytes(rq);
 
 
-static const struct blk_mq_ops image_mq_ops = {
-	.queue_rq       = snapimage_queue_rq,
+	rq_for_each_segment(bvec, rq, iter) {
+		
+	}	
+}
+
+static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
+		const struct blk_mq_queue_data *bd)
+{
+	blk_status_t status;
+	struct request *rq = bd->rq;
+
+	blk_mq_start_request(rq);
+	if (rq_data_dir(rq))
+		status = snapimage_write_rq(rq);
+	else
+		status = snapimage_read_rq(rq);
+	blk_mq_end_request(rq, status);
+
+	return status;
+}
+
+static const struct blk_mq_ops mq_ops = {
+	.queue_rq = snapimage_queue_rq,
 };
 
-const struct block_device_operations snapimage_ops = {
+const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
 	.open = snapimage_open,
 	.ioctl = snapimage_ioctl,
@@ -34,23 +58,11 @@ const struct block_device_operations snapimage_ops = {
 
 static void snapimage_free(struct snapimage *image)
 {
-	pr_info("Snapshot image request processing stop\n");
-	blk_mq_freeze_queue(image->queue);
-	blk_mq_quiesce_queue(image->queue);
-
 	pr_info("Snapshot image disk delete\n");
+
 	del_gendisk(image->disk);
-
-	if (image->queue) {
-		pr_info("Snapshot image queue cleanup\n");
-		blk_cleanup_queue(image->queue);
-		image->queue = NULL;
-	}
-
-	if (image->disk != NULL) {
-		pr_info("Snapshot image disk structure release\n");
-		put_disk(image->disk);
-	}
+	blk_cleanup_disk(image->disk);
+	blk_mq_free_tag_set(&image.tag_set);
 
 	spin_lock(&snapimage_minors_lock);
 	bitmap_clear(snapimage_minors, MINOR(image->image_dev_id), 1u);
@@ -59,31 +71,47 @@ static void snapimage_free(struct snapimage *image)
 	kfree(image);
 }
 
+static void snapimage_tagset_init(struct blk_mq_tag_set *tag_set, void *image)
+{
+	tag_set->ops = &mq_ops;
+	tag_set->nr_hw_queues = 1;
+	tag_set->queue_depth = 128;
+	tag_set->numa_node = NUMA_NO_NODE;
+	//tag_set->cmd_size = sizeof(struct loop_cmd);
+	tag_set->flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;
+	tag_set->driver_data = image;
+}
+static void snapimage_queue_init(struct request_queue *q)
+{
+	//blk_queue_max_segment_size(q, 1024 * PAGE_SIZE);
+	/**
+	 * The actual access to the original device is performed in whole
+	 * chunks, so the size of the blocks does not depend on anything.
+	 */
+	//blk_queue_physical_block_size(q, 512);
+	//blk_queue_logical_block_size(q, 512);
+}
 
 struct snapimage *snapimage_create(struct diff_area *diff_area, struct cbt_map *cbt_map)
 {
 	int res = 0;
-	struct snapimage *image = NULL;
+	struct snapimage *snapimage = NULL;
+	struct request_queue *queue;
 	struct gendisk *disk = NULL;
 
 	int minor;
 
 	pr_info("Create snapshot image for device [%d:%d]\n",
-	        MAJOR(original_dev_id), MINOR(original_dev_id));
+	        MAJOR(diff_area->orig_bdev->bd_dev),
+	        MINOR(diff_area->orig_bdev->bd_dev));
 
-	res = tracker_find_by_dev_id(orig_dev_id, &tracker);
-	if (res) {
-		pr_err("Unable to create snapshot image: cannot find tracker for device [%d:%d]\n",
-		       MAJOR(orig_dev_id), MINOR(orig_dev_id));
-		return res;
-	}
 
-	image = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
-	if (image == NULL)
+	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
+	if (snapimage == NULL)
 		return -ENOMEM;
 
-	INIT_LIST_HEAD(&image->link);
-	kref_init(&image->kref);
+	INIT_LIST_HEAD(&snapimage->link);
+	kref_init(&snapimage->kref);
 	
 	spin_lock(&snapimage_minors_lock);
 	minor = bitmap_find_free_region(snapimage_minors, SNAPIMAGE_MAX_DEVICES, 0);
@@ -92,109 +120,71 @@ struct snapimage *snapimage_create(struct diff_area *diff_area, struct cbt_map *
 	if (minor < 0) {
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
 		       minor);
-		goto fail;
+		goto fail_;
 	}
 
-	image->rq_processor = NULL;
-
-	image->diff_area = diff_area_get(diff_area);
-	image->cbt_map = cbt_map_get(cbt_map);
-
-	image->capacity = cbt_map->device_capacity;
-	image->image_dev_id = MKDEV(snapimage_major, minor);
+	snapimage->capacity = cbt_map->device_capacity;
+	snapimage->image_dev_id = MKDEV(snapimage_major, minor);
 	pr_info("Snapshot image device id [%d:%d]\n",
-	        MAJOR(image->image_dev_id),MINOR(image->image_dev_id));
+	        MAJOR(snapimage->image_dev_id),
+	        MINOR(snapimage->image_dev_id));
 
-	//mutex_init(&image->open_locker);
-	//image->open_bdev = NULL;
-	//image->open_cnt = 0;
+	snapimage_tagset_init(&snapimage.tag_set, snapimage);
 
-	image->queue = blk_alloc_queue(NUMA_NO_NODE);
-	if (image->queue == NULL) {
-		res = -ENOMEM;
-		goto fail;
+	ret = blk_mq_alloc_tag_set(&snapimage.tag_set);
+	if (ret)
+		goto out_free_image;
+
+	disk = blk_mq_alloc_disk(&snapimage.tag_set, snapimage);
+	if (IS_ERR(disk)) {
+		ret = PTR_ERR(disk);
+		goto out_free_tagset;
 	}
-	image->queue->queuedata = image;
 
-	blk_queue_max_segment_size(image->queue, 1024 * PAGE_SIZE);
-	/**
-	 * The actual access to the original device is performed in whole
-	 * chunks, so the size of the blocks does not depend on anything.
-	 */
-	blk_queue_physical_block_size(image->queue, 512);
-	blk_queue_logical_block_size(image->queue, 512);
-
-	disk = alloc_disk(1); //only one partition on disk
-	if (disk == NULL) {
-		pr_err("Failed to allocate disk for snapshot image device\n");
-		res = -ENOMEM;
-		goto fail;
-	}
-	image->disk = disk;
+	snapimage_queue_init(disk->queue);
 
 	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d", SNAP_IMAGE_NAME, minor) < 0) {
 		pr_err("Unable to set disk name for snapshot image device: invalid minor %d\n",
 		       minor);
 		res = -EINVAL;
-		goto fail;
+		goto fail_cleanup_disk;
 	}
-
-
 	pr_info("Snapshot image disk name [%s]", disk->disk_name);
 
+	//disk->flags |= GENHD_FL_SUPPRESS_PARTITION_INFO;
+	//disk->flags |= GENHD_FL_EXT_DEVT;
 	disk->flags |= GENHD_FL_NO_PART_SCAN;
+	disk->flags |= GENHD_FL_HIDDEN;
 	//disk->flags |= GENHD_FL_REMOVABLE;
 
 	disk->major = snapimage_major;
 	disk->minors = 1; // one disk have only one partition.
 	disk->first_minor = minor;
 
-	disk->private_data = image;
+	disk->fops = &bd_ops;
+	disk->private_data = snapimage;
+	snapimage->disk = disk;
 
-	disk->fops = &snapimage_ops;
-	disk->queue = image->queue;
-
-	set_capacity(disk, image->capacity);
+	set_capacity(disk, snapimage->capacity);
 	pr_info("Snapshot image device capacity %lld bytes",
-		(u64)from_sectors(image->capacity));
+		(u64)from_sectors(snapimage->capacity));
 
+	snapimage->diff_area = diff_area_get(diff_area);
+	snapimage->cbt_map = cbt_map_get(cbt_map);
 
-	add_disk(image->disk);
+	add_disk(disk);
 
-	
-	down_write(&snap_images_lock);
-	list_add_tail(&image->link, &snap_images);
-	up_write(&snap_images_lock);
 	return 0;
-fail:
-	snapimage_put(image);
-	//_snapimage_destroy(image);
-	//_snapimage_free(image);
-	//kfree(image);
-	image = NULL;
-	
-	return res;
-}
-/*
-int snapimage_create_for(dev_t *p_dev, int count)
-{
-	int res = 0;
-	int inx = 0;
 
-	for (; inx < count; ++inx) {
-		res = snapimage_create(p_dev[inx]);
-		if (res) {
-			pr_err("Failed to create snapshot image for original device [%d:%d]\n",
-			       MAJOR(p_dev[inx]), MINOR(p_dev[inx]));
-			break;
-		}
-	}
-	if (res)
-		if (inx > 0)
-			_snapimage_destroy_for(p_dev, inx - 1);
+out_cleanup_disk:
+	blk_cleanup_disk(disk);
+out_free_tagset:
+	blk_mq_free_tag_set(&snapimage->tag_set);
+out_free_image:
+	kfree(snapimage);
 	return res;
 }
-*/
+
 int snapimage_init(void)
 {
 	int major = 0;

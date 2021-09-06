@@ -246,8 +246,17 @@ static int ioctl_snapshot_append_storage(unsigned long arg)
 		pr_err("Unable to append difference storage: invalid user buffer\n");
 		return -EINVAL;
 	}
-
-	ranges_buffer_size = karg.range_count sizeof(struct blk_snap_block_range);
+	
+	/**
+	 * Rarely, but there are file systems in which the blocks on the disk
+	 * are significantly fragmented. And the drive for diff storage can be
+	 * quite large.
+	 * At the same time, an attempt to allocate several pages of continuous
+	 * address space on such systems often causes an ENOMEM error.
+	 * Therefore, an array of pages is used to store an array of ranges of
+	 * available disk space.
+	 */
+	ranges_buffer_size = karg.range_count * sizeof(struct blk_snap_block_range);
 	ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
 	if (ranges == NULL) {
 		pr_err("Unable to append difference storage: cannot allocate [%zu] bytes\n",
@@ -323,11 +332,7 @@ static int ioctl_snapshot_collect_images(unsigned long arg)
 	return ret;
 }
 
-struct ioctl_table {
-	int (*fn)(unsigned long arg);
-};
-
-static const struct ioctl_table ioctl_table[] = {
+static const int (*blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_version,
 	ioctl_tracker_remove,
 	ioctl_tracker_collect,
@@ -351,5 +356,5 @@ static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned lo
 	if (!blk_snap_ioctl_table[nr].fn)
 		return -ENOTTY;
 
-	return blk_snap_ioctl_table[nr].fn(arg);
+	return blk_snap_ioctl_table[nr](arg);
 }
