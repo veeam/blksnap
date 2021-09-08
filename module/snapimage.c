@@ -13,31 +13,43 @@ int snapimage_major;
 unsigned long *snapimage_minors;
 DEFINE_SPINLOCK(snapimage_minors_lock);
 
-static blk_status_t snapimage_write_rq(struct request *rq)
+
+static 
+blk_status_t snapimage_rq_io(struct snapimage *image, struct request *rq)
 {
 	blk_status_t status = BLK_STS_OK;
-	struct snapimage *image = rq->q->queuedata;
 	struct bio_vec bvec;
 	struct req_iterator iter;
+	struct diff_area_image_ctx io_ctx;
 	sector_t pos = blk_rq_pos(rq);
-	unsigned int bytes = blk_rq_bytes(rq);
 
+	diff_area_image_ctx_init(&io_ctx, image->diff_area, op_is_write(req_op(rq)));
 
 	rq_for_each_segment(bvec, rq, iter) {
-		
-	}	
+		status = diff_area_image_io(&io_ctx, &bvec, &pos);
+		if (unlikely(status != BLK_STS_OK))
+			break;
+	}
+	diff_area_image_ctx_done(&io_ctx);
+
+	return status;
 }
 
-static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
+static 
+blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 		const struct blk_mq_queue_data *bd)
 {
 	blk_status_t status;
 	struct request *rq = bd->rq;
 
 	blk_mq_start_request(rq);
-	if (rq_data_dir(rq))
-		status = snapimage_write_rq(rq);
-	else
+	if (op_is_write(req_op(rq))) {
+		ret = cbt_map_set_both(image->cbt_map, pos, blk_rq_sectors(rq));
+		if (unlikely(ret))
+			status = BLK_STS_IOERR;
+		else
+			status = snapimage_rq_io(rq->q->queuedata, rq);
+	} else
 		status = snapimage_read_rq(rq);
 	blk_mq_end_request(rq, status);
 
@@ -386,7 +398,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 	struct diff_area *diff_area;
 	struct bio_vec bvec;
 	struct bvec_iter iter;
-	struct diff_area_image_context image_ctx;
+	struct diff_area_image_ctx io_ctx;
 	
 	if (!disk->private_data) {
 		bio_io_error(bio);
@@ -399,12 +411,12 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 		return BLK_QC_T_NONE;
 	}
 
-	diff_area_image_context_init(&image_ctx, disk->private_data, op_is_write(bio_op(bio)));
+	diff_area_image_ctx_init(&io_ctx, disk->private_data, op_is_write(bio_op(bio)));
 
 	bio_for_each_segment(bvec, bio, iter) {
 		blk_status_t status;
 		
-		status = diff_area_image_page(&image_ctx,
+		status = diff_area_image_page(&io_ctx,
 			                      bvec.bv_page, bvec.bv_offset,
 			                      iter.bi_sector, bvec.bv_len);
 		if (status) {
@@ -413,7 +425,7 @@ blk_qc_t _snapimage_submit_bio(struct bio *bio)
 		}
 
 	}
-	diff_area_image_context_done(&image_ctx);
+	diff_area_image_ctx_done(&io_ctx);
 
 	//bio->bi_iter
 	//bio->bi_io_vec
