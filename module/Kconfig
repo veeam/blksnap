@@ -21,9 +21,9 @@ config BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT
 	int "The power of 2 for minimum trackings block size"
 	default 16
 	help
-	  The minimum tracjing block size by default is 65535 KB (shift 16)
+	  The minimum tracking block size by default is 64 KB (shift 16)
 	  It's looks good for block device 128 GB or lower.
-	  In this case, the block device is divided into 2097152 chunks.
+	  In this case, the block device is divided into 2097152 blocks.
 
 config BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT
 	depends on BLK_SNAP
@@ -37,13 +37,13 @@ config BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT
 config BLK_SNAP_CHUNK_MINIMUM_SHIFT
 	depends on BLK_SNAP
 	int "The power of 2 for minimum snapshots chunk size"
-	default 16
+	default 18
 	help
-	  The minimum chunk size by default is 65535 KB (shift 16)
+	  The minimum chunk size by default is 256 KB (shift 18)
 	  It's looks good for block device 128 GB or lower.
-	  In this case, the block device is divided into 2097152 chunks.
+	  In this case, the block device is divided into 524288 chunks.
 
-config BLK_SNAP_MAXIMUM_CHUNK_COUNT
+config BLK_SNAP_CHUNK_MAXIMUM_COUNT
 	depends on BLK_SNAP
 	int "The limit of the maximum number of snapshots chunks"
 	default 2097152
@@ -52,7 +52,7 @@ config BLK_SNAP_MAXIMUM_CHUNK_COUNT
 	  should also grow. For this purpose, the limit of the maximum number
 	  of chunks is set.
 
-config BLK_SNAP_MAXIMUM_CHUNK_IN_CACHE
+config BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE
 	depends on BLK_SNAP
 	int "The limit of the maximum chunks in memory cache"
 	default 128

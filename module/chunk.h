@@ -1,19 +1,37 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
-
+#include <linux/dm-io.h>
 
 struct diff_area;
 struct diff_store;
 
 /**
- * struct diff_buffer - Difference buffer
- * Describes the memory buffer for chunk in memory.
+ * struct diff_buffer - Difference buffer.
+ * 
+ * @size:
+ *	Number of bytes in byffer.
+ * @pages:
+ * 	An array and at the same time a singly linked list of pages.
+ * 	It is convenient to use with dm-io.
+ * 
+ * Describes the memory buffer for chunk in memory. 
  */
 struct diff_buffer {
 	size_t size;
 	struct page_list pages[0];
 };
 
+/**
+ * struct diff_buffer_iter - Iterator for &struct diff_buffer 
+ * @page:
+ * 	A pointer to the current page.
+ * @offset:
+ * 	The offset in bytes in the current page.
+ * @bytes:
+ * 	The number of bytes that can be read or written from this page.
+ * 
+ * It is convenient to use when copying data from or to &struct bio_vec.
+ */
 struct diff_buffer_iter {
 	struct page *page;
 	size_t offset;
@@ -41,34 +59,47 @@ enum {
 	CHUNK_ST_STORE_READY,	/* The data of the chunk was wrote to the difference storage */
 };
 
+/**
+ * struct chunk - Elementary IO block.
+ * @link:
+ * 	?
+ * @diff_area:
+ * 	?
+ * @number:
+ * 	Sequential number of chunk.
+ * @sector_count:
+ * 	Numbers of sectors in current chunk this is especially true for the
+ * 	last piece.
+ * @state:
+ * 	?
+ * @lock:
+ * 	Syncs access to the chunks fields: state, diff_buffer and diff_store.
+ * 	The semaphore is blocked for writing if there is no actual data
+ * 	in the buffer, since a block of data is being read from the original
+ * 	device or from a diff storage.
+ * 	If data is being read or written from the chunk buffer, the semaphore
+ * 	must be blocked for reading.
+ * 	The module does not prohibit reading and writing data to the snapshot
+ * 	from different threads in parallel.
+ * 	To avoid the problem with simultaneous access, it is enough to open
+ * 	the snapshot image block device with the FMODE_EXCL parameter.
+ * @diff_buffer:
+ * 	Pointer to &struct diff_buffer. Describes a buffer in memory for
+ * 	storing chunk data.
+ * @diff_store:
+ * 	Pointer to &struc diff_store. Describes a copy of the chunk data
+ * 	on the storage.
+ * This structure describes the block of data that the module operates with
+ * when executing the COW algorithm and when performing IO to snapshot images.
+ */
 struct chunk {
 	struct list_head link;
-	//struct kref kref;
 	struct diff_area *diff_area;
-	/**
-	 * sequential number of chunk
-	 */
-	unsigned long number;
-	/**
-	 * numbers of sectors in current chunk
-	 * this is especially true for the last piece.
-	 */
-	sector_t sector_count; 
 
+	unsigned long number;
+	sector_t sector_count; 
 	atomic_t state;
-	/**
-	 * lock - syncs access to the chunks fields: state, diff_buffer and
-	 * diff_store.
-	 * The semaphore is blocked for writing if there is no actual data
-	 * in the buffer, since a block of data is being read from the original
-	 * device or from a diff storage.
-	 * If data is being read or written from the chunk buffer, the semaphore
-	 * must be blocked for reading.
-	 * The module does not prohibit reading and writing data to the snapshot
-	 * from different threads in parallel.
-	 * To avoid the problem with simultaneous access, it is enough to open
-	 * the snapshot image block device with the FMODE_EXCL parameter.
-	 */
+
 	struct rw_semaphore lock; 
 
 	struct diff_buffer *diff_buffer;
@@ -97,20 +128,11 @@ bool chunk_state_check(struct chunk* chunk, int st)
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
 void chunk_free(struct chunk *chunk);
-/*void chunk_free(struct kref *kref);
-static inline void chunk_get(struct chunk *chunk)
-{
-	kref_get(&chunk->kref);
-};
-static inline void chunk_put(struct chunk *chunk)
-{
-	if (likely(chunk))
-		kref_put(&chunk->kref, chunk_free);
-};*/
 
 int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask);
 
-static inline void chunk_io_failed(struct chunk *chunk, int error)
+static inline
+void chunk_io_failed(struct chunk *chunk, int error)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	diff_area_set_corrupted(chunk->diff_area, error);

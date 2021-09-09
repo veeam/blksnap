@@ -17,22 +17,25 @@
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 
-static int blk_snap_major;
+static
+int blk_snap_major;
 
-static const struct file_operations ctrl_fops = {
+static const
+struct file_operations ctrl_fops = {
 	.owner = THIS_MODULE,
 	.open = ctrl_open,
 	.release = ctrl_release,
 	.unlocked_ioctl = ctrl_unlocked_ioctl
 };
 
-static const struct blk_snap_version version = {
+static const
+struct blk_snap_version version = {
 	.major = FILEVER_MAJOR,
 	.minor = FILEVER_MINOR,
 	.revision = FILEVER_REVISION,
 	.build = 0
 	.compatibility_flags = 0,
-	.modification_name = {0}
+	.mod_name = ""
 };
 
 int get_blk_snap_major(void)
@@ -60,20 +63,23 @@ void ctrl_done(void)
 	unregister_chrdev(blk_snap_major, MODULE_NAME);
 }
 
-static int ctrl_open(struct inode *inode, struct file *fl)
+static 
+int ctrl_open(struct inode *inode, struct file *fl)
 {
 	if (try_module_get(THIS_MODULE))
 		return 0;
 	return -EINVAL;
 }
 
-static int ctrl_release(struct inode *inode, struct file *fl)
+static 
+int ctrl_release(struct inode *inode, struct file *fl)
 {
 	module_put(THIS_MODULE);
 	return result;
 }
 
-static int ioctl_version(unsigned long arg)
+static 
+int ioctl_version(unsigned long arg)
 {
 	if (copy_to_user((void *)arg, &version, sizeof(version))) {
 		pr_err("Unable to get version: invalid user buffer\n");
@@ -83,7 +89,8 @@ static int ioctl_version(unsigned long arg)
 	return 0;
 }
 
-static int ioctl_tracker_remove(unsigned long arg)
+static 
+int ioctl_tracker_remove(unsigned long arg)
 {
 	struct blk_snap_tracker_remove karg;
 
@@ -94,7 +101,8 @@ static int ioctl_tracker_remove(unsigned long arg)
 	return tracker_remove((dev_t)karg.dev_id);
 }
 
-static int ioctl_tracker_collect(unsigned long arg)
+static 
+int ioctl_tracker_collect(unsigned long arg)
 {
 	int res;
 	struct blk_snap_tracker_collect karg;
@@ -108,7 +116,7 @@ static int ioctl_tracker_collect(unsigned long arg)
 	}
 
 	if (!karg.cbt_info_array) {
-		/**
+		/*
 		 * If the buffer is empty, this is a request to determine
 		 * the number of trackers.
 		 */ 
@@ -150,7 +158,8 @@ fail:
 	return res;
 }
 
-static int ioctl_tracker_read_cbt_map(unsigned long arg)
+static 
+int ioctl_tracker_read_cbt_map(unsigned long arg)
 {
 	dev_t dev_id;
 	struct blk_snap_tracker_read_cbt_bitmap karg;
@@ -164,7 +173,8 @@ static int ioctl_tracker_read_cbt_map(unsigned long arg)
 					(char __user*)karg.buff);
 }
 
-static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
+static 
+int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 {
 	int ret = 0;
 	struct blk_snap_tracker_mark_dirty_blocks karg;
@@ -193,7 +203,8 @@ static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 	return ret;
 }
 
-static int ioctl_snapshot_create(unsigned long arg)
+static 
+int ioctl_snapshot_create(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_create karg;
@@ -223,7 +234,8 @@ out:
 	return ret;
 }
 
-static int ioctl_snapshot_destroy(unsigned long arg)
+static 
+int ioctl_snapshot_destroy(unsigned long arg)
 {
 	blk_snap_snapshot_destroy karg;
 
@@ -235,7 +247,8 @@ static int ioctl_snapshot_destroy(unsigned long arg)
 	return snapshot_destroy(&karg.id);
 }
 
-static int ioctl_snapshot_append_storage(unsigned long arg)
+static 
+int ioctl_snapshot_append_storage(unsigned long arg)
 {
 	int res = 0;
 	struct blk_snap_snapshot_append_storage karg;
@@ -246,8 +259,8 @@ static int ioctl_snapshot_append_storage(unsigned long arg)
 		pr_err("Unable to append difference storage: invalid user buffer\n");
 		return -EINVAL;
 	}
-	
-	/**
+
+	/*
 	 * Rarely, but there are file systems in which the blocks on the disk
 	 * are significantly fragmented. And the drive for diff storage can be
 	 * quite large.
@@ -277,7 +290,8 @@ static int ioctl_snapshot_append_storage(unsigned long arg)
 	return res;
 }
 
-static int ioctl_snapshot_take(unsigned long arg)
+static 
+int ioctl_snapshot_take(unsigned long arg)
 {
 	blk_snap_snapshot_take karg;
 
@@ -289,7 +303,8 @@ static int ioctl_snapshot_take(unsigned long arg)
 	return snapshot_take(&karg.id);
 }
 
-static int ioctl_snapshot_wait_event(unsigned long arg)
+static 
+int ioctl_snapshot_wait_event(unsigned long arg)
 {
 	int res;
 	struct blk_snap_snapshot_event karg;
@@ -312,7 +327,8 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 	return 0;
 }
 
-static int ioctl_snapshot_collect_images(unsigned long arg)
+static 
+int ioctl_snapshot_collect_images(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_collect_images karg;
@@ -332,7 +348,8 @@ static int ioctl_snapshot_collect_images(unsigned long arg)
 	return ret;
 }
 
-static const int (*blk_snap_ioctl_table[])(unsigned long arg) = {
+static const 
+int (*blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_version,
 	ioctl_tracker_remove,
 	ioctl_tracker_collect,
@@ -346,7 +363,8 @@ static const int (*blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_snapshot_collect_images,
 };
 
-static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static 
+long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int nr = _IOC_NR(cmd);
 

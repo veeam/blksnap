@@ -10,8 +10,8 @@ static LIST_HEAD(bd_filters);
 /* Lock the queue of block device to add or delete filter. */
 static DEFINE_PERCPU_RWSEM(bd_filters_lock);
 
-/*
- * filters_write_lock - Locks the processing of I/O requests for block device
+/**
+ * filters_write_lock() - Locks the processing of I/O requests for block device.
  *
  * Locks block device the execution of the submit_bio_noacct() function for it.
  * To avoid calling a deadlock, do not call I/O operations after this lock.
@@ -25,9 +25,11 @@ void filters_write_lock(void )
 	percpu_down_write(&bd_filters_lock);
 };
 
-/*
- * bdev_filter_lock - Unlocks the processing of I/O requests for block device
- * @bdev: pointer to block device structure
+/**
+ * bdev_filter_lock - Unlocks the processing of I/O requests for block device.
+
+ * @bdev:
+ *	pointer to block device structure
  *
  * The submit_bio_noacct() function can be continued.
  */
@@ -36,10 +38,11 @@ void filters_write_unlock(void )
 	percpu_up_write(&bd_filters_lock);
 };
 
+static inline 
 #if defined(HAVE_BI_BDEV)
-static inline struct blk_filter *filter_find(dev_t dev_id)
+struct blk_filter *filter_find(dev_t dev_id)
 #elif defined(HAVE_BI_BDISK)
-static inline struct blk_filter *filter_find(int major, int partno)
+struct blk_filter *filter_find(int major, int partno)
 #endif
 {
 	struct blk_filter *flt;
@@ -59,10 +62,9 @@ static inline struct blk_filter *filter_find(int major, int partno)
 	return NULL;
 }
 
-
-
-static int __filter_add(struct block_device *bdev,
-	       const struct filter_operations *fops, void *ctx)
+static 
+int __filter_add(struct block_device *bdev,
+		 const struct filter_operations *fops, void *ctx)
 {
 	struct blk_filter *flt;
 
@@ -91,10 +93,13 @@ static int __filter_add(struct block_device *bdev,
 }
 
 /**
- * filter_add - Attach a filter to original block device 
- * @bdev: block device
- * @fops: table of filter callbacks
- * @ctx: Filter specific private data
+ * filter_add - Attach a filter to original block device.
+ * @bdev:
+ * 	block device
+ * @fops:
+ * 	table of filter callbacks
+ * @ctx:
+ * 	Filter specific private data
  *
  * Before adding a filter, it is necessary to lock the processing
  * of bio requests of the original device by calling filters_write_lock().
@@ -118,7 +123,8 @@ int filter_add(struct block_device *bdev,
 	return ret;
 }
 
-static int __filter_del(struct block_device *bdev)
+static
+int __filter_del(struct block_device *bdev)
 {
 	struct blk_filter *flt;
 
@@ -138,11 +144,12 @@ static int __filter_del(struct block_device *bdev)
 	return 0;
 }
 
-
 /**
- * bdev_filter_del - Delete filter from the block device
- * @bdev: block device
- * @filter_name: unique filters name
+ * bdev_filter_del - Delete filter from the block device.
+ * @bdev:
+ * 	block device.
+ * @filter_name:
+ * 	unique filters name.
  *
  * Before deleting a filter, it is necessary to lock the processing
  * of bio requests of the device by calling bdev_filter_lock().
@@ -175,7 +182,8 @@ void filters_read_unlock(void )
 	percpu_up_read(&bd_filters_lock);
 }
 
-static inline bool filters_read_lock_for_bio(struct bio *bio)
+static inline
+bool filters_read_lock_for_bio(struct bio *bio)
 {
 	if (bio->bi_opf & REQ_NOWAIT)
 		return percpu_down_read_trylock(&bd_filters_lock);
@@ -184,7 +192,8 @@ static inline bool filters_read_lock_for_bio(struct bio *bio)
 	return true;
 }
 
-static inline struct blk_filter *flt filter_find_by_bio(const struct bio *bio)
+static inline
+struct blk_filter *flt filter_find_by_bio(const struct bio *bio)
 {
 #if defined(HAVE_BI_BDEV)
 	return filter_find(bio->bi_bdev->bd_dev);
@@ -193,7 +202,8 @@ static inline struct blk_filter *flt filter_find_by_bio(const struct bio *bio)
 #endif
 }
 
-static int filters_apply(const struct bio *bio)
+static
+int filters_apply(const struct bio *bio)
 {
 	struct blk_filter *flt;
 	int status;
@@ -216,12 +226,13 @@ static int filters_apply(const struct bio *bio)
 #error "Your kernel is too old for "KBUILD_MODNAME"."
 #endif
 
-static blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
-	(blk_qc_t (*)(struct bio *))((unsigned long)(submit_bio_noacct) + CALL_INSTRUCTION_LENGTH);
+static
+blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
+	(blk_qc_t (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
+	                             CALL_INSTRUCTION_LENGTH);
 
-
-
-static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
+static
+blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 {
 	if (!current->bio_list) {
 		struct bio_list bio_list_on_stack[2];
@@ -245,21 +256,26 @@ static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 	return submit_bio_noacct_notrace(bio);
 }
 
-static struct klp_func funcs[] = {
+static
+struct klp_func funcs[] = {
 	{
 		.old_name = "submit_bio_noacct",
 		.new_func = submit_bio_noacct_handler,
-	}, { }
+	},
+	{0}
 };
 
-static struct klp_object objs[] = {
+static
+struct klp_object objs[] = {
 	{
 		/* name being NULL means vmlinux */
 		.funcs = funcs,
-	}, { }
+	},
+	{0}
 };
 
-static struct klp_patch patch = {
+static
+struct klp_patch patch = {
 	.mod = THIS_MODULE,
 	.objs = objs,
 };

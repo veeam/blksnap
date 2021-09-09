@@ -2,6 +2,9 @@
 #pragma once
 #include <linux/wait.h>
 
+/**
+ * struct event - An event to pass it to the user-space.
+ */
 struct event {
 	struct list_head link;
 	ktime_t time;
@@ -10,6 +13,9 @@ struct event {
 	char data[1]; /* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
 };
 
+/**
+ * struct event_queue - A queue of &struct event.
+ */
 struct event_queue {
 	struct list_head list;
 	spinlock_t lock;

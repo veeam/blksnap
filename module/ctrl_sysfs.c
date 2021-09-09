@@ -8,16 +8,21 @@
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 
-static ssize_t major_show(struct class *class, struct class_attribute *attr, char *buf)
+static
+ssize_t major_show(struct class *class, struct class_attribute *attr,char *buf)
 {
 	sprintf(buf, "%d", get_blk_snap_major());
 	return strlen(buf);
 }
 
-CLASS_ATTR_RO(major); // declare class_attr_major
-static struct class *blk_snap_class;
+/* declare class_attr_major */
+CLASS_ATTR_RO(major); 
 
-static struct device *blk_snap_device;
+static
+struct class *blk_snap_class;
+
+static
+struct device *blk_snap_device;
 
 int ctrl_sysfs_init(void)
 {

@@ -5,5 +5,3 @@
 #define BLK_SNAP_SECTION ""
 #endif
 #define pr_fmt(fmt) KBUILD_MODNAME BLK_SNAP_SECTION ": " fmt
-
-pr_dbg

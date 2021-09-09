@@ -10,7 +10,7 @@ DEFINE_RWLOCK(trackers_lock);
 
 void tracker_free(struct kref *kref)
 {
-	struct tracker *tracker = container_of(kref, struct tracker, refcount);
+	struct tracker *tracker = container_of(kref, struct tracker, kref);
 
 	if (tracker->snapdev) {
 		snapstore_device_put_resource(tracker->snapdev);
@@ -47,7 +47,8 @@ out:
 	return result;
 }
 
-static int tracker_submit_bio_cb(struct bio *bio, void *ctx)
+static
+int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
 	struct tracker *tracker = ctx;
@@ -78,12 +79,14 @@ static int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	return FLT_ST_PASS;
 }
 
-static void tracker_detach_cb(void *ctx)
+static
+void tracker_detach_cb(void *ctx)
 {
 	tracker_put((struct tracker *)ctx);
 }
 
-const struct filter_operations *tracker_fops = {
+const
+struct filter_operations *tracker_fops = {
 	.submit_bio_cb = tracker_submit_bio_cb;
 	.detach_cb = tracker_detach_cb;
 }
@@ -93,7 +96,8 @@ enum filter_cmd {
 	filter_cmd_del
 };
 
-static int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd)
+static
+int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd)
 {
 	int ret;
 	struct block_device* bdev;
@@ -139,7 +143,8 @@ static int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd)
 	return ret;
 }
 
-static int tracker_new(dev_t dev_id, unsigned long long snapshot_id)
+static
+int tracker_new(dev_t dev_id, unsigned long long snapshot_id)
 {
 	int ret;
 	struct tracker *tracker = NULL;
@@ -151,7 +156,7 @@ static int tracker_new(dev_t dev_id, unsigned long long snapshot_id)
 	if (tracker == NULL)
 		return = -ENOMEM;
 
-	kref_init(&tracker->refcount);
+	kref_init(&tracker->kref);
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->dev_d = dev_id;
 	tracker->snapshot_id = 0;

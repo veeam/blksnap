@@ -20,7 +20,7 @@ static void snapshot_release(struct snapshot *snapshot)
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		if (!snapshot->snapimage_array[inx])
 			continue;
-		snapimage_put(snapshot->snapimage_array[inx]);
+		snapimage_free(snapshot->snapimage_array[inx]);
 	}
 
 	/* flush and freeze fs on each original block device */
@@ -462,6 +462,6 @@ out:
 	*pcount = snapshot->count;
 	kfree(image_info_array);
 	snapshot_put(snapshot);
-	
+
 	return res;
 }

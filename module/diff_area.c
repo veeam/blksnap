@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define BLK_SNAP_SECTION "-diff-area"
 #include "common.h"
+#include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
 #include "diff_storage.h"
@@ -46,7 +47,7 @@ unsigned long long count_by_shift(sector_t capacity, unsigned long long shift)
 static 
 void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 {
-	unsigned long long shift = CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT;
+	unsigned long long shift = chunk_minimum_shift;
 	unsigned long long count;
 	sector_t capacity;
 	sector_t min_io_sect;
@@ -55,7 +56,7 @@ void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	capacity = bdev_nr_sectors(diff_area->orig_bdev);
 
 	count = count_by_shift(capacity, shift);
-	while ((count > CONFIG_BLK_SNAP_MAXIMUM_CHUNK_COUNT) || (chunk_sectors(shift) < min_io_sect)) {
+	while ((count > chunk_maximum_count) || (chunk_sectors(shift) < min_io_sect)) {
 		shift = shift << 1;
 		count = count_by_shift(capacity, shift);
 	}
@@ -178,7 +179,7 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 
 
 	while (atomic_read(&diff_area->caching_chunks_count) >
-	       CONFIG_BLK_SNAP_MAXIMUM_CHUNK_IN_CACHE) {
+	       chunk_maximum_in_cache) {
 
 		spin_lock(&diff_area->caching_chunks_lock);
 		chunk = list_first_entry_or_null(&diff_area->caching_chunks, struct chunk, link);
@@ -247,7 +248,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage,
 	pr_info("Chunk size %llu bytes\n", chunk_size(diff_area->chunk_shift));
 	pr_info("chunk count %lu\n", diff_area->chunk_count);
 
-	kref_init(&diff_area->refcount);
+	kref_init(&diff_area->kref);
 	xa_init(&diff_area->chunk_map);
 
 	INIT_LIST_HEAD(&diff_area->storing_chunks);
@@ -431,7 +432,7 @@ struct chunk* diff_area_image_context_get_chunk(
 		if (io_ctx->->chunk->number == new_chunk_number)
 			return io_ctx->chunk;
 
-		/**
+		/*
 		 * If the sector falls into a new chunk, then we release
 		 * the old chunk.
 		 */
@@ -463,12 +464,12 @@ struct chunk* diff_area_image_context_get_chunk(
 	io_ctx->chunk = chunk;
 
 	/* Up chunk in cache */
-	spin_lock(&shared_chunk_cache_lock);
+	spin_lock(&diff_area->caching_chunks_lock);
 	list_del(&chunk->link);
-	list_add_tail(&chunk->link, shared_chunk_cache_lock)
-	spin_unlock(&shared_chunk_cache_lock);
+	list_add_tail(&chunk->link, diff_area->caching_chunks)
+	spin_unlock(&diff_area->caching_chunks_lock);
 
-	/**
+	/*
 	 * If there is already data in the buffer, then nothing needs to be load.
 	 * A chunk should be read from diff_storage 
 	 */
