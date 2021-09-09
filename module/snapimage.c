@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define BLK_SNAP_SECTION "-snapimage"
+#define pr_fmt(fmt) KBUILD_MODNAME "-snapimage" ": " fmt
+
 #include "snapimage.h"
 #include "cbt_map.h"
 #include "tracker.h"

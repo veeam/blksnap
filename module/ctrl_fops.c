@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define BLK_SNAP_SECTION "-ctrl"
-#include "common.h"
+#define pr_fmt(fmt) KBUILD_MODNAME "-ctrl" ": " fmt
+
 #include "blk-snap-ctl.h"
 #include "ctrl_fops.h"
 #include "version.h"
@@ -12,7 +12,6 @@
 #include "blk_deferred.h"
 #include "big_buffer.h"
 #include "params.h"
-
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>

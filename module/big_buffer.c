@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#include "common.h"
+#define pr_fmt(fmt) KBUILD_MODNAME "" ": " fmt
+
 #include <linux/mm.h>
 #include "big_buffer.h"
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#include "common.h"
+#define pr_fmt(fmt) KBUILD_MODNAME "" ": " fmt
+
 #include "version.h"
 #include "blk-snap-ctl.h"
 #include "params.h"
@@ -16,25 +17,11 @@
 
 static int __init blk_snap_init(void)
 {
-	int result = 0;
+	int result;
 
 	pr_info("Loading\n");
 
-	params_check();
-
 	result = ctrl_init();
-	if (result)
-		return result;
-
-	result = blk_bioset_create();
-	if (result)
-		return result;
-
-	result = blk_redirect_bioset_create();
-	if (result)
-		return result;
-
-	result = blk_deferred_bioset_create();
 	if (result)
 		return result;
 
@@ -52,6 +39,8 @@ static int __init blk_snap_init(void)
 }
 
 /*
+ * For standalone only:
+ *
  * Before unload module livepatch should be detached.
  * echo 0 > /sys/kernel/livepatch/blk_snap_lp/enabled
  */
@@ -60,23 +49,11 @@ static void __exit blk_snap_exit(void)
 	pr_info("Unloading module\n");
 
 	tracker_done();
-
-	ctrl_sysfs_done();
-
 	snapshot_done();
-
-	snapstore_device_done();
 	snapstore_done();
-
 	snapimage_done();
 
-	blk_deferred_bioset_free();
-	blk_deferred_done();
-
-	blk_redirect_bioset_free();
-
-	blk_bioset_free();
-
+	ctrl_sysfs_done();
 	ctrl_done();
 }
 

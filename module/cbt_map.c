@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define BLK_SNAP_SECTION "-cbt_map"
-#include "common.h"
+#define pr_fmt(fmt) KBUILD_MODNAME "-cbt_map" ": " fmt
+
 #include "params.h"
 #include "cbt_map.h"
 

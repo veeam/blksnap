@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
-#define BLK_SNAP_SECTION "-cache"
+#define pr_fmt(fmt) KBUILD_MODNAME "-chunk" ": " fmt
+
 #include <linux/blk_types.h>
 #include <linux/blk.h>
 #include <linux/blkdev.h>
-#include "common.h"
 #include "cache.h"
 #include "diff_area.h"
 

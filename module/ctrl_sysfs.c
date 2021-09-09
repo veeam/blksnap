@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
-#define BLK_SNAP_SECTION "-ctrl"
-#include "common.h"
+#define pr_fmt(fmt) KBUILD_MODNAME "-sysfs" ": " fmt
+
 #include "ctrl_sysfs.h"
 #include "ctrl_fops.h"
 #include "blk-snap-ctl.h"
-
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 

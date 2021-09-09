@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define BLK_SNAP_SECTION "-lpflt"
-#include "common.h"
+#define pr_fmt(fmt) KBUILD_MODNAME "-lpflt" ": " fmt
+
 #include "lp-filter.h"
 #include <linux/livepatch.h>
 

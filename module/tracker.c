@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define BLK_SNAP_SECTION "-tracker"
-#include "common.h"
+#define pr_fmt(fmt) KBUILD_MODNAME "-tracker" ": " fmt
+
 #include "tracker.h"
 #include "blk_util.h"
 #include "params.h"
