@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-tracker" ": " fmt
 
-#include "tracker.h"
-#include "blk_util.h"
+#include <linux/mm.h>
+#include <linux/blk-mq.h>
+
 #include "params.h"
+#include "tracker.h"
+#include "cbt_map.h"
+#include "blk_snap.h"
+
 
 LIST_HEAD(trackers);
 DEFINE_RWLOCK(trackers_lock);
@@ -62,7 +67,7 @@ int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	if (unlikely(err))
 		return FLT_ST_PASS;
 
-	if (!atomic_read(tracker->snapshot_is_taken))
+	if (!atomic_read(&tracker->snapshot_is_taken))
 		return FLT_ST_PASS;
 
 	err = diff_area_copy(tracker->diff_area, sector, count,
@@ -309,7 +314,7 @@ int tracker_remove(dev_t dev_id)
 		return -ENODATA;
 	}
 
-	if (atomic_read(tracker->snapshot_is_taken)) {
+	if (atomic_read(&tracker->snapshot_is_taken)) {
 		pr_err("Unable to remove device [%d:%d] from tracking: ",
 			MAJOR(dev_id), MINOR(dev_id));
 		pr_err("snapshot [0x%llx] already exist\n", tracker->snapshot_id);

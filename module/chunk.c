@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-chunk" ": " fmt
 
-#include <linux/blk_types.h>
-#include <linux/blk.h>
-#include <linux/blkdev.h>
-#include "cache.h"
+#include "chunk.h"
 #include "diff_area.h"
 
 static inline

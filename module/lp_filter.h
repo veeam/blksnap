@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
+#include <linux/types.h>
+#include <linux/list.h>
+#include <linux/blk_types.h>
 
 /*
  * Each filter can skip the bio request or complete it,

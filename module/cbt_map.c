@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-cbt_map" ": " fmt
 
-#include "params.h"
 #include "cbt_map.h"
+#include "params.h"
 
 static inline 
 unsigned long long count_by_shift(sector_t capacity, unsigned long long shift)
@@ -17,11 +17,11 @@ void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 	unsigned long long shift;
 	unsigned long long count;
 
-	if (get_tracker_block_size_pow()) {
+	if (tracking_block_minimum_shift) {
 		/**
 		 * The tracking block size was set explicitly.
 		 */
-		shift = get_tracker_block_size_pow() - SECTOR_SHIFT;
+		shift = tracking_block_minimum_shift - SECTOR_SHIFT;
 		count = count_by_shift(cbt_map->device_capacity, shift);
 	} else {
 		/**
@@ -107,11 +107,9 @@ void cbt_map_destroy(struct cbt_map *cbt_map)
 	}
 }
 
-
 struct cbt_map *cbt_map_create(struct block_device* bdev)
 {
 	struct cbt_map *cbt_map = NULL;
-	unsigned int cbt_sect_in_block_degree;
 
 	pr_info("CBT map create\n");
 
@@ -128,7 +126,6 @@ struct cbt_map *cbt_map_create(struct block_device* bdev)
 	}
 
 	spin_lock_init(&cbt_map->locker);
-	//init_rwsem(&cbt_map->rw_lock);
 	kref_init(&cbt_map->kref);
 	cbt_map->is_corrupted = false;
 
@@ -226,7 +223,7 @@ int cbt_map_set(struct cbt_map *cbt_map,
 	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
 	if (res)
-		cbt_map->is_corrupted;
+		cbt_map->is_corrupted = true;
 	else
 		cbt_map->state_changed_sectors += sector_cnt;
 	spin_unlock(&cbt_map->locker);

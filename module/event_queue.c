@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-event_queue" ": " fmt
 
+#include <linux/mm.h>
+#include "event_queue.h"
+
 void event_queue_init(struct event_queue *event_queue)
 {
 	INIT_LIST_HEAD(&event_queue->list);

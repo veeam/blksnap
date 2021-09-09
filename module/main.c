@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "" ": " fmt
 
+#include <linux/module.h>
+//#include <linux/blk_types.h>
+//#include <linux/blkdev.h>
+//#include <linux/mm.h>
+//#include <linux/rwsem.h>
+//#include <linux/atomic.h>
+
 #include "version.h"
-#include "blk-snap-ctl.h"
 #include "params.h"
-#include "ctrl_fops.h"
-#include "ctrl_pipe.h"
-#include "ctrl_sysfs.h"
+#include "ctrl.h"
+#include "sysfs.h"
 #include "snapimage.h"
-#include "snapstore.h"
-#include "snapstore_device.h"
 #include "snapshot.h"
 #include "tracker.h"
-#include "tracking.h"
-#include <linux/module.h>
 
 static int __init blk_snap_init(void)
 {
@@ -29,7 +30,7 @@ static int __init blk_snap_init(void)
 	if (result)
 		return result;
 
-	result = ctrl_sysfs_init();
+	result = sysfs_init();
 	if (result)
 		return result;
 
@@ -53,7 +54,7 @@ static void __exit blk_snap_exit(void)
 	snapstore_done();
 	snapimage_done();
 
-	ctrl_sysfs_done();
+	sysfs_done();
 	ctrl_done();
 }
 

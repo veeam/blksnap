@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-ctrl" ": " fmt
 
-#include "blk-snap-ctl.h"
-#include "ctrl_fops.h"
-#include "version.h"
-#include "tracking.h"
-#include "snapshot.h"
-#include "snapstore.h"
-#include "snapimage.h"
-#include "tracker.h"
-#include "blk_deferred.h"
-#include "big_buffer.h"
-#include "params.h"
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>
+#include <linux/mm.h>
+
+#include "ctrl.h"
+#include "blk_snap.h"
+#include "params.h"
+#include "version.h"
+#include "snapshot.h"
+#include "snapimage.h"
+#include "tracker.h"
+#include "big_buffer.h"
 
 static
 int blk_snap_major;

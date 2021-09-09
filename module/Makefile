@@ -13,27 +13,28 @@ $(KERNEL_MODULE_NAME)-y += snapimage.o
 $(KERNEL_MODULE_NAME)-y += snapshot.o
 $(KERNEL_MODULE_NAME)-y += sysfs.o
 $(KERNEL_MODULE_NAME)-y += tracker.o
-$(KERNEL_MODULE_NAME)-y += lp_filter.o    # only for standalone module
+$(KERNEL_MODULE_NAME)-y += lp_filter.o
+# only for standalone module
 
 # for upstream, we don't need any configurations
 # but for a standalone module, the configuration is necessary
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&&	\
-		echo -DHAVE_SUBMIT_BIO_NOACCT;					\
-	)
+		echo -DHAVE_SUBMIT_BIO_NOACCT)
 EXTRA_CFLAGS += $(shell 							\
-	grep -qw "struct super_block *freeze_bdev);"				\
+	grep -qw "struct super_block *freeze_bdev;"				\
 		$(srctree)/include/linux/blkdev.h &&				\
-		echo -DHAVE_SUPER_BLOCK_FREEZE					\
-	)
+		echo -DHAVE_SUPER_BLOCK_FREEZE)
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -DHAVE_BI_BDEV						\
-	)
+		echo -DHAVE_BI_BDEV)
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -DHAVE_BI_BDISK						\
-	)
+		echo -DHAVE_BI_BDISK)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "*bdev_nr_sectors;" $(srctree)/include/linux/genhd.h &&	\
+		echo -DHAVE_BDEV_NR_SECTORS)
+
 # The power of 2 for minimum trackings block size.
 # The minimum tracking block size by default is 64 KB (shift 16)
 # It's looks good for block device 128 GB or lower.

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-storage" ": " fmt
 
+#include <linux/mm.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
+
 #include "params.h"
 #include "chunk.h"
 #include "diff_storage.h"
@@ -167,7 +171,7 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	struct storage_block *storage_block;
 	sector_t sectors_left;
 
-	if (atomic_read(diff_storage->overflow))
+	if (atomic_read(&diff_storage->overflow))
 		return ERR_PTR(-ENOSPC);
 
 	diff_store = kzalloc(sizeof(struct diff_store), GFP_KERNEL);

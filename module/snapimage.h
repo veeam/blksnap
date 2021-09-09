@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
+#include <linux/blk_types.h>
+#include <linux/blkdev.h>
+#include <linux/gendisk.h>
 
 struct diff_area;
 struct cbt_map;

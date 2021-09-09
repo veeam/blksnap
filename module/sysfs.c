@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-sysfs" ": " fmt
 
-#include "ctrl_sysfs.h"
-#include "ctrl_fops.h"
-#include "blk-snap-ctl.h"
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
+#include <linux/class.h>
+#include <linux/device.h>
+
+#include "sysfs.h"
+#include "ctrl.h"
+#include "blk_snap.h"
 
 static
 ssize_t major_show(struct class *class, struct class_attribute *attr,char *buf)
@@ -23,7 +26,7 @@ struct class *blk_snap_class;
 static
 struct device *blk_snap_device;
 
-int ctrl_sysfs_init(void)
+int sysfs_init(void)
 {
 	struct device *dev;
 	int res;
@@ -62,7 +65,7 @@ int ctrl_sysfs_init(void)
 	return res;
 }
 
-void ctrl_sysfs_done(void)
+void sysfs_done(void)
 {
 	if (blk_snap_device) {
 		device_unregister(blk_snap_device);

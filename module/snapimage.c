@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapimage" ": " fmt
 
+#include <linux/cdrom.h>
+#include <linux/blk-mq.h>
+
 #include "snapimage.h"
 #include "cbt_map.h"
 #include "tracker.h"
-#include <linux/cdrom.h>
-#include <linux/blk-mq.h>
 
 #define SNAPIMAGE_MAX_DEVICES 2048
 

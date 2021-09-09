@@ -1,5 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
+#include <linux/blk_types.h>
+#include <linux/blkdev.h>
+#include <linux/mm.h>
+#include <linux/rwsem.h>
+#include <linux/atomic.h>
 #include <linux/dm-io.h>
 
 struct diff_area;
@@ -111,19 +116,19 @@ unsigned long long chunk_calculate_optimal_size_shift(struct block_device *bdev)
 static inline
 void chunk_state_set(struct chunk* chunk, int st)
 {
-	atomic_or(&chunk->state, (1 << st));
+	atomic_or((1 << st), &chunk->state);
 };
 
 static inline
 void chunk_state_unset(struct chunk* chunk, int st)
 {
-	atomic_and(&chunk->state, ~(1 << st));
+	atomic_and(~(1 << st), &chunk->state);
 };
 
 static inline
 bool chunk_state_check(struct chunk* chunk, int st)
 {
-	return atomic_read(chunk->state) & (1 << st);
+	return atomic_read(&chunk->state) & (1 << st);
 };
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);

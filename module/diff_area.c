@@ -5,7 +5,6 @@
 #include "chunk.h"
 #include "diff_area.h"
 #include "diff_storage.h"
-#include <linux/uio.h>
 
 static inline 
 unsigned long chunk_size(struct diff_area *diff_area)

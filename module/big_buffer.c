@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "" ": " fmt
 
-#include <linux/mm.h>
+#include <linux/uaccess.h>
 #include "big_buffer.h"
 
 static inline size_t page_count_calc(size_t buffer_size)

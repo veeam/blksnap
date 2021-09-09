@@ -188,7 +188,7 @@ struct blk_snap_snapshot_append_storage {
 	__u32 range_count;
 	struct blk_snap_block_range *ranges;
 
-}
+};
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE - Append storage to difference
  * 	storage of snapshot.
@@ -270,7 +270,7 @@ struct blk_snap_event_low_free_space {
  */
 struct blk_snap_event_corrupted {
 	__u32 orig_dev_id;
-	__i32 errno;
+	__s32 errno;
 };
 /**
  * BLK_SNAP_EVENT_CORRUPTED - Snapshot image is corupted event.

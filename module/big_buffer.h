@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
+#include <linux/mm.h>
+#include <linux/slab.h>
 
 struct big_buffer {
 	size_t pg_cnt;

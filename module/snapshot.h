@@ -1,6 +1,17 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
+#include <linux/types.h>
+#include <linux/list.h>
+#include <linux/mm.h>
+#include <linux/kref.h>
+#include <linux/uuid.h>
+#include <linux/spinlock.h>
+#include <linux/rwsem.h>
+#include <linux/fs.h>
 
+struct tracker;
+struct diff_storage;
+struct snapimage;
 /**
  * struct snapshot - Snapshot structure.
  * @link:

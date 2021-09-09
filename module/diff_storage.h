@@ -73,12 +73,12 @@ void diff_storage_free(struct kref *kref);
 
 void diff_storage_get(struct diff_storage *diff_storage)
 {
-	kref_get(diff_storage->kref);
+	kref_get(&diff_storage->kref);
 };
 void diff_storage_put(struct diff_storage *diff_storage)
 {
 	if (likely(diff_storage))
-		kref_put(diff_storage->kref, diff_storage_free);
+		kref_put(&diff_storage->kref, diff_storage_free);
 };
 
 int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,

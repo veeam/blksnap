@@ -1,10 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
-#include "rangevector.h"
-#include "cbt_map.h"
-#include "snapstore_device.h"
-#include "blk_snap.h"
-#include "snapshot.h"
+#include <linux/kref.h>
+#include <linux/spinlock.h>
+#include <linux/rwsem.h>
+#include <linux/blkdev.h>
+#include <linux/fs.h>
+
+struct cbt_map;
+struct diff_area;
 
 /**
  * struct tracker - Tracker for block device.

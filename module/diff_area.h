@@ -1,10 +1,18 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
-#include "event_queue.h"
+#include <linux/mm.h>
+#include <linux/uio.h>
+#include <linux/kref.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
+#include <linux/blkdev.h>
+#include <linux/xarray.h>
 #include <linux/dm-io.h>
 
-struct dm_io_client;
+#include "event_queue.h"
+
 struct diff_storage;
+struct chunk;
 
 /**
  * struct diff_area - Discribes the difference area for one original device. 
@@ -94,21 +102,21 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage,
 void diff_area_free(struct kref *kref);
 static inline void diff_area_get(struct diff_area *diff_area)
 {
-	kref_get(diff_area->kref);
+	kref_get(&diff_area->kref);
 };
 static inline void diff_area_put(struct diff_area *diff_area)
 {
 	if (likely(diff_area))
-		kref_put(diff_area->kref, diff_area_free);
+		kref_put(&diff_area->kref, diff_area_free);
 };
+void diff_area_set_corrupted(struct diff_area *diff_area, int err_code);
 static inline bool diff_area_is_corrupted(struct diff_area *diff_area)
 {
 	return !!atomic_read(&diff_area->corrupted_flag);
 };
-int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count
+int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
                    bool is_nowait);
 
-struct chunk;
 /**
  * struct diff_area_image_ctx - The context for processing an io request to
  * 	the snapshot image.
