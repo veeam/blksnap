@@ -218,7 +218,7 @@ int chunk_load_orig(struct chunk *chunk)
  * chunk_load_diff() - Performs synchronous loading of a chunk from the
  * 	difference storage.
  */
-int chunc_load_diff(struct chunk *chunk)
+int chunk_load_diff(struct chunk *chunk)
 {
 	unsigned long sync_error_bits = 0;
 	struct dm_io_region region = {

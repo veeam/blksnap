@@ -135,6 +135,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
 void chunk_free(struct chunk *chunk);
 
 int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask);
+void chunk_free_buffer(struct chunk *chunk);
 
 /* Asynchronous operations are used to implement the COW algorithm. */
 int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn);
@@ -142,4 +143,4 @@ int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn);
 
 /* Synchronous operations are used to implement reading and writing to the snapshot image. */
 int chunk_load_orig(struct chunk *chunk);
-int chunc_load_diff(struct chunk *chunk);
+int chunk_load_diff(struct chunk *chunk);

@@ -8,7 +8,7 @@
 #include <linux/blkdev.h>
 #include <linux/xarray.h>
 #include <linux/dm-io.h>
-
+#include <linux/workqueue.h>
 #include "event_queue.h"
 
 struct diff_storage;
@@ -150,4 +150,4 @@ void diff_area_image_ctx_init(struct diff_area_image_ctx *io_ctx,
 };
 void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx);
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
-				struct bio_vec *bvec, sector_t *pos);
+				const struct bio_vec *bvec, sector_t *pos);
