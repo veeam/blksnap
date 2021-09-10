@@ -114,6 +114,11 @@ static inline bool diff_area_is_corrupted(struct diff_area *diff_area)
 {
 	return !!atomic_read(&diff_area->corrupted_flag);
 };
+static inline 
+sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
+{
+	return (sector_t)(1ULL << (diff_area->chunk_shift - SECTOR_SHIFT));
+};
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
                    bool is_nowait);
 

@@ -55,11 +55,3 @@ size_t cbt_map_blk_size(struct cbt_map *cbt_map)
 {
 	return 1 << (cbt_map->blk_size_shift + SECTOR_SHIFT);
 };
-
-#ifndef HAVE_BDEV_NR_SECTORS
-static inline
-sector_t bdev_nr_sectors(struct block_device *bdev)
-{
-	return i_size_read(bdev->bd_inode) >> 9;
-};
-#endif

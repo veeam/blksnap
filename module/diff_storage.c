@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define pr_fmt(fmt) KBUILD_MODNAME "-diff-storage" ": " fmt
-
+#define pr_fmt(fmt) KBUILD_MODNAME "-diff-storage: " fmt
+#include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -88,7 +88,7 @@ void diff_storage_free(struct kref *kref)
 	}
 
 	while ((storage_bdev = first_storage_bdev(diff_storage->storage_bdevs))) {
-		blkdev_put(storage_bdev->bdev);
+		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
 		list_del(storage_bdev);
 		kfree(storage_bdev);
 	}
@@ -113,36 +113,40 @@ struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage, 
 	return bdev;
 }
 
-int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
-                              sector_t sector, sector_t count)
+static inline 
+void int diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
+{
+	struct storage_bdev *storage_bdev;
+
+	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
+	if (IS_ERR(bdev)) {
+		pr_err("Failed to open device. errno=%ld\n", PTR_ERR(bdev));
+		return PTR_ERR(bdev);
+	}
+
+	storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
+	if (!storage_bdev) {
+		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+		return -NOMEM;
+	}
+
+	storage_bdev->bdev = bdev;
+	storage_bdev->dev_id = dev_id;
+	INIT_LIST_HEAD(&storage_bdev->link);
+
+	spin_lock(&diff_storage->lock);
+	list_add_tail(&storage_bdev->link, &diff_storage->storage_bdevs);
+	spin_unlock(&diff_storage->lock);	
+
+	return 0;
+}
+
+static inline 
+int diff_storage_add_range(struct diff_storage *diff_storage,
+                           struct block_device *bdev,
+                           sector_t sector, sector_t count)
 {
 	struct storage_block *storage_block;
-	struct block_device *bdev;
-
-	bdev = diff_storage_bdev_by_id(diff_storage, dev_id);
-	if (!bdev) {
-		struct storage_bdev *storage_bdev;
-
-		bdev = blkdev_get_by_dev(dev_id, 0, NULL);
-		if (IS_ERR(bdev)) {
-			pr_err("Failed to open device. errno=%ld\n", PTR_ERR(bdev));
-			return PTR_ERR(bdev);
-		}
-
-		storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
-		if (!storage_bdev) {
-			blkdev_put(bdev);
-			return -NOMEM;
-		}
-
-		storage_bdev->bdev = bdev;
-		storage_bdev->dev_id = dev_id;
-		INIT_LIST_HEAD(&storage_bdev->link);
-
-		spin_lock(&diff_storage->lock);
-		list_add_tail(&storage_bdev->link, &diff_storage->storage_bdevs);
-		spin_unlock(&diff_storage->lock);
-	}
 
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
@@ -159,9 +163,40 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	sectors_left = diff_storage->capacity - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
 
+	return 0;
+}
+
+int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
+                              struct big_buffer *ranges,
+                              unsigned int range_count)
+{
+	struct block_device *bdev;
+	struct blk_snap_block_range *range;
+
+	bdev = diff_storage_bdev_by_id(diff_storage, dev_id);
+	if (!bdev) {
+		ret = diff_storage_add_storage_bdev(diff_storage, dev_id);
+		if (ret)
+			return ret;
+	}
+
+	for (inx = 0, inx < range_count; inx++) {
+		range = big_buffer_get_element(ranges, inx, sizeof(*range));
+		if (unlikely(!range))
+			return -EINVAL;
+
+		ret = diff_storage_add_range(diff_storage, bdev,
+		                             range->sector_offset,
+		                             range->sector_count);
+		if (unlikely(ret))
+			return ret;
+	}
+
 	if (atomic_read(&diff_storage->low_space_flag) &&
 	    (diff_storage->capacity >= diff_storage->requested))
 		atomic_set(&diff_storage->low_space_flag, 0);
+
+	return 0;
 }
 
 struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sector_t count)

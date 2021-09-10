@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define pr_fmt(fmt) KBUILD_MODNAME "-snapimage" ": " fmt
-
+#define pr_fmt(fmt) KBUILD_MODNAME "-snapimage: " fmt
+#include <linux/module.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
 

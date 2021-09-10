@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
-#define pr_fmt(fmt) KBUILD_MODNAME "-chunk" ": " fmt
+#define pr_fmt(fmt) KBUILD_MODNAME "-chunk: " fmt
+#include <linux/dm-io.h>
 
 #include "chunk.h"
 #include "diff_area.h"
+#include "diff_storage.h"
 
 static inline
 struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
@@ -34,13 +36,15 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 			prev_page->next = buf->pages + inx;
 		prev_page = buf->pages + inx;
 	}
-	pr_debug("allocate %d pages\n", inx);
+	pr_debug("allocate %zd pages\n", inx);
+
+	return buf;
 }
 
 static inline
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
-	struct page_list *curr_page = diff_buffer.pages;
+	struct page_list *curr_page = diff_buffer->pages;
 	
 	while(curr_page) {
 		if (curr_page->page)
@@ -53,7 +57,6 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 {
-	int ret = 0;
 	struct chunk *chunk;
 
 	pr_debug("allocate chunk sz=%ld\n", sizeof(struct chunk));
@@ -61,7 +64,6 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	if (!chunk)
 		return NULL;
 
-	kref_init(&chunk->kref);
 	INIT_LIST_HEAD(&chunk->link);
 	init_rwsem(&chunk->lock);
 	chunk->diff_area = diff_area;
@@ -72,11 +74,11 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 
 void chunk_free(struct chunk *chunk)
 {
-	if (!chunk)
+	if (unlikely(!chunk))
 		return;
 
 	if (chunk->diff_buffer) 
-		diff_buffer_put(chunk->diff_buffer);
+		diff_buffer_free(chunk->diff_buffer);
 
 	if (chunk->diff_store)
 		kfree(chunk->diff_store);
@@ -108,7 +110,9 @@ int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 		pr_err("Failed allocate memory buffer for chunk");
 		return -ENOMEM;
 	}
-	chunk->diff_buffer = buf;	
+	chunk->diff_buffer = buf;
+
+	return 0;
 }
 
 /**
@@ -125,29 +129,32 @@ void chunk_free_buffer(struct chunk *chunk)
 	chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 }
 
+static inline
+struct page_list *chunk_first_page(struct chunk *chunk)
+{
+	return chunk->diff_buffer->pages;
+};
+
 /**
  * chunk_async_store_diff() - Starts asynchronous storing of a chunk to the
  *	difference storage.
  * 
  */
-int chunk_async_store_diff(struct chunk *chunk, io_notify_fn *fn)
+int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn)
 {
 	unsigned long sync_error_bits;
-	struct dm_io_region region;
-	struct dm_io_request reguest;
-
-	dm_io_region region = {
+	struct dm_io_region region = {
 		.bdev = chunk->diff_store->bdev,
 		.sector = chunk->diff_store->sector,
 		.count = chunk->sector_count,
 	};
-	dm_io_request reguest = {
+	struct dm_io_request reguest = {
 		.bi_op = REQ_OP_WRITE,
 		.bi_op_flags = 0,
 		.mem.type = DM_IO_PAGE_LIST,
 		.mem.offset = 0,
 		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = fn;
+		.notify.fn = fn,
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
@@ -159,13 +166,12 @@ int chunk_async_store_diff(struct chunk *chunk, io_notify_fn *fn)
  * chunk_asunc_load_orig() - Starts asynchronous loading of a chunk from 
  * 	the origian block device.
  */
-int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn *fn)
+int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn)
 {
 	unsigned long sync_error_bits;
 	struct dm_io_region region = {
 		.bdev = chunk->diff_area->orig_bdev,
-		.sector = (sector_t)chunk->number *
-			chunk_sectors(chunk->diff_area),
+		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
 	struct dm_io_request reguest = {
@@ -191,7 +197,7 @@ int chunk_load_orig(struct chunk *chunk)
 	unsigned long sync_error_bits = 0;
 	struct dm_io_region region = {
 		.bdev = chunk->diff_area->orig_bdev,
-		.sector = (sector_t)chunk->number * chunk_sectors(chunk->diff_area),
+		.sector = (sector_t)chunk->number * diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
 	struct dm_io_request reguest = {

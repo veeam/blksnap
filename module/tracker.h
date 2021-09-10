@@ -39,11 +39,6 @@ struct tracker {
 
 void tracker_free(struct kref *kref);
 static inline 
-void tracker_get(struct tracker *tracker);
-{
-	kref_get(&tracker->kref);
-};
-static inline 
 void tracker_put(struct tracker *tracker)
 {
 	if (likely(tracker))

@@ -136,17 +136,9 @@ void chunk_free(struct chunk *chunk);
 
 int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask);
 
-static inline
-void chunk_io_failed(struct chunk *chunk, int error)
-{
-	chunk_state_set(chunk, CHUNK_ST_FAILED);
-	diff_area_set_corrupted(chunk->diff_area, error);
-	pr_err("Failed to write chunk %lu\n", chunk->number);
-};
-
 /* Asynchronous operations are used to implement the COW algorithm. */
-int chunk_async_store_diff(struct chunk *chunk, io_notify_fn *fn);
-int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn *fn);
+int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn);
+int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn);
 
 /* Synchronous operations are used to implement reading and writing to the snapshot image. */
 int chunk_load_orig(struct chunk *chunk);

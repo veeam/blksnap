@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define pr_fmt(fmt) KBUILD_MODNAME "-snapshot" ": " fmt
-
+#define pr_fmt(fmt) KBUILD_MODNAME "-snapshot: " fmt
+#include <linux/module.h>
 #include "snapshot.h"
 #include "tracker.h"
 #include "snapimage.h"
@@ -248,16 +248,19 @@ int snapshot_destroy(uuid_t *id)
 	return 0;
 }
 
-int snapshot_append_storage(uuid_t *id, dev_t dev_id, sector_t sector, sector_t count)
+int snapshot_append_storage(uuid_t *id, dev_t dev_id,
+                            struct big_buffer *ranges, unsigned int range_count)
 {
 	int ret = 0;
 	struct snapshot *snapshot;
+	unsigned int inx;
 
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return -ESRCH;
 
-	ret = diff_storage_append_block(snapshot->diff_storage, dev_id, sector, count);
+	ret = diff_storage_append_block(snapshot->diff_storage, dev_id,
+	                                ranges, range_count);
 
 	snapshot_put(snapshot);
 	return ret;

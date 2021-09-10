@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0
-#define pr_fmt(fmt) KBUILD_MODNAME "-lpflt" ": " fmt
-
-#include "lp-filter.h"
-
+#define pr_fmt(fmt) KBUILD_MODNAME "-lpflt: " fmt
+#include <linux/module.h>
 #include <linux/livepatch.h>
+#include <linux/bio.h>
+#include <linux/genhd.h>
+#include <linux/blkdev.h>
+#include <linux/sched/mm.h>
+#include "lp_filter.h"
 
 /* The list of filters for this block device */
-static LIST_HEAD(bd_filters);
+static
+LIST_HEAD(bd_filters);
 
 /* Lock the queue of block device to add or delete filter. */
-static DEFINE_PERCPU_RWSEM(bd_filters_lock);
+DEFINE_PERCPU_RWSEM(bd_filters_lock);
 
 /**
  * filters_write_lock() - Locks the processing of I/O requests for block device.
@@ -21,6 +25,7 @@ static DEFINE_PERCPU_RWSEM(bd_filters_lock);
  * If successful, returns a pointer to the block device structure.
  * Returns an error code when an error occurs.
  */
+static inline 
 void filters_write_lock(void )
 {
 	percpu_down_write(&bd_filters_lock);
@@ -34,6 +39,7 @@ void filters_write_lock(void )
  *
  * The submit_bio_noacct() function can be continued.
  */
+static inline
 void filters_write_unlock(void )
 {
 	percpu_up_write(&bd_filters_lock);
@@ -84,11 +90,11 @@ int __filter_add(struct block_device *bdev,
 	flt->dev_id = bdev->bd_dev;
 #elif defined(HAVE_BI_BDISK)
 	flt->major = bdev->bd_disk->major;
-	flt->bi_partno = bdev->bi_partno;
+	flt->partno = bdev->bd_partno;
 #endif
 	flt->fops = fops;
 	flt->ctx = ctx;
-	list_add(&flt->list, &bdev->bd_filters);
+	list_add(&flt->list, &bd_filters);
 
 	return 0;
 }
@@ -184,7 +190,7 @@ void filters_read_unlock(void )
 }
 
 static inline
-bool filters_read_lock_for_bio(struct bio *bio)
+bool filters_read_lock_for_bio(const struct bio *bio)
 {
 	if (bio->bi_opf & REQ_NOWAIT)
 		return percpu_down_read_trylock(&bd_filters_lock);
@@ -194,17 +200,17 @@ bool filters_read_lock_for_bio(struct bio *bio)
 }
 
 static inline
-struct blk_filter *flt filter_find_by_bio(const struct bio *bio)
+struct blk_filter *filter_find_by_bio(struct bio *bio)
 {
 #if defined(HAVE_BI_BDEV)
 	return filter_find(bio->bi_bdev->bd_dev);
 #elif defined(HAVE_BI_BDISK)
-	return filter_find(bio->bi_bdisk->major, bio->bi_partno);
+	return filter_find(bio->bi_disk->major, bio->bi_partno);
 #endif
 }
 
 static
-int filters_apply(const struct bio *bio)
+int filters_apply(struct bio *bio)
 {
 	struct blk_filter *flt;
 	int status;
@@ -225,6 +231,12 @@ int filters_apply(const struct bio *bio)
 
 #ifndef HAVE_SUBMIT_BIO_NOACCT
 #error "Your kernel is too old for "KBUILD_MODNAME"."
+#endif
+
+#ifdef CONFIG_X86
+#define CALL_INSTRUCTION_LENGTH	5
+#else
+#pragma error "Current CPU is not supported yet"
 #endif
 
 static

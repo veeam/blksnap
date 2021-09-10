@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define pr_fmt(fmt) KBUILD_MODNAME "-sysfs" ": " fmt
-
+#define pr_fmt(fmt) KBUILD_MODNAME "-sysfs: " fmt
+#include <linux/module.h>
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 #include <linux/class.h>

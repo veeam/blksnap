@@ -2,7 +2,8 @@
 #pragma once
 #include <linux/blk_types.h>
 #include <linux/blkdev.h>
-#include <linux/gendisk.h>
+#include <linux/blk-mq.h>
+#include <linux/genhd.h>
 
 struct diff_area;
 struct cbt_map;

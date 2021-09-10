@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
-#define pr_fmt(fmt) KBUILD_MODNAME "-tracker" ": " fmt
-
+#define pr_fmt(fmt) KBUILD_MODNAME "-tracker: " fmt
+#include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/blk-mq.h>
 
@@ -9,6 +9,13 @@
 #include "cbt_map.h"
 #include "blk_snap.h"
 
+#ifndef HAVE_BDEV_NR_SECTORS
+static inline
+sector_t bdev_nr_sectors(struct block_device *bdev)
+{
+	return i_size_read(bdev->bd_inode) >> 9;
+};
+#endif
 
 LIST_HEAD(trackers);
 DEFINE_RWLOCK(trackers_lock);
@@ -42,7 +49,7 @@ struct tracker *tracker_get_by_dev_id(dev_t dev_id)
 	
 	list_for_each_entry(tracker, &trackers, list) {
 		if (tracker->dev_id == dev_id) {
-			tracker_get(tracker);
+			kref_get(&tracker->kref);
 			result = tracker;
 			break;
 		}
