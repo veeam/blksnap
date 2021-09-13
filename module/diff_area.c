@@ -556,6 +556,6 @@ void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 		pr_err("Set snapshot device is corrupted for [%d:%d] with error code %d.\n",
 		       MAJOR(data.orig_dev_id),
 		       MINOR(data.orig_dev_id),
-		       data.errno);
+		       abs(data.errno));
 	}
 }

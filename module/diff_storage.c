@@ -5,6 +5,7 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
+#include "blk_snap.h"
 #include "params.h"
 #include "chunk.h"
 #include "diff_storage.h"
@@ -17,7 +18,7 @@ struct storage_bdev
 	struct list_head link;
 	dev_t dev_id;
 	struct block_device *bdev;
-}
+};
 
 /**
  * struct storage_block - A storage unit reserved for storing differences.
@@ -30,7 +31,7 @@ struct storage_block
 	sector_t sector;
 	sector_t count;
 	sector_t used;
-}
+};
 
 struct diff_storage *diff_storage_new(void)
 {
@@ -41,7 +42,7 @@ struct diff_storage *diff_storage_new(void)
 		return NULL;
 
 	spin_lock_init(&diff_storage->lock);
-	INIT_LIST_HEAD(&diff_storage->bdevs);
+	INIT_LIST_HEAD(&diff_storage->storage_bdevs);
 	INIT_LIST_HEAD(&diff_storage->empty_blocks);
 	INIT_LIST_HEAD(&diff_storage->filled_blocks);
 
@@ -78,18 +79,18 @@ void diff_storage_free(struct kref *kref)
 	struct storage_bdev *storage_bdev;
 
 	while ((blk = first_empty_storage_block(diff_storage))) {
-		list_del(blk);
+		list_del(&blk->link);
 		kfree(blk);
 	}
 
 	while ((blk = first_filled_storage_block(diff_storage))) {
-		list_del(blk);
+		list_del(&blk->link);
 		kfree(blk);
 	}
 
-	while ((storage_bdev = first_storage_bdev(diff_storage->storage_bdevs))) {
+	while ((storage_bdev = first_storage_bdev(diff_storage))) {
 		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
-		list_del(storage_bdev);
+		list_del(&storage_bdev->link);
 		kfree(storage_bdev);
 	}
 
@@ -98,7 +99,7 @@ void diff_storage_free(struct kref *kref)
 
 struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
 {
-	struct block-device *bdev = NULL;
+	struct block_device *bdev = NULL;
 	struct storage_bdev *storage_bdev;
 
 	spin_lock(&diff_storage->lock);
@@ -114,20 +115,22 @@ struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage, 
 }
 
 static inline 
-void int diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
+struct block_device *diff_storage_add_storage_bdev(struct diff_storage *diff_storage,
+						   dev_t dev_id)
 {
+	struct block_device *bdev;
 	struct storage_bdev *storage_bdev;
 
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 	if (IS_ERR(bdev)) {
 		pr_err("Failed to open device. errno=%ld\n", PTR_ERR(bdev));
-		return PTR_ERR(bdev);
+		return bdev;
 	}
 
 	storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
 	if (!storage_bdev) {
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
-		return -NOMEM;
+		return ERR_PTR(-ENOMEM);
 	}
 
 	storage_bdev->bdev = bdev;
@@ -138,7 +141,7 @@ void int diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t 
 	list_add_tail(&storage_bdev->link, &diff_storage->storage_bdevs);
 	spin_unlock(&diff_storage->lock);	
 
-	return 0;
+	return bdev;
 }
 
 static inline 
@@ -160,7 +163,6 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 	spin_lock(&diff_storage->lock);
 	list_add_tail(&storage_block->link, &diff_storage->empty_blocks);
 	diff_storage->capacity += count;
-	sectors_left = diff_storage->capacity - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
 
 	return 0;
@@ -170,18 +172,21 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
                               struct big_buffer *ranges,
                               unsigned int range_count)
 {
+	int ret;
+	int inx;
 	struct block_device *bdev;
 	struct blk_snap_block_range *range;
 
 	bdev = diff_storage_bdev_by_id(diff_storage, dev_id);
 	if (!bdev) {
-		ret = diff_storage_add_storage_bdev(diff_storage, dev_id);
-		if (ret)
-			return ret;
+		bdev = diff_storage_add_storage_bdev(diff_storage, dev_id);
+		if (IS_ERR(bdev))
+			return PTR_ERR(bdev);
 	}
 
-	for (inx = 0, inx < range_count; inx++) {
-		range = big_buffer_get_element(ranges, inx, sizeof(*range));
+	for (inx = 0; inx < range_count; inx++) {
+		range = big_buffer_get_element(ranges, inx,
+					sizeof(struct blk_snap_block_range));
 		if (unlikely(!range))
 			return -EINVAL;
 
@@ -206,7 +211,7 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	struct storage_block *storage_block;
 	sector_t sectors_left;
 
-	if (atomic_read(&diff_storage->overflow))
+	if (atomic_read(&diff_storage->overflow_flag))
 		return ERR_PTR(-ENOSPC);
 
 	diff_store = kzalloc(sizeof(struct diff_store), GFP_KERNEL);
@@ -255,15 +260,15 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	}
 
 	if ((sectors_left <= (diff_storage_minimum >> SECTOR_SHIFT)) &&
-	    (atomic_inc_return(diff_storage->low_space_flag) == 1)) {
+	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
 		struct blk_snap_event_low_free_space data = {
-			.requested_nr_sect = diff_storage_minimum >> SECTOR_SHIFT;
+			.requested_nr_sect = diff_storage_minimum >> SECTOR_SHIFT
 		};
 
 		diff_storage->requested += data.requested_nr_sect;
 		event_gen(&diff_storage->event_queue, GFP_NOIO, 
 			BLK_SNAP_EVENT_LOW_FREE_SPACE,
-			data, sizeof(data));
+			&data, sizeof(data));
 	}
 
 	return diff_store;
