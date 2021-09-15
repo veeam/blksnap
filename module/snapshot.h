@@ -46,10 +46,10 @@ struct snapshot {
 	struct diff_storage *diff_storage;
 
 	int count;
-	struct tracker *tracker_array;
-	struct snapimage *snapimage_array;
+	struct tracker **tracker_array;
+	struct snapimage **snapimage_array;
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-	struct super_block *superblock_array;
+	struct super_block **superblock_array;
 #endif
 };
 

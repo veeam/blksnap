@@ -63,7 +63,7 @@ int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const 
 	kfree(data);
 	return ret;
 }
-
+*/
 struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_ms)
 {
 	int ret;
@@ -84,4 +84,4 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 
 	return event;
 }
-*/
+

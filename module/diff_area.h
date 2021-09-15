@@ -97,8 +97,7 @@ struct diff_area {
 	atomic_t corrupted_flag;
 };
 
-struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage,
-                                struct event_queue *event_queue);
+struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage);
 void diff_area_free(struct kref *kref);
 static inline
 void diff_area_get(struct diff_area *diff_area)

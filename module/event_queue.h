@@ -35,5 +35,5 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 /*
 int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code,
 		  const char *fmt, ...);
-struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_ms);
 */
+struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_ms);

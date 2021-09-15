@@ -342,6 +342,7 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 	}
 	memcpy(karg->data, event->data,
 	       min_t(size_t, event->data_size, PAGE_SIZE - sizeof(karg)));
+	kfree(event);
 
 	if (copy_to_user((void *)arg, karg, PAGE_SIZE)) {
 		pr_err("Unable to get snapstore error code: invalid user buffer\n");
@@ -373,7 +374,8 @@ int ioctl_snapshot_collect_images(unsigned long arg)
 	return ret;
 }
 
-static int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
+static
+int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_version,
 	ioctl_tracker_remove,
 	ioctl_tracker_collect,

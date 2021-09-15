@@ -4,7 +4,8 @@
 #include <linux/uaccess.h>
 #include "big_buffer.h"
 
-static inline size_t page_count_calc(size_t buffer_size)
+static inline
+size_t page_count_calc(size_t buffer_size)
 {
 	size_t page_count = buffer_size / PAGE_SIZE;
 

@@ -13,7 +13,7 @@
 
 #ifdef HAVE_LP_FILTER
 #pragma message ("Have livepatch filter")
-
+#endif
 #ifdef HAVE_SUBMIT_BIO_NOACCT
 #pragma message ("The submit_bio_noacct() function was found.")
 #endif
@@ -29,10 +29,12 @@
 #ifdef HAVE_BDEV_NR_SECTORS
 #pragma message ("The bdev_nr_sectors() function was found.")
 #endif
-
+#ifdef HAVE_BLK_MQ_ALLOC_DISK
+#pragma message ("The blk_mq_alloc_disk() function was found.")
 #endif
 
-static int __init blk_snap_init(void)
+static
+int __init blk_snap_init(void)
 {
 	int result;
 
@@ -60,7 +62,8 @@ static int __init blk_snap_init(void)
  * Before unload module livepatch should be detached.
  * echo 0 > /sys/kernel/livepatch/blk_snap_lp/enabled
  */
-static void __exit blk_snap_exit(void)
+static
+void __exit blk_snap_exit(void)
 {
 	pr_info("Unloading module\n");
 

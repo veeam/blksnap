@@ -21,6 +21,9 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
 		echo -DHAVE_BDEV_NR_SECTORS)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
+		echo -DHAVE_BLK_MQ_ALLOC_DISK)
 
 # The power of 2 for minimum trackings block size.
 # The minimum tracking block size by default is 64 KB (shift 16)

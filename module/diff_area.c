@@ -220,7 +220,7 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 	}
 }
 
-struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage, struct event_queue *event_queue)
+struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 {
 	int ret = 0;
 	struct diff_area *diff_area = NULL;
