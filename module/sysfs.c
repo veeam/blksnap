@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-sysfs: " fmt
-#include <linux/module.h>
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
-#include <linux/class.h>
+#include <linux/device/class.h>
 #include <linux/device.h>
 
 #include "sysfs.h"
@@ -35,7 +34,7 @@ int sysfs_init(void)
 	if (IS_ERR(blk_snap_class)) {
 		res = PTR_ERR(blk_snap_class);
 
-		pr_err("Bad class create. errno=%d\n", res);
+		pr_err("Bad class create. errno=%d\n", abs(res));
 		return res;
 	}
 
@@ -53,7 +52,7 @@ int sysfs_init(void)
 			    MODULE_NAME);
 	if (IS_ERR(dev)) {
 		res = PTR_ERR(dev);
-		pr_err("Failed to create device, errno=%d\n", res);
+		pr_err("Failed to create device, errno=%d\n", abs(res));
 
 		class_remove_file(blk_snap_class, &class_attr_major);
 		class_destroy(blk_snap_class);

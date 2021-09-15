@@ -57,7 +57,7 @@ struct blk_filter *filter_find(int major, int partno)
 	if (list_empty(&bd_filters))
 		return NULL;
 	
-	list_for_each_entry(flt, &bd_filters, list) {
+	list_for_each_entry(flt, &bd_filters, link) {
 #if defined(HAVE_BI_BDEV)
 		if (dev_id == flt->dev_id)
 			return flt;
@@ -94,7 +94,7 @@ int __filter_add(struct block_device *bdev,
 #endif
 	flt->fops = fops;
 	flt->ctx = ctx;
-	list_add(&flt->list, &bd_filters);
+	list_add(&flt->link, &bd_filters);
 
 	return 0;
 }
@@ -145,7 +145,7 @@ int __filter_del(struct block_device *bdev)
 
 	if (flt->fops->detach_cb)
 		flt->fops->detach_cb(flt->ctx);
-	list_del(&flt->list);
+	list_del(&flt->link);
 	kfree(flt);
 
 	return 0;

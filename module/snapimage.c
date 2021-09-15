@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapimage: " fmt
-#include <linux/module.h>
+#include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
 
@@ -75,6 +75,9 @@ void snapimage_free(struct snapimage *image)
 {
 	pr_info("Snapshot image disk delete\n");
 
+	diff_area_put(snapimage->diff_area);
+	cbt_map_out(snapimage->cbt_map);
+
 	del_gendisk(image->disk);
 	blk_cleanup_disk(image->disk);
 	blk_mq_free_tag_set(&image.tag_set);
@@ -108,7 +111,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	int minor;
 
-	pr_info("Create snapshot image for device [%d:%d]\n",
+	pr_info("Create snapshot image for device [%u:%u]\n",
 	        MAJOR(diff_area->orig_bdev->bd_dev),
 	        MINOR(diff_area->orig_bdev->bd_dev));
 
@@ -126,13 +129,13 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	if (minor < 0) {
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
-		       minor);
+		       abs(minor));
 		goto fail_;
 	}
 
 	snapimage->capacity = cbt_map->device_capacity;
 	snapimage->image_dev_id = MKDEV(snapimage_major, minor);
-	pr_info("Snapshot image device id [%d:%d]\n",
+	pr_info("Snapshot image device id [%u:%u]\n",
 	        MAJOR(snapimage->image_dev_id),
 	        MINOR(snapimage->image_dev_id));
 
@@ -202,7 +205,7 @@ int snapimage_init(void)
 
 	major = register_blkdev(snapimage_major, SNAPIMAGE_NAME);
 	if (major < 0) {
-		pr_err("Failed to register snapshot image block device. errno=%d\n", res);
+		pr_err("Failed to register snapshot image block device. errno=%d\n", abs(res));
 		bitmap_free(snapimage_minors);
 		return res;
 	}

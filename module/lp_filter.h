@@ -19,7 +19,7 @@ struct filter_operations {
 };
 
 struct blk_filter {
-	struct list_head list;
+	struct list_head link;
 #if defined(HAVE_BI_BDEV)
 	dev_t	dev_id;
 #elif defined(HAVE_BI_BDISK)

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-cbt_map: " fmt
-#include <linux/module.h>
+#include <linux/slab.h>
 #include "cbt_map.h"
 #include "params.h"
 
@@ -146,7 +146,7 @@ void _cbt_map_destroy_cb(struct kref *kref)
 	cbt_map_destroy(container_of(kref, struct cbt_map, kref));
 }
 
-struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map)
+struct cbt_map *cbt_map_get(struct cbt_map *cbt_map)
 {
 	if (cbt_map)
 		kref_get(&cbt_map->kref);
@@ -154,7 +154,7 @@ struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map)
 	return cbt_map;
 }
 
-void cbt_map_put_resource(struct cbt_map *cbt_map)
+void cbt_map_put(struct cbt_map *cbt_map)
 {
 	if (likely(cbt_map))
 		kref_put(&cbt_map->kref, _cbt_map_destroy_cb);

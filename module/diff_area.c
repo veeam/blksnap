@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-area: " fmt
-#include <linux/module.h>
 #include <linux/genhd.h>
-
+#include <linux/slab.h>
 #include "params.h"
 #include "blk_snap.h"
 #include "chunk.h"
@@ -230,7 +229,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage,
 	unsigned long number;
 	struct chunk *chunk;
 
-	pr_info("Open device [%d:%d]\n", MAJOR(dev_id), MINOR(dev_id));
+	pr_info("Open device [%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
 
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 	if (IS_ERR(bdev)) {
@@ -553,7 +552,7 @@ void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 			BLK_SNAP_EVENT_CORRUPTED,
 			&data, sizeof(data));
 
-		pr_err("Set snapshot device is corrupted for [%d:%d] with error code %d.\n",
+		pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
 		       MAJOR(data.orig_dev_id),
 		       MINOR(data.orig_dev_id),
 		       abs(data.errno));

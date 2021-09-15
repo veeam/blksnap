@@ -3,12 +3,13 @@
 
 $(KERNEL_MODULE_NAME)-y += lp_filter.o
 
-EXTRA_CFLAGS += "-DMOD_NAME=\"lp\""
+EXTRA_CFLAGS += "-DMOD_NAME=\"lp\" "
+EXTRA_CFLAGS += "-DHAVE_LP_FILTER "
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&&	\
 		echo -DHAVE_SUBMIT_BIO_NOACCT)
 EXTRA_CFLAGS += $(shell 							\
-	grep -qw "struct super_block *freeze_bdev;"				\
+	grep -qw "struct super_block \*freeze_bdev"				\
 		$(srctree)/include/linux/blkdev.h &&				\
 		echo -DHAVE_SUPER_BLOCK_FREEZE)
 EXTRA_CFLAGS += $(shell 							\
@@ -18,7 +19,7 @@ EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -DHAVE_BI_BDISK)
 EXTRA_CFLAGS += $(shell 							\
-	grep -qw "*bdev_nr_sectors;" $(srctree)/include/linux/genhd.h &&	\
+	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
 		echo -DHAVE_BDEV_NR_SECTORS)
 
 # The power of 2 for minimum trackings block size.

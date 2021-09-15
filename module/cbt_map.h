@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 #include <linux/kernel.h>
-#include <linux/mm.h>
 #include <linux/kref.h>
 #include <linux/uuid.h>
 #include <linux/spinlock.h>
@@ -38,8 +37,8 @@ struct cbt_map {
 struct cbt_map *cbt_map_create(struct block_device* bdev);
 int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity);
 
-struct cbt_map *cbt_map_get_resource(struct cbt_map *cbt_map);
-void cbt_map_put_resource(struct cbt_map *cbt_map);
+struct cbt_map *cbt_map_get(struct cbt_map *cbt_map);
+void cbt_map_put(struct cbt_map *cbt_map);
 
 void cbt_map_switch(struct cbt_map *cbt_map);
 int cbt_map_set(struct cbt_map *cbt_map,

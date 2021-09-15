@@ -2,7 +2,6 @@
 #pragma once
 #include <linux/blk_types.h>
 #include <linux/blkdev.h>
-#include <linux/mm.h>
 #include <linux/rwsem.h>
 #include <linux/atomic.h>
 #include <linux/dm-io.h>

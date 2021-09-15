@@ -7,12 +7,12 @@ $(KERNEL_MODULE_NAME)-y += chunk.o
 $(KERNEL_MODULE_NAME)-y += ctrl.o
 $(KERNEL_MODULE_NAME)-y += diff_area.o
 $(KERNEL_MODULE_NAME)-y += diff_storage.o
-# $(KERNEL_MODULE_NAME)-y += event_queue.o
-# $(KERNEL_MODULE_NAME)-y += main.o
+$(KERNEL_MODULE_NAME)-y += event_queue.o
+$(KERNEL_MODULE_NAME)-y += main.o
 # $(KERNEL_MODULE_NAME)-y += snapimage.o
 # $(KERNEL_MODULE_NAME)-y += snapshot.o
-# $(KERNEL_MODULE_NAME)-y += sysfs.o
-# $(KERNEL_MODULE_NAME)-y += tracker.o
+$(KERNEL_MODULE_NAME)-y += sysfs.o
+$(KERNEL_MODULE_NAME)-y += tracker.o
 
 # for upstream, we don't need any addition makefiles,
 # but for a standalone module the configuration is necessary

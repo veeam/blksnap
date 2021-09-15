@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapshot: " fmt
-#include <linux/module.h>
+#include <linux/slab.h>
 #include "snapshot.h"
 #include "tracker.h"
 #include "snapimage.h"
@@ -34,7 +34,7 @@ static void snapshot_release(struct snapshot *snapshot)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &snapshot->superblock_array[inx]);
 #else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to freeze device [%d:%d]\n",
+			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
@@ -53,7 +53,7 @@ static void snapshot_release(struct snapshot *snapshot)
 		_thaw_bdev(tracker->diff_area->orig_bdev, snapshot->superblock_array[inx]);
 #else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to thaw device [%d:%d]\n",
+			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
@@ -146,7 +146,7 @@ void snapshot_done(void)
 
 	pr_info("Removing all snapshots\n");
 	down_write(&snapshots_lock);
-	while((snap = list_first_entry_or_null(snapshots, struct snapshot, list))) {
+	while((snap = list_first_entry_or_null(snapshots, struct snapshot, link))) {
 		list_del(&snapshot->link);
 		snapshot_put(snapshot);
 	}
@@ -161,7 +161,7 @@ int snapshot_create(dev_t *dev_id_array, unsigned int count, uuid_t *id)
 
 	pr_info("Create snapshot for devices:\n");
 	for (inx = 0; inx < count; ++inx)
-		pr_info("\t%d:%d\n", MAJOR(dev_id_array[inx]), MINOR(dev_id_array[inx]));
+		pr_info("\t%u:%u\n", MAJOR(dev_id_array[inx]), MINOR(dev_id_array[inx]));
 
 	snapshot = snapshot_new(count);
 	if (IS_ERR(snapshot)) {
@@ -176,7 +176,7 @@ int snapshot_create(dev_t *dev_id_array, unsigned int count, uuid_t *id)
 		tracker = tracker_create_or_get(dev_id_array[inx]);
 		if (IS_ERR(tracker)){
 			pr_err("Unable to create snapshot\n");
-			pr_err("Failed to add device [%d:%d] to snapshot tracking\n",
+			pr_err("Failed to add device [%u:%u] to snapshot tracking\n",
 			       MAJOR(dev_id_array[inx]), MINOR(dev_id_array[inx]));
 			ret = PTR_ERR(tracker);
 			goto fail;
@@ -292,7 +292,6 @@ int snapshot_take(uuid_t *id)
 			ret = PTR_ERR(diff_area);
 			goto fail;
 		}
-
 		tracker->diff_area = diff_area;
 	}
 
@@ -307,7 +306,7 @@ int snapshot_take(uuid_t *id)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &snapshot->superblock_array[inx]);
 #else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to freeze device [%d:%d]\n",
+			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
@@ -336,7 +335,7 @@ int snapshot_take(uuid_t *id)
 		_thaw_bdev(tracker->diff_area->orig_bdev, snapshot->superblock_array[inx]);
 #else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to thaw device [%d:%d]\n",
+			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
@@ -352,7 +351,7 @@ int snapshot_take(uuid_t *id)
 			continue;
 
 		if (diff_area_is_corrupted(tracker->diff_area)) {
-			pr_err("Unable to freeze devices [%d:%d]: diff area is corrupted\n",
+			pr_err("Unable to freeze devices [%u:%u]: diff area is corrupted\n",
 			       MAJOR(dev_id), MINOR(dev_id));
 			ret = -EFAULT;
 			goto fail;
@@ -367,7 +366,7 @@ int snapshot_take(uuid_t *id)
 		snapimage = snapimage_create(tracker->diff_area, tracker->cbt_map);
 		if (IS_ERR(snapimage)) {
 			ret = PTR_ERR(snapimage);
-			pr_err("Failed to create snapshot image for device [%d:%d] with error=%d\n",
+			pr_err("Failed to create snapshot image for device [%u:%u] with error=%d\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id), ret);
 			break;
 		}

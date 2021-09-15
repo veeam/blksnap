@@ -1,19 +1,36 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
-//#include <linux/blk_types.h>
-//#include <linux/blkdev.h>
-//#include <linux/mm.h>
-//#include <linux/rwsem.h>
-//#include <linux/atomic.h>
 
 #include "version.h"
 #include "params.h"
+#include "blk_snap.h"
 #include "ctrl.h"
 #include "sysfs.h"
 #include "snapimage.h"
 #include "snapshot.h"
 #include "tracker.h"
+
+#ifdef HAVE_LP_FILTER
+#pragma message ("Have livepatch filter")
+
+#ifdef HAVE_SUBMIT_BIO_NOACCT
+#pragma message ("The submit_bio_noacct() function was found.")
+#endif
+#ifdef HAVE_SUPER_BLOCK_FREEZE
+#pragma message ("The freeze_bdev() and thaw_bdev() have struct super_block.")
+#endif
+#ifdef HAVE_BI_BDEV
+#pragma message ("The struct bio have pointer to struct block_device.")
+#endif
+#ifdef HAVE_BI_BDISK
+#pragma message ("The struct bio have pointer to struct gendisk.")
+#endif
+#ifdef HAVE_BDEV_NR_SECTORS
+#pragma message ("The bdev_nr_sectors() function was found.")
+#endif
+
+#endif
 
 static int __init blk_snap_init(void)
 {
@@ -21,20 +38,19 @@ static int __init blk_snap_init(void)
 
 	pr_info("Loading\n");
 
-	result = ctrl_init();
-	if (result)
-		return result;
-
 	result = snapimage_init();
 	if (result)
 		return result;
 
-	result = sysfs_init();
+	result = tracker_init();
 	if (result)
 		return result;
 
-	result = tracker_init();
+	result = ctrl_init();
+	if (result)
+		return result;
 
+	result = sysfs_init();
 	return result;
 }
 
@@ -48,10 +64,9 @@ static void __exit blk_snap_exit(void)
 {
 	pr_info("Unloading module\n");
 
-	tracker_done();
 	snapshot_done();
-	snapstore_done();
 	snapimage_done();
+	tracker_done();
 
 	sysfs_done();
 	ctrl_done();

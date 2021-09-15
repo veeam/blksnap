@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-event_queue: " fmt
-#include <linux/module.h>
-#include <linux/mm.h>
+#include <linux/slab.h>
+#include <linux/sched.h>
 #include "event_queue.h"
 
 void event_queue_init(struct event_queue *event_queue)
@@ -29,7 +29,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 	struct event *event;
 
 	event = kzalloc(sizeof(struct event) + data_size, flags);
-	if (!ev)
+	if (!event)
 		return -ENOMEM;
 
 	event->time = ktime_get();
@@ -41,24 +41,25 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 	spin_unlock(&event_queue->lock);
 
 	wake_up(&event_queue->wq_head);
-
+	return 0;
 }
-
+/*
 int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const char *fmt, ...)
 {
 	va_list args;
+	int ret;
 	char *data;
 	int data_size = PAGE_SIZE - sizeof(struct event);
 
 	data = kzalloc(data_size, flags);
-	if (!ev)
+	if (!data)
 		return -ENOMEM;
 
 	va_start(args, fmt);
 	data_size = vsnprintf(data, data_size, fmt, args);
 	va_end(args);
 
-	ret = event_gen(snapshot, flags, code, data, data_size);
+	ret = event_gen(event_queue, flags, code, data, data_size);
 	kfree(data);
 	return ret;
 }
@@ -69,8 +70,8 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 	struct event *event;
 
 	ret = wait_event_interruptible_timeout(
-		&event_queue->wq_head,
-		!list_empty(&event_queue->list),
+		event_queue->wq_head,
+		(!list_empty(&event_queue->list)),
 		timeout_ms);
 
 	if (ret)
@@ -78,8 +79,9 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 
 	spin_lock(&event_queue->lock);
 	event = list_first_entry(&event_queue->list, struct event, link);
-	list_del(event);
+	list_del(&event->link);
 	spin_unlock(&event_queue->lock);
 
 	return event;
 }
+*/

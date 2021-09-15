@@ -4,7 +4,7 @@
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>
-#include <linux/mm.h>
+#include <linux/slab.h>
 
 #include "ctrl.h"
 #include "blk_snap.h"
@@ -55,7 +55,7 @@ int ctrl_init(void)
 
 	ret = register_chrdev(0, MODULE_NAME, &ctrl_fops);
 	if (ret < 0) {
-		pr_err("Failed to register a character device. errno=%d\n", blk_snap_major);
+		pr_err("Failed to register a character device. errno=%d\n", abs(blk_snap_major));
 		return ret;
 	}
 
@@ -129,7 +129,7 @@ int ioctl_tracker_collect(unsigned long arg)
 		 */ 
 		res = tracker_collect(0, NULL, &karg.count);
 		if (res) {
-			pr_err("Failed to execute tracker_collect. errno=%d\n", res);
+			pr_err("Failed to execute tracker_collect. errno=%d\n", abs(res));
 			return res;
 		}
 		if (copy_to_user((void *)arg, (void *)&karg, sizeof(karg))) {
@@ -145,7 +145,7 @@ int ioctl_tracker_collect(unsigned long arg)
 
 	res = tracker_collect(karg.count, cbt_info, &karg.count);
 	if (res) {
-		pr_err("Failed to execute tracker_collect. errno=%d\n", res);
+		pr_err("Failed to execute tracker_collect. errno=%d\n", abs(res));
 		goto fail;
 	}
 

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
-#include <linux/mm.h>
+#include <linux/slab.h>
 #include <linux/uio.h>
 #include <linux/kref.h>
 #include <linux/list.h>
@@ -100,17 +100,20 @@ struct diff_area {
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage,
                                 struct event_queue *event_queue);
 void diff_area_free(struct kref *kref);
-static inline void diff_area_get(struct diff_area *diff_area)
+static inline
+void diff_area_get(struct diff_area *diff_area)
 {
 	kref_get(&diff_area->kref);
 };
-static inline void diff_area_put(struct diff_area *diff_area)
+static inline
+void diff_area_put(struct diff_area *diff_area)
 {
 	if (likely(diff_area))
 		kref_put(&diff_area->kref, diff_area_free);
 };
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code);
-static inline bool diff_area_is_corrupted(struct diff_area *diff_area)
+static inline
+bool diff_area_is_corrupted(struct diff_area *diff_area)
 {
 	return !!atomic_read(&diff_area->corrupted_flag);
 };
