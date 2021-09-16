@@ -82,10 +82,11 @@ void snapshot_free(struct kref *kref)
 		tracker_put(tracker);
 	}
 
-	kfree(snapshot->superblock_array);
 	kfree(snapshot->snapimage_array);
 	kfree(snapshot->tracker_array);
-
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	kfree(snapshot->superblock_array);
+#endif
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);	
