@@ -74,14 +74,20 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 		(!list_empty(&event_queue->list)),
 		timeout_ms);
 
-	if (ret)
-		return ERR_PTR(ret);
+	if (ret == 1) {
+		spin_lock(&event_queue->lock);
+		event = list_first_entry(&event_queue->list, struct event, link);
+		list_del(&event->link);
+		spin_unlock(&event_queue->lock);
 
-	spin_lock(&event_queue->lock);
-	event = list_first_entry(&event_queue->list, struct event, link);
-	list_del(&event->link);
-	spin_unlock(&event_queue->lock);
+		return event;
+	}
+	if (ret == 0)
+		return ERR_PTR(-ENOENT);
 
-	return event;
+	if (ret == -ERESTARTSYS)
+		return ERR_PTR(-EINTR);
+
+	return ERR_PTR(ret);
 }
 

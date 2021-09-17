@@ -69,7 +69,7 @@ void ctrl_done(void)
 	unregister_chrdev(blk_snap_major, MODULE_NAME);
 }
 
-static 
+static
 int ctrl_open(struct inode *inode, struct file *fl)
 {
 	if (try_module_get(THIS_MODULE))
@@ -77,15 +77,15 @@ int ctrl_open(struct inode *inode, struct file *fl)
 	return -EINVAL;
 }
 
-static 
+static
 int ctrl_release(struct inode *inode, struct file *fl)
 {
 	module_put(THIS_MODULE);
-	
+
 	return 0;
 }
 
-static 
+static
 int ioctl_version(unsigned long arg)
 {
 	if (copy_to_user((void *)arg, &version, sizeof(version))) {
@@ -96,7 +96,7 @@ int ioctl_version(unsigned long arg)
 	return 0;
 }
 
-static 
+static
 int ioctl_tracker_remove(unsigned long arg)
 {
 	struct blk_snap_tracker_remove karg;
@@ -108,7 +108,7 @@ int ioctl_tracker_remove(unsigned long arg)
 	return tracker_remove((dev_t)karg.dev_id);
 }
 
-static 
+static
 int ioctl_tracker_collect(unsigned long arg)
 {
 	int res;
@@ -126,7 +126,7 @@ int ioctl_tracker_collect(unsigned long arg)
 		/*
 		 * If the buffer is empty, this is a request to determine
 		 * the number of trackers.
-		 */ 
+		 */
 		res = tracker_collect(0, NULL, &karg.count);
 		if (res) {
 			pr_err("Failed to execute tracker_collect. errno=%d\n", abs(res));
@@ -165,7 +165,7 @@ fail:
 	return res;
 }
 
-static 
+static
 int ioctl_tracker_read_cbt_map(unsigned long arg)
 {
 	struct blk_snap_tracker_read_cbt_bitmap karg;
@@ -179,7 +179,7 @@ int ioctl_tracker_read_cbt_map(unsigned long arg)
 					(char __user*)karg.buff);
 }
 
-static 
+static
 int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 {
 	int ret = 0;
@@ -209,7 +209,7 @@ int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 	return ret;
 }
 
-static 
+static
 int ioctl_snapshot_create(unsigned long arg)
 {
 	int ret;
@@ -240,7 +240,7 @@ out:
 	return ret;
 }
 
-static 
+static
 int ioctl_snapshot_destroy(unsigned long arg)
 {
 	struct blk_snap_snapshot_destroy karg;
@@ -253,7 +253,7 @@ int ioctl_snapshot_destroy(unsigned long arg)
 	return snapshot_destroy(&karg.id);
 }
 
-static 
+static
 int ioctl_snapshot_append_storage(unsigned long arg)
 {
 	int res = 0;
@@ -275,7 +275,7 @@ int ioctl_snapshot_append_storage(unsigned long arg)
 	 * Therefore, an array of pages is used to store an array of ranges of
 	 * available disk space.
 	 */
-	ranges_buffer_size = karg.range_count * sizeof(struct blk_snap_block_range);
+	ranges_buffer_size = karg.count * sizeof(struct blk_snap_block_range);
 	ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
 	if (!ranges) {
 		pr_err("Unable to append difference storage: cannot allocate [%zu] bytes\n",
@@ -290,13 +290,13 @@ int ioctl_snapshot_append_storage(unsigned long arg)
 		return -ENODATA;
 	}
 
-	res = snapshot_append_storage(&karg.id, karg.dev_id, ranges, (size_t)karg.range_count);
+	res = snapshot_append_storage(&karg.id, karg.dev_id, ranges, (size_t)karg.count);
 	big_buffer_free(ranges);
 
 	return res;
 }
 
-static 
+static
 int ioctl_snapshot_take(unsigned long arg)
 {
 	struct blk_snap_snapshot_take karg;
@@ -309,18 +309,18 @@ int ioctl_snapshot_take(unsigned long arg)
 	return snapshot_take(&karg.id);
 }
 
-static 
+static
 int ioctl_snapshot_wait_event(unsigned long arg)
 {
 	int ret = 0;
 	struct blk_snap_snapshot_event *karg;
 	struct event *event;
 
-	karg = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	karg = kzalloc(sizeof(struct blk_snap_snapshot_event), GFP_KERNEL);
 	if (!karg)
 		return -ENOMEM;
 
-	if (copy_from_user(karg, (void *)arg, PAGE_SIZE)) {
+	if (copy_from_user(karg, (void *)arg, sizeof(struct blk_snap_snapshot_event))) {
 		pr_err("Unable failed to get snapstore error code: invalid user buffer\n");
 		ret = -EINVAL;
 		goto out;
@@ -335,16 +335,16 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 	karg->time_label = event->time;
 	karg->code = event->code;
 
-	if (event->data_size > (PAGE_SIZE - sizeof(karg))) {
+	if (event->data_size > sizeof(karg->data)) {
 		pr_err("Event size %zd is too big. ", event->data_size);
 		ret = -ENOSPC;
 		/* If we can't copy all the data, we copy only part of it. */
 	}
 	memcpy(karg->data, event->data,
-	       min_t(size_t, event->data_size, PAGE_SIZE - sizeof(karg)));
+	       min_t(size_t, event->data_size, sizeof(karg->data)));
 	kfree(event);
 
-	if (copy_to_user((void *)arg, karg, PAGE_SIZE)) {
+	if (copy_to_user((void *)arg, karg, sizeof(struct blk_snap_snapshot_event))) {
 		pr_err("Unable to get snapstore error code: invalid user buffer\n");
 		ret = -EINVAL;
 	}
@@ -353,7 +353,7 @@ out:
 	return ret;
 }
 
-static 
+static
 int ioctl_snapshot_collect_images(unsigned long arg)
 {
 	int ret;
@@ -389,7 +389,7 @@ int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_snapshot_collect_images,
 };
 
-static 
+static
 long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int nr = _IOC_NR(cmd);
