@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 //@todo: [TBD] should be a common part or in <linux/*>
-#include "../../module/blk-snap-ctl.h"
+#include "../../include/blk-snap/blk-snap-ctl.h"
 
 #pragma pack(push,1)
 /*
