@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <unordered_map>
+#include <map>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -51,6 +51,11 @@ struct blk_snap_block_range parseRange(const std::string &str)
 class IArgsProc
 {
 public:
+    IArgsProc()
+    {
+        m_desc.add_options()
+            ("help,h", "[TBD]Print usage for command.");
+    };
     virtual ~IArgsProc()
     {};
     virtual void PrintUsage() const
@@ -65,7 +70,12 @@ public:
         po::store(parsed, vm);
         po::notify(vm);
 
-        return Execute(vm);
+        if (vm.count("help")) {
+            PrintUsage();
+            return;
+        }
+
+        Execute(vm);
     };
     virtual void Execute(po::variables_map &vm) = 0;
 protected:
@@ -77,6 +87,7 @@ class VersionArgsProc : public IArgsProc
 {
 public:
     VersionArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Print " MODULE_NAME " module version.");
         m_desc.add_options()
@@ -112,6 +123,7 @@ class TrackerRemoveArgsProc : public IArgsProc
 {
 public:
     TrackerRemoveArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Remove block device from change tracking.");
         m_desc.add_options()
@@ -137,6 +149,7 @@ class TrackerCollectArgsProc : public IArgsProc
 {
 public:
     TrackerCollectArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Collect block devices with change tracking.");
         m_desc.add_options()
@@ -183,6 +196,7 @@ class TrackerReadCbtMapArgsProc : public IArgsProc
 {
 public:
     TrackerReadCbtMapArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Read change tracking map.");
         m_desc.add_options()
@@ -233,6 +247,7 @@ class TrackerMarkDirtyBlockArgsProc : public IArgsProc
 {
 public:
     TrackerMarkDirtyBlockArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Mark blocks as changed in change tracking map.");
         m_desc.add_options()
@@ -268,6 +283,7 @@ class SnapshotCreateArgsProc : public IArgsProc
 {
 public:
     SnapshotCreateArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Create snapshot object structure.");
         m_desc.add_options()
@@ -303,6 +319,7 @@ class SnapshotDestroyArgsProc : public IArgsProc
 {
 public:
     SnapshotDestroyArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Release snapshot and destroy snapshot object.");
         m_desc.add_options()
@@ -330,6 +347,7 @@ class SnapshotAppendStorageArgsProc : public IArgsProc
 {
 public:
     SnapshotAppendStorageArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Append space in difference storage for snapshot.");
         m_desc.add_options()
@@ -373,6 +391,7 @@ class SnapshotTakeArgsProc : public IArgsProc
 {
 public:
     SnapshotTakeArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Take snapshot.");
         m_desc.add_options()
@@ -400,6 +419,7 @@ class SnapshotWaitEventArgsProc : public IArgsProc
 {
 public:
     SnapshotWaitEventArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Wait and read event from snapshot.");
         m_desc.add_options()
@@ -466,6 +486,7 @@ class SnapshotCollectArgsProc : public IArgsProc
 {
 public:
     SnapshotCollectArgsProc()
+        :IArgsProc()
     {
         m_usage = std::string("[TBD]Get collection of devices and his snapshot images.");
         m_desc.add_options()
@@ -513,7 +534,7 @@ public:
 };
 
 static
-std::unordered_map<std::string, std::shared_ptr<IArgsProc> > argsProcMap {
+std::map<std::string, std::shared_ptr<IArgsProc> > argsProcMap {
     {"version", std::make_shared<VersionArgsProc>()},
     {"tracker_remove", std::make_shared<TrackerRemoveArgsProc>()},
     {"tracker_collect", std::make_shared<TrackerCollectArgsProc>()},
