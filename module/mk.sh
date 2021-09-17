@@ -1,6 +1,6 @@
 #!/bin/bash -e
 # SPDX-License-Identifier: GPL-2.0
-KERNEL_MODULE_NAME=blk-snap-lp
+KERNEL_MODULE_NAME=blk-snap
 CMD=$1
 if [ -n "$2" ]
 then
@@ -16,7 +16,7 @@ fi
 
 case "$CMD" in
 	build)
-		echo Making all...
+		echo Making ...
 		make -j`nproc` -C /lib/modules/${KERNEL_RELEASE}/build M=$(pwd) modules
 		echo Completed.
 		;;
@@ -26,7 +26,7 @@ case "$CMD" in
 		echo Completed.
 		;;
 	install)
-		echo Installing veeamsnap kernel module
+		echo Installing ...
 		mkdir -p /lib/modules/${KERNEL_RELEASE}/kernel/drivers
 		cp ${KERNEL_MODULE_NAME}.ko /lib/modules/${KERNEL_RELEASE}/kernel/drivers
 		depmod
