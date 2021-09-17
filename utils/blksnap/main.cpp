@@ -1,11 +1,7 @@
 #include <iostream>
-#include <fstream> 
+#include <fstream>
 #include <vector>
-#include <map>
-
-#include <boost/program_options.hpp>
-namespace po = boost::program_options;
-
+#include <unordered_map>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -15,13 +11,17 @@ namespace po = boost::program_options;
 #include <sys/sysmacros.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
-
 #include <uuid/uuid.h>
+
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
 #include "../../module/blk_snap.h"
+
 static int blksnap_fd = 0;
 static const char* blksnap_filename = "/dev/" MODULE_NAME;
 
-static
+static inline
 dev_t deviceByName(const std::string &name)
 {
     struct stat st;
@@ -32,34 +32,20 @@ dev_t deviceByName(const std::string &name)
     return st.st_rdev;
 }
 
-static
-void parseRanges(const std::string &str, std::vector<struct blk_snap_block_range> &ranges)
+static inline
+struct blk_snap_block_range parseRange(const std::string &str)
 {
-    size_t pos = 0;
-    size_t valuePos = 0;
-    struct blk_snap_block_range rg = {0};
+    struct blk_snap_block_range range;
+    size_t pos;
 
-    if (str.empty())
-        throw std::invalid_argument("String should not be empty.");
+    pos = str.find(':');
+    if (pos == std::string::npos)
+        throw std::invalid_argument("Invalid format of range string.");
 
-    while (pos < str.size()) {
-        char ch = str[pos];
+    range.sector_offset = std::stoull(str.substr(0, pos));
+    range.sector_count = std::stoull(str.substr(pos + 1));
 
-        if (ch == ':') {
-            rg.sector_offset = std::stoull(str.substr(valuePos, pos - valuePos));
-            valuePos = pos;
-        } else if (ch == ',') {
-            rg.sector_count = std::stoull(str.substr(valuePos, pos - valuePos));
-            ranges.push_back(rg);
-            valuePos = pos;
-        }
-        pos++;
-    }
-    if ((pos - valuePos) > 1) {
-        rg.sector_count = std::stoull(str.substr(valuePos, pos - valuePos));
-        ranges.push_back(rg);
-        valuePos = pos;
-    }
+    return range;
 }
 
 class IArgsProc
@@ -96,12 +82,12 @@ public:
         m_desc.add_options()
             ("compatibility,c", "[TBD]Print only compatibility flag value in decimal form.")
             ("modification,m", "[TBD]Print only module modification name.")
-            ("json,j", po::value<std::string>(), "[TBD]Use json format for output.");
+            ("json,j", "[TBD]Use json format for output.");
     };
 
     void Execute(po::variables_map &vm) override
     {
-        struct blk_snap_version param;
+        struct blk_snap_version param = {0};
 
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_VERSION, &param))
             throw std::system_error(errno, std::generic_category(), "Failed to get version.");
@@ -115,10 +101,10 @@ public:
             return;
         }
 
-        std::cout << param.major << "." <<
-                     param.minor << "." <<
-                     param.revision << "." <<
-                     param.build << std::endl;
+        std::cout << param.major << "."
+                  << param.minor << "."
+                  << param.revision << "."
+                  << param.build << std::endl;
     };
 };
 
@@ -139,8 +125,8 @@ public:
         if (!vm.count("device"))
             throw std::invalid_argument("Argument 'device' is missed.");
 
-        auto deviceName = vm["device"].as<std::string>();
-        param.dev_id = deviceByName(deviceName);
+        param.dev_id = deviceByName(vm["device"].as<std::string>());
+
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_REMOVE, &param))
             throw std::system_error(errno, std::generic_category(),
                 "Failed to remove block device from change tracking.");
@@ -154,7 +140,7 @@ public:
     {
         m_usage = std::string("[TBD]Collect block devices with change tracking.");
         m_desc.add_options()
-            ("json,j", po::value<std::string>(), "[TBD]Use json format for output.");
+            ("json,j", "[TBD]Use json format for output.");
     };
 
     void Execute(po::variables_map &vm) override
@@ -173,22 +159,22 @@ public:
             throw std::system_error(errno, std::generic_category(),
                 "[TBD]Failed to collect block devices with change tracking.");
 
-        if (vm.count("json")) {
-            std::cout << "json output is not suppoted yet." << std::endl;
-        } else {
-            char generationIdStr[64];
+        if (vm.count("json"))
+            throw std::invalid_argument("Argument 'json' is not supported yet.");
 
-            for (const auto &it : cbtInfoVector) {
-                uuid_unparse(it.generationId, generationIdStr);
+        std::cout << "count=" << param.count << std::endl;
+        char generationIdStr[64];
+        for (int inx=0; inx<param.count; inx++) {
+            struct blk_snap_cbt_info *it = &cbtInfoVector[inx];
 
-                std::cout << "device=" << major(it.dev_id) << ":" << minor(it.dev_id) << std::endl;
-                std::cout << "blk_size=" << it.blk_size << std::endl;
-                std::cout << "device_capacity=" << it.device_capacity << std::endl;
-                std::cout << "blk_count=" << it.blk_count << std::endl;
-                std::cout << "generationId=" << generationIdStr << std::endl;
-                std::cout << "snap_number=" << it.snap_number << std::endl;
-                std::cout << std::endl;
-            }
+            uuid_unparse(it->generationId, generationIdStr);
+            std::cout << "device=" << major(it->dev_id) << ":" << minor(it->dev_id) << std::endl;
+            std::cout << "blk_size=" << it->blk_size << std::endl;
+            std::cout << "device_capacity=" << it->device_capacity << std::endl;
+            std::cout << "blk_count=" << it->blk_count << std::endl;
+            std::cout << "generationId=" << std::string(generationIdStr) << std::endl;
+            std::cout << "snap_number=" << it->snap_number << std::endl;
+            std::cout << "," << std::endl;
         }
     };
 };
@@ -202,7 +188,7 @@ public:
         m_desc.add_options()
             ("device,d", po::value<std::string>(), "[TBD]Device name.")
             ("file,f", po::value<std::string>(), "[TBD]File name for output.")
-            ("json,j", po::value<std::string>(), "[TBD]Use json format for output.");
+            ("json,j", "[TBD]Use json format for output.");
     };
 
     void Execute(po::variables_map &vm) override
@@ -251,7 +237,8 @@ public:
         m_usage = std::string("[TBD]Mark blocks as changed in change tracking map.");
         m_desc.add_options()
             ("device,d", po::value<std::string>(), "[TBD]Device name.")
-            ("ranges,r", po::value<std::string>(), "[TBD]Sectors ranges array in format 'sector:count,next_sector:next_count'.");
+            ("ranges,r", po::value<std::vector<std::string> >()->multitoken(),
+                "[TBD]Sectors range in format 'sector:count'. It's multitoken argument.");
     };
 
     void Execute(po::variables_map &vm) override
@@ -265,8 +252,9 @@ public:
 
         if (!vm.count("ranges"))
             throw std::invalid_argument("Argument 'ranges' is missed.");
-        parseRanges(vm["ranges"].as<std::string>(), ranges);
-        
+        for (const std::string& range : vm["ranges"].as<std::vector<std::string> >())
+            ranges.push_back(parseRange(range));
+
         param.count = ranges.size();
         param.dirty_blocks_array = ranges.data();
 
@@ -276,14 +264,267 @@ public:
     }
 };
 
-static
-std::map<std::string, std::shared_ptr<IArgsProc> > argsProcMap {
-    {"tracker_readcbtmap", std::make_shared<TrackerReadCbtMapArgsProc>()},
-    {"tracker_collect", std::make_shared<TrackerCollectArgsProc>()},
-    {"tracker_markdirtyblock", std::make_shared<TrackerMarkDirtyBlockArgsProc>()},
-    {"tracker_remove", std::make_shared<TrackerRemoveArgsProc>()},
-    {"version", std::make_shared<VersionArgsProc>()},
+class SnapshotCreateArgsProc : public IArgsProc
+{
+public:
+    SnapshotCreateArgsProc()
+    {
+        m_usage = std::string("[TBD]Create snapshot object structure.");
+        m_desc.add_options()
+            ("device,d", po::value<std::vector<std::string> >()->multitoken(),
+                "[TBD]Device for snapshot. It's multitoken argument.");
+    };
 
+    void Execute(po::variables_map &vm) override
+    {
+        struct blk_snap_snapshot_create param = {0};
+        std::vector<dev_t> devices;
+
+        if (!vm.count("device"))
+            throw std::invalid_argument("Argument 'device' is missed.");
+        for (const std::string& name : vm["device"].as<std::vector<std::string> >())
+            devices.push_back(deviceByName(name));
+
+        param.count = devices.size();
+        param.dev_id_array = devices.data();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_CREATE, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to create snapshot object.");
+
+        char idStr[64];
+        uuid_unparse(param.id, idStr);
+
+        std::cout << std::string(idStr) << std::endl;
+    };
+};
+
+class SnapshotDestroyArgsProc : public IArgsProc
+{
+public:
+    SnapshotDestroyArgsProc()
+    {
+        m_usage = std::string("[TBD]Release snapshot and destroy snapshot object.");
+        m_desc.add_options()
+            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        struct blk_snap_snapshot_destroy param;
+
+        if (!vm.count("id"))
+            throw std::invalid_argument("Argument 'id' is missed.");
+
+        char idStr[64];
+        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
+        uuid_parse(idStr, param.id);
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to destroy snapshot.");
+    };
+};
+
+class SnapshotAppendStorageArgsProc : public IArgsProc
+{
+public:
+    SnapshotAppendStorageArgsProc()
+    {
+        m_usage = std::string("[TBD]Append space in difference storage for snapshot.");
+        m_desc.add_options()
+            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
+            ("device,d", po::value<std::string>(), "[TBD]Device name.")
+            ("ranges,r", po::value<std::vector<std::string> >()->multitoken(),
+                "[TBD]Sectors range in format 'sector:count'. It's multitoken argument.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        struct blk_snap_snapshot_append_storage param;
+        std::vector<struct blk_snap_block_range> ranges;
+
+        if (!vm.count("id"))
+            throw std::invalid_argument("Argument 'id' is missed.");
+
+        char idStr[64];
+        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
+        uuid_parse(idStr, param.id);
+
+        if (!vm.count("device"))
+            throw std::invalid_argument("Argument 'device' is missed.");
+        param.dev_id = deviceByName(vm["device"].as<std::string>());
+
+        if (!vm.count("ranges"))
+            throw std::invalid_argument("Argument 'ranges' is missed.");
+        for (const std::string& range : vm["ranges"].as<std::vector<std::string> >())
+            ranges.push_back(parseRange(range));
+
+        param.count = ranges.size();
+        param.ranges = ranges.data();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to append storage for snapshot.");
+    };
+};
+
+class SnapshotTakeArgsProc : public IArgsProc
+{
+public:
+    SnapshotTakeArgsProc()
+    {
+        m_usage = std::string("[TBD]Take snapshot.");
+        m_desc.add_options()
+            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        struct blk_snap_snapshot_take param;
+
+        if (!vm.count("id"))
+            throw std::invalid_argument("Argument 'id' is missed.");
+
+        char idStr[64];
+        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
+        uuid_parse(idStr, param.id);
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to append storage for snapshot.");
+    };
+};
+
+class SnapshotWaitEventArgsProc : public IArgsProc
+{
+public:
+    SnapshotWaitEventArgsProc()
+    {
+        m_usage = std::string("[TBD]Wait and read event from snapshot.");
+        m_desc.add_options()
+            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
+            ("timeout,t", po::value<std::string>(), "[TBD]The allowed waiting time for the event in milliseconds.")
+            ("json,j", "[TBD]Use json format for output.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        struct blk_snap_snapshot_event param;
+
+        if (!vm.count("id"))
+            throw std::invalid_argument("Argument 'id' is missed.");
+
+        char idStr[64];
+        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
+        uuid_parse(idStr, param.id);
+
+        if (!vm.count("timeout"))
+            throw std::invalid_argument("Argument 'timeout' is missed.");
+        param.timeout_ms = std::stoi(vm["timeout"].as<std::string>());
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param)) {
+            if (errno == ENOENT) {
+                if (vm.count("json"))
+                    throw std::invalid_argument("Argument 'json' is not supported yet.");
+
+                std::cout << "result=timeout" << std::endl;
+            } else if (errno == EINTR) {
+                if (vm.count("json"))
+                    throw std::invalid_argument("Argument 'json' is not supported yet.");
+
+                std::cout << "result=interrupted" << std::endl;
+            } else
+                throw std::system_error(errno, std::generic_category(),
+                    "[TBD]Failed to get event from snapshot.");
+        } else {
+            if (vm.count("json"))
+                throw std::invalid_argument("Argument 'json' is not supported yet.");
+
+            std::cout << "result=ok" << std::endl;
+            std::cout << "time=" << param.time_label << std::endl;
+
+            switch (param.code) {
+            case BLK_SNAP_EVENT_LOW_FREE_SPACE:
+                std::cout << "event=low_free_space" << std::endl;
+                std::cout << "requested_nr_sect=" << *(__u64*)(param.data) << std::endl;
+                break;
+            case BLK_SNAP_EVENT_CORRUPTED:
+                std::cout << "event=corrupted" << std::endl;
+                break;
+            case BLK_SNAP_EVENT_TERMINATE:
+                std::cout << "event=terminate" << std::endl;
+                break;
+            default:
+                std::cout << "event=" << param.code << std::endl;
+            }
+        }
+    };
+};
+
+class SnapshotCollectArgsProc : public IArgsProc
+{
+public:
+    SnapshotCollectArgsProc()
+    {
+        m_usage = std::string("[TBD]Get collection of devices and his snapshot images.");
+        m_desc.add_options()
+            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
+            ("json,j", "[TBD]Use json format for output.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        struct blk_snap_snapshot_collect_images param = {0};
+        std::vector<struct blk_snap_image_info> imageInfoVector;
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param)) {
+            if (errno == ENODATA) {
+                if (vm.count("json"))
+                    throw std::invalid_argument("Argument 'json' is not supported yet.");
+
+                std::cout << "count=0" << std::endl;
+                return;
+            } else {
+                throw std::system_error(errno, std::generic_category(),
+                    "[TBD]Failed to get device collection for snapshot.");
+            }
+        }
+
+        imageInfoVector.resize(param.count);
+        param.image_info_array = imageInfoVector.data();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to get device collection for snapshot.");
+
+        if (vm.count("json"))
+            throw std::invalid_argument("Argument 'json' is not supported yet.");
+
+        std::cout << "count=" << param.count << std::endl;
+        for (int inx=0; inx < param.count; inx++) {
+            struct blk_snap_image_info *it = &imageInfoVector[inx];
+
+            std::cout << "orig_dev_id=" << major(it->orig_dev_id) << ":" << minor(it->orig_dev_id) << std::endl;
+            std::cout << "image_dev_id=" << major(it->image_dev_id) << ":" << minor(it->image_dev_id) << std::endl;
+            std::cout << "," << std::endl;
+        }
+    };
+};
+
+static
+std::unordered_map<std::string, std::shared_ptr<IArgsProc> > argsProcMap {
+    {"version", std::make_shared<VersionArgsProc>()},
+    {"tracker_remove", std::make_shared<TrackerRemoveArgsProc>()},
+    {"tracker_collect", std::make_shared<TrackerCollectArgsProc>()},
+    {"tracker_readcbtmap", std::make_shared<TrackerReadCbtMapArgsProc>()},
+    {"tracker_markdirtyblock", std::make_shared<TrackerMarkDirtyBlockArgsProc>()},
+    {"snapshot_create", std::make_shared<SnapshotCreateArgsProc>()},
+    {"snapshot_destroy", std::make_shared<SnapshotDestroyArgsProc>()},
+    {"snapshot_appendstorage", std::make_shared<SnapshotAppendStorageArgsProc>()},
+    {"snapshot_take", std::make_shared<SnapshotTakeArgsProc>()},
+    {"snapshot_waitevent", std::make_shared<SnapshotWaitEventArgsProc>()},
+    {"snapshot_collect", std::make_shared<SnapshotCollectArgsProc>()},
 };
 
 static
