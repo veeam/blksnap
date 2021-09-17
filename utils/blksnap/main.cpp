@@ -1,6 +1,6 @@
 #include <iostream>
+#include <fstream> 
 #include <vector>
-//#include <unordered_map>
 #include <map>
 
 #include <boost/program_options.hpp>
@@ -22,14 +22,44 @@ static int blksnap_fd = 0;
 static const char* blksnap_filename = "/dev/" MODULE_NAME;
 
 static
-dev_t deviceByName(const char *name)
+dev_t deviceByName(const std::string &name)
 {
     struct stat st;
 
-    if (::stat(name, &st))
-        throw std::system_error(errno, std::generic_category(), std::string(name));
+    if (::stat(name.c_str(), &st))
+        throw std::system_error(errno, std::generic_category(), name);
 
     return st.st_rdev;
+}
+
+static
+void parseRanges(const std::string &str, std::vector<struct blk_snap_block_range> &ranges)
+{
+    size_t pos = 0;
+    size_t valuePos = 0;
+    struct blk_snap_block_range rg = {0};
+
+    if (str.empty())
+        throw std::invalid_argument("String should not be empty.");
+
+    while (pos < str.size()) {
+        char ch = str[pos];
+
+        if (ch == ':') {
+            rg.sector_offset = std::stoull(str.substr(valuePos, pos - valuePos));
+            valuePos = pos;
+        } else if (ch == ',') {
+            rg.sector_count = std::stoull(str.substr(valuePos, pos - valuePos));
+            ranges.push_back(rg);
+            valuePos = pos;
+        }
+        pos++;
+    }
+    if ((pos - valuePos) > 1) {
+        rg.sector_count = std::stoull(str.substr(valuePos, pos - valuePos));
+        ranges.push_back(rg);
+        valuePos = pos;
+    }
 }
 
 class IArgsProc
@@ -64,8 +94,9 @@ public:
     {
         m_usage = std::string("[TBD]Print " MODULE_NAME " module version.");
         m_desc.add_options()
-            ("compatibility,c", "[TBD]Optional argument. Print compatibility flag value in decimal form.")
-            ("modification,m", "[TBD]Optional argument. Print module modification name.");
+            ("compatibility,c", "[TBD]Print only compatibility flag value in decimal form.")
+            ("modification,m", "[TBD]Print only module modification name.")
+            ("json,j", po::value<std::string>(), "[TBD]Use json format for output.");
     };
 
     void Execute(po::variables_map &vm) override
@@ -109,7 +140,7 @@ public:
             throw std::invalid_argument("Argument 'device' is missed.");
 
         auto deviceName = vm["device"].as<std::string>();
-        param.dev_id = deviceByName(deviceName.c_str());
+        param.dev_id = deviceByName(deviceName);
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_REMOVE, &param))
             throw std::system_error(errno, std::generic_category(),
                 "Failed to remove block device from change tracking.");
@@ -162,9 +193,94 @@ public:
     };
 };
 
+class TrackerReadCbtMapArgsProc : public IArgsProc
+{
+public:
+    TrackerReadCbtMapArgsProc()
+    {
+        m_usage = std::string("[TBD]Read change tracking map.");
+        m_desc.add_options()
+            ("device,d", po::value<std::string>(), "[TBD]Device name.")
+            ("file,f", po::value<std::string>(), "[TBD]File name for output.")
+            ("json,j", po::value<std::string>(), "[TBD]Use json format for output.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        int ret;
+        struct blk_snap_tracker_read_cbt_bitmap param;
+        std::vector<unsigned char> cbtmap(1024*1024);
+
+        if (!vm.count("device"))
+            throw std::invalid_argument("Argument 'device' is missed.");
+
+        param.dev_id = deviceByName(vm["device"].as<std::string>());
+        param.offset = 0;
+        param.length = cbtmap.size();
+        param.buff = cbtmap.data();
+
+        if (vm.count("json"))
+            throw std::invalid_argument("Argument 'json' is not supported yet.");
+
+        if (!vm.count("file"))
+            throw std::invalid_argument("Argument 'file' is missed.");
+
+        std::ofstream output;
+        output.open(vm["file"].as<std::string>(), std::ofstream::out | std::ofstream::binary);
+
+        do {
+            ret = ::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP, &param);
+            if (ret < 0)
+                throw std::system_error(errno, std::generic_category(),
+                    "[TBD]Failed to read map of difference from change tracking.");
+            if (ret > 0) {
+                output.write((char*)param.buff, ret);
+                param.offset += ret;
+            }
+        } while (ret);
+
+        output.close();
+    };
+};
+
+class TrackerMarkDirtyBlockArgsProc : public IArgsProc
+{
+public:
+    TrackerMarkDirtyBlockArgsProc()
+    {
+        m_usage = std::string("[TBD]Mark blocks as changed in change tracking map.");
+        m_desc.add_options()
+            ("device,d", po::value<std::string>(), "[TBD]Device name.")
+            ("ranges,r", po::value<std::string>(), "[TBD]Sectors ranges array in format 'sector:count,next_sector:next_count'.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        struct blk_snap_tracker_mark_dirty_blocks param;
+        std::vector<struct blk_snap_block_range> ranges;
+
+        if (!vm.count("device"))
+            throw std::invalid_argument("Argument 'device' is missed.");
+        param.dev_id = deviceByName(vm["device"].as<std::string>());
+
+        if (!vm.count("ranges"))
+            throw std::invalid_argument("Argument 'ranges' is missed.");
+        parseRanges(vm["ranges"].as<std::string>(), ranges);
+        
+        param.count = ranges.size();
+        param.dirty_blocks_array = ranges.data();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to mark dirty blocks in change tracking map.");
+    }
+};
+
 static
 std::map<std::string, std::shared_ptr<IArgsProc> > argsProcMap {
+    {"tracker_readcbtmap", std::make_shared<TrackerReadCbtMapArgsProc>()},
     {"tracker_collect", std::make_shared<TrackerCollectArgsProc>()},
+    {"tracker_markdirtyblock", std::make_shared<TrackerMarkDirtyBlockArgsProc>()},
     {"tracker_remove", std::make_shared<TrackerRemoveArgsProc>()},
     {"version", std::make_shared<VersionArgsProc>()},
 
