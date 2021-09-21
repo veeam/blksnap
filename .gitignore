@@ -3,7 +3,7 @@
 !.editorconfig
 cmake*
 /build/
-bins
+/bin/
 *.o
 *.a
 *.so
