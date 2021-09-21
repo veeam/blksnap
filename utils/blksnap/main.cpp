@@ -48,6 +48,12 @@ struct blk_snap_block_range parseRange(const std::string &str)
     return range;
 }
 
+static
+void fiemapStorage(const std::string &filename, dev_t &dev_id, std::vector<struct blk_snap_block_range> &ranges)
+{
+    throw std::runtime_error(std::string( __func__));
+}
+
 class IArgsProc
 {
 public:
@@ -353,14 +359,16 @@ public:
         m_desc.add_options()
             ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
             ("device,d", po::value<std::string>(), "[TBD]Device name.")
-            ("ranges,r", po::value<std::vector<std::string> >()->multitoken(),
-                "[TBD]Sectors range in format 'sector:count'. It's multitoken argument.");
+            ("range,r", po::value<std::vector<std::string> >()->multitoken(),
+                "[TBD]Sectors range in format 'sector:count'. It's multitoken argument.")
+            ("file,f", po::value<std::string>(), "[TBD]File for diff storage instead --device.");
     };
 
     void Execute(po::variables_map &vm) override
     {
         struct blk_snap_snapshot_append_storage param;
         std::vector<struct blk_snap_block_range> ranges;
+        dev_t dev_id = 0;
 
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
@@ -369,18 +377,21 @@ public:
         strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
         uuid_parse(idStr, param.id);
 
-        if (!vm.count("device"))
-            throw std::invalid_argument("Argument 'device' is missed.");
-        param.dev_id = deviceByName(vm["device"].as<std::string>());
+        if (vm.count("file"))
+            fiemapStorage(vm["file"].as<std::string>(), dev_id, ranges);
+        else {
+            if (!vm.count("device"))
+                throw std::invalid_argument("Argument 'device' is missed.");
+            dev_id = deviceByName(vm["device"].as<std::string>());
 
-        if (!vm.count("ranges"))
-            throw std::invalid_argument("Argument 'ranges' is missed.");
-        for (const std::string& range : vm["ranges"].as<std::vector<std::string> >())
-            ranges.push_back(parseRange(range));
-
+            if (!vm.count("ranges"))
+                throw std::invalid_argument("Argument 'ranges' is missed.");
+            for (const std::string& range : vm["range"].as<std::vector<std::string> >())
+                ranges.push_back(parseRange(range));
+        }
+        param.dev_id = dev_id;
         param.count = ranges.size();
         param.ranges = ranges.data();
-
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
             throw std::system_error(errno, std::generic_category(),
                 "[TBD]Failed to append storage for snapshot.");
