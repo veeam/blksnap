@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-make_loop_device()
+imagefile_make()
 {
 	FILEPATH=$1
 	SIZE=$2
@@ -9,7 +9,14 @@ make_loop_device()
 	mkfs.ext4 ${FILEPATH}
 }
 
-attach_loop_device()
+imagefile_cleanup()
+{
+	FILEPATH=$1
+
+	rm -f ${FILEPATH}
+}
+
+loop_device_attach()
 {
 	FILEPATH=$1
 
@@ -17,7 +24,7 @@ attach_loop_device()
 	echo ${DEVICE}
 }
 
-detach_loop_device()
+loop_device_detach()
 {
 	DEVICE=$1
 
