@@ -46,7 +46,7 @@ void snapshot_release(struct snapshot *snapshot)
 
 	/* Set tracker as available */
 	for (inx = 0; inx < snapshot->count; ++inx)
-		tracker_release_snapshot(snapshot->tracker_array[inx]);	
+		tracker_release_snapshot(snapshot->tracker_array[inx]);
 
 	/* thaw fs on each original block device */
 	for (inx = 0; inx < snapshot->count; ++inx) {
@@ -89,7 +89,7 @@ void snapshot_free(struct kref *kref)
 #endif
 	diff_storage_put(snapshot->diff_storage);
 
-	kfree(snapshot);	
+	kfree(snapshot);
 }
 
 static inline
@@ -161,7 +161,7 @@ void snapshot_done(void)
 	up_write(&snapshots_lock);
 }
 
-int snapshot_create(dev_t *dev_id_array, unsigned int count, uuid_t *id)
+int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uuid_t *id)
 {
 	struct snapshot *snapshot = NULL;
 	int ret;
@@ -169,7 +169,7 @@ int snapshot_create(dev_t *dev_id_array, unsigned int count, uuid_t *id)
 
 	pr_info("Create snapshot for devices:\n");
 	for (inx = 0; inx < count; ++inx)
-		pr_info("\t%u:%u\n", MAJOR(dev_id_array[inx]), MINOR(dev_id_array[inx]));
+		pr_info("\t%u:%u\n", dev_id_array[inx].mj, dev_id_array[inx].mn);
 
 	snapshot = snapshot_new(count);
 	if (IS_ERR(snapshot)) {
@@ -179,13 +179,14 @@ int snapshot_create(dev_t *dev_id_array, unsigned int count, uuid_t *id)
 
 	ret = -ENODEV;
 	for (inx = 0; inx < snapshot->count; ++inx) {
+		dev_t dev_id = MKDEV(dev_id_array[inx].mj, dev_id_array[inx].mn);
 		struct tracker *tracker;
 
-		tracker = tracker_create_or_get(dev_id_array[inx]);
+		tracker = tracker_create_or_get(dev_id);
 		if (IS_ERR(tracker)){
 			pr_err("Unable to create snapshot\n");
 			pr_err("Failed to add device [%u:%u] to snapshot tracking\n",
-			       MAJOR(dev_id_array[inx]), MINOR(dev_id_array[inx]));
+			       MAJOR(dev_id), MINOR(dev_id));
 			ret = PTR_ERR(tracker);
 			goto fail;
 		}
@@ -256,7 +257,7 @@ int snapshot_destroy(uuid_t *id)
 	return 0;
 }
 
-int snapshot_append_storage(uuid_t *id, dev_t dev_id,
+int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
                             struct big_buffer *ranges, unsigned int range_count)
 {
 	int ret = 0;
@@ -266,9 +267,9 @@ int snapshot_append_storage(uuid_t *id, dev_t dev_id,
 	if (!snapshot)
 		return -ESRCH;
 
-	ret = diff_storage_append_block(snapshot->diff_storage, dev_id,
+	ret = diff_storage_append_block(snapshot->diff_storage,
+	                                MKDEV(dev_id.mj, dev_id.mn),
 	                                ranges, range_count);
-
 	snapshot_put(snapshot);
 	return ret;
 }
@@ -435,14 +436,17 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 	}
 
 	for (inx=0; inx<snapshot->count; inx++) {
+		dev_t orig_dev_id = snapshot->tracker_array[inx]->dev_id;
+		dev_t image_dev_id = snapshot->snapimage_array[inx]->image_dev_id;
+
 		if (snapshot->tracker_array[inx]) {
-			image_info_array[inx].orig_dev_id = 
-				snapshot->tracker_array[inx]->dev_id;
+			image_info_array[inx].orig_dev_id.mj = MAJOR(orig_dev_id);
+			image_info_array[inx].orig_dev_id.mn = MINOR(orig_dev_id);
 		}
 
 		if (snapshot->snapimage_array[inx]) {
-			image_info_array[inx].image_dev_id =
-				snapshot->snapimage_array[inx]->image_dev_id;
+			image_info_array[inx].image_dev_id.mj = MAJOR(image_dev_id);
+			image_info_array[inx].image_dev_id.mn = MINOR(image_dev_id);
 		}
 	}
 

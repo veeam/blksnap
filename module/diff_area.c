@@ -16,18 +16,18 @@ sector_t bdev_nr_sectors(struct block_device *bdev)
 };
 #endif
 
-/*static inline 
+/*static inline
 unsigned long chunk_pages(struct diff_area *diff_area)
 {
 	return (1UL << (diff_area->chunk_shift - PAGE_SHIFT));
 };*/
-static inline 
+static inline
 unsigned long chunk_number(struct diff_area *diff_area, sector_t sector)
 {
 	return (unsigned long)(sector >> (diff_area->chunk_shift - SECTOR_SHIFT));
 };
 
-static inline 
+static inline
 void recalculate_last_chunk_size(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
@@ -37,13 +37,13 @@ void recalculate_last_chunk_size(struct chunk *chunk)
 	chunk->sector_count = capacity - round_down(capacity, chunk->sector_count);
 }
 
-static inline 
+static inline
 unsigned long long count_by_shift(sector_t capacity, unsigned long long shift)
 {
 	return round_up(capacity, 1ull << (shift - SECTOR_SHIFT)) >> (shift - SECTOR_SHIFT);
 }
 
-static 
+static
 void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 {
 	unsigned long long shift = chunk_minimum_shift;
@@ -64,7 +64,7 @@ void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	diff_area->chunk_count = count;
 }
 
-static inline 
+static inline
 struct chunk *get_chunk_from_storing_list(struct diff_area *diff_area)
 {
 	struct chunk *chunk;
@@ -73,7 +73,7 @@ struct chunk *get_chunk_from_storing_list(struct diff_area *diff_area)
 	chunk = list_first_entry_or_null(&diff_area->storing_chunks, struct chunk, link);
 	if (chunk)
 		list_del(&chunk->link);
-	spin_unlock(&diff_area->storing_chunks_lock);	
+	spin_unlock(&diff_area->storing_chunks_lock);
 
 	return chunk;
 }
@@ -129,7 +129,7 @@ void schedule_cache(struct chunk *chunk)
 	up_read(&chunk->lock);
 
 	/* Initiate the cache clearing process. */
-	queue_work(system_wq, &diff_area->caching_chunks_work); 
+	queue_work(system_wq, &diff_area->caching_chunks_work);
 }
 
 static inline
@@ -264,7 +264,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	INIT_LIST_HEAD(&diff_area->storing_chunks);
 	spin_lock_init(&diff_area->storing_chunks_lock);
 	INIT_WORK(&diff_area->storing_chunks_work, diff_area_storing_chunks_work);
-	
+
 	INIT_LIST_HEAD(&diff_area->caching_chunks);
 	spin_lock_init(&diff_area->caching_chunks_lock);
 	INIT_WORK(&diff_area->caching_chunks_work, diff_area_caching_chunks_work);
@@ -295,7 +295,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	}
 	if (ret) {
 		diff_area_put(diff_area);
-		return ERR_PTR(ret);		
+		return ERR_PTR(ret);
 	}
 
 	recalculate_last_chunk_size(chunk);
@@ -320,7 +320,7 @@ void schedule_storing_diff(struct chunk *chunk)
 	 * should be high so that the scheduler can preempt other threads to
 	 * complete the write.
 	 */
-	queue_work(system_highpri_wq, &diff_area->storing_chunks_work); 
+	queue_work(system_highpri_wq, &diff_area->storing_chunks_work);
 }
 
 static
@@ -395,7 +395,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO | GFP_NOWAIT);
 			if (ret) {
 				up_write(&chunk->lock);
-				return -EAGAIN;		
+				return -EAGAIN;
 			}
 		} else {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
@@ -419,7 +419,7 @@ void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
 {
 	if (!io_ctx->chunk)
 		return;
-	
+
 	if (io_ctx->is_write)
 		schedule_storing_diff(io_ctx->chunk);
 	else
@@ -452,7 +452,7 @@ struct chunk* diff_area_image_context_get_chunk(
 			io_ctx->chunk = NULL;
 		}
 	}
-	 
+
 	/* Take a next chunk. */
 	chunk = xa_load(&diff_area->chunk_map, new_chunk_number);
 	if (unlikely(!chunk))
@@ -478,10 +478,10 @@ struct chunk* diff_area_image_context_get_chunk(
 
 	/*
 	 * If there is already data in the buffer, then nothing needs to be load.
-	 * A chunk should be read from diff_storage 
+	 * A chunk should be read from diff_storage
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
-		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))		
+		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
 			chunk_load_diff(chunk);
 		else
 			chunk_load_orig(chunk);
@@ -542,19 +542,19 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 {
-	if (atomic_inc_return(&diff_area->corrupted_flag) == 1) {
-		struct blk_snap_event_corrupted data = {
-			.orig_dev_id = diff_area->orig_bdev->bd_dev,
-			.errno = abs(err_code),
-		};
+	struct blk_snap_event_corrupted data;
 
-		event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO,
-			BLK_SNAP_EVENT_CORRUPTED,
-			&data, sizeof(data));
+	if (atomic_inc_return(&diff_area->corrupted_flag) != 1)
+		return;
 
-		pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
-		       MAJOR(data.orig_dev_id),
-		       MINOR(data.orig_dev_id),
-		       abs(data.errno));
-	}
+	data.orig_dev_id.mj = MAJOR(diff_area->orig_bdev->bd_dev);
+	data.orig_dev_id.mn = MINOR(diff_area->orig_bdev->bd_dev);
+	data.errno = abs(err_code);
+
+	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO,
+		BLK_SNAP_EVENT_CORRUPTED,
+		&data, sizeof(data));
+
+	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
+	       data.orig_dev_id.mj, data.orig_dev_id.mn, abs(data.errno));
 }

@@ -105,7 +105,7 @@ int ioctl_tracker_remove(unsigned long arg)
 		pr_err("Unable to remove device from tracking: invalid user buffer\n");
 		return -ENODATA;
 	}
-	return tracker_remove((dev_t)karg.dev_id);
+	return tracker_remove(MKDEV(karg.dev_id.mj, karg.dev_id.mn));
 }
 
 static
@@ -175,8 +175,9 @@ int ioctl_tracker_read_cbt_map(unsigned long arg)
 		return -ENODATA;
 	}
 
-	return tracker_read_cbt_bitmap((dev_t)karg.dev_id, karg.offset, karg.length,
-					(char __user*)karg.buff);
+	return tracker_read_cbt_bitmap(MKDEV(karg.dev_id.mj, karg.dev_id.mn),
+	                               karg.offset, karg.length,
+	                               (char __user*)karg.buff);
 }
 
 static
@@ -202,7 +203,8 @@ int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 		pr_err("Unable to mark dirty blocks: invalid user buffer\n");
 		ret = -ENODATA;
 	} else
-		ret = tracker_mark_dirty_blocks((dev_t)karg.dev_id, dirty_blocks_array, karg.count);
+		ret = tracker_mark_dirty_blocks(MKDEV(karg.dev_id.mj, karg.dev_id.mn),
+		                                dirty_blocks_array, karg.count);
 
 	kfree(dirty_blocks_array);
 
@@ -214,17 +216,24 @@ int ioctl_snapshot_create(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_create karg;
-	dev_t *dev_id_array = NULL;
+	struct blk_snap_dev_t *dev_id_array = NULL;
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}
 
-	dev_id_array = kcalloc(karg.count, sizeof(dev_t), GFP_KERNEL);
+	dev_id_array = kcalloc(karg.count, sizeof(struct blk_snap_dev_t), GFP_KERNEL);
 	if (dev_id_array == NULL) {
 		pr_err("Unable to create snapshot: too many devices %d\n", karg.count);
 		return -ENOMEM;
+	}
+
+	if (copy_from_user(dev_id_array, (void *)karg.dev_id_array,
+	                   karg.count * sizeof(struct blk_snap_dev_t))) {
+		pr_err("Unable to create snapshot: invalid user buffer\n");
+		ret = -ENODATA;
+		goto out;
 	}
 
 	ret = snapshot_create(dev_id_array, karg.count, &karg.id);

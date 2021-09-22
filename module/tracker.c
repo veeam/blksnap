@@ -47,10 +47,10 @@ struct tracker *tracker_get_by_dev_id(dev_t dev_id)
 	struct tracker *tracker;
 
 	read_lock(&trackers_lock);
-	
+
 	if (list_empty(&trackers))
 		goto out;
-	
+
 	list_for_each_entry(tracker, &trackers, link) {
 		if (tracker->dev_id == dev_id) {
 			kref_get(&tracker->kref);
@@ -404,7 +404,8 @@ int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info, int *pcou
 			break;
 		}
 
-		cbt_info[count].dev_id = (__u32)tracker->dev_id;
+		cbt_info[count].dev_id.mj = MAJOR(tracker->dev_id);
+		cbt_info[count].dev_id.mn = MINOR(tracker->dev_id);
 		if (tracker->cbt_map) {
 			cbt_info[count].device_capacity =
 				(__u64)(tracker->cbt_map->device_capacity << SECTOR_SHIFT);

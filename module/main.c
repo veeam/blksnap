@@ -60,7 +60,7 @@ int __init blk_snap_init(void)
  * For standalone only:
  *
  * Before unload module livepatch should be detached.
- * echo 0 > /sys/kernel/livepatch/blk_snap_lp/enabled
+ * echo 0 > /sys/kernel/livepatch/blk_snap/enabled
  */
 static
 void __exit blk_snap_exit(void)

@@ -49,13 +49,29 @@ struct blk_snap_version {
  */
 
 /**
+ * struct blk_snap_dev_t - Block device ID.
+ * @mj:
+ *      Major part.
+ * @mn:
+ *      Minor part.
+ *
+ * In user-space and in kernel-space, block devices are encoded differently.
+ * We have to enter own type to guarantee the correct transmission of the major
+ * and minor parts.
+ */
+struct blk_snap_dev_t {
+        __u32 mj;
+        __u32 mn;
+};
+
+/**
  * struct blk_snap_tracker_remove - Input argument for
  * 	&IOCTL_BLK_SNAP_TRACKER_REMOVE control.
  * @dev_id:
- * 	Device ID in dev_t format.
+ * 	Device ID in &struct blk_snap_dev_t.
  */
 struct blk_snap_tracker_remove {
-	dev_t dev_id;
+	struct blk_snap_dev_t dev_id;
 };
 /**
  * IOCTL_BLK_SNAP_TRACKER_REMOVE - Remove device from tracking.
@@ -72,7 +88,7 @@ struct blk_snap_tracker_remove {
  * 	device.
  */
 struct blk_snap_cbt_info {
-	dev_t dev_id;
+	struct blk_snap_dev_t dev_id;
 	__u32 blk_size;
 	__u64 device_capacity;
 	__u32 blk_count;
@@ -102,7 +118,7 @@ struct blk_snap_tracker_collect {
  * 	&IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP control.
  */
 struct blk_snap_tracker_read_cbt_bitmap {
-	dev_t dev_id;
+	struct blk_snap_dev_t dev_id;
 	__u32 offset;
 	__u32 length;
 	__u8 *buff;
@@ -130,7 +146,7 @@ struct blk_snap_block_range {
  * 	&IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS control.
  */
 struct blk_snap_tracker_mark_dirty_blocks {
-	dev_t dev_id;
+	struct blk_snap_dev_t dev_id;
 	__u32 count;
 	struct blk_snap_block_range *dirty_blocks_array;
 };
@@ -153,7 +169,7 @@ struct blk_snap_tracker_mark_dirty_blocks {
  */
 struct blk_snap_snapshot_create {
 	__u32 count;		/* in */
-	dev_t *dev_id_array;	/* in */
+	struct blk_snap_dev_t *dev_id_array;	/* in */
 	uuid_t id;		/* output */
 };
 /**
@@ -186,7 +202,7 @@ struct blk_snap_snapshot_destroy {
  */
 struct blk_snap_snapshot_append_storage {
 	uuid_t id;
-	dev_t dev_id;
+	struct blk_snap_dev_t dev_id;
 	__u32 count;
 	struct blk_snap_block_range *ranges;
 
@@ -271,7 +287,7 @@ struct blk_snap_event_low_free_space {
  *
  */
 struct blk_snap_event_corrupted {
-	dev_t orig_dev_id;
+	struct blk_snap_dev_t orig_dev_id;
 	__s32 errno;
 };
 /**
@@ -301,8 +317,8 @@ struct blk_snap_event_corrupted {
  *
  */
 struct blk_snap_image_info {
-	dev_t orig_dev_id;
-	dev_t image_dev_id;
+	struct blk_snap_dev_t orig_dev_id;
+	struct blk_snap_dev_t image_dev_id;
 };
 /**
  * struct blk_snap_snapshot_collect_images - Argument for
