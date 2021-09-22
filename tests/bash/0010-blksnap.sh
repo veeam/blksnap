@@ -9,10 +9,15 @@ blksnap_version()
 
 blksnap_snapshot_create_inmem()
 {
-	DEVICE=$1
+	PARAM=""
+
+	for DEVICE in $1
+	do
+		PARAM="${PARAM} --device ${DEVICE}"
+	done
 
 	${BLKSNAP} version
-	ID=$(${BLKSNAP} snapshot_create --device ${DEVICE})
+	ID=$(${BLKSNAP} snapshot_create ${PARAM})
 	echo "New snapshot ${ID} was created"
 }
 
