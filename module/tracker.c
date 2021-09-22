@@ -62,7 +62,7 @@ out:
 	read_unlock(&trackers_lock);
 	return result;
 }
-
+//Failed to attach tracker
 static
 int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
@@ -75,8 +75,13 @@ int tracker_submit_bio_cb(struct bio *bio, void *ctx)
 		return FLT_ST_PASS;
 
 	err = cbt_map_set(tracker->cbt_map, sector, count);
-	if (unlikely(err))
+	if (unlikely(err)) {
+		// for debug only
+		pr_err("bio sector=%lld", sector);
+		pr_err("bio count=%lld", sector);
+		//
 		return FLT_ST_PASS;
+	}
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
 		return FLT_ST_PASS;

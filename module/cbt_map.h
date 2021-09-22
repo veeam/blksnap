@@ -10,7 +10,7 @@
 
 /**
  * struct cbt_map - The table of changes fo block device.
- * 
+ *
  */
 struct cbt_map {
 	struct kref kref;
@@ -52,5 +52,5 @@ size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buffer,
 static inline
 size_t cbt_map_blk_size(struct cbt_map *cbt_map)
 {
-	return 1 << (cbt_map->blk_size_shift + SECTOR_SHIFT);
+	return 1 << cbt_map->blk_size_shift;
 };

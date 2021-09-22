@@ -12,37 +12,30 @@ sector_t bdev_nr_sectors(struct block_device *bdev)
 };
 #endif
 
-static inline 
+static inline
 unsigned long long count_by_shift(sector_t capacity, unsigned long long shift)
 {
-	return round_up(capacity,
-	                1ull << (shift - SECTOR_SHIFT)) >> (shift - SECTOR_SHIFT);
+	sector_t blk_size = 1ull << (shift - SECTOR_SHIFT);
+
+	return round_up(capacity, blk_size) / blk_size;
 }
 
-static 
+static
 void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 {
 	unsigned long long shift;
 	unsigned long long count;
 
-	if (tracking_block_minimum_shift) {
-		/**
-		 * The tracking block size was set explicitly.
-		 */
-		shift = tracking_block_minimum_shift - SECTOR_SHIFT;
-		count = count_by_shift(cbt_map->device_capacity, shift);
-	} else {
-		/**
-		 * The size of the tracking block is calculated based on the size of the disk
-		 * so that the CBT table does not exceed a reasonable size. 
-		 */
-		shift = tracking_block_minimum_shift;
-		count = count_by_shift(cbt_map->device_capacity, shift);
+	/**
+	 * The size of the tracking block is calculated based on the size of the disk
+	 * so that the CBT table does not exceed a reasonable size.
+	 */
+	shift = tracking_block_minimum_shift;
+	count = count_by_shift(cbt_map->device_capacity, shift);
 
-		while (count > tracking_block_maximum_count) {
-			shift = shift << 1;
-			count = count_by_shift(cbt_map->device_capacity, shift);
-		}
+	while (count > tracking_block_maximum_count) {
+		shift = shift << 1;
+		count = count_by_shift(cbt_map->device_capacity, shift);
 	}
 
 	cbt_map->blk_size_shift = shift;
@@ -52,7 +45,7 @@ void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 static
 int cbt_map_allocate(struct cbt_map *cbt_map)
 {
-	pr_info("Allocate CBT map of %zu\n", cbt_map->blk_count);
+	pr_info("Allocate CBT map of %zu blocks\n", cbt_map->blk_count);
 
 	cbt_map->read_map = big_buffer_alloc(cbt_map->blk_count, GFP_KERNEL);
 	if (cbt_map->read_map != NULL)
@@ -63,7 +56,8 @@ int cbt_map_allocate(struct cbt_map *cbt_map)
 		big_buffer_memset(cbt_map->write_map, 0);
 
 	if ((cbt_map->read_map == NULL) || (cbt_map->write_map == NULL)) {
-		pr_err("Cannot allocate CBT map. blk_count=%zu\n", cbt_map->blk_count);
+		pr_err("Cannot allocate CBT map. %zu blocks are required.\n",
+		       cbt_map->blk_count);
 		return -ENOMEM;
 	}
 
@@ -189,13 +183,14 @@ int _cbt_map_set(struct cbt_map *cbt_map,
 	int res = 0;
 	u8 num;
 	size_t cbt_block;
-	size_t cbt_block_first = (size_t)(sector_start >> cbt_map->blk_size_shift);
+	size_t cbt_block_first = (size_t)(sector_start >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
 	size_t cbt_block_last = (size_t)((sector_start + sector_cnt - 1) >>
-					 cbt_map->blk_size_shift); //inclusive
+					 (cbt_map->blk_size_shift - SECTOR_SHIFT)); //inclusive
 
 	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last; ++cbt_block) {
 		if (unlikely(cbt_block >= cbt_map->blk_count)) {
-			pr_err("Block index is too large. #%zu was demanded, map size %zu\n",
+			pr_err("Block index is too large.\n");
+			pr_err("Block #%zu was demanded, map size %zu blocks.\n",
 			       cbt_block, cbt_map->blk_count);
 			res = -EINVAL;
 			break;

@@ -32,7 +32,7 @@ void snapshot_release(struct snapshot *snapshot)
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
-		if (!tracker)
+		if (!tracker || !tracker->diff_area)
 			continue;
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -52,8 +52,9 @@ void snapshot_release(struct snapshot *snapshot)
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
-		if (!tracker)
+		if (!tracker  || !tracker->diff_area)
 			continue;
+
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(tracker->diff_area->orig_bdev, snapshot->superblock_array[inx]);
 #else
@@ -107,35 +108,41 @@ void snapshot_put(struct snapshot *snapshot)
 static
 struct snapshot *snapshot_new(unsigned int count)
 {
+	int ret;
 	struct snapshot *snapshot = NULL;
 
 	snapshot = kzalloc(sizeof(struct snapshot), GFP_KERNEL);
-	if (!snapshot)
-		return ERR_PTR(-ENOMEM);
+	if (!snapshot) {
+		ret= -ENOMEM;
+		goto fail;
+	}
 
 	snapshot->tracker_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->tracker_array) {
-		kfree(snapshot);
-		return ERR_PTR(-ENOMEM);
+		ret = -ENOMEM;
+		goto fail_free_snapshot;
 	}
 
 	snapshot->snapimage_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->snapimage_array) {
-		kfree(snapshot->tracker_array);
-		kfree(snapshot);
-		return ERR_PTR(-ENOMEM);
+		ret = -ENOMEM;
+		goto fail_free_trackers;
 	}
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	snapshot->superblock_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->superblock_array) {
-		kfree(snapshot->snapimage_array);
-		kfree(snapshot->tracker_array);
-		snapshot_put(snapshot);
-		return ERR_PTR(-ENOMEM);
+		ret = -ENOMEM;
+		goto fail_free_snapimage;
 	}
 
 #endif
+	snapshot->diff_storage = diff_storage_new();
+	if (!snapshot->diff_storage) {
+		ret = -ENOMEM;
+		goto fail_free_snapimage;
+	}
+
 	INIT_LIST_HEAD(&snapshot->link);
 	kref_init(&snapshot->kref);
 	uuid_gen(&snapshot->id);
@@ -146,6 +153,18 @@ struct snapshot *snapshot_new(unsigned int count)
 	up_write(&snapshots_lock);
 
 	return snapshot;
+
+fail_free_snapimage:
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	kfree(snapshot->superblock_array);
+#endif
+	kfree(snapshot->snapimage_array);
+fail_free_trackers:
+	kfree(snapshot->tracker_array);
+fail_free_snapshot:
+	kfree(snapshot);
+fail:
+	return ERR_PTR(ret);
 }
 
 void snapshot_done(void)
@@ -178,7 +197,7 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uui
 	}
 
 	ret = -ENODEV;
-	for (inx = 0; inx < snapshot->count; ++inx) {
+	for (inx = 0; inx < count; ++inx) {
 		dev_t dev_id = MKDEV(dev_id_array[inx].mj, dev_id_array[inx].mn);
 		struct tracker *tracker;
 
@@ -192,6 +211,7 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uui
 		}
 
 		snapshot->tracker_array[inx] = tracker;
+		snapshot->count++;
 	}
 
 	uuid_copy(id, &snapshot->id);
@@ -286,6 +306,9 @@ int snapshot_take(uuid_t *id)
 
 	if (snapshot->is_taken)
 		return -EALREADY;
+
+	if (!snapshot->count)
+		return -ENODEV;
 
 	/* allocate diff area for each device in snapshot */
 	for (inx = 0; inx < snapshot->count; inx++) {
