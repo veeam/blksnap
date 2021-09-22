@@ -2,6 +2,11 @@
 BLKSNAP="$(cd ../../; pwd)/bin/blksnap"
 ID=""
 
+blksnap_version()
+{
+	${BLKSNAP} version
+}
+
 blksnap_snapshot_create_inmem()
 {
 	DEVICE=$1

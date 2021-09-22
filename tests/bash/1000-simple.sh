@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+# check module is ready
+blksnap_version
+
 TESTDIR=/tmp/blk-snap-test
 mkdir -p ${TESTDIR}
 
@@ -10,15 +13,17 @@ echo "new image file ${IMAGEFILE}"
 DEVICE=$(loop_device_attach ${IMAGEFILE})
 echo "new device ${DEVICE}"
 
-MOUNTPOINT=${TESTDIR}/simple_mp
+MPDIR=/mnt/blk-snap-test
+MOUNTPOINT=${MPDIR}/simple
 mkdir -p ${MOUNTPOINT}
-mount ${DEVICE}" ${MOUNTPOINT}
+mount ${DEVICE} ${MOUNTPOINT}
 
 blksnap_snapshot_create_inmem ${DEVICE}
 
 blksnap_snapshot_take
 
 blksnap_snapshot_destroy
+
 
 umount ${MOUNTPOINT}
 
