@@ -22,14 +22,18 @@ static int blksnap_fd = 0;
 static const char* blksnap_filename = "/dev/" MODULE_NAME;
 
 static inline
-dev_t deviceByName(const std::string &name)
+struct blk_snap_dev_t deviceByName(const std::string &name)
 {
     struct stat st;
 
     if (::stat(name.c_str(), &st))
         throw std::system_error(errno, std::generic_category(), name);
 
-    return st.st_rdev;
+    struct blk_snap_dev_t device = {
+        .mj = major(st.st_rdev),
+        .mn = minor(st.st_rdev),
+    };
+    return device;
 }
 
 static inline
@@ -49,7 +53,9 @@ struct blk_snap_block_range parseRange(const std::string &str)
 }
 
 static
-void fiemapStorage(const std::string &filename, dev_t &dev_id, std::vector<struct blk_snap_block_range> &ranges)
+void fiemapStorage(const std::string &filename,
+                   struct blk_snap_dev_t &dev_id,
+                   std::vector<struct blk_snap_block_range> &ranges)
 {
     throw std::runtime_error(std::string( __func__));
 }
@@ -187,7 +193,7 @@ public:
             struct blk_snap_cbt_info *it = &cbtInfoVector[inx];
 
             uuid_unparse(it->generationId, generationIdStr);
-            std::cout << "device=" << major(it->dev_id) << ":" << minor(it->dev_id) << std::endl;
+            std::cout << "device=" << it->dev_id.mj << ":" << it->dev_id.mn << std::endl;
             std::cout << "blk_size=" << it->blk_size << std::endl;
             std::cout << "device_capacity=" << it->device_capacity << std::endl;
             std::cout << "blk_count=" << it->blk_count << std::endl;
@@ -300,7 +306,7 @@ public:
     void Execute(po::variables_map &vm) override
     {
         struct blk_snap_snapshot_create param = {0};
-        std::vector<dev_t> devices;
+        std::vector<struct blk_snap_dev_t> devices;
 
         if (!vm.count("device"))
             throw std::invalid_argument("Argument 'device' is missed.");
@@ -368,7 +374,7 @@ public:
     {
         struct blk_snap_snapshot_append_storage param;
         std::vector<struct blk_snap_block_range> ranges;
-        dev_t dev_id = 0;
+        struct blk_snap_dev_t dev_id = {0};
 
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
@@ -537,8 +543,8 @@ public:
         for (int inx=0; inx < param.count; inx++) {
             struct blk_snap_image_info *it = &imageInfoVector[inx];
 
-            std::cout << "orig_dev_id=" << major(it->orig_dev_id) << ":" << minor(it->orig_dev_id) << std::endl;
-            std::cout << "image_dev_id=" << major(it->image_dev_id) << ":" << minor(it->image_dev_id) << std::endl;
+            std::cout << "orig_dev_id=" << it->orig_dev_id.mj << ":" << it->orig_dev_id.mn << std::endl;
+            std::cout << "image_dev_id=" << it->image_dev_id.mj << ":" << it->image_dev_id.mn << std::endl;
             std::cout << "," << std::endl;
         }
     };
