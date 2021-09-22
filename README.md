@@ -10,7 +10,7 @@ This kernel module implements snapshot and changed block tracking functionality.
 
 ## Prepare to build
 ``` bash
-sudo apt install gcc cmake uuid-dev libboost-all-dev
+sudo apt install gcc g++ cmake uuid-dev libboost-all-dev libssl-dev linux-headers-generic
 ```
 ## Install Catch2
 Download and unpack Catch2
