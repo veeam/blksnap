@@ -18,12 +18,12 @@ enum blk_snap_compat_flags {
  * 	?
  */
 struct blk_snap_version {
-	__u16 major;
-	__u16 minor;
-	__u16 revision;
-	__u16 build;
-	__u64 compatibility_flags;
-	__u8 mod_name[32];
+	__u16 major;			/* output */
+	__u16 minor;			/* output */
+	__u16 revision;			/* output */
+	__u16 build;			/* output */
+	__u64 compatibility_flags;	/* output */
+	__u8 mod_name[32];		/* output */
 };
 /**
  * IOCTL_BLK_SNAP_VERSION - Get version and compatibility flags.
@@ -55,7 +55,7 @@ struct blk_snap_version {
  * 	Device ID in dev_t format.
  */
 struct blk_snap_tracker_remove {
-	dev_t dev_id;
+	dev_t dev_id;		/* input */
 };
 /**
  * IOCTL_BLK_SNAP_TRACKER_REMOVE - Remove device from tracking.
@@ -84,14 +84,14 @@ struct blk_snap_cbt_info {
  * 	&IOCTL_BLK_SNAP_TRACKER_COLLECT control.
  */
 struct blk_snap_tracker_collect {
-	__u32 count;
-	struct blk_snap_cbt_info *cbt_info_array;
+	__u32 count;					/* input/output */
+	struct blk_snap_cbt_info *cbt_info_array;	/* allocated buffer for output */
 };
 /**
  * IOCTL_BLK_SNAP_TRACKER_COLLECT - Collect all tracked device.
  *
  * Getting information about of all devices under tracking.
- * This ioctl duplicates displays the same information that the module outputs
+ * This ioctl returns the same information that the module outputs
  * to sysfs for each device under tracking.
  */
 #define IOCTL_BLK_SNAP_TRACKER_COLLECT \
@@ -102,10 +102,10 @@ struct blk_snap_tracker_collect {
  * 	&IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP control.
  */
 struct blk_snap_tracker_read_cbt_bitmap {
-	dev_t dev_id;
-	__u32 offset;
-	__u32 length;
-	__u8 *buff;
+	dev_t dev_id;		/* input */
+	__u32 offset;		/* input */
+	__u32 length;		/* input */
+	__u8 *buff;		/* allocated buffer for output */
 };
 /**
  * IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP - Read CBT map.
@@ -130,9 +130,9 @@ struct blk_snap_block_range {
  * 	&IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS control.
  */
 struct blk_snap_tracker_mark_dirty_blocks {
-	dev_t dev_id;
-	__u32 count;
-	struct blk_snap_block_range *dirty_blocks_array;
+	dev_t dev_id;						/* input */
+	__u32 count;						/* input */
+	struct blk_snap_block_range *dirty_blocks_array;	/* input */
 };
 /**
  * IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS - Set dirty blocks in CBT map.
@@ -152,8 +152,8 @@ struct blk_snap_tracker_mark_dirty_blocks {
  * 	&IOCTL_BLK_SNAP_SNAPSHOT_CREATE control.
  */
 struct blk_snap_snapshot_create {
-	__u32 count;		/* in */
-	dev_t *dev_id_array;	/* in */
+	__u32 count;		/* input */
+	dev_t *dev_id_array;	/* input */
 	uuid_t id;		/* output */
 };
 /**
@@ -170,7 +170,7 @@ struct blk_snap_snapshot_create {
  * 	&IOCTL_BLK_SNAP_SNAPSHOT_DESTROY control.
  */
 struct blk_snap_snapshot_destroy {
-	uuid_t id;
+	uuid_t id;	/* input */
 };
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_DESTROY - Release and destroy snapshot.
@@ -185,10 +185,10 @@ struct blk_snap_snapshot_destroy {
  * 	&IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE control.
  */
 struct blk_snap_snapshot_append_storage {
-	uuid_t id;
-	dev_t dev_id;
-	__u32 count;
-	struct blk_snap_block_range *ranges;
+	uuid_t id;				/* input */
+	dev_t dev_id;				/* input */
+	__u32 count;				/* input */
+	struct blk_snap_block_range *ranges;	/* input */
 
 };
 /**
@@ -207,28 +207,58 @@ struct blk_snap_snapshot_append_storage {
  * 	&IOCTL_BLK_SNAP_SNAPSHOT_TAKE control.
  */
 struct blk_snap_snapshot_take {
-	uuid_t id;
+	uuid_t id;	/* input */
 };
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_TAKE - Take snapshot.
  *
  * This ioctl creates snapshot images of block devices and switches CBT tables.
- * Before this call, the snapshot must be created, and the areas of block
+ * The snapshot must be created before this call, and the areas of block
  * devices should be added to the difference storage.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_TAKE \
 	_IOR(BLK_SNAP, 8, struct blk_snap_snapshot_take)
 
+ /**
+  * struct blk_snap_image_info - Associates the original device in the snapshot
+  * 	and the corresponding snapshot image.
+  *
+  */
+struct blk_snap_image_info {
+	dev_t orig_dev_id;
+	dev_t image_dev_id;
+};
 /**
- * struct blk_snap_snapshot_take - Argument for
+ * struct blk_snap_snapshot_collect_images - Argument for
+ * 	&IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES control.
+ */
+struct blk_snap_snapshot_collect_images {
+	uuid_t id;					/* input */
+	__u32 count;					/* input/output */
+	struct blk_snap_image_info* image_info_array;	/* allocated buffer for output */
+
+};
+/**
+ * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES - Get collection of devices and their
+ * 	snapshot images.
+ *
+ * While holding the snapshot, this ioctl allows you to get a table of
+ * correspondences of the original devices and their snapshot images.
+ * This information can also be obtained from files from sysfs.
+ */
+#define IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES \
+	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_collect_images)
+
+/**
+ * struct blk_snap_snapshot_event - Argument for
  * 	&IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT control.
  */
 struct blk_snap_snapshot_event {
-	uuid_t id;		/* in */
-	__u32 timeout_ms;	/* in */
-	__u32 time_label;	/* other fields for output */
-	__u32 code;
-	__u8  data[4096 - 20];	/* up to PAGE_SIZE */
+	uuid_t id;		/* input */
+	__u32 timeout_ms;	/* input */
+	__u32 time_label;	/* output */
+	__u32 code;		/* output */
+	__u8  data[4096 - 28];	/* output, up to PAGE_SIZE */
 };
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get event from snapshot.
@@ -262,7 +292,7 @@ struct blk_snap_event_low_free_space {
  * BLK_SNAP_EVENT_LOW_FREE_SPACE - Low free space in difference storage event.
  *
  * If the free space in the difference storage is reduced to the specified
- * limit, the module generates an event about this.
+ * limit, the module generates this event.
  */
 #define BLK_SNAP_EVENT_LOW_FREE_SPACE 0x41
 
@@ -275,7 +305,7 @@ struct blk_snap_event_corrupted {
 	__s32 errno;
 };
 /**
- * BLK_SNAP_EVENT_CORRUPTED - Snapshot image is corupted event.
+ * BLK_SNAP_EVENT_CORRUPTED - Snapshot image is corrupted event.
  *
  * If a chunk could not be allocated when trying to save data to difference
  * storage, this event is generated.
@@ -294,33 +324,3 @@ struct blk_snap_event_corrupted {
  * since the snapshot is destroyed.
  */
 #define BLK_SNAP_EVENT_TERMINATE 0x43
-
-/**
- * struct blk_snap_image_info - Associates the original device in the snapshot
- * 	and the corresponding snapshot image.
- *
- */
-struct blk_snap_image_info {
-	dev_t orig_dev_id;
-	dev_t image_dev_id;
-};
-/**
- * struct blk_snap_snapshot_collect_images - Argument for
- * 	&IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES control.
- */
-struct blk_snap_snapshot_collect_images {
-	uuid_t id;
-	__u32 count;
-	struct blk_snap_image_info *image_info_array;
-
-};
-/**
- * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES - Get collection of devices and his
- * 	snapshot images.
- *
- * While holding the snapshot, this ioctl allows you to get a table of
- * correspondences of the original devices and their snapshot images.
- * This information can also be obtained from files from sysfs.
- */
-#define IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES \
-	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_collect_images)
