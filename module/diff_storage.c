@@ -21,7 +21,7 @@ struct storage_bdev
 
 /**
  * struct storage_block - A storage unit reserved for storing differences.
- * 
+ *
  */
 struct storage_block
 {
@@ -40,6 +40,7 @@ struct diff_storage *diff_storage_new(void)
 	if (!diff_storage)
 		return NULL;
 
+	kref_init(&diff_storage->kref);
 	spin_lock_init(&diff_storage->lock);
 	INIT_LIST_HEAD(&diff_storage->storage_bdevs);
 	INIT_LIST_HEAD(&diff_storage->empty_blocks);
@@ -64,7 +65,7 @@ struct storage_block *first_filled_storage_block(struct diff_storage *diff_stora
 	                                struct storage_block, link);
 };
 
-static inline 
+static inline
 struct storage_bdev *first_storage_bdev(struct diff_storage *diff_storage)
 {
 	return list_first_entry_or_null(&diff_storage->storage_bdevs,
@@ -113,7 +114,7 @@ struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage, 
 	return bdev;
 }
 
-static inline 
+static inline
 struct block_device *diff_storage_add_storage_bdev(struct diff_storage *diff_storage,
 						   dev_t dev_id)
 {
@@ -138,12 +139,12 @@ struct block_device *diff_storage_add_storage_bdev(struct diff_storage *diff_sto
 
 	spin_lock(&diff_storage->lock);
 	list_add_tail(&storage_bdev->link, &diff_storage->storage_bdevs);
-	spin_unlock(&diff_storage->lock);	
+	spin_unlock(&diff_storage->lock);
 
 	return bdev;
 }
 
-static inline 
+static inline
 int diff_storage_add_range(struct diff_storage *diff_storage,
                            struct block_device *bdev,
                            sector_t sector, sector_t count)
@@ -265,7 +266,7 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		};
 
 		diff_storage->requested += data.requested_nr_sect;
-		event_gen(&diff_storage->event_queue, GFP_NOIO, 
+		event_gen(&diff_storage->event_queue, GFP_NOIO,
 			BLK_SNAP_EVENT_LOW_FREE_SPACE,
 			&data, sizeof(data));
 	}

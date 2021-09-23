@@ -148,10 +148,6 @@ struct snapshot *snapshot_new(unsigned int count)
 	uuid_gen(&snapshot->id);
 	snapshot->is_taken = false;
 
-	down_write(&snapshots_lock);
-	list_add_tail(&snapshots, &snapshot->link);
-	up_write(&snapshots_lock);
-
 	return snapshot;
 
 fail_free_snapimage:
@@ -214,15 +210,15 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uui
 		snapshot->count++;
 	}
 
+	down_write(&snapshots_lock);
+	list_add_tail(&snapshots, &snapshot->link);
+	up_write(&snapshots_lock);
+
 	uuid_copy(id, &snapshot->id);
 	pr_info("Snapshot %pUb was created\n", &snapshot->id);
 	return 0;
 fail:
 	pr_info("Snapshot cannot be created\n");
-
-	down_write(&snapshots_lock);
-	list_del(&snapshot->link);
-	up_write(&snapshots_lock);
 
 	snapshot_put(snapshot);
 	return ret;

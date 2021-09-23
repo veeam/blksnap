@@ -99,14 +99,13 @@ int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity)
 	return cbt_map_allocate(cbt_map);
 }
 
-static
+static inline
 void cbt_map_destroy(struct cbt_map *cbt_map)
 {
 	pr_info("CBT map destroy\n");
-	if (cbt_map != NULL) {
-		cbt_map_deallocate(cbt_map);
-		kfree(cbt_map);
-	}
+
+	cbt_map_deallocate(cbt_map);
+	kfree(cbt_map);
 }
 
 struct cbt_map *cbt_map_create(struct block_device* bdev)
@@ -134,24 +133,9 @@ struct cbt_map *cbt_map_create(struct block_device* bdev)
 	return cbt_map;
 }
 
-static
-void _cbt_map_destroy_cb(struct kref *kref)
+void cbt_map_destroy_cb(struct kref *kref)
 {
 	cbt_map_destroy(container_of(kref, struct cbt_map, kref));
-}
-
-struct cbt_map *cbt_map_get(struct cbt_map *cbt_map)
-{
-	if (cbt_map)
-		kref_get(&cbt_map->kref);
-
-	return cbt_map;
-}
-
-void cbt_map_put(struct cbt_map *cbt_map)
-{
-	if (likely(cbt_map))
-		kref_put(&cbt_map->kref, _cbt_map_destroy_cb);
 }
 
 void cbt_map_switch(struct cbt_map *cbt_map)

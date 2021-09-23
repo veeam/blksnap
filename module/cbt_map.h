@@ -37,8 +37,18 @@ struct cbt_map {
 struct cbt_map *cbt_map_create(struct block_device* bdev);
 int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity);
 
-struct cbt_map *cbt_map_get(struct cbt_map *cbt_map);
-void cbt_map_put(struct cbt_map *cbt_map);
+void cbt_map_destroy_cb(struct kref *kref);
+static inline
+void cbt_map_get(struct cbt_map *cbt_map)
+{
+	kref_get(&cbt_map->kref);
+};
+static inline
+void cbt_map_put(struct cbt_map *cbt_map)
+{
+	if (likely(cbt_map))
+		kref_put(&cbt_map->kref, cbt_map_destroy_cb);
+};
 
 void cbt_map_switch(struct cbt_map *cbt_map);
 int cbt_map_set(struct cbt_map *cbt_map,
