@@ -23,7 +23,7 @@ struct blk_filter {
 #if defined(HAVE_BI_BDEV)
 	dev_t	dev_id;
 #elif defined(HAVE_BI_BDISK)
-	int	major;		/* major number of disks driver */
+	struct gendisk *disk;
 	u8	partno;
 #else
 #error "Invalid kernel configuration"

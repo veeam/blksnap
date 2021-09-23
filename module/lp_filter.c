@@ -25,7 +25,7 @@ DEFINE_PERCPU_RWSEM(bd_filters_lock);
  * If successful, returns a pointer to the block device structure.
  * Returns an error code when an error occurs.
  */
-static inline 
+static inline
 void filters_write_lock(void )
 {
 	percpu_down_write(&bd_filters_lock);
@@ -45,31 +45,31 @@ void filters_write_unlock(void )
 	percpu_up_write(&bd_filters_lock);
 };
 
-static inline 
+static inline
 #if defined(HAVE_BI_BDEV)
 struct blk_filter *filter_find(dev_t dev_id)
 #elif defined(HAVE_BI_BDISK)
-struct blk_filter *filter_find(int major, int partno)
+struct blk_filter *filter_find(struct gendisk *disk, int partno)
 #endif
 {
 	struct blk_filter *flt;
 
 	if (list_empty(&bd_filters))
 		return NULL;
-	
+
 	list_for_each_entry(flt, &bd_filters, link) {
 #if defined(HAVE_BI_BDEV)
 		if (dev_id == flt->dev_id)
 			return flt;
 #elif defined(HAVE_BI_BDISK)
-		if ((major == flt->major) && (partno == flt->partno))
+		if ((disk == flt->disk) && (partno == flt->partno))
 			return flt;
 #endif
 	}
 	return NULL;
 }
 
-static 
+static
 int __filter_add(struct block_device *bdev,
 		 const struct filter_operations *fops, void *ctx)
 {
@@ -78,7 +78,7 @@ int __filter_add(struct block_device *bdev,
 #if defined(HAVE_BI_BDEV)
 	if (filter_find(bdev->bd_dev))
 #elif defined(HAVE_BI_BDISK)
-	if (filter_find(bdev->bd_disk->major, bdev->bd_partno))
+	if (filter_find(bdev->bd_disk, bdev->bd_partno))
 #endif
 		return -EBUSY;
 
@@ -89,7 +89,7 @@ int __filter_add(struct block_device *bdev,
 #if defined(HAVE_BI_BDEV)
 	flt->dev_id = bdev->bd_dev;
 #elif defined(HAVE_BI_BDISK)
-	flt->major = bdev->bd_disk->major;
+	flt->disk = bdev->bd_disk;
 	flt->partno = bdev->bd_partno;
 #endif
 	flt->fops = fops;
@@ -121,7 +121,7 @@ int filter_add(struct block_device *bdev,
 
 	filters_write_lock();
 	current_flag = memalloc_noio_save();
-		
+
 	ret = __filter_add(bdev, fops, ctx);
 
 	memalloc_noio_restore(current_flag);
@@ -138,7 +138,7 @@ int __filter_del(struct block_device *bdev)
 #if defined(HAVE_BI_BDEV)
 	flt = filter_find(bdev->bd_dev);
 #elif defined(HAVE_BI_BDISK)
-	flt = filter_find(bdev->bd_disk->major, bdev->bd_partno);
+	flt = filter_find(bdev->bd_disk, bdev->bd_partno);
 #endif
 	if (!flt)
 		return -ENOENT;
@@ -181,7 +181,7 @@ int filter_del(struct block_device *bdev)
 
 void filters_read_lock(void )
 {
-	percpu_down_read(&bd_filters_lock);	
+	percpu_down_read(&bd_filters_lock);
 }
 
 void filters_read_unlock(void )
@@ -205,7 +205,7 @@ struct blk_filter *filter_find_by_bio(struct bio *bio)
 #if defined(HAVE_BI_BDEV)
 	return filter_find(bio->bi_bdev->bd_dev);
 #elif defined(HAVE_BI_BDISK)
-	return filter_find(bio->bi_disk->major, bio->bi_partno);
+	return filter_find(bio->bi_disk, bio->bi_partno);
 #endif
 }
 
