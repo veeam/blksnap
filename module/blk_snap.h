@@ -333,7 +333,7 @@ struct blk_snap_snapshot_collect_images {
  * This information can also be obtained from files from sysfs.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES \
-	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_collect_images)
+	_IOW(BLK_SNAP, 9, struct blk_snap_snapshot_collect_images)
 
 /**
  * struct blk_snap_snapshot_event - Argument for
@@ -365,7 +365,7 @@ struct blk_snap_snapshot_event {
  * user's thread is in a state of interruptable sleep.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT \
-	_IOW(BLK_SNAP, 9, struct blk_snap_snapshot_event)
+	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_event)
 
 /**
  * BLK_SNAP_EVENT_MSG_ERROR - Unused

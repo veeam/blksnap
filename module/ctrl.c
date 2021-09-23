@@ -394,8 +394,8 @@ int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_snapshot_destroy,
 	ioctl_snapshot_append_storage,
 	ioctl_snapshot_take,
-	ioctl_snapshot_wait_event,
 	ioctl_snapshot_collect_images,
+	ioctl_snapshot_wait_event,
 };
 
 static
