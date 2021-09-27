@@ -15,11 +15,11 @@ struct diff_storage;
 struct chunk;
 
 /**
- * struct diff_area - Discribes the difference area for one original device. 
+ * struct diff_area - Discribes the difference area for one original device.
  * @kref:
  *	This structure can be shared between &struct tracker and &struct
- *	snapimage. 
- * @orig_bdev: 
+ *	snapimage.
+ * @orig_bdev:
  *	A pointer to the structure of an open block device.
  * @io_client:
  *	dm-io is used for disk read and write operations.
@@ -66,8 +66,8 @@ struct chunk;
  *	The flag is set if an error occurred in the operation of the data
  *	saving mechanism in the diff area. In this case, an error will be
  *	generated when reading from the snapshot image.
- * 
- * The &struct diff_area is created for each block device in the snapshot. 
+ *
+ * The &struct diff_area is created for each block device in the snapshot.
  * It is used to save the differences between the original block device and
  * the snapshot image. That is, when writing data to the original device,
  * the differences are copied as chunks to the difference storage.
@@ -85,6 +85,7 @@ struct diff_area {
 	unsigned long chunk_count;
 	struct xarray chunk_map;
 
+        bool in_memory;
 	struct list_head storing_chunks;
 	spinlock_t storing_chunks_lock;
 	struct work_struct storing_chunks_work;
@@ -103,12 +104,20 @@ static inline
 void diff_area_get(struct diff_area *diff_area)
 {
 	kref_get(&diff_area->kref);
+        //DEBUG
+        pr_info("%s - refcount=%u\n", __FUNCTION__,
+                refcount_read(&diff_area->kref.refcount));
 };
 static inline
 void diff_area_put(struct diff_area *diff_area)
 {
-	if (likely(diff_area))
+	if (likely(diff_area)) {
+                //DEBUG
+                pr_info("%s - refcount=%u\n", __FUNCTION__,
+                        refcount_read(&diff_area->kref.refcount));
+
 		kref_put(&diff_area->kref, diff_area_free);
+        }
 };
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code);
 static inline
@@ -116,7 +125,7 @@ bool diff_area_is_corrupted(struct diff_area *diff_area)
 {
 	return !!atomic_read(&diff_area->corrupted_flag);
 };
-static inline 
+static inline
 sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
 {
 	return (sector_t)(1ULL << (diff_area->chunk_shift - SECTOR_SHIFT));

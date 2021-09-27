@@ -121,6 +121,9 @@ void schedule_cache(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
+	if (diff_area->in_memory)
+		return;
+
 	spin_lock(&diff_area->caching_chunks_lock);
 	list_add_tail(&chunk->link, &diff_area->caching_chunks);
 	atomic_inc(&diff_area->caching_chunks_count);
@@ -133,11 +136,12 @@ void schedule_cache(struct chunk *chunk)
 }
 
 static inline
-void io_failed(struct chunk *chunk, int error)
+void io_failed(struct chunk *chunk, int error, bool is_write)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	diff_area_set_corrupted(chunk->diff_area, error);
-	pr_err("Failed to write chunk %lu\n", chunk->number);
+	pr_err("Failed to %s chunk %lu\n",
+	       is_write ? "write" : "read", chunk->number);
 };
 
 static
@@ -146,13 +150,14 @@ void notify_store_fn(unsigned long error, void *context)
 	struct chunk *chunk = (struct chunk *)context;
 
 	if (error) {
-		io_failed(chunk, error);
+		io_failed(chunk, error, true);
 		up_read(&chunk->lock);
 		return;
 	}
 	chunk_state_set(chunk, CHUNK_ST_STORE_READY);
 
-	pr_err("Chunk 0x%lu was stored\n", chunk->number);
+	//DEBUG
+	pr_info("Chunk 0x%lu was stored\n", chunk->number);
 
 	schedule_cache(chunk);
 }
@@ -172,7 +177,9 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 					diff_area->diff_storage,
 					diff_area_chunk_sectors(diff_area));
 			if (unlikely(IS_ERR(diff_store))) {
-				io_failed(chunk, PTR_ERR(diff_store));
+				//DEBUG
+				pr_err("Cannot get new diff storage");
+				io_failed(chunk, PTR_ERR(diff_store), true);
 				up_read(&chunk->lock);
 				return;
 			}
@@ -182,10 +189,9 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 
 		ret = chunk_async_store_diff(chunk, notify_store_fn);
 		if (ret)
-			io_failed(chunk, ret);
+			io_failed(chunk, ret, true);
 		up_read(&chunk->lock);
 	}
-
 }
 
 static
@@ -261,6 +267,12 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	kref_init(&diff_area->kref);
 	xa_init(&diff_area->chunk_map);
 
+	if (!diff_storage->capacity) {
+		diff_area->in_memory = true;
+		pr_info("Difference storage is empty.\n") ;
+		pr_info("Only the memory cache will be used to store the snapshots difference.\n") ;
+	}
+
 	INIT_LIST_HEAD(&diff_area->storing_chunks);
 	spin_lock_init(&diff_area->storing_chunks_lock);
 	INIT_WORK(&diff_area->storing_chunks_work, diff_area_storing_chunks_work);
@@ -309,6 +321,9 @@ void schedule_storing_diff(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
+	if (diff_area->in_memory)
+		return;
+
 	spin_lock(&diff_area->storing_chunks_lock);
 	list_add_tail(&chunk->link, &diff_area->storing_chunks);
 	spin_unlock(&diff_area->storing_chunks_lock);
@@ -329,7 +344,7 @@ void notify_load_fn(unsigned long error, void *context)
 	struct chunk *chunk = (struct chunk *)context;
 
 	if (error) {
-		io_failed(chunk, error);
+		io_failed(chunk, error, false);
 		up_write(&chunk->lock);
 		return;
 	}
