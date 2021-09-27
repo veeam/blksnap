@@ -21,9 +21,10 @@ void snapshot_release(struct snapshot *snapshot)
 
 	/* destroy all snapshot images */
 	for (inx = 0; inx < snapshot->count; ++inx) {
-		if (!snapshot->snapimage_array[inx])
-			continue;
-		snapimage_free(snapshot->snapimage_array[inx]);
+		struct snapimage * snapimage = snapshot->snapimage_array[inx];
+
+		if (snapimage)
+			snapimage_free(snapimage);
 	}
 
 	/* flush and freeze fs on each original block device */
@@ -42,7 +43,7 @@ void snapshot_release(struct snapshot *snapshot)
 #endif
 	}
 
-	/* Set tracker as available */
+	/* Set tracker as available for new snapshots */
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
 
@@ -62,12 +63,9 @@ void snapshot_release(struct snapshot *snapshot)
 #endif
 	}
 
+	/* destroy diff area for each tracker */
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
-		struct snapimage * snapimage = snapshot->snapimage_array[inx];
-
-		if (snapimage)
-			snapimage_free(snapimage);
 
 		if (tracker) {
 			diff_area_put(tracker->diff_area);

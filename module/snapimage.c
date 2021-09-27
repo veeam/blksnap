@@ -280,7 +280,7 @@ fail_free_queue:
 #endif
 fail_free_tagset:
 	blk_mq_free_tag_set(&snapimage->tag_set);
-fail_free_minor:
+//fail_free_minor:
 	free_minor(minor);
 fail_free_image:
 	kfree(snapimage);
