@@ -10,11 +10,64 @@
 
 #define SNAPIMAGE_MAX_DEVICES 2048
 
-int snapimage_major;
-unsigned long *snapimage_minors;
-DEFINE_SPINLOCK(snapimage_minors_lock);
+static unsigned int _major = 0;
+static DEFINE_IDR(_minor_idr);
+static DEFINE_SPINLOCK(_minor_lock);
 
-static 
+static
+void free_minor(int minor)
+{
+	spin_lock(&_minor_lock);
+	idr_remove(&_minor_idr, minor);
+	spin_unlock(&_minor_lock);
+}
+
+static
+int new_minor(int *minor, void *ptr)
+{
+	int ret;
+
+	idr_preload(GFP_KERNEL);
+	spin_lock(&_minor_lock);
+
+	ret = idr_alloc(&_minor_idr, ptr, 0, 1 << MINORBITS, GFP_NOWAIT);
+
+	spin_unlock(&_minor_lock);
+	idr_preload_end();
+
+	if (ret < 0)
+		return ret;
+
+	*minor = ret;
+	return 0;
+}
+
+/*
+struct snapimage *snapimage_get_dev(dev_t dev)
+{
+	struct snapimage *snapimage;
+	unsigned int minor = MINOR(dev);
+
+	if (MAJOR(dev) != _major || minor >= (1 << MINORBITS))
+		return NULL;
+
+	spin_lock(&_minor_lock);
+
+	snapimage = idr_find(&_minor_idr, minor);
+	if (!snapimage)
+		goto out;
+
+	//snapimage_get(snapimage);
+out:
+	spin_unlock(&_minor_lock);
+
+	return snapimage;
+}
+*/
+//unsigned long *snapimage_minors;
+//DEFINE_SPINLOCK(snapimage_minors_lock);
+
+static
 blk_status_t snapimage_rq_io(struct snapimage *snapimage, struct request *rq)
 {
 	blk_status_t status = BLK_STS_OK;
@@ -36,7 +89,7 @@ blk_status_t snapimage_rq_io(struct snapimage *snapimage, struct request *rq)
 	return status;
 }
 
-static 
+static
 blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 		const struct blk_mq_queue_data *bd)
 {
@@ -77,37 +130,25 @@ struct block_device_operations bd_ops = {
 
 void snapimage_free(struct snapimage *snapimage)
 {
-	pr_info("Snapshot image disk delete\n");
+	pr_info("Snapshot image disk [%u:%u] delete\n",
+	        MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
 
-	del_gendisk(snapimage->disk);
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
+	del_gendisk(snapimage->disk);
 	blk_cleanup_disk(snapimage->disk);
+	blk_mq_free_tag_set(&snapimage->tag_set);
 #else
+	del_gendisk(snapimage->disk);
 	blk_cleanup_queue(snapimage->queue);
+	blk_mq_free_tag_set(&snapimage->tag_set);
 	put_disk(snapimage->disk);
 #endif
-	blk_mq_free_tag_set(&snapimage->tag_set);
 
-	spin_lock(&snapimage_minors_lock);
-	bitmap_clear(snapimage_minors, MINOR(snapimage->image_dev_id), 1u);
-	spin_unlock(&snapimage_minors_lock);
-
+	free_minor(MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
-}
-
-static
-void snapimage_tagset_init(struct blk_mq_tag_set *tag_set, void *snapimage)
-{
-	tag_set->ops = &mq_ops;
-	tag_set->nr_hw_queues = 1;
-	tag_set->queue_depth = 128;
-	tag_set->numa_node = NUMA_NO_NODE;
-	//tag_set->cmd_size = sizeof(struct loop_cmd);
-	tag_set->flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;
-	tag_set->driver_data = snapimage;
 }
 
 struct snapimage *snapimage_create(struct diff_area *diff_area,
@@ -129,57 +170,67 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	if (snapimage == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	spin_lock(&snapimage_minors_lock);
-	minor = bitmap_find_free_region(snapimage_minors, SNAPIMAGE_MAX_DEVICES, 0);
-	spin_unlock(&snapimage_minors_lock);
-
-	if (minor < 0) {
-		ret = abs(minor);
+	ret = new_minor(&minor, snapimage);
+	if (ret) {
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
-			ret);
+			abs(ret));
 		goto fail_free_image;
 	}
 
 	snapimage->capacity = cbt_map->device_capacity;
-	snapimage->image_dev_id = MKDEV(snapimage_major, minor);
+	snapimage->image_dev_id = MKDEV(_major, minor);
 	pr_info("Snapshot image device id [%u:%u]\n",
 	        MAJOR(snapimage->image_dev_id),
 	        MINOR(snapimage->image_dev_id));
-
-	snapimage_tagset_init(&snapimage->tag_set, snapimage);
+/*
+	snapimage->tag_set.ops = &mq_ops;
+	snapimage->tag_set.nr_hw_queues = 1;
+	snapimage->tag_set.queue_depth = 128;
+	snapimage->tag_set.numa_node = NUMA_NO_NODE;
+	//snapimage->tag_set.cmd_size = sizeof(struct loop_cmd);
+	snapimage->tag_set.flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;
+	snapimage->tag_set.driver_data = snapimage;
 
 	ret = blk_mq_alloc_tag_set(&snapimage->tag_set);
 	if (ret) {
 		pr_err("Failed to allocate tag set. errno=%d\n", ret);
-		goto fail_free_image;
+		goto fail_free_minor;
 	}
+*/
 
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
-	disk = blk_mq_alloc_disk(&snapimage->tag_set, snapimage);
+	//disk = blk_mq_alloc_disk(&snapimage->tag_set, snapimage);
 	if (IS_ERR(disk)) {
 		ret = PTR_ERR(disk);
 		pr_err("Failed to allocate disk. errno=%d\n", ret);
 		goto fail_free_tagset;
 	}
+
+	blk_queue_max_hw_sectors(snapimage->queue, BLK_DEF_MAX_SECTORS);
+	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, snapimage->queue);
+
 #else
-	queue = blk_mq_init_queue(&snapimage->tag_set);
+	disk = alloc_disk(1);
+	if (!disk) {
+		pr_err("Failed to allocate disk. errno=%d\n", -EFAULT);
+		goto fail_free_queue;
+	}
+	queue = blk_mq_init_sq_queue(&snapimage->tag_set, &mq_ops, 128,
+	                             BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING);
 	if (IS_ERR(queue)) {
 		ret = PTR_ERR(queue);
 		pr_err("Failed to allocate queue. errno=%d\n", ret);
 		goto fail_free_tagset;
 	}
+	disk->queue = queue;
+
 	snapimage->queue = queue;
 	snapimage->queue->queuedata = snapimage;
 
-	disk = alloc_disk(1);
-	if (IS_ERR(disk)) {
-		ret = PTR_ERR(disk);
-		pr_err("Failed to allocate disk. errno=%d\n", ret);
-		goto fail_free_queue;
-	}
-	disk->queue = queue;
+	blk_queue_bounce_limit(snapimage->queue, BLK_BOUNCE_HIGH);
+	blk_queue_max_hw_sectors(snapimage->queue, BLK_DEF_MAX_SECTORS);
+	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, snapimage->queue);
 #endif
-	snapimage->disk = disk;
 
 	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d", SNAPIMAGE_NAME, minor) < 0) {
 		pr_err("Unable to set disk name for snapshot image device: invalid minor %d\n",
@@ -189,18 +240,22 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	}
 	pr_info("Snapshot image disk name [%s]", disk->disk_name);
 
+	disk->flags = 0;
 	//disk->flags |= GENHD_FL_SUPPRESS_PARTITION_INFO;
 	//disk->flags |= GENHD_FL_EXT_DEVT;
 	disk->flags |= GENHD_FL_NO_PART_SCAN;
-	disk->flags |= GENHD_FL_HIDDEN;
+	//disk->flags |= GENHD_FL_HIDDEN;
 	//disk->flags |= GENHD_FL_REMOVABLE;
 
-	disk->major = snapimage_major;
-	disk->minors = 1; // one disk have only one partition.
+	disk->major = _major;
 	disk->first_minor = minor;
+	disk->minors = 1; // one disk have only one partition.
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;
+	disk->queue = queue;
+
+	snapimage->disk = disk;
 
 	set_capacity(disk, snapimage->capacity);
 	pr_info("Snapshot image device capacity %lld bytes",
@@ -225,6 +280,8 @@ fail_free_queue:
 #endif
 fail_free_tagset:
 	blk_mq_free_tag_set(&snapimage->tag_set);
+fail_free_minor:
+	free_minor(minor);
 fail_free_image:
 	kfree(snapimage);
 	return ERR_PTR(ret);
@@ -232,34 +289,24 @@ fail_free_image:
 
 int snapimage_init(void)
 {
-	int major = 0;
+	int mj = 0;
 
-	snapimage_minors = bitmap_zalloc(SNAPIMAGE_MAX_DEVICES, GFP_KERNEL);
-	if (!snapimage_minors) {
-		pr_err("Failed to initialize bitmap of minors\n");
-		return -ENOMEM;
-	}
-
-	major = register_blkdev(snapimage_major, SNAPIMAGE_NAME);
-	if (major < 0) {
+	mj = register_blkdev(mj, SNAPIMAGE_NAME);
+	if (mj < 0) {
 		pr_err("Failed to register snapshot image block device. errno=%d\n",
-			abs(major));
-		bitmap_free(snapimage_minors);
-		return major;
+			abs(mj));
+		return mj;
 	}
-	snapimage_major = major;
-	pr_info("Snapshot image block device major %d was registered\n",
-		snapimage_major);
-	
+	_major = mj;
+	pr_info("Snapshot image block device major %d was registered\n", _major);
+
 	return 0;
 }
 
 void snapimage_done(void)
 {
-	bitmap_free(snapimage_minors);
-	snapimage_minors = NULL;
+	unregister_blkdev(_major, SNAPIMAGE_NAME);
+	pr_info("Snapshot image block device [%d] was unregistered\n", _major);
 
-	unregister_blkdev(snapimage_major, SNAPIMAGE_NAME);
-	pr_info("Snapshot image block device [%d] was unregistered\n",
-		snapimage_major);
+	idr_destroy(&_minor_idr);
 }
