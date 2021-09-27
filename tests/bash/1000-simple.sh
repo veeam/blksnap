@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+echo "---"
+echo "Simple test start"
+
 # check module is ready
 blksnap_version
 
@@ -41,12 +44,15 @@ blksnap_snapshot_take
 blksnap_snapshot_destroy
 
 
-# destroy second device
+echo "Destroy second device"
 umount ${MOUNTPOINT_2}
 loop_device_detach ${DEVICE_2}
 imagefile_cleanup ${IMAGEFILE_2}
 
-# destroy first device
+echo "Destroy first device"
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
+
+echo "Simple test finish"
+echo "---"

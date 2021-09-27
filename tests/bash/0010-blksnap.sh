@@ -33,3 +33,10 @@ blksnap_snapshot_take()
 
 	${BLKSNAP} snapshot_take --id=${ID}
 }
+
+blksnap_tracker_remove()
+{
+	local DEVICE=$1
+
+	${BLKSNAP} tracker_remove --device=${DEVICE}
+}
