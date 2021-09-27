@@ -132,6 +132,9 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd)
 	struct super_block *superblock = NULL;
 #endif
 
+	//DEBUG
+	pr_info("%s %s filter", __FUNCTION__, (flt_cmd == filter_cmd_add) ? "add" : "delete");
+
 	bdev = blkdev_get_by_dev(tracker->dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
 		pr_err("Failed to open device [%u:%u]\n",
@@ -145,6 +148,9 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd)
 	if (freeze_bdev(bdev))
 		pr_err("Failed to freeze device [%u:%u]\n",
 		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	else
+		pr_info("Device [%u:%u] was frozen\n",
+	        	MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 #endif
 
 	switch (flt_cmd) {
@@ -164,6 +170,9 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd)
 	if (thaw_bdev(bdev))
 		pr_err("Failed to thaw device [%u:%u]\n",
 		       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+	else
+		pr_info("Device [%u:%u] was unfrozen\n",
+		        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 #endif
 
 	blkdev_put(bdev, 0);
@@ -266,8 +275,12 @@ void tracker_release_snapshot(struct tracker *tracker)
 	if (!tracker)
 		return;
 
-	if (!!atomic_read(&tracker->snapshot_is_taken))
-		return;
+	//DEBUG
+	pr_info("%s for device [%u:%u]", __FUNCTION__,
+	        MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+
+	//if (!!atomic_read(&tracker->snapshot_is_taken))
+	//	return;
 
 	atomic_set(&tracker->snapshot_is_taken, false);
 }
