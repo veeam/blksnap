@@ -16,10 +16,8 @@ void snapshot_release(struct snapshot *snapshot)
 {
 	int inx;
 
-	if (snapshot->is_taken)
-		return;
-
-	snapshot->is_taken = false;
+	//DEBUG
+	pr_info("%s id=%pUb\n", __FUNCTION__, &snapshot->id);
 
 	/* destroy all snapshot images */
 	for (inx = 0; inx < snapshot->count; ++inx) {
@@ -52,7 +50,7 @@ void snapshot_release(struct snapshot *snapshot)
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
-		if (!tracker  || !tracker->diff_area)
+		if (!tracker || !tracker->diff_area)
 			continue;
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -63,25 +61,28 @@ void snapshot_release(struct snapshot *snapshot)
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
+
+	for (inx = 0; inx < snapshot->count; ++inx) {
+		struct tracker *tracker = snapshot->tracker_array[inx];
+		struct snapimage * snapimage = snapshot->snapimage_array[inx];
+
+		if (snapimage)
+			snapimage_free(snapimage);
+
+		if (tracker) {
+			diff_area_put(tracker->diff_area);
+			tracker_put(tracker);
+		}
+	}
 }
 
 static
 void snapshot_free(struct kref *kref)
 {
 	struct snapshot *snapshot = container_of(kref, struct snapshot, kref);
-	int inx;
 
-	snapshot_release(snapshot);
-
-	for (inx = 0; inx < snapshot->count; ++inx) {
-		struct tracker *tracker = snapshot->tracker_array[inx];
-
-		if (!tracker)
-			continue;
-
-		diff_area_put(tracker->diff_area);
-		tracker_put(tracker);
-	}
+	if (snapshot->is_taken)
+		snapshot_release(snapshot);
 
 	kfree(snapshot->snapimage_array);
 	kfree(snapshot->tracker_array);
@@ -97,12 +98,19 @@ static inline
 void snapshot_get(struct snapshot *snapshot)
 {
 	kref_get(&snapshot->kref);
+	//DEBUG
+	pr_info("%s - refcount=%u\n", __FUNCTION__,
+	        refcount_read(&snapshot->kref.refcount));
 };
 static inline
 void snapshot_put(struct snapshot *snapshot)
 {
-	if (likely(snapshot))
+	if (likely(snapshot)) {
+		//DEBUG
+		pr_info("%s - refcount=%u\n", __FUNCTION__,
+		        refcount_read(&snapshot->kref.refcount));
 		kref_put(&snapshot->kref, snapshot_free);
+	}
 };
 
 static
@@ -167,13 +175,17 @@ void snapshot_done(void)
 {
 	struct snapshot *snapshot;
 
-	pr_info("Removing all snapshots\n");
-	down_write(&snapshots_lock);
-	while((snapshot = list_first_entry_or_null(&snapshots, struct snapshot, link))) {
-		list_del(&snapshot->link);
+	pr_info("Cleanup snapshots\n");
+
+	do {
+		down_write(&snapshots_lock);
+		snapshot = list_first_entry_or_null(&snapshots, struct snapshot, link);
+		if (snapshot)
+			list_del(&snapshot->link);
+		up_write(&snapshots_lock);
+
 		snapshot_put(snapshot);
-	}
-	up_write(&snapshots_lock);
+	} while (snapshot);
 }
 
 int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uuid_t *id)
@@ -300,11 +312,15 @@ int snapshot_take(uuid_t *id)
 	if (!snapshot)
 		return -ESRCH;
 
-	if (snapshot->is_taken)
-		return -EALREADY;
+	if (snapshot->is_taken) {
+		ret = -EALREADY;
+		goto out;
+	}
 
-	if (!snapshot->count)
-		return -ENODEV;
+	if (!snapshot->count) {
+		ret = -ENODEV;
+		goto out;
+	}
 
 	/* allocate diff area for each device in snapshot */
 	for (inx = 0; inx < snapshot->count; inx++) {
@@ -350,6 +366,7 @@ int snapshot_take(uuid_t *id)
 		}
 	}
 	snapshot->is_taken = true;
+	pr_info("Snapshot was taken");
 
 	/* thaw file systems on original block devices */
 	for (inx = 0; inx < snapshot->count; inx++) {
