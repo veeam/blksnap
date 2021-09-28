@@ -66,6 +66,8 @@ int sysfs_init(void)
 
 void sysfs_done(void)
 {
+	pr_info("Cleanup sysfs\n");
+
 	if (blk_snap_device) {
 		device_unregister(blk_snap_device);
 		blk_snap_device = NULL;

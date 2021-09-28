@@ -66,6 +66,8 @@ int ctrl_init(void)
 
 void ctrl_done(void)
 {
+	pr_info("Unregister control device\n");
+
 	unregister_chrdev(blk_snap_major, MODULE_NAME);
 }
 

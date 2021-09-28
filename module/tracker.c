@@ -293,34 +293,40 @@ int tracker_init(void)
 void tracker_done(void)
 {
 	struct tracker *tracker;
-	dev_t dev_id;
 	struct block_device *bdev;
+	bool is_detached;
+	int ret;
 
-	pr_info("Cleanup trackers:\n");
+	pr_info("Cleanup trackers\n");
 	write_lock(&trackers_lock);
 	while ((tracker = list_first_entry_or_null(&trackers, struct tracker, link))) {
-		dev_id = tracker->dev_id;
+		is_detached = false;
+		kref_get(&tracker->kref);
 		write_unlock(&trackers_lock);
 
-		pr_info("\t[%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
+		pr_info("Cleanup tracker for device [%u:%u]\n",
+			MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
-		bdev = blkdev_get_by_dev(dev_id, 0, NULL);
-		if (IS_ERR(bdev)) {
+		bdev = blkdev_get_by_dev(tracker->dev_id, 0, NULL);
+		if (IS_ERR(bdev))
 			pr_err("Cannot open device [%u:%u], errno=%d\n",
-			       MAJOR(dev_id), MINOR(dev_id), abs((int)PTR_ERR(bdev)));
-
-			tracker_detach(tracker);
-		} else {
-			int ret = filter_del(bdev);
-
-			if (ret) {
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id),
+			       abs((int)PTR_ERR(bdev)));
+		else {
+			ret = filter_del(bdev);
+			if (ret)
 				pr_err("Failed to detach filter from  device [%u:%u], errno=%d\n",
-			       		MAJOR(dev_id), MINOR(dev_id), abs(ret));
-				tracker_detach(tracker);
-			}
+			       		MAJOR(tracker->dev_id), MINOR(tracker->dev_id),
+			       		abs(ret));
+			else
+				is_detached = true;
 			blkdev_put(bdev, 0);
 		}
 
+		if (!is_detached)
+			tracker_detach(tracker);
+
+		tracker_put(tracker);
 		write_lock(&trackers_lock);
 	}
 	write_unlock(&trackers_lock);
@@ -471,7 +477,7 @@ int tracker_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_r
 		count, MAJOR(dev_id), MINOR(dev_id));
 
 	tracker = tracker_get_by_dev_id(dev_id);
-	if (tracker == NULL) {
+	if (!tracker) {
 		pr_err("Cannot find device [%u:%u]\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		return -ENODEV;
@@ -481,12 +487,11 @@ int tracker_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_r
 		ret = cbt_map_set_both(tracker->cbt_map,
 				       (sector_t)block_ranges[inx].sector_offset,
 				       (sector_t)block_ranges[inx].sector_count);
-		if (ret != 0) {
+		if (ret) {
 			pr_err("Failed to set CBT table. errno=%d\n", abs(ret));
 			break;
 		}
 	}
 	tracker_put(tracker);
-
 	return ret;
 }

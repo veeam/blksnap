@@ -69,7 +69,10 @@ void snapshot_release(struct snapshot *snapshot)
 
 		if (tracker) {
 			diff_area_put(tracker->diff_area);
+			tracker->diff_area = NULL;
+
 			tracker_put(tracker);
+			snapshot->tracker_array[inx] = NULL;
 		}
 	}
 }

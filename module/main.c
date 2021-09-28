@@ -73,6 +73,8 @@ void __exit blk_snap_exit(void)
 
 	sysfs_done();
 	ctrl_done();
+
+	pr_info("Module was unloaded \n");
 }
 
 module_init(blk_snap_init);
