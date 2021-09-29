@@ -20,19 +20,23 @@ struct filter_operations {
 
 struct blk_filter {
 	struct list_head link;
-#if defined(HAVE_BI_BDEV)
-	dev_t	dev_id;
-#elif defined(HAVE_BI_BDISK)
+	dev_t dev_id;
+#if defined(HAVE_BI_BDISK)
 	struct gendisk *disk;
-	u8	partno;
-#else
-#error "Invalid kernel configuration"
+	u8 partno;
 #endif
 	const struct filter_operations *fops;
 	void *ctx;
 };
 
+void filters_write_lock(struct block_device *bdev );
+void filters_write_unlock(struct block_device *bdev );
+void filters_read_lock(struct block_device *bdev );
+void filters_read_unlock(struct block_device *bdev );
+
 int filter_add(struct block_device *bdev, const struct filter_operations *fops, void *ctx);
 int filter_del(struct block_device *bdev);
+
+void* filter_find_ctx(struct block_device *bdev);
 
 int filter_enable(void );

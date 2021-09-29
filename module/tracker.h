@@ -11,23 +11,20 @@ struct diff_area;
 
 /**
  * struct tracker - Tracker for block device.
- * 
- * @link:
- * 
+ *
  * @kref:
  * 	Protects the structure from being released during the processing of
  * 	a IOCTL.
  * @dev_id:
  * 	Original block device ID.
  * @snapshot_is_taken:
- * 
+ *
  * @cbt_map:
- * 
+ *
  * @diff_area:
- * 
+ *
  */
 struct tracker {
-	struct list_head link;
 	struct kref kref;
 	dev_t dev_id;
 
@@ -38,13 +35,13 @@ struct tracker {
 };
 
 void tracker_free(struct kref *kref);
-static inline 
+static inline
 void tracker_put(struct tracker *tracker)
 {
 	if (likely(tracker))
 		kref_put(&tracker->kref, tracker_free);
 };
-struct tracker *tracker_get_by_dev_id(dev_t dev_id);
+struct tracker *tracker_get_by_dev(struct block_device *bdev);
 
 int tracker_init(void);
 void tracker_done(void);

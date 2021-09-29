@@ -64,8 +64,6 @@ out:
 	return snapimage;
 }
 */
-//unsigned long *snapimage_minors;
-//DEFINE_SPINLOCK(snapimage_minors_lock);
 
 static
 blk_status_t snapimage_rq_io(struct snapimage *snapimage, struct request *rq)

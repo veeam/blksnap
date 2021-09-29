@@ -5,7 +5,6 @@
 #include <linux/bio.h>
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
-#include <linux/sched/mm.h>
 #include "lp_filter.h"
 
 /* The list of filters for this block device */
@@ -17,40 +16,37 @@ DEFINE_PERCPU_RWSEM(bd_filters_lock);
 
 /**
  * filters_write_lock() - Locks the processing of I/O requests for block device.
+ * @bdev:
+ *	Pointer to &struct block_device.
+ *      The parameter is unused, but is present for compatibility with the
+ * 	blk-filter from upstream.
  *
  * Locks block device the execution of the submit_bio_noacct() function for it.
  * To avoid calling a deadlock, do not call I/O operations after this lock.
  * To do this, using the memalloc_noio_save() function can be useful.
  *
- * If successful, returns a pointer to the block device structure.
- * Returns an error code when an error occurs.
  */
-static inline
-void filters_write_lock(void )
+void filters_write_lock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_down_write(&bd_filters_lock);
 };
 
 /**
- * bdev_filter_lock - Unlocks the processing of I/O requests for block device.
-
+ * filters_write_unlock - Unlocks the processing of I/O requests for block device.
  * @bdev:
- *	pointer to block device structure
+ *	Pointer to &struct block_device.
+ *      The parameter is unused, but is present for compatibility with the
+ * 	blk-filter from upstream.
  *
  * The submit_bio_noacct() function can be continued.
  */
-static inline
-void filters_write_unlock(void )
+void filters_write_unlock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_up_write(&bd_filters_lock);
 };
 
 static inline
-#if defined(HAVE_BI_BDEV)
 struct blk_filter *filter_find(dev_t dev_id)
-#elif defined(HAVE_BI_BDISK)
-struct blk_filter *filter_find(struct gendisk *disk, int partno)
-#endif
 {
 	struct blk_filter *flt;
 
@@ -58,46 +54,28 @@ struct blk_filter *filter_find(struct gendisk *disk, int partno)
 		return NULL;
 
 	list_for_each_entry(flt, &bd_filters, link) {
-#if defined(HAVE_BI_BDEV)
 		if (dev_id == flt->dev_id)
 			return flt;
-#elif defined(HAVE_BI_BDISK)
-		if ((disk == flt->disk) && (partno == flt->partno))
-			return flt;
-#endif
 	}
 	return NULL;
 }
 
-static
-int __filter_add(struct block_device *bdev,
-		 const struct filter_operations *fops, void *ctx)
+#if defined(HAVE_BI_BDISK)
+static inline
+struct blk_filter *filter_find_by_disk(struct gendisk *disk, int partno)
 {
 	struct blk_filter *flt;
 
-#if defined(HAVE_BI_BDEV)
-	if (filter_find(bdev->bd_dev))
-#elif defined(HAVE_BI_BDISK)
-	if (filter_find(bdev->bd_disk, bdev->bd_partno))
-#endif
-		return -EBUSY;
+	if (list_empty(&bd_filters))
+		return NULL;
 
-	flt = kzalloc(sizeof(struct blk_filter), GFP_NOIO);
-	if (!flt)
-		return -ENOMEM;
-
-#if defined(HAVE_BI_BDEV)
-	flt->dev_id = bdev->bd_dev;
-#elif defined(HAVE_BI_BDISK)
-	flt->disk = bdev->bd_disk;
-	flt->partno = bdev->bd_partno;
-#endif
-	flt->fops = fops;
-	flt->ctx = ctx;
-	list_add(&flt->link, &bd_filters);
-
-	return 0;
+	list_for_each_entry(flt, &bd_filters, link) {
+		if ((disk == flt->disk) && (partno == flt->partno))
+			return flt;
+	}
+	return NULL;
 }
+#endif
 
 /**
  * filter_add - Attach a filter to original block device.
@@ -116,37 +94,23 @@ int __filter_add(struct block_device *bdev,
 int filter_add(struct block_device *bdev,
 	       const struct filter_operations *fops, void *ctx)
 {
-	int ret;
-	unsigned int current_flag;
-
-	filters_write_lock();
-	current_flag = memalloc_noio_save();
-
-	ret = __filter_add(bdev, fops, ctx);
-
-	memalloc_noio_restore(current_flag);
-	filters_write_unlock();
-
-	return ret;
-}
-
-static
-int __filter_del(struct block_device *bdev)
-{
 	struct blk_filter *flt;
 
-#if defined(HAVE_BI_BDEV)
-	flt = filter_find(bdev->bd_dev);
-#elif defined(HAVE_BI_BDISK)
-	flt = filter_find(bdev->bd_disk, bdev->bd_partno);
-#endif
-	if (!flt)
-		return -ENOENT;
+	if (filter_find(bdev->bd_dev))
+		return -EBUSY;
 
-	if (flt->fops->detach_cb)
-		flt->fops->detach_cb(flt->ctx);
-	list_del(&flt->link);
-	kfree(flt);
+	flt = kzalloc(sizeof(struct blk_filter), GFP_NOIO);
+	if (!flt)
+		return -ENOMEM;
+
+	flt->dev_id = bdev->bd_dev;
+#if defined(HAVE_BI_BDISK)
+	flt->disk = bdev->bd_disk;
+	flt->partno = bdev->bd_partno;
+#endif
+	flt->fops = fops;
+	flt->ctx = ctx;
+	list_add(&flt->link, &bd_filters);
 
 	return 0;
 }
@@ -159,54 +123,70 @@ int __filter_del(struct block_device *bdev)
  * 	unique filters name.
  *
  * Before deleting a filter, it is necessary to lock the processing
- * of bio requests of the device by calling bdev_filter_lock().
+ * of bio requests of the device by calling filters_write_lock().
  *
  * The filter should be added using the bdev_filter_add() function.
  */
 int filter_del(struct block_device *bdev)
 {
-	int ret;
-	unsigned int current_flag;
+	struct blk_filter *flt;
 
-	filters_write_lock();
-	current_flag = memalloc_noio_save();
+	flt = filter_find(bdev->bd_dev);
+	if (!flt)
+		return -ENOENT;
 
-	ret = __filter_del(bdev);
+	if (flt->fops->detach_cb)
+		flt->fops->detach_cb(flt->ctx);
+	list_del(&flt->link);
+	kfree(flt);
 
-	memalloc_noio_restore(current_flag);
-	filters_write_unlock();
-
-	return ret;
+	return 0;
 }
 
-void filters_read_lock(void )
+/**
+ * filters_read_lock - Lock filters list, protecting them from changes.
+ * @bdev:
+ *	Pointer to &struct block_device.
+ *      The parameter is unused, but is present for compatibility with the
+ * 	blk-filter from upstream.
+ *
+ * The lock ensures that the filter will not be removed from the list until
+ * the lock is removed.
+ */
+void filters_read_lock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_down_read(&bd_filters_lock);
 }
 
-void filters_read_unlock(void )
+/**
+ * filters_read_unlock - Unlock filters list.
+ * @bdev:
+ *	Pointer to &struct block_device.
+ *      The parameter is unused, but is present for compatibility with the
+ * 	blk-filter from upstream.
+ */
+void filters_read_unlock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_up_read(&bd_filters_lock);
 }
 
-static inline
-bool filters_read_lock_for_bio(const struct bio *bio)
+/**
+ * filter_find_ctx - Get filters context value.
+ * @dev_id:
+ * 	Block device ID.
+ *
+ * Return &ctx value from &struct blk_filter or NULL.
+ * NULL is returned if the filter was not found.
+ *
+ * Necessary to lock list of filters by calling filters_read_lock().
+ */
+void* filter_find_ctx(struct block_device *bdev)
 {
-	if (bio->bi_opf & REQ_NOWAIT)
-		return percpu_down_read_trylock(&bd_filters_lock);
+	struct blk_filter *flt;
 
-	percpu_down_read(&bd_filters_lock);
-	return true;
-}
+	flt = filter_find(bdev->bd_dev);
 
-static inline
-struct blk_filter *filter_find_by_bio(struct bio *bio)
-{
-#if defined(HAVE_BI_BDEV)
-	return filter_find(bio->bi_bdev->bd_dev);
-#elif defined(HAVE_BI_BDISK)
-	return filter_find(bio->bi_disk, bio->bi_partno);
-#endif
+	return flt->ctx;
 }
 
 static
@@ -215,16 +195,26 @@ int filters_apply(struct bio *bio)
 	struct blk_filter *flt;
 	int status;
 
-	if (unlikely(!filters_read_lock_for_bio(bio))) {
-		bio_wouldblock_error(bio);
-		return FLT_ST_COMPLETE;
-	}
+	if (bio->bi_opf & REQ_NOWAIT) {
+		int ret;
 
-	flt = filter_find_by_bio(bio);
+		ret = percpu_down_read_trylock(&bd_filters_lock);
+		if (unlikely(ret)) {
+			bio_wouldblock_error(bio);
+			return FLT_ST_COMPLETE;
+		}
+	} else
+		percpu_down_read(&bd_filters_lock);
+
+#if defined(HAVE_BI_BDISK)
+	flt = filter_find_by_disk(bio->bi_disk, bio->bi_partno);
+#else
+	flt = filter_find(bio->bi_bdev->bd_dev);
+#endif
 	if (flt)
 		status = flt->fops->submit_bio_cb(bio, flt->ctx);
 
-	filters_read_unlock();
+	percpu_up_read(&bd_filters_lock);
 
 	return status;
 }
