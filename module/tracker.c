@@ -90,7 +90,7 @@ enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
 		return FLT_ST_COMPLETE;
 	}
 
-	pr_err("Failed to copy data to diff storage with error %d\n", err);
+	pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
 	return FLT_ST_PASS;
 }
 

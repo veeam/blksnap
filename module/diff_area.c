@@ -178,10 +178,11 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 					diff_area_chunk_sectors(diff_area));
 			if (unlikely(IS_ERR(diff_store))) {
 				//DEBUG
-				pr_err("Cannot get new diff storage");
+				pr_err("Cannot get new diff storage for chunk #%lu", chunk->number);
+
 				io_failed(chunk, PTR_ERR(diff_store), true);
 				up_read(&chunk->lock);
-				return;
+				continue;
 			}
 
 			chunk->diff_store = diff_store;
@@ -239,7 +240,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 	if (IS_ERR(bdev)) {
-		pr_err("Failed to open device. errno=%ld\n", PTR_ERR(bdev));
+		pr_err("Failed to open device. errno=%d\n", abs((int)PTR_ERR(bdev)));
 		return ERR_PTR(PTR_ERR(bdev));
 	}
 
@@ -442,13 +443,14 @@ void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
 }
 
 static
-struct chunk* diff_area_image_context_get_chunk(
-	struct diff_area_image_ctx *io_ctx,
-	sector_t sector)
+struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
+                                                sector_t sector)
 {
 	struct chunk* chunk;
 	struct diff_area *diff_area = io_ctx->diff_area;
 	unsigned long new_chunk_number = chunk_number(diff_area, sector);
+
+	pr_info("%s\n", __FUNCTION__);
 
 	if (io_ctx->chunk) {
 		if (io_ctx->chunk->number == new_chunk_number)
@@ -520,6 +522,8 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 {
 	unsigned int bv_len = bvec->bv_len;
 	struct iov_iter iter;
+
+	pr_info("%s\n", __FUNCTION__); //DEBUG
 
 	iov_iter_bvec(&iter, io_ctx->is_write ? WRITE : READ, bvec, 1, bv_len);
 

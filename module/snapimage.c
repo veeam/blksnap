@@ -65,7 +65,7 @@ out:
 }
 */
 
-static
+static inline
 blk_status_t snapimage_rq_io(struct snapimage *snapimage, struct request *rq)
 {
 	blk_status_t status = BLK_STS_OK;
@@ -73,6 +73,8 @@ blk_status_t snapimage_rq_io(struct snapimage *snapimage, struct request *rq)
 	struct req_iterator iter;
 	struct diff_area_image_ctx io_ctx;
 	sector_t pos = blk_rq_pos(rq);
+
+	pr_info("%s\n", __FUNCTION__);
 
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
 				 op_is_write(req_op(rq)));
@@ -200,7 +202,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	//disk = blk_mq_alloc_disk(&snapimage->tag_set, snapimage);
 	if (IS_ERR(disk)) {
 		ret = PTR_ERR(disk);
-		pr_err("Failed to allocate disk. errno=%d\n", ret);
+		pr_err("Failed to allocate disk. errno=%d\n", abs(ret));
 		goto fail_free_tagset;
 	}
 
@@ -210,14 +212,14 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 #else
 	disk = alloc_disk(1);
 	if (!disk) {
-		pr_err("Failed to allocate disk. errno=%d\n", -EFAULT);
+		pr_err("Failed to allocate disk.\n");
 		goto fail_free_queue;
 	}
 	queue = blk_mq_init_sq_queue(&snapimage->tag_set, &mq_ops, 128,
 	                             BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING);
 	if (IS_ERR(queue)) {
 		ret = PTR_ERR(queue);
-		pr_err("Failed to allocate queue. errno=%d\n", ret);
+		pr_err("Failed to allocate queue. errno=%d\n", abs(ret));
 		goto fail_free_tagset;
 	}
 	disk->queue = queue;
@@ -231,7 +233,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 #endif
 
 	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d", SNAPIMAGE_NAME, minor) < 0) {
-		pr_err("Unable to set disk name for snapshot image device: invalid minor %d\n",
+		pr_err("Unable to set disk name for snapshot image device: invalid minor %u\n",
 		       minor);
 		ret = -EINVAL;
 		goto fail_cleanup_disk;
