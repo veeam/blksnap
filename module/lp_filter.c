@@ -305,7 +305,12 @@ struct klp_patch patch = {
 	.objs = objs,
 };
 
-int filter_enable(void)
+int filter_init(void)
 {
 	return klp_enable_patch(&patch);
+}
+
+void filter_done(void )
+{
+	percpu_free_rwsem(&bd_filters_lock);
 }

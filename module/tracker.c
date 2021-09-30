@@ -275,7 +275,7 @@ void tracker_release_snapshot(struct tracker *tracker)
 
 int tracker_init(void)
 {
-	return filter_enable();
+	return filter_init();
 }
 
 void tracker_done(void)
@@ -297,6 +297,8 @@ void tracker_done(void)
 		spin_lock(&tracked_device_lock);
 	}
 	spin_unlock(&tracked_device_lock);
+
+	filter_done();
 }
 
 struct tracker *tracker_create_or_get(dev_t dev_id)

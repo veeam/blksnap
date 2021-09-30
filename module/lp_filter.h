@@ -28,4 +28,5 @@ int filter_del(struct block_device *bdev);
 
 void* filter_find_ctx(struct block_device *bdev);
 
-int filter_enable(void );
+int filter_init(void );
+void filter_done(void );
