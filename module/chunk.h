@@ -11,14 +11,14 @@ struct diff_store;
 
 /**
  * struct diff_buffer - Difference buffer.
- * 
+ *
  * @size:
  *	Number of bytes in byffer.
  * @pages:
  * 	An array and at the same time a singly linked list of pages.
  * 	It is convenient to use with dm-io.
- * 
- * Describes the memory buffer for chunk in memory. 
+ *
+ * Describes the memory buffer for chunk in memory.
  */
 struct diff_buffer {
 	size_t size;
@@ -26,14 +26,14 @@ struct diff_buffer {
 };
 
 /**
- * struct diff_buffer_iter - Iterator for &struct diff_buffer 
+ * struct diff_buffer_iter - Iterator for &struct diff_buffer
  * @page:
  * 	A pointer to the current page.
  * @offset:
  * 	The offset in bytes in the current page.
  * @bytes:
  * 	The number of bytes that can be read or written from this page.
- * 
+ *
  * It is convenient to use when copying data from or to &struct bio_vec.
  */
 struct diff_buffer_iter {
@@ -45,13 +45,28 @@ struct diff_buffer_iter {
 #define SECTOR_IN_PAGE (1 << (PAGE_SHIFT - SECTOR_SHIFT))
 
 static inline
-bool diff_buffer_iter_get(struct diff_buffer *buf, sector_t ofs, struct diff_buffer_iter *iter)
+bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct diff_buffer_iter *iter)
 {
-	size_t page_inx = ofs >> PAGE_SHIFT;
+	size_t page_inx = ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
 
-	iter->page = buf->pages[page_inx].page;
+        BUG_ON( (diff_buffer == NULL) ||
+                (diff_buffer->pages == NULL) ||
+                (diff_buffer->pages[page_inx].page == NULL)); //DEBUG
+
+	iter->page = diff_buffer->pages[page_inx].page;
 	iter->offset = (size_t)(ofs & (SECTOR_IN_PAGE - 1)) << SECTOR_SHIFT;
-	iter->bytes = buf->size - iter->offset;
+        /*
+         * The size cannot exceed the size of the page, taking into account
+         * the offset in this page.
+         * But at the same time it is unacceptable to go beyond the allocated
+         * buffer.
+         */
+	iter->bytes = min_t(size_t, (PAGE_SIZE - iter->offset), (diff_buffer->size - (ofs << SECTOR_SHIFT)));
+
+        //DEBUG
+        pr_info("page_inx=%zu", page_inx); //DEBUG
+        pr_info("offset=%zu", iter->offset); //DEBUG
+        pr_info("bytes=%zu", iter->bytes); //DEBUG
 
 	return !!iter->bytes;
 };
@@ -101,10 +116,10 @@ struct chunk {
 	struct diff_area *diff_area;
 
 	unsigned long number;
-	sector_t sector_count; 
+	sector_t sector_count;
 	atomic_t state;
 
-	struct rw_semaphore lock; 
+	struct rw_semaphore lock;
 
 	struct diff_buffer *diff_buffer;
 	struct diff_store *diff_store;

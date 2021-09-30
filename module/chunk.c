@@ -7,46 +7,15 @@
 #include "diff_area.h"
 #include "diff_storage.h"
 
-static inline
-struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-                                    gfp_t gfp_mask)
-{
-	int ret = 0;
-	struct diff_buffer *buf;
-	size_t inx;
-	struct page_list *prev_page = NULL;
-
-	buf = kzalloc(sizeof(struct diff_buffer) +
-	              page_count * sizeof(struct page_list), gfp_mask);
-	if (!buf)
-		return NULL;
-
-	buf->size = buffer_size;
-
-	for (inx = 0; inx < page_count; inx++) {
-		struct page *page;
-
-		page = alloc_page(gfp_mask);
-		if (!page) {
-			ret = -ENOMEM;
-			break;
-		}
-		buf->pages[inx].page = page;
-
-		if (inx)
-			prev_page->next = buf->pages + inx;
-		prev_page = buf->pages + inx;
-	}
-	pr_debug("allocate %zd pages\n", inx);
-
-	return buf;
-}
-
-static inline
+static
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
-	struct page_list *curr_page = diff_buffer->pages;
-	
+	struct page_list *curr_page;
+
+	if (unlikely(!diff_buffer))
+		return;
+
+	curr_page = diff_buffer->pages;
 	while(curr_page) {
 		if (curr_page->page)
 			__free_page(curr_page->page);
@@ -55,6 +24,58 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 	}
 	kfree(diff_buffer);
 }
+
+static
+struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
+                                    gfp_t gfp_mask)
+{
+	struct diff_buffer *diff_buffer;
+	size_t inx;
+	struct page_list *prev_page;
+	struct page_list *curr_page;
+	struct page *page;
+
+	pr_info("Allocate diff buffer\n");
+
+	if (unlikely(page_count <= 0))
+		return NULL;
+
+	diff_buffer = kzalloc(sizeof(struct diff_buffer) + page_count * sizeof(struct page_list),
+	              gfp_mask);
+	if (!diff_buffer)
+		return NULL;
+
+	diff_buffer->size = buffer_size;
+
+	/* Allocate first page */
+	page = alloc_page(gfp_mask);
+	if (!page)
+		goto fail;
+
+	diff_buffer->pages[0].page = page;
+	prev_page = diff_buffer->pages;
+
+	/* Allocate all other pages and make list link */
+	for (inx = 1; inx < page_count; inx++) {
+		page = alloc_page(gfp_mask);
+		if (!page)
+			goto fail;
+
+		curr_page = prev_page + 1;
+		curr_page->page = page;
+
+		prev_page->next = curr_page;
+		prev_page = curr_page;
+	}
+	pr_info("%zd pages allocated\n", inx);
+
+	return diff_buffer;
+fail:
+	diff_buffer_free(diff_buffer);
+	return NULL;
+}
+
+
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 {
@@ -78,15 +99,14 @@ void chunk_free(struct chunk *chunk)
 	if (unlikely(!chunk))
 		return;
 
-	if (chunk->diff_buffer) 
-		diff_buffer_free(chunk->diff_buffer);
+	diff_buffer_free(chunk->diff_buffer);
+	chunk->diff_buffer = NULL;
 
-	if (chunk->diff_store)
-		kfree(chunk->diff_store);
+	kfree(chunk->diff_store);
+	chunk->diff_store = NULL;
 
 	kfree(chunk);
 }
-
 
 /**
  * chunk_allocate_buffer() - Allocate diff buffer.
@@ -94,7 +114,7 @@ void chunk_free(struct chunk *chunk)
  * 	?
  * @gfp_mask:
  * 	?
- * 
+ *
  * Don't forget to lock the chunk for writing before allocating the buffer.
  */
 int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
@@ -103,7 +123,9 @@ int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 	size_t page_count;
 	size_t buffer_size;
 
-	page_count = round_up(chunk->sector_count, SECTOR_IN_PAGE);
+	pr_info("%s", __FUNCTION__); //DEBUG
+
+	page_count = round_up(chunk->sector_count, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
 	buffer_size = chunk->sector_count << SECTOR_SHIFT;
 
 	buf = diff_buffer_new(page_count, buffer_size, gfp_mask);
@@ -120,7 +142,7 @@ int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
  * chunk_free_buffer() - Free diff buffer.
  * @chunk:
  * 	?
- * 
+ *
  * Don't forget to lock the chunk for writing before freeing the buffer.
  */
 void chunk_free_buffer(struct chunk *chunk)
@@ -139,7 +161,7 @@ struct page_list *chunk_first_page(struct chunk *chunk)
 /**
  * chunk_async_store_diff() - Starts asynchronous storing of a chunk to the
  *	difference storage.
- * 
+ *
  */
 int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn)
 {
@@ -164,7 +186,7 @@ int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn)
 }
 
 /**
- * chunk_asunc_load_orig() - Starts asynchronous loading of a chunk from 
+ * chunk_asunc_load_orig() - Starts asynchronous loading of a chunk from
  * 	the origian block device.
  */
 int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn)
@@ -185,8 +207,9 @@ int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn)
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
-
-	return dm_io(&reguest, 1, &region, &sync_error_bits);
+	pr_info("%s\n", __FUNCTION__);
+	return 0; //DEBUG
+	//return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
 
 /**
@@ -212,7 +235,9 @@ int chunk_load_orig(struct chunk *chunk)
 		.client = chunk->diff_area->io_client,
 	};
 
-	return dm_io(&reguest, 1, &region, &sync_error_bits);
+	pr_info("%s\n", __FUNCTION__);
+	return 0; //DEBUG
+	//return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
 
 /**
@@ -237,6 +262,8 @@ int chunk_load_diff(struct chunk *chunk)
 		.notify.context = NULL,
 		.client = chunk->diff_area->io_client,
 	};
+
+	pr_info("%s\n", __FUNCTION__);
 
 	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }

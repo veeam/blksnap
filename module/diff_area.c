@@ -121,8 +121,10 @@ void schedule_cache(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
-	if (diff_area->in_memory)
+	if (diff_area->in_memory) {
+		up_read(&chunk->lock);
 		return;
+	}
 
 	spin_lock(&diff_area->caching_chunks_lock);
 	list_add_tail(&chunk->link, &diff_area->caching_chunks);
@@ -322,8 +324,10 @@ void schedule_storing_diff(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
-	if (diff_area->in_memory)
+	if (diff_area->in_memory) {
+		up_write(&chunk->lock);
 		return;
+	}
 
 	spin_lock(&diff_area->storing_chunks_lock);
 	list_add_tail(&chunk->link, &diff_area->storing_chunks);
@@ -475,10 +479,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	if (unlikely(!chunk))
 		return ERR_PTR(-EINVAL);
 
-	if (io_ctx->is_write)
-		down_write(&chunk->lock);
-	else
-		down_read(&chunk->lock);
+	down_write(&chunk->lock);
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		up_write(&chunk->lock);
@@ -486,6 +487,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	}
 
 	io_ctx->chunk = chunk;
+	pr_info("Access to chunk %lu\n", chunk->number);
 
 	/* Up chunk in cache */
 	spin_lock(&diff_area->caching_chunks_lock);
@@ -498,11 +500,33 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	 * A chunk should be read from diff_storage
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
+		int ret;
+
+		pr_info("No data in chunks buffer\n");
+
+		if (!chunk->diff_buffer) {
+			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
+			if (ret) {
+				up_write(&chunk->lock);
+				return ERR_PTR(ret);
+			}
+		}
+
 		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
-			chunk_load_diff(chunk);
+			ret = chunk_load_diff(chunk);
 		else
-			chunk_load_orig(chunk);
-	}
+			ret = chunk_load_orig(chunk);
+
+		if (ret) {
+			pr_err("Failed to load chunk.\n");
+			up_write(&chunk->lock);
+			return ERR_PTR(ret);
+		}
+	} else
+		pr_info("Buffer ready\n");
+
+	if (!io_ctx->is_write)
+		downgrade_write(&chunk->lock);
 
 	return chunk;
 }
@@ -535,7 +559,9 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 		if (IS_ERR(chunk))
 			return BLK_STS_IOERR;
 
-		while(bv_len && diff_buffer_iter_get(chunk->diff_buffer, *pos, &diff_buffer_iter)) {
+		BUG_ON((chunk->diff_buffer == NULL)); //DEBUG
+		while(bv_len &&
+		      diff_buffer_iter_get(chunk->diff_buffer, *pos, &diff_buffer_iter)) {
 			ssize_t sz;
 
 			if (io_ctx->is_write)
