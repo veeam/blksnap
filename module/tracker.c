@@ -281,7 +281,6 @@ int tracker_init(void)
 void tracker_done(void)
 {
 	struct tracked_device *tr_dev;
-	dev_t dev_id;
 
 	pr_info("Cleanup trackers\n");
 
@@ -289,11 +288,12 @@ void tracker_done(void)
 	while ((tr_dev = list_first_entry_or_null(&tracked_device_list,
 	                                          struct tracked_device,
 	                                          link))) {
-		dev_id = tr_dev->dev_id;
+		list_del(&tr_dev->link);
 		spin_unlock(&tracked_device_lock);
 
-		tracker_remove(dev_id);
+		tracker_remove(tr_dev->dev_id);
 
+		kfree(tr_dev);
 		spin_lock(&tracked_device_lock);
 	}
 	spin_unlock(&tracked_device_lock);
@@ -317,6 +317,8 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		tracker = ERR_PTR(-ENOMEM);
 		goto put_bdev;
 	}
+	INIT_LIST_HEAD(&tr_dev->link);
+	tr_dev->dev_id = dev_id;
 
 	tracker = tracker_get_by_dev(bdev);
 	if (tracker){
@@ -383,11 +385,13 @@ int tracker_remove(dev_t dev_id)
 			MAJOR(dev_id), MINOR(dev_id));
 	else {
 		struct tracked_device *tr_dev = NULL;
+		struct tracked_device *iter_tr_dev;
 
 		spin_lock(&tracked_device_lock);
-		list_for_each_entry(tr_dev, &tracked_device_list, link) {
-			if (tr_dev->dev_id == dev_id) {
-				list_del(&tr_dev->link);
+		list_for_each_entry(iter_tr_dev, &tracked_device_list, link) {
+			if (iter_tr_dev->dev_id == dev_id) {
+				list_del(&iter_tr_dev->link);
+				tr_dev = iter_tr_dev;
 				break;
 			}
 		}
