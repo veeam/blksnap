@@ -46,18 +46,18 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 {
 	struct tracker *tracker;
 
-	filters_read_lock(bdev);
+	filter_read_lock(bdev);
 
 	tracker = filter_find_ctx(bdev);
 	if (likely(tracker))
 		kref_get(&tracker->kref);
 
-	filters_read_unlock(bdev);
+	filter_read_unlock(bdev);
 	return tracker;
 }
 //Failed to attach tracker
 static
-int tracker_submit_bio_cb(struct bio *bio, void *ctx)
+enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
 	struct tracker *tracker = ctx;
@@ -139,8 +139,8 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 	}
 #endif
 
-	filters_write_lock(bdev);
 	current_flag = memalloc_noio_save();
+	filter_write_lock(bdev);
 
 	switch (flt_cmd) {
 	case filter_cmd_add:
@@ -153,8 +153,8 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 		ret = -EINVAL;
 	}
 
+	filter_write_unlock(bdev);
 	memalloc_noio_restore(current_flag);
-	filters_write_unlock(bdev);
 
 	if (is_frozen) {
 #if defined(HAVE_SUPER_BLOCK_FREEZE)

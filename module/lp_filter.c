@@ -7,15 +7,33 @@
 #include <linux/blkdev.h>
 #include "lp_filter.h"
 
+/**
+ * struct blk_filter - Description of the block device filter.
+ * @link:
+ * @dev_id:
+ * @fops:
+ * @ctx:
+ *
+ */
+struct blk_filter {
+	struct list_head link;
+	dev_t dev_id;
+#if defined(HAVE_BI_BDISK)
+	struct gendisk *disk;
+	u8 partno;
+#endif
+	const struct filter_operations *fops;
+	void *ctx;
+};
+
 /* The list of filters for this block device */
-static
-LIST_HEAD(bd_filters);
+static LIST_HEAD(bd_filters);
 
 /* Lock the queue of block device to add or delete filter. */
 DEFINE_PERCPU_RWSEM(bd_filters_lock);
 
 /**
- * filters_write_lock() - Locks the processing of I/O requests for block device.
+ * filter_write_lock() - Locks the processing of I/O requests for block device.
  * @bdev:
  *	Pointer to &struct block_device.
  *      The parameter is unused, but is present for compatibility with the
@@ -26,13 +44,13 @@ DEFINE_PERCPU_RWSEM(bd_filters_lock);
  * To do this, using the memalloc_noio_save() function can be useful.
  *
  */
-void filters_write_lock(struct block_device *__attribute__((__unused__))bdev)
+void filter_write_lock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_down_write(&bd_filters_lock);
 };
 
 /**
- * filters_write_unlock - Unlocks the processing of I/O requests for block device.
+ * filter_write_unlock - Unlocks the processing of I/O requests for block device.
  * @bdev:
  *	Pointer to &struct block_device.
  *      The parameter is unused, but is present for compatibility with the
@@ -40,7 +58,7 @@ void filters_write_lock(struct block_device *__attribute__((__unused__))bdev)
  *
  * The submit_bio_noacct() function can be continued.
  */
-void filters_write_unlock(struct block_device *__attribute__((__unused__))bdev)
+void filter_write_unlock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_up_write(&bd_filters_lock);
 };
@@ -87,7 +105,7 @@ struct blk_filter *filter_find_by_disk(struct gendisk *disk, int partno)
  * 	Filter specific private data
  *
  * Before adding a filter, it is necessary to lock the processing
- * of bio requests of the original device by calling filters_write_lock().
+ * of bio requests of the original device by calling filter_write_lock().
  *
  * The filter_del() function allows to delete the filter from the block device.
  */
@@ -123,7 +141,7 @@ int filter_add(struct block_device *bdev,
  * 	unique filters name.
  *
  * Before deleting a filter, it is necessary to lock the processing
- * of bio requests of the device by calling filters_write_lock().
+ * of bio requests of the device by calling filter_write_lock().
  *
  * The filter should be added using the bdev_filter_add() function.
  */
@@ -144,7 +162,7 @@ int filter_del(struct block_device *bdev)
 }
 
 /**
- * filters_read_lock - Lock filters list, protecting them from changes.
+ * filter_read_lock - Lock filters list, protecting them from changes.
  * @bdev:
  *	Pointer to &struct block_device.
  *      The parameter is unused, but is present for compatibility with the
@@ -153,19 +171,19 @@ int filter_del(struct block_device *bdev)
  * The lock ensures that the filter will not be removed from the list until
  * the lock is removed.
  */
-void filters_read_lock(struct block_device *__attribute__((__unused__))bdev)
+void filter_read_lock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_down_read(&bd_filters_lock);
 }
 
 /**
- * filters_read_unlock - Unlock filters list.
+ * filter_read_unlock - Unlock filters list.
  * @bdev:
  *	Pointer to &struct block_device.
  *      The parameter is unused, but is present for compatibility with the
  * 	blk-filter from upstream.
  */
-void filters_read_unlock(struct block_device *__attribute__((__unused__))bdev)
+void filter_read_unlock(struct block_device *__attribute__((__unused__))bdev)
 {
 	percpu_up_read(&bd_filters_lock);
 }
@@ -178,28 +196,27 @@ void filters_read_unlock(struct block_device *__attribute__((__unused__))bdev)
  * Return &ctx value from &struct blk_filter or NULL.
  * NULL is returned if the filter was not found.
  *
- * Necessary to lock list of filters by calling filters_read_lock().
+ * Necessary to lock list of filters by calling filter_read_lock().
  */
 void* filter_find_ctx(struct block_device *bdev)
 {
 	struct blk_filter *flt;
 
 	flt = filter_find(bdev->bd_dev);
-
-	return flt->ctx;
+	if (flt)
+		return flt->ctx;
+	else
+		return NULL;
 }
 
-static
-int filters_apply(struct bio *bio)
+static inline
+enum flt_st filters_apply(struct bio *bio)
 {
 	struct blk_filter *flt;
-	int status;
+	enum flt_st flt_st;
 
 	if (bio->bi_opf & REQ_NOWAIT) {
-		int ret;
-
-		ret = percpu_down_read_trylock(&bd_filters_lock);
-		if (unlikely(ret)) {
+		if (!percpu_down_read_trylock(&bd_filters_lock)) {
 			bio_wouldblock_error(bio);
 			return FLT_ST_COMPLETE;
 		}
@@ -212,11 +229,13 @@ int filters_apply(struct bio *bio)
 	flt = filter_find(bio->bi_bdev->bd_dev);
 #endif
 	if (flt)
-		status = flt->fops->submit_bio_cb(bio, flt->ctx);
+		flt_st = flt->fops->submit_bio_cb(bio, flt->ctx);
+	else
+		flt_st = FLT_ST_PASS;
 
 	percpu_up_read(&bd_filters_lock);
 
-	return status;
+	return flt_st;
 }
 
 #ifndef HAVE_SUBMIT_BIO_NOACCT
@@ -240,19 +259,21 @@ blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 	if (!current->bio_list) {
 		struct bio_list bio_list_on_stack[2];
 		struct bio *new_bio;
-		int status;
+		enum flt_st flt_st;
 
 		bio_list_init(&bio_list_on_stack[0]);
 		current->bio_list = bio_list_on_stack;
+		barrier();
 
-		status = filters_apply(bio);
+		flt_st = filters_apply(bio);
 
 		current->bio_list = NULL;
+		barrier();
 
 		while ((new_bio = bio_list_pop(&bio_list_on_stack[0])))
 			submit_bio_noacct_notrace(new_bio);
 
-		if (status == FLT_ST_COMPLETE)
+		if (flt_st == FLT_ST_COMPLETE)
 			return BLK_QC_T_NONE;
 	}
 
