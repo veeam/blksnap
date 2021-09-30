@@ -121,6 +121,7 @@ int filter_add(struct block_device *bdev,
 	if (!flt)
 		return -ENOMEM;
 
+	INIT_LIST_HEAD(&flt->link);
 	flt->dev_id = bdev->bd_dev;
 #if defined(HAVE_BI_BDISK)
 	flt->disk = bdev->bd_disk;
