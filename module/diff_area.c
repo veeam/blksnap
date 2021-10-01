@@ -36,11 +36,11 @@ sector_t chunk_sector(struct chunk *chunk)
 static inline
 void recalculate_last_chunk_size(struct chunk *chunk)
 {
-	struct diff_area *diff_area = chunk->diff_area;
 	sector_t capacity;
 
-	capacity = bdev_nr_sectors(diff_area->orig_bdev);
-	chunk->sector_count = capacity - round_down(capacity, chunk->sector_count);
+	capacity = bdev_nr_sectors(chunk->diff_area->orig_bdev);
+	if (capacity > round_down(capacity, chunk->sector_count))
+		chunk->sector_count = capacity - round_down(capacity, chunk->sector_count);
 }
 
 static inline
