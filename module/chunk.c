@@ -11,6 +11,9 @@ static
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	struct page_list *curr_page;
+	int counter = 0;
+
+	pr_info("%s", __FUNCTION__); //DEBUG
 
 	if (unlikely(!diff_buffer))
 		return;
@@ -21,8 +24,11 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 			__free_page(curr_page->page);
 
 		curr_page = curr_page->next;
+		counter++;
 	}
 	kfree(diff_buffer);
+
+	pr_info("All %d pages were freed\n", counter);
 }
 
 static
@@ -41,7 +47,7 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		return NULL;
 
 	diff_buffer = kzalloc(sizeof(struct diff_buffer) + page_count * sizeof(struct page_list),
-	              gfp_mask);
+	                      gfp_mask);
 	if (!diff_buffer)
 		return NULL;
 
@@ -100,11 +106,7 @@ void chunk_free(struct chunk *chunk)
 		return;
 
 	diff_buffer_free(chunk->diff_buffer);
-	chunk->diff_buffer = NULL;
-
 	kfree(chunk->diff_store);
-	chunk->diff_store = NULL;
-
 	kfree(chunk);
 }
 
@@ -207,9 +209,9 @@ int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn)
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
-	pr_info("%s\n", __FUNCTION__);
-	return 0; //DEBUG
-	//return dm_io(&reguest, 1, &region, &sync_error_bits);
+	pr_info("%s\n", __FUNCTION__); //DEBUG
+
+	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
 
 /**
@@ -234,10 +236,9 @@ int chunk_load_orig(struct chunk *chunk)
 		.notify.context = NULL,
 		.client = chunk->diff_area->io_client,
 	};
+	pr_info("%s\n", __FUNCTION__); //DEBUG
 
-	pr_info("%s\n", __FUNCTION__);
-	return 0; //DEBUG
-	//return dm_io(&reguest, 1, &region, &sync_error_bits);
+	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
 
 /**

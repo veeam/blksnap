@@ -28,6 +28,12 @@ unsigned long chunk_number(struct diff_area *diff_area, sector_t sector)
 };
 
 static inline
+sector_t chunk_sector(struct chunk *chunk)
+{
+	return (sector_t)(chunk->number) << (chunk->diff_area->chunk_shift - SECTOR_SHIFT);
+}
+
+static inline
 void recalculate_last_chunk_size(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
@@ -119,22 +125,29 @@ void diff_area_free(struct kref *kref)
 static inline
 void schedule_cache(struct chunk *chunk)
 {
+	bool need_to_cleanup = false;
 	struct diff_area *diff_area = chunk->diff_area;
 
-	if (diff_area->in_memory) {
-		up_read(&chunk->lock);
-		return;
-	}
+	pr_err("%s", __FUNCTION__); //DEBUG
 
 	spin_lock(&diff_area->caching_chunks_lock);
-	list_add_tail(&chunk->link, &diff_area->caching_chunks);
-	atomic_inc(&diff_area->caching_chunks_count);
+	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
+		pr_err("Add chunk #%lu to cache", chunk->number); //DEBUG
+
+		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
+		list_add_tail(&chunk->link, &diff_area->caching_chunks);
+		need_to_cleanup =
+			atomic_inc_return(&diff_area->caching_chunks_count) >=
+			chunk_maximum_in_cache;
+	}
 	spin_unlock(&diff_area->caching_chunks_lock);
 
 	up_read(&chunk->lock);
 
-	/* Initiate the cache clearing process. */
-	queue_work(system_wq, &diff_area->caching_chunks_work);
+	if (need_to_cleanup) {
+		/* Initiate the cache clearing process. */
+		queue_work(system_wq, &diff_area->caching_chunks_work);
+	}
 }
 
 static inline
@@ -211,10 +224,14 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 		if (!chunk)
 			break;
 
+		/*
+		 * If it is not possible to lock a chunk for writing,
+		 * then it is currently in use.
+		 */
 		if (!down_write_trylock(&chunk->lock)) {
-			/**
-			 * If a used block is detected, it is moved to the end
-			 * of the queue.
+			/*
+			 * This chunk is returned back to the cache to the end
+			 * of queue.
 			 */
 			spin_lock(&diff_area->caching_chunks_lock);
 			list_add_tail(&chunk->link, &diff_area->caching_chunks);
@@ -223,6 +240,9 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 			continue;
 		}
 
+		pr_info("cleanup chunk #%lu", chunk->number);
+
+		chunk_state_unset(chunk, CHUNK_ST_IN_CACHE);
 		chunk_free_buffer(chunk);
 		atomic_dec(&diff_area->caching_chunks_count);
 		up_write(&chunk->lock);
@@ -323,6 +343,8 @@ static inline
 void schedule_storing_diff(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
+
+	pr_err("%s", __FUNCTION__); //DEBUG
 
 	if (diff_area->in_memory) {
 		up_write(&chunk->lock);
@@ -450,21 +472,21 @@ static
 struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
                                                 sector_t sector)
 {
-	struct chunk* chunk;
+	struct chunk* chunk = io_ctx->chunk;
 	struct diff_area *diff_area = io_ctx->diff_area;
 	unsigned long new_chunk_number = chunk_number(diff_area, sector);
 
-	pr_info("%s\n", __FUNCTION__);
+	//pr_info("%s\n", __FUNCTION__);
 
-	if (io_ctx->chunk) {
-		if (io_ctx->chunk->number == new_chunk_number)
-			return io_ctx->chunk;
+	if (chunk) {
+		if (chunk->number == new_chunk_number)
+			return chunk;
 
 		/*
 		 * If the sector falls into a new chunk, then we release
 		 * the old chunk.
 		 */
-		if (io_ctx->chunk) {
+		if (chunk) {
 			if (io_ctx->is_write)
 				schedule_storing_diff(chunk);
 			else
@@ -486,18 +508,12 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		return ERR_PTR(-EIO);
 	}
 
-	io_ctx->chunk = chunk;
 	pr_info("Access to chunk %lu\n", chunk->number);
-
-	/* Up chunk in cache */
-	spin_lock(&diff_area->caching_chunks_lock);
-	list_del(&chunk->link);
-	list_add_tail(&chunk->link, &diff_area->caching_chunks);
-	spin_unlock(&diff_area->caching_chunks_lock);
 
 	/*
 	 * If there is already data in the buffer, then nothing needs to be load.
-	 * A chunk should be read from diff_storage
+	 * Otherwise, the chunk needs to be load from the original device or
+	 * from diff storage.
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 		int ret;
@@ -522,12 +538,16 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 			up_write(&chunk->lock);
 			return ERR_PTR(ret);
 		}
+
+		/* Set the flag that the buffer contains the required data. */
+		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 	} else
-		pr_info("Buffer ready\n");
+		pr_info("Buffer ready\n"); //DEBUG
 
 	if (!io_ctx->is_write)
 		downgrade_write(&chunk->lock);
 
+	io_ctx->chunk = chunk;
 	return chunk;
 }
 
@@ -547,21 +567,23 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 	unsigned int bv_len = bvec->bv_len;
 	struct iov_iter iter;
 
-	pr_info("%s\n", __FUNCTION__); //DEBUG
+	//pr_info("%s\n", __FUNCTION__); //DEBUG
 
 	iov_iter_bvec(&iter, io_ctx->is_write ? WRITE : READ, bvec, 1, bv_len);
 
 	while (bv_len) {
 		struct diff_buffer_iter diff_buffer_iter;
 		struct chunk *chunk;
+		sector_t buff_offset;
 
 		chunk = diff_area_image_context_get_chunk(io_ctx, *pos);
 		if (IS_ERR(chunk))
 			return BLK_STS_IOERR;
 
-		BUG_ON((chunk->diff_buffer == NULL)); //DEBUG
+		BUG_ON(!chunk->diff_buffer); //DEBUG
+		buff_offset = *pos - chunk_sector(chunk);
 		while(bv_len &&
-		      diff_buffer_iter_get(chunk->diff_buffer, *pos, &diff_buffer_iter)) {
+		      diff_buffer_iter_get(chunk->diff_buffer, buff_offset, &diff_buffer_iter)) {
 			ssize_t sz;
 
 			if (io_ctx->is_write)
@@ -577,6 +599,7 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 			if (!sz)
 				return BLK_STS_IOERR;
 
+			buff_offset += (sz >> SECTOR_SHIFT);
 			*pos += (sz >> SECTOR_SHIFT);
 			bv_len -= sz;
 		}
