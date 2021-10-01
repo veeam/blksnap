@@ -44,7 +44,8 @@ blksnap_snapshot_take
 echo "Press any key to continue..."
 read -n 1
 
-dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=4096 count=1
+dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0
+#dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=4096 count=1
 # dd if=/dev/blk-snap-image1 of=${TESTDIR}/image1 bs=4096 count=1
 
 echo "Press any key to continue..."
