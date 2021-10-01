@@ -84,6 +84,7 @@ blk_status_t snapimage_rq_io(struct snapimage *snapimage, struct request *rq)
 	}
 	diff_area_image_ctx_done(&io_ctx);
 
+	blk_mq_end_request(rq, status);
 	return status;
 }
 
@@ -92,24 +93,24 @@ blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 		const struct blk_mq_queue_data *bd)
 {
 	int ret = 0;
-	blk_status_t status;
 	struct request *rq = bd->rq;
 	struct snapimage *snapimage = rq->q->queuedata;
 
+	/*
+	 * Cannot fall asleep in the context of this function, as we are under
+	 * rwsem lockdown.
+	 */
 	blk_mq_start_request(rq);
 	if (op_is_write(req_op(rq))) {
 		ret = cbt_map_set_both(snapimage->cbt_map, blk_rq_pos(rq),
 				       blk_rq_sectors(rq));
 		if (unlikely(ret)) {
-			status = BLK_STS_IOERR;
-			goto out;
+			blk_mq_end_request(rq, BLK_STS_IOERR);
+			return BLK_STS_IOERR;
 		}
 	}
-	status = snapimage_rq_io(snapimage, rq);
-out:
-	blk_mq_end_request(rq, status);
 
-	return status;
+	return snapimage_rq_io(snapimage, rq);
 }
 
 static const
