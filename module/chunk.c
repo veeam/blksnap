@@ -11,9 +11,6 @@ static
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	struct page_list *curr_page;
-	int counter = 0;
-
-	pr_info("%s", __FUNCTION__); //DEBUG
 
 	if (unlikely(!diff_buffer))
 		return;
@@ -24,11 +21,8 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 			__free_page(curr_page->page);
 
 		curr_page = curr_page->next;
-		counter++;
 	}
 	kfree(diff_buffer);
-
-	pr_info("All %d pages were freed\n", counter);
 }
 
 static
@@ -40,8 +34,6 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 	struct page_list *prev_page;
 	struct page_list *curr_page;
 	struct page *page;
-
-	pr_info("Allocate diff buffer\n");
 
 	if (unlikely(page_count <= 0))
 		return NULL;
@@ -73,7 +65,6 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		prev_page->next = curr_page;
 		prev_page = curr_page;
 	}
-	pr_info("%zd pages allocated\n", inx);
 
 	return diff_buffer;
 fail:
@@ -87,7 +78,6 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 {
 	struct chunk *chunk;
 
-	pr_debug("allocate chunk sz=%ld\n", sizeof(struct chunk));
 	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
@@ -124,8 +114,6 @@ int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 	struct diff_buffer *buf;
 	size_t page_count;
 	size_t buffer_size;
-
-	pr_info("%s", __FUNCTION__); //DEBUG
 
 	page_count = round_up(chunk->sector_count, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
 	buffer_size = chunk->sector_count << SECTOR_SHIFT;

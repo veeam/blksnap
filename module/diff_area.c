@@ -128,8 +128,6 @@ void schedule_cache(struct chunk *chunk)
 	bool need_to_cleanup = false;
 	struct diff_area *diff_area = chunk->diff_area;
 
-	pr_err("%s", __FUNCTION__); //DEBUG
-
 	spin_lock(&diff_area->caching_chunks_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
 		pr_err("Add chunk #%lu to cache", chunk->number); //DEBUG
@@ -476,8 +474,6 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	struct diff_area *diff_area = io_ctx->diff_area;
 	unsigned long new_chunk_number = chunk_number(diff_area, sector);
 
-	//pr_info("%s\n", __FUNCTION__);
-
 	if (chunk) {
 		if (chunk->number == new_chunk_number)
 			return chunk;
@@ -508,7 +504,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		return ERR_PTR(-EIO);
 	}
 
-	pr_info("Access to chunk %lu\n", chunk->number);
+	//pr_info("Access to chunk %lu\n", chunk->number);
 
 	/*
 	 * If there is already data in the buffer, then nothing needs to be load.
@@ -518,7 +514,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 		int ret;
 
-		pr_info("No data in chunks buffer\n");
+		pr_info("No data in buffer for chunk #%ld\n", chunk->number);
 
 		if (!chunk->diff_buffer) {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
@@ -534,15 +530,14 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 			ret = chunk_load_orig(chunk);
 
 		if (ret) {
-			pr_err("Failed to load chunk.\n");
+			pr_err("Failed to load chunk #%ld\n", chunk->number);
 			up_write(&chunk->lock);
 			return ERR_PTR(ret);
 		}
 
 		/* Set the flag that the buffer contains the required data. */
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
-	} else
-		pr_info("Buffer ready\n"); //DEBUG
+	}
 
 	if (!io_ctx->is_write)
 		downgrade_write(&chunk->lock);
@@ -566,8 +561,6 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 {
 	unsigned int bv_len = bvec->bv_len;
 	struct iov_iter iter;
-
-	//pr_info("%s\n", __FUNCTION__); //DEBUG
 
 	iov_iter_bvec(&iter, io_ctx->is_write ? WRITE : READ, bvec, 1, bv_len);
 

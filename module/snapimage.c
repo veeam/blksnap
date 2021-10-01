@@ -74,8 +74,6 @@ blk_status_t snapimage_rq_io(struct snapimage *snapimage, struct request *rq)
 	struct diff_area_image_ctx io_ctx;
 	sector_t pos = blk_rq_pos(rq);
 
-	pr_info("%s\n", __FUNCTION__);
-
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
 				 op_is_write(req_op(rq)));
 
