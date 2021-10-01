@@ -51,7 +51,7 @@ EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT=2097152"
 # from the snapshot image. As the number of chunks in the cache
 # increases, memory consumption also increases.
 # The minimum recommended value is four.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=128"
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=64"
 
 # The minimum allowable size of the difference storage in sectors.
 # When reached, an event is generated about the lack of free space.
