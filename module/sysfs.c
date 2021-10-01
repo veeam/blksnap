@@ -2,7 +2,6 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-sysfs: " fmt
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
-#include <linux/device/class.h>
 #include <linux/device.h>
 
 #include "sysfs.h"
@@ -17,7 +16,7 @@ ssize_t major_show(struct class *class, struct class_attribute *attr,char *buf)
 }
 
 /* declare class_attr_major */
-CLASS_ATTR_RO(major); 
+CLASS_ATTR_RO(major);
 
 static
 struct class *blk_snap_class;
