@@ -18,15 +18,15 @@
 static
 int blk_snap_major;
 
-static int ctrl_open(struct inode *inode, struct file *fl);
-static int ctrl_release(struct inode *inode, struct file *fl);
+//static int ctrl_open(struct inode *inode, struct file *fl);
+//static int ctrl_release(struct inode *inode, struct file *fl);
 static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 
 static const
 struct file_operations ctrl_fops = {
 	.owner = THIS_MODULE,
-	.open = ctrl_open,
-	.release = ctrl_release,
+	//.open = ctrl_open,
+	//.release = ctrl_release,
 	.unlocked_ioctl = ctrl_unlocked_ioctl,
 };
 
@@ -70,7 +70,7 @@ void ctrl_done(void)
 
 	unregister_chrdev(blk_snap_major, MODULE_NAME);
 }
-
+/*
 static
 int ctrl_open(struct inode *inode, struct file *fl)
 {
@@ -86,7 +86,7 @@ int ctrl_release(struct inode *inode, struct file *fl)
 
 	return 0;
 }
-
+*/
 static
 int ioctl_version(unsigned long arg)
 {

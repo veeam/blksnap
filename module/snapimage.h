@@ -4,21 +4,22 @@
 #include <linux/blkdev.h>
 #include <linux/blk-mq.h>
 #include <linux/genhd.h>
+#include <linux/kthread.h>
 
 struct diff_area;
 struct cbt_map;
 
 /**
  * struct snapimage - Snapshot image block device.
- * 
+ *
  * @image_dev_id:
- * 
+ *
  * @capacity:
- * 
+ *
  * @tag_set:
  * 	Area to keep a shared tag map.
  * @disk:
- * 
+ *
  * @diff_area:
  * 	Pointer to owned &struct diff_area.
  * @cbt_map:
@@ -27,6 +28,10 @@ struct cbt_map;
 struct snapimage {
 	dev_t image_dev_id;
 	sector_t capacity;
+        bool is_ready;
+
+        struct kthread_worker worker;
+        struct task_struct *worker_task;
 
 	struct blk_mq_tag_set tag_set;
 	struct gendisk *disk;
