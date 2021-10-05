@@ -36,23 +36,36 @@ MOUNTPOINT_2=${MPDIR}/simple_2
 mkdir -p ${MOUNTPOINT_2}
 mount ${DEVICE_2} ${MOUNTPOINT_2}
 
+generate_files ${MOUNTPOINT_1} "before" 10
+
+echo "Block device prepared, press ..."
+read -n 1
 
 blksnap_snapshot_create_inmem "${DEVICE_1} ${DEVICE_2}"
 
 blksnap_snapshot_take
 
-echo "Press any key to continue..."
+echo "Snapshot was token, press ..."
 read -n 1
 
-dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=1M
+echo "Write something"
+echo "Write something" > ${MOUNTPOINT_1}/something.txt
+ls ${MOUNTPOINT_1}
+
+#dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=1M
+#generate_files ${MOUNTPOINT_1} "after" 3
+#dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=1M
+
+#dd if=/dev/blk-snap-image1 of=${TESTDIR}/image1 bs=1M
 #dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=4096 count=1
-# dd if=/dev/blk-snap-image1 of=${TESTDIR}/image1 bs=4096 count=1
+#dd if=/dev/blk-snap-image1 of=${TESTDIR}/image1 bs=4096 count=1
 
-echo "Press any key to continue..."
-read -n 1
+#check_files ${MOUNTPOINT_1}
 
 blksnap_snapshot_destroy
 
+echo "Destroy snapshot, press ..."
+#read -n 1
 
 echo "Destroy second device"
 umount ${MOUNTPOINT_2}

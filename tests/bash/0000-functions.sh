@@ -32,3 +32,24 @@ loop_device_detach()
 	losetup -d ${DEVICE}
 }
 
+generate_files()
+{
+	local TARGET_DIR=$1
+	local PREFIX=$2
+	local COUNT=$3
+
+	for ((ITER = 0 ; ITER < ${COUNT} ; ITER++))
+	do
+		local FILE=${TARGET_DIR}/${PREFIX}-${ITER}
+
+		dd if=/dev/urandom of=${FILE} count=${RANDOM:1:2} bs=512
+		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
+	done
+}
+
+check_files()
+{
+	local TARGET_DIR=$1
+
+	md5sum -c ${TARGET_DIR}/hash.md5
+}
