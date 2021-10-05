@@ -384,40 +384,44 @@ void notify_load_fn(unsigned long error, void *context)
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
                    bool is_nowait)
 {
-	int ret;
+	int ret = 0;
 	sector_t offset;
 	struct chunk *chunk;
 	sector_t area_sect_first;
-	sector_t area_sect_end;
+	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
 
-	//pr_err("bio sector %lld count %lld\n", sector, count);
+	pr_info("bio sector %lld count %lld\n", sector, count);
 
-	area_sect_first = round_down(sector, diff_area_chunk_sectors(diff_area));
-	area_sect_end = round_up(sector + count, diff_area_chunk_sectors(diff_area));
+	area_sect_first = round_down(sector, chunk_sectors);
 
-	//pr_err("copy sectors form [%lld to %lld)\n", area_sect_first, area_sect_end);
-
-	for (offset = area_sect_first;
-	     offset < area_sect_end;
-	     offset += diff_area_chunk_sectors(diff_area)) {
+	for (offset = area_sect_first; offset < (sector + count); offset += chunk_sectors) {
 		unsigned long number = chunk_number(diff_area, offset);
 
-		chunk = xa_load(&diff_area->chunk_map, number);
-		if (!chunk)
-			return -EINVAL;
+		pr_info("copy chunk #%lu\n", number);
 
-		if (chunk_state_check(chunk, CHUNK_ST_DIRTY))
+		chunk = xa_load(&diff_area->chunk_map, number);
+		if (!chunk) {
+			ret = -EINVAL;
+			break;
+		}
+
+		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
+			pr_info("chunk #%lu already was copied\n", number);
 			continue;
+		}
 
 		if (is_nowait) {
-			if (!down_write_trylock(&chunk->lock))
-				return -EAGAIN;
+			if (!down_write_trylock(&chunk->lock)) {
+				ret = -EAGAIN;
+				break;
+			}
 		}
 		else
 			down_write(&chunk->lock);
 
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
 			up_write(&chunk->lock);
+			pr_info("chunk #%lu already was copied\n", number);
 			continue;
 		}
 
@@ -435,24 +439,27 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO | GFP_NOWAIT);
 			if (ret) {
 				up_write(&chunk->lock);
-				return -EAGAIN;
+				ret = -EAGAIN;
+				break;
 			}
 		} else {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
 			if (ret) {
 				up_write(&chunk->lock);
-				return ret;
+				break;
 			}
 		}
 
 		ret = chunk_asunc_load_orig(chunk, notify_load_fn);
 		if (ret) {
 			up_write(&chunk->lock);
-			return ret;
+			break;
 		}
 	}
 
-	return 0;
+	pr_info("%s finish\n", __FUNCTION__);
+
+	return ret;
 }
 
 void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
