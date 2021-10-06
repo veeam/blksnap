@@ -517,6 +517,9 @@ public:
         struct blk_snap_snapshot_collect_images param = {0};
         std::vector<struct blk_snap_image_info> imageInfoVector;
 
+        if (vm.count("json"))
+            throw std::invalid_argument("Argument 'json' is not supported yet.");
+
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
@@ -526,15 +529,17 @@ public:
 
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param)) {
             if (errno == ENODATA) {
-                if (vm.count("json"))
-                    throw std::invalid_argument("Argument 'json' is not supported yet.");
-
-                std::cout << "count=0" << std::endl;
-                return;
+                // it's ok. We have not received any data.
             } else {
                 throw std::system_error(errno, std::generic_category(),
                     "[TBD]Failed to get device collection for snapshot.");
             }
+        }
+
+        if (param.count == 0) {
+            std::cout << "count=" << param.count << std::endl;
+            std::cout << "." << std::endl;
+            return;
         }
 
         imageInfoVector.resize(param.count);
@@ -543,9 +548,6 @@ public:
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
             throw std::system_error(errno, std::generic_category(),
                 "[TBD]Failed to get device collection for snapshot.");
-
-        if (vm.count("json"))
-            throw std::invalid_argument("Argument 'json' is not supported yet.");
 
         std::cout << "count=" << param.count << std::endl;
         for (int inx=0; inx < param.count; inx++) {

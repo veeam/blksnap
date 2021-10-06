@@ -456,12 +456,20 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 	struct blk_snap_image_info *image_info_array = NULL;
 	struct snapshot *snapshot;
 
+	pr_info("%s", __FUNCTION__);
+
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return -ESRCH;
 
+	pr_info("Found snapshot with %d devices\n", snapshot->count);
 	if (*pcount < snapshot->count) {
 		ret = -ENODATA;
+		goto out;
+	}
+
+	if (!user_image_info_array) {
+		pr_info("Users buffer is not set\n");
 		goto out;
 	}
 
@@ -485,6 +493,9 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 			image_info_array[inx].image_dev_id.mj = MAJOR(image_dev_id);
 			image_info_array[inx].image_dev_id.mn = MINOR(image_dev_id);
 		}
+
+		pr_info("Original [%u:%u]\n", MAJOR(orig_dev_id), MINOR(orig_dev_id));
+		pr_info("Image [%u:%u]\n", MAJOR(image_dev_id), MINOR(image_dev_id));
 	}
 
 	len = copy_to_user(user_image_info_array, image_info_array,
