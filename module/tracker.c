@@ -64,8 +64,6 @@ enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	sector_t sector;
 	sector_t count;
 
-	pr_info("%s", __FUNCTION__);
-
 	if (!op_is_write(bio_op(bio)))
 		return FLT_ST_PASS;
 
