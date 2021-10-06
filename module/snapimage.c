@@ -205,9 +205,9 @@ void snapimage_free(struct snapimage *snapimage)
 	pr_info("Snapshot image disk [%u:%u] delete\n",
 	        MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 
-	blk_mq_freeze_queue(snapimage->queue);
+	blk_mq_freeze_queue(snapimage->disk->queue);
 	snapimage->is_ready = false;
-	blk_mq_unfreeze_queue(snapimage->queue);
+	blk_mq_unfreeze_queue(snapimage->disk->queue);
 
 	snapimage_unprepare_worker(snapimage);
 
@@ -301,8 +301,8 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	blk_queue_bounce_limit(snapimage->queue, BLK_BOUNCE_HIGH);
 #endif
 
-	blk_queue_max_hw_sectors(snapimage->queue, BLK_DEF_MAX_SECTORS);
-	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, snapimage->queue);
+	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
+	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
 
 	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d", SNAPIMAGE_NAME, minor) < 0) {
 		pr_err("Unable to set disk name for snapshot image device: invalid minor %u\n",
@@ -325,8 +325,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;
-	disk->queue = queue;
-
 	snapimage->disk = disk;
 
 	set_capacity(disk, snapimage->capacity);
