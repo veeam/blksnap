@@ -199,7 +199,7 @@ public:
             std::cout << "device_capacity=" << it->device_capacity << std::endl;
             std::cout << "blk_count=" << it->blk_count << std::endl;
             std::cout << "generationId=" << std::string(generationIdStr) << std::endl;
-            std::cout << "snap_number=" << it->snap_number << std::endl;
+            std::cout << "snap_number=" << static_cast<int>(it->snap_number) << std::endl;
         }
         std::cout << "." << std::endl;
     };
