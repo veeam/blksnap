@@ -193,14 +193,15 @@ public:
             struct blk_snap_cbt_info *it = &cbtInfoVector[inx];
 
             uuid_unparse(it->generationId, generationIdStr);
+            std::cout << "," << std::endl;
             std::cout << "device=" << it->dev_id.mj << ":" << it->dev_id.mn << std::endl;
             std::cout << "blk_size=" << it->blk_size << std::endl;
             std::cout << "device_capacity=" << it->device_capacity << std::endl;
             std::cout << "blk_count=" << it->blk_count << std::endl;
             std::cout << "generationId=" << std::string(generationIdStr) << std::endl;
             std::cout << "snap_number=" << it->snap_number << std::endl;
-            std::cout << "," << std::endl;
         }
+        std::cout << "." << std::endl;
     };
 };
 
@@ -516,6 +517,13 @@ public:
         struct blk_snap_snapshot_collect_images param = {0};
         std::vector<struct blk_snap_image_info> imageInfoVector;
 
+        if (!vm.count("id"))
+            throw std::invalid_argument("Argument 'id' is missed.");
+
+        char idStr[64];
+        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
+        uuid_parse(idStr, param.id);
+
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param)) {
             if (errno == ENODATA) {
                 if (vm.count("json"))
@@ -543,10 +551,11 @@ public:
         for (int inx=0; inx < param.count; inx++) {
             struct blk_snap_image_info *it = &imageInfoVector[inx];
 
+            std::cout << "," << std::endl;
             std::cout << "orig_dev_id=" << it->orig_dev_id.mj << ":" << it->orig_dev_id.mn << std::endl;
             std::cout << "image_dev_id=" << it->image_dev_id.mj << ":" << it->image_dev_id.mn << std::endl;
-            std::cout << "," << std::endl;
         }
+        std::cout << "." << std::endl;
     };
 };
 
