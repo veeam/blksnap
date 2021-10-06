@@ -34,9 +34,28 @@ blksnap_snapshot_take()
 	${BLKSNAP} snapshot_take --id=${ID}
 }
 
+blksnap_snapshot_take()
+{
+	echo "Take snapshot ${ID}"
+
+	${BLKSNAP} snapshot_take --id=${ID}
+}
+
+blksnap_snapshot_collect()
+{
+	echo "Collect snapshot ${ID}"
+
+	${BLKSNAP} snapshot_collect --id=${ID}
+}
+
 blksnap_tracker_remove()
 {
 	local DEVICE=$1
 
 	${BLKSNAP} tracker_remove --device=${DEVICE}
+}
+
+blksnap_tracker_collect()
+{
+	${BLKSNAP} tracker_collect
 }
