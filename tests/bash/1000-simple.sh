@@ -42,7 +42,11 @@ drop_cache
 echo "Block device prepared, press ..."
 #read -n 1
 
-blksnap_snapshot_create_inmem "${DEVICE_1} ${DEVICE_2}"
+blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
+
+DIFF_STORAGE=~/diff_storage0
+fallocate --length 1GiB ${DIFF_STORAGE}
+blksnap_snapshot_append ${DIFF_STORAGE}
 
 blksnap_snapshot_take
 
@@ -87,6 +91,9 @@ blksnap_snapshot_destroy
 
 echo "Destroy snapshot, press ..."
 #read -n 1
+
+rm ${DIFF_STORAGE}
+
 drop_cache
 umount ${DEVICE_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}

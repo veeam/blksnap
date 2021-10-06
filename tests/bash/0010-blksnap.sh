@@ -7,7 +7,7 @@ blksnap_version()
 	${BLKSNAP} version
 }
 
-blksnap_snapshot_create_inmem()
+blksnap_snapshot_create()
 {
 	PARAM=""
 
@@ -19,6 +19,13 @@ blksnap_snapshot_create_inmem()
 	${BLKSNAP} version
 	ID=$(${BLKSNAP} snapshot_create ${PARAM})
 	echo "New snapshot ${ID} was created"
+}
+
+blksnap_snapshot_append()
+{
+	local FILE=$1
+
+	${BLKSNAP} snapshot_appendstorage --id=${ID} --file=${FILE}
 }
 
 blksnap_snapshot_destroy()
