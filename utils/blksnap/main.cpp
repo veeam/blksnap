@@ -12,11 +12,20 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <uuid/uuid.h>
+#include <linux/fs.h>
+#include <linux/fiemap.h>
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
 #include "../../module/blk_snap.h"
+
+#ifndef SECTOR_SHIFT
+#define SECTOR_SHIFT 9
+#endif
+#ifndef SECTOR_SIZE
+#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+#endif
 
 static int blksnap_fd = 0;
 static const char* blksnap_filename = "/dev/" MODULE_NAME;
@@ -57,7 +66,75 @@ void fiemapStorage(const std::string &filename,
                    struct blk_snap_dev_t &dev_id,
                    std::vector<struct blk_snap_block_range> &ranges)
 {
-    throw std::runtime_error(std::string( __func__));
+    int ret = 0;
+    const char* errMessage;
+    int fileHandle = -1;
+    struct fiemap *map = NULL;
+    int extentMax = 500;
+    long long fileSize;
+    struct stat64 st;
+
+    if (::stat64(filename.c_str(), &st))
+        throw std::system_error(errno, std::generic_category(), "Failed to get file size.");
+
+    fileSize = st.st_size;
+    dev_id.mj = major(st.st_dev);
+    dev_id.mn = minor(st.st_dev);
+
+    fileHandle = ::open(filename.c_str(), O_RDONLY | O_EXCL | O_LARGEFILE);
+    if (fileHandle < 0) {
+        ret = errno;
+        errMessage = "Failed to open file.";
+        goto fail;
+    }
+
+    map = (struct fiemap *)::malloc(sizeof(struct fiemap) + sizeof(struct fiemap_extent) * extentMax);
+    if (!map) {
+        ret = ENOMEM;
+        errMessage = "Failed to allocate memory for fiemap structure.";
+        goto fail;
+    }
+
+    for (long long fileOffset = 0; fileOffset < fileSize; ) {
+
+        map->fm_start = fileOffset;
+        map->fm_length = fileSize - fileOffset;
+        map->fm_extent_count = extentMax;
+        map->fm_flags = 0;
+
+        if (::ioctl(fileHandle, FS_IOC_FIEMAP, map)) {
+            ret = errno;
+            errMessage = "Failed to call FS_IOC_FIEMAP.";
+            goto fail;
+        }
+
+        for (int i=0; i < map->fm_mapped_extents; ++i) {
+            struct blk_snap_block_range rg;
+            struct fiemap_extent *extent = map->fm_extents + i;
+
+            if (extent->fe_physical & (SECTOR_SIZE - 1)) {
+                ret = EINVAL;
+                errMessage = "File location is not ordered by sector size.";
+                goto fail;
+            }
+
+            rg.sector_offset = extent->fe_physical >> SECTOR_SHIFT;
+            rg.sector_count = extent->fe_length >> SECTOR_SHIFT;
+            ranges.push_back(rg);
+
+            fileOffset = extent->fe_logical + extent->fe_length;
+        }
+    }
+
+    ::close(fileHandle);
+    return;
+
+fail:
+    if (map)
+        free(map);
+    if (fileHandle >= 0)
+        ::close(fileHandle);
+    throw std::system_error(ret, std::generic_category(), errMessage);
 }
 
 class IArgsProc
