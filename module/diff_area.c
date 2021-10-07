@@ -75,11 +75,11 @@ struct chunk *get_chunk_from_storing_list(struct diff_area *diff_area)
 {
 	struct chunk *chunk;
 
-	spin_lock(&diff_area->storing_chunks_lock);
+	spin_lock(&diff_area->chunks_list_lock);
 	chunk = list_first_entry_or_null(&diff_area->storing_chunks, struct chunk, link);
 	if (chunk)
 		list_del(&chunk->link);
-	spin_unlock(&diff_area->storing_chunks_lock);
+	spin_unlock(&diff_area->chunks_list_lock);
 
 	return chunk;
 }
@@ -89,11 +89,11 @@ struct chunk *get_chunk_from_cache(struct diff_area *diff_area)
 {
 	struct chunk *chunk;
 
-	spin_lock(&diff_area->caching_chunks_lock);
+	spin_lock(&diff_area->chunks_list_lock);
 	chunk = list_first_entry_or_null(&diff_area->caching_chunks, struct chunk, link);
 	if (chunk)
 		list_del(&chunk->link);
-	spin_unlock(&diff_area->caching_chunks_lock);
+	spin_unlock(&diff_area->chunks_list_lock);
 
 	return chunk;
 }
@@ -130,7 +130,7 @@ void schedule_cache(struct chunk *chunk)
 
 	pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
 
-	spin_lock(&diff_area->caching_chunks_lock);
+	spin_lock(&diff_area->chunks_list_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
 		pr_err("Add chunk #%lu to cache", chunk->number); //DEBUG
 
@@ -140,7 +140,7 @@ void schedule_cache(struct chunk *chunk)
 			atomic_inc_return(&diff_area->caching_chunks_count) >=
 			chunk_maximum_in_cache;
 	}
-	spin_unlock(&diff_area->caching_chunks_lock);
+	spin_unlock(&diff_area->chunks_list_lock);
 
 	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	up_read(&chunk->lock);
@@ -256,9 +256,9 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 			 * This chunk is returned back to the cache to the end
 			 * of queue.
 			 */
-			spin_lock(&diff_area->caching_chunks_lock);
+			spin_lock(&diff_area->chunks_list_lock);
 			list_add_tail(&chunk->link, &diff_area->caching_chunks);
-			spin_unlock(&diff_area->caching_chunks_lock);
+			spin_unlock(&diff_area->chunks_list_lock);
 
 			continue;
 		}
@@ -323,12 +323,12 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		pr_info("Only the memory cache will be used to store the snapshots difference.\n") ;
 	}
 
+	spin_lock_init(&diff_area->chunks_list_lock);
+
 	INIT_LIST_HEAD(&diff_area->storing_chunks);
-	spin_lock_init(&diff_area->storing_chunks_lock);
 	INIT_WORK(&diff_area->storing_chunks_work, diff_area_storing_chunks_work);
 
 	INIT_LIST_HEAD(&diff_area->caching_chunks);
-	spin_lock_init(&diff_area->caching_chunks_lock);
 	INIT_WORK(&diff_area->caching_chunks_work, diff_area_caching_chunks_work);
 
 	/**
@@ -380,9 +380,9 @@ void schedule_storing_diff(struct chunk *chunk)
 		return;
 	}
 
-	spin_lock(&diff_area->storing_chunks_lock);
+	spin_lock(&diff_area->chunks_list_lock);
 	list_add_tail(&chunk->link, &diff_area->storing_chunks);
-	spin_unlock(&diff_area->storing_chunks_lock);
+	spin_unlock(&diff_area->chunks_list_lock);
 
 	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	downgrade_write(&chunk->lock);

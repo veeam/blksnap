@@ -47,8 +47,8 @@ struct chunk;
  *	diff storage is performed in workqueue.
  *	The chunks that need to be stored in diff storage are accumitale in
  *	this list.
- * @storing_chunks_lock:
- * 	Spin lock for the @storing_chunks list.
+ * @chunks_list_lock:
+ * 	Spin lock for the @storing_chunks and @caching_chunks list.
  * @storing_chunks_work:
  *	The workqueue work item. This worker saves the chunks to the diff
  * 	storage.
@@ -56,8 +56,6 @@ struct chunk;
  *	After copying the sectors from the original block device to diff
  *	storage, the sectors are still located in memory. When the snapshot
  *	data is read or written, they also remain in memory for some time.
- * @caching_chunks_lock:
- *	Spin lock for the @caching_chunks list.
  * @caching_chunks_count:
  *	The number of chunks in the cache.
  * @caching_chunks_work:
@@ -86,12 +84,12 @@ struct diff_area {
 	struct xarray chunk_map;
 
         bool in_memory;
+        spinlock_t chunks_list_lock;
+
 	struct list_head storing_chunks;
-	spinlock_t storing_chunks_lock;
 	struct work_struct storing_chunks_work;
 
 	struct list_head caching_chunks;
-	spinlock_t caching_chunks_lock;
 	atomic_t caching_chunks_count;
 	struct work_struct caching_chunks_work;
 
