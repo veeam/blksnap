@@ -464,6 +464,11 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 	if (!snapshot)
 		return -ESRCH;
 
+	if (!snapshot->is_taken) {
+		ret = -ENODEV;
+		goto out;
+	}
+
 	pr_info("Found snapshot with %d devices\n", snapshot->count);
 	if (*pcount < snapshot->count) {
 		ret = -ENODATA;
@@ -483,21 +488,21 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 	}
 
 	for (inx=0; inx<snapshot->count; inx++) {
-		dev_t orig_dev_id = snapshot->tracker_array[inx]->dev_id;
-		dev_t image_dev_id = snapshot->snapimage_array[inx]->image_dev_id;
-
 		if (snapshot->tracker_array[inx]) {
+			dev_t orig_dev_id = snapshot->tracker_array[inx]->dev_id;
+
+			pr_info("Original [%u:%u]\n", MAJOR(orig_dev_id), MINOR(orig_dev_id));
 			image_info_array[inx].orig_dev_id.mj = MAJOR(orig_dev_id);
 			image_info_array[inx].orig_dev_id.mn = MINOR(orig_dev_id);
 		}
 
 		if (snapshot->snapimage_array[inx]) {
+			dev_t image_dev_id = snapshot->snapimage_array[inx]->image_dev_id;
+
+			pr_info("Image [%u:%u]\n", MAJOR(image_dev_id), MINOR(image_dev_id));
 			image_info_array[inx].image_dev_id.mj = MAJOR(image_dev_id);
 			image_info_array[inx].image_dev_id.mn = MINOR(image_dev_id);
 		}
-
-		pr_info("Original [%u:%u]\n", MAJOR(orig_dev_id), MINOR(orig_dev_id));
-		pr_info("Image [%u:%u]\n", MAJOR(image_dev_id), MINOR(image_dev_id));
 	}
 
 	len = copy_to_user(user_image_info_array, image_info_array,
