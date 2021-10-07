@@ -36,7 +36,7 @@ MOUNTPOINT_2=${MPDIR}/simple_2
 mkdir -p ${MOUNTPOINT_2}
 mount ${DEVICE_2} ${MOUNTPOINT_2}
 
-generate_files ${MOUNTPOINT_1} "before" 10
+generate_files ${MOUNTPOINT_1} "before" 9
 drop_cache
 
 echo "Block device prepared, press ..."

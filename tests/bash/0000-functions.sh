@@ -36,13 +36,13 @@ generate_files()
 {
 	local TARGET_DIR=$1
 	local PREFIX=$2
-	local COUNT=$3
+	local CNT=$3
 	local GEN_FILE_PWD=$(pwd)
 
 	echo "generate files in ${TARGET_DIR}"
 	cd ${TARGET_DIR}
 
-	for ((ITER = 0 ; ITER < ${COUNT} ; ITER++))
+	for ((ITER = 0 ; ITER < ${CNT} ; ITER++))
 	do
 		local FILE=./${PREFIX}-${ITER}
 		local SZ=${RANDOM:1:2}
