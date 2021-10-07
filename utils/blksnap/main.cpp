@@ -131,7 +131,7 @@ void fiemapStorage(const std::string &filename,
 
 fail:
     if (map)
-        free(map);
+        ::free(map);
     if (fileHandle >= 0)
         ::close(fileHandle);
     throw std::system_error(ret, std::generic_category(), errMessage);
