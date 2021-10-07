@@ -128,6 +128,8 @@ void schedule_cache(struct chunk *chunk)
 	bool need_to_cleanup = false;
 	struct diff_area *diff_area = chunk->diff_area;
 
+	pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
+
 	spin_lock(&diff_area->caching_chunks_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
 		pr_err("Add chunk #%lu to cache", chunk->number); //DEBUG
@@ -140,7 +142,9 @@ void schedule_cache(struct chunk *chunk)
 	}
 	spin_unlock(&diff_area->caching_chunks_lock);
 
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	up_read(&chunk->lock);
+	pr_info("%s up_read chunk #%lu", __FUNCTION__, chunk->number);
 
 	if (need_to_cleanup) {
 		/* Initiate the cache clearing process. */
@@ -149,12 +153,27 @@ void schedule_cache(struct chunk *chunk)
 }
 
 static inline
-void io_failed(struct chunk *chunk, int error, bool is_write)
+void chunk_store_failed(struct chunk *chunk, int error)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	diff_area_set_corrupted(chunk->diff_area, error);
-	pr_err("Failed to %s chunk %lu\n",
-	       is_write ? "write" : "read", chunk->number);
+	pr_err("Failed to store chunk #%lu\n", chunk->number);
+
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
+	up_read(&chunk->lock);
+	pr_info("%s up_read chunk #%lu", __FUNCTION__, chunk->number);
+};
+
+static inline
+void chunk_load_failed(struct chunk *chunk, int error)
+{
+	chunk_state_set(chunk, CHUNK_ST_FAILED);
+	diff_area_set_corrupted(chunk->diff_area, error);
+	pr_err("Failed to load chunk #%lu\n", chunk->number);
+
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
+	up_write(&chunk->lock);
+	pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 };
 
 static
@@ -162,9 +181,10 @@ void notify_store_fn(unsigned long error, void *context)
 {
 	struct chunk *chunk = (struct chunk *)context;
 
+	pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
+
 	if (error) {
-		io_failed(chunk, error, true);
-		up_read(&chunk->lock);
+		chunk_store_failed(chunk, error);
 		return;
 	}
 	chunk_state_set(chunk, CHUNK_ST_STORE_READY);
@@ -182,6 +202,8 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 	struct diff_area *diff_area = container_of(work, struct diff_area, storing_chunks_work);
 	struct chunk *chunk;
 
+	pr_info("%s ", __FUNCTION__);
+
 	while ((chunk = get_chunk_from_storing_list(diff_area))) {
 		if (!chunk->diff_store) {
 			struct diff_store *diff_store;
@@ -193,18 +215,17 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 				//DEBUG
 				pr_err("Cannot get new diff storage for chunk #%lu", chunk->number);
 
-				io_failed(chunk, PTR_ERR(diff_store), true);
-				up_read(&chunk->lock);
+				chunk_store_failed(chunk, PTR_ERR(diff_store));
 				continue;
 			}
 
 			chunk->diff_store = diff_store;
 		}
 
+		pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
 		ret = chunk_async_store_diff(chunk, notify_store_fn);
 		if (ret)
-			io_failed(chunk, ret, true);
-		up_read(&chunk->lock);
+			chunk_store_failed(chunk, ret);
 	}
 }
 
@@ -214,6 +235,7 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 	struct diff_area *diff_area = container_of(work, struct diff_area, caching_chunks_work);
 	struct chunk *chunk = NULL;
 
+	pr_info("%s \n", __FUNCTION__); //DEBUG
 
 	while (atomic_read(&diff_area->caching_chunks_count) >
 	       chunk_maximum_in_cache) {
@@ -222,10 +244,13 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 		if (!chunk)
 			break;
 
+		pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
 		/*
 		 * If it is not possible to lock a chunk for writing,
 		 * then it is currently in use.
 		 */
+		pr_info("%s chunk #%lu is %s", __FUNCTION__, chunk->number,
+	        	rwsem_is_locked(&chunk->lock) ? "locked" : "released");
 		if (!down_write_trylock(&chunk->lock)) {
 			/*
 			 * This chunk is returned back to the cache to the end
@@ -237,13 +262,17 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 
 			continue;
 		}
+		pr_info("%s down_write chunk #%lu", __FUNCTION__, chunk->number);
 
 		pr_info("cleanup chunk #%lu", chunk->number);
 
 		chunk_state_unset(chunk, CHUNK_ST_IN_CACHE);
 		chunk_free_buffer(chunk);
 		atomic_dec(&diff_area->caching_chunks_count);
+
+		WARN_ON(!rwsem_is_locked(&chunk->lock));
 		up_write(&chunk->lock);
+		pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 	}
 }
 
@@ -342,10 +371,12 @@ void schedule_storing_diff(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
-	pr_err("%s", __FUNCTION__); //DEBUG
+	pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
 
 	if (diff_area->in_memory) {
+		WARN_ON(!rwsem_is_locked(&chunk->lock));
 		up_write(&chunk->lock);
+		pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 		return;
 	}
 
@@ -353,7 +384,9 @@ void schedule_storing_diff(struct chunk *chunk)
 	list_add_tail(&chunk->link, &diff_area->storing_chunks);
 	spin_unlock(&diff_area->storing_chunks_lock);
 
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	downgrade_write(&chunk->lock);
+	pr_info("%s downgrade_write chunk #%lu", __FUNCTION__, chunk->number);
 
 	/**
 	 * I believe that the priority of the COW algorithm completion process
@@ -368,11 +401,13 @@ void notify_load_fn(unsigned long error, void *context)
 {
 	struct chunk *chunk = (struct chunk *)context;
 
+	pr_err("%s", __FUNCTION__); //DEBUG
+
 	if (error) {
-		io_failed(chunk, error, false);
-		up_write(&chunk->lock);
+		chunk_load_failed(chunk, error);
 		return;
 	}
+
 	chunk_state_set(chunk, CHUNK_ST_DIRTY);
 	chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 
@@ -390,14 +425,14 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 	sector_t area_sect_first;
 	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
 
-	pr_info("bio sector %lld count %lld\n", sector, count);
+	//pr_info("bio sector %lld count %lld\n", sector, count);
 
 	area_sect_first = round_down(sector, chunk_sectors);
 
 	for (offset = area_sect_first; offset < (sector + count); offset += chunk_sectors) {
 		unsigned long number = chunk_number(diff_area, offset);
 
-		pr_info("copy chunk #%lu\n", number);
+		//pr_info("copy chunk #%lu\n", number);
 
 		chunk = xa_load(&diff_area->chunk_map, number);
 		if (!chunk) {
@@ -406,10 +441,12 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
-			pr_info("chunk #%lu already was copied\n", number);
+			//pr_info("chunk #%lu already was copied\n", number);
 			continue;
 		}
 
+		pr_info("%s chunk #%lu is %s", __FUNCTION__, chunk->number,
+	        	rwsem_is_locked(&chunk->lock) ? "locked" : "released");
 		if (is_nowait) {
 			if (!down_write_trylock(&chunk->lock)) {
 				ret = -EAGAIN;
@@ -419,9 +456,13 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		else
 			down_write(&chunk->lock);
 
+		pr_info("%s down_write chunk #%lu", __FUNCTION__, chunk->number);
+
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
+			WARN_ON(!rwsem_is_locked(&chunk->lock));
 			up_write(&chunk->lock);
-			pr_info("chunk #%lu already was copied\n", number);
+			pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
+			//pr_info("chunk #%lu already was copied\n", number);
 			continue;
 		}
 
@@ -438,26 +479,32 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		if (is_nowait) {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO | GFP_NOWAIT);
 			if (ret) {
+				WARN_ON(!rwsem_is_locked(&chunk->lock));
 				up_write(&chunk->lock);
+				pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 				ret = -EAGAIN;
 				break;
 			}
 		} else {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
 			if (ret) {
+				WARN_ON(!rwsem_is_locked(&chunk->lock));
 				up_write(&chunk->lock);
+				pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 				break;
 			}
 		}
 
 		ret = chunk_asunc_load_orig(chunk, notify_load_fn);
 		if (ret) {
+			WARN_ON(!rwsem_is_locked(&chunk->lock));
 			up_write(&chunk->lock);
+			pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 			break;
 		}
 	}
 
-	pr_info("%s finish\n", __FUNCTION__);
+	//pr_info("%s finish\n", __FUNCTION__);
 
 	return ret;
 }
@@ -499,15 +546,21 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		}
 	}
 
+	pr_info("%s Take a next chunk #%lu\n", __FUNCTION__, new_chunk_number);
 	/* Take a next chunk. */
 	chunk = xa_load(&diff_area->chunk_map, new_chunk_number);
 	if (unlikely(!chunk))
 		return ERR_PTR(-EINVAL);
 
+	pr_info("%s chunk #%lu is %s", __FUNCTION__, chunk->number,
+	        rwsem_is_locked(&chunk->lock) ? "locked" : "released");
 	down_write(&chunk->lock);
+	pr_info("%s down_write chunk #%lu", __FUNCTION__, chunk->number);
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
+		WARN_ON(!rwsem_is_locked(&chunk->lock));
 		up_write(&chunk->lock);
+		pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 		return ERR_PTR(-EIO);
 	}
 
@@ -526,7 +579,9 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		if (!chunk->diff_buffer) {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
 			if (ret) {
+				WARN_ON(!rwsem_is_locked(&chunk->lock));
 				up_write(&chunk->lock);
+				pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 				return ERR_PTR(ret);
 			}
 		}
@@ -538,7 +593,9 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 
 		if (ret) {
 			pr_err("Failed to load chunk #%ld\n", chunk->number);
+			WARN_ON(!rwsem_is_locked(&chunk->lock));
 			up_write(&chunk->lock);
+			pr_info("%s up_write chunk #%lu", __FUNCTION__, chunk->number);
 			return ERR_PTR(ret);
 		}
 
@@ -546,8 +603,11 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 	}
 
-	if (!io_ctx->is_write)
+	if (!io_ctx->is_write) {
+		WARN_ON(!rwsem_is_locked(&chunk->lock));
 		downgrade_write(&chunk->lock);
+		pr_info("%s downgrade_write chunk #%lu", __FUNCTION__, chunk->number);
+	}
 
 	io_ctx->chunk = chunk;
 	return chunk;

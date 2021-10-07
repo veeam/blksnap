@@ -80,7 +80,7 @@ enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	if (!atomic_read(&tracker->snapshot_is_taken))
 		return FLT_ST_PASS;
 
-	pr_info("%s - snapshot_is_taken", __FUNCTION__);
+	//pr_info("%s - snapshot_is_taken", __FUNCTION__);
 
 	err = diff_area_copy(tracker->diff_area, sector, count,
 	                     (bool)(bio->bi_opf & REQ_NOWAIT));

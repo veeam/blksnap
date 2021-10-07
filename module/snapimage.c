@@ -113,6 +113,8 @@ void snapimage_queue_work(struct kthread_work *work)
 	struct diff_area_image_ctx io_ctx;
 	sector_t pos = blk_rq_pos(rq);
 
+	pr_info("%s request %llu process start\n", __FUNCTION__, blk_rq_pos(rq)); //DEBUG
+
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area, op_is_write(req_op(rq)));
 	rq_for_each_segment(bvec, rq, iter) {
 		status = diff_area_image_io(&io_ctx, &bvec, &pos);
@@ -122,6 +124,7 @@ void snapimage_queue_work(struct kthread_work *work)
 	diff_area_image_ctx_done(&io_ctx);
 
 	blk_mq_end_request(rq, status);
+	pr_info("%s request %llu processed\n", __FUNCTION__, blk_rq_pos(rq)); //DEBUG
 }
 
 static

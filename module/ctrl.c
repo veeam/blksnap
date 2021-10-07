@@ -272,6 +272,8 @@ int ioctl_snapshot_append_storage(unsigned long arg)
 	struct big_buffer *ranges = NULL;
 	size_t ranges_buffer_size;
 
+	pr_info("%s", __FUNCTION__);
+
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to append difference storage: invalid user buffer\n");
 		return -EINVAL;

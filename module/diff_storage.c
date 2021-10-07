@@ -151,6 +151,9 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 {
 	struct storage_block *storage_block;
 
+	pr_info("%s [%u:%u] %llu:%llu", __FUNCTION__,
+	        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
+
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
 		return -ENOMEM;
@@ -176,6 +179,8 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	int inx;
 	struct block_device *bdev;
 	struct blk_snap_block_range *range;
+
+	pr_info("%s ranges: %u", __FUNCTION__, range_count);
 
 	bdev = diff_storage_bdev_by_id(diff_storage, dev_id);
 	if (!bdev) {
@@ -210,6 +215,8 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	struct diff_store *diff_store;
 	struct storage_block *storage_block;
 	sector_t sectors_left;
+
+	pr_info("%s count: %llu", __FUNCTION__, count);
 
 	if (atomic_read(&diff_storage->overflow_flag))
 		return ERR_PTR(-ENOSPC);
@@ -259,12 +266,16 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		return ERR_PTR(ret);
 	}
 
+	pr_info("%s allocated diff_store sectors count: %llu", __FUNCTION__, diff_store->count);
+
 	if ((sectors_left <= (diff_storage_minimum >> SECTOR_SHIFT)) &&
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
 		struct blk_snap_event_low_free_space data = {
 			.requested_nr_sect = diff_storage_minimum >> SECTOR_SHIFT
 		};
 
+
+		pr_info("%s EVENT_LOW_FREE_SPACE requested: %llu", __FUNCTION__, data.requested_nr_sect);
 		diff_storage->requested += data.requested_nr_sect;
 		event_gen(&diff_storage->event_queue, GFP_NOIO,
 			BLK_SNAP_EVENT_LOW_FREE_SPACE,

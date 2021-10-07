@@ -292,6 +292,8 @@ int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
 	int ret = 0;
 	struct snapshot *snapshot;
 
+	pr_info("%s", __FUNCTION__);
+
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return -ESRCH;
