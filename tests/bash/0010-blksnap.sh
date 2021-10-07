@@ -25,6 +25,7 @@ blksnap_snapshot_append()
 {
 	local FILE=$1
 
+	echo "Append file ${FILE} to diff storage"
 	${BLKSNAP} snapshot_appendstorage --id=${ID} --file=${FILE}
 }
 

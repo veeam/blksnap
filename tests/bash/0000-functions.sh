@@ -45,8 +45,8 @@ generate_files()
 	for ((ITER = 0 ; ITER < ${COUNT} ; ITER++))
 	do
 		local FILE=./${PREFIX}-${ITER}
-
-		dd if=/dev/urandom of=${FILE} count=${RANDOM:1:2} bs=512
+		local SZ=${RANDOM:1:2}
+		dd if=/dev/urandom of=${FILE} count=$((SZ + 8)) bs=512
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 	done
 	cd ${GEN_FILE_PWD}
