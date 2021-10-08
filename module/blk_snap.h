@@ -398,12 +398,12 @@ struct blk_snap_event_low_free_space {
  * struct blk_snap_event_corrupted - Data for &BLK_SNAP_EVENT_CORRUPTED event.
  * @orig_dev_id:
  *	Device ID.
- * @errno:
+ * @err_code:
  *	Error code.
  */
 struct blk_snap_event_corrupted {
 	struct blk_snap_dev_t orig_dev_id;
-	__s32 errno;
+	__s32 err_code;
 };
 /**
  * BLK_SNAP_EVENT_CORRUPTED - Snapshot image is corrupted event.

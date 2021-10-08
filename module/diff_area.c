@@ -677,12 +677,12 @@ void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 
 	data.orig_dev_id.mj = MAJOR(diff_area->orig_bdev->bd_dev);
 	data.orig_dev_id.mn = MINOR(diff_area->orig_bdev->bd_dev);
-	data.errno = abs(err_code);
+	data.err_code = abs(err_code);
 
 	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO,
 		BLK_SNAP_EVENT_CORRUPTED,
 		&data, sizeof(data));
 
 	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
-	       data.orig_dev_id.mj, data.orig_dev_id.mn, abs(data.errno));
+	       data.orig_dev_id.mj, data.orig_dev_id.mn, abs(data.err_code));
 }
