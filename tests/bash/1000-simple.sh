@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+. ./functions.sh
+. ./blksnap.sh
+
 echo "---"
 echo "Simple test start"
 
