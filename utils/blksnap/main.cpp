@@ -2,6 +2,7 @@
 #include <fstream>
 #include <vector>
 #include <map>
+#include <cstring>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -17,6 +18,8 @@
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
+#include <boost/filesystem.hpp>
+namespace fs = boost::filesystem;
 
 #include "../../module/blk_snap.h"
 
@@ -68,7 +71,7 @@ void fiemapStorage(const std::string &filename,
 {
     int ret = 0;
     const char* errMessage;
-    int fileHandle = -1;
+    int fd = -1;
     struct fiemap *map = NULL;
     int extentMax = 500;
     long long fileSize;
@@ -81,8 +84,8 @@ void fiemapStorage(const std::string &filename,
     dev_id.mj = major(st.st_dev);
     dev_id.mn = minor(st.st_dev);
 
-    fileHandle = ::open(filename.c_str(), O_RDONLY | O_EXCL | O_LARGEFILE);
-    if (fileHandle < 0) {
+    fd = ::open(filename.c_str(), O_RDONLY | O_EXCL | O_LARGEFILE);
+    if (fd < 0) {
         ret = errno;
         errMessage = "Failed to open file.";
         goto fail;
@@ -102,7 +105,7 @@ void fiemapStorage(const std::string &filename,
         map->fm_extent_count = extentMax;
         map->fm_flags = 0;
 
-        if (::ioctl(fileHandle, FS_IOC_FIEMAP, map)) {
+        if (::ioctl(fd, FS_IOC_FIEMAP, map)) {
             ret = errno;
             errMessage = "Failed to call FS_IOC_FIEMAP.";
             goto fail;
@@ -126,14 +129,14 @@ void fiemapStorage(const std::string &filename,
         }
     }
 
-    ::close(fileHandle);
+    ::close(fd);
     return;
 
 fail:
     if (map)
         ::free(map);
-    if (fileHandle >= 0)
-        ::close(fileHandle);
+    if (fd >= 0)
+        ::close(fd);
     throw std::system_error(ret, std::generic_category(), errMessage);
 }
 
@@ -638,6 +641,141 @@ public:
     };
 };
 
+class StretchSnapshotArgsProc : public IArgsProc
+{
+private:
+    uuid_t m_id;
+    std::string m_path;
+    std::vector<std::string> m_allocatedFiles;
+    int m_counter;
+    unsigned long long m_allocated;
+    unsigned long long m_limit;
+private:
+    void ProcessLowFreeSpace(unsigned int time_label, struct blk_snap_event_low_free_space *data)
+    {
+        std::string filename;
+        int fd;
+        std::cout << time_label << " - Low free space in diff storage." << std::endl;
+
+        if (m_allocated > m_limit)
+            std::cerr << "The diff storage limit has been achieved." << std::endl;
+
+        fs::path filepath(m_path);
+        filepath += "diff_storage#";
+        filepath += std::to_string(m_counter++);
+        filename = filepath.string();
+
+        fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);
+        if (fd < 0)
+                throw std::system_error(errno, std::generic_category(),
+                                        "[TBD]Failed to create file for diff storage.");
+        m_allocatedFiles.push_back(filename);
+
+        if (::fallocate64(fd, 0, 0, data->requested_nr_sect)) {
+            int err = errno;
+
+            ::close(fd);
+            throw std::system_error(err, std::generic_category(),
+                                    "[TBD]Failed to allocate file for diff storage.");
+        }
+        ::close(fd);
+        m_allocated += data->requested_nr_sect;
+
+        std::vector<struct blk_snap_block_range> ranges;
+        struct blk_snap_dev_t dev_id = {0};
+        fiemapStorage(filename, dev_id, ranges);
+
+        struct blk_snap_snapshot_append_storage param;
+        uuid_copy(param.id, m_id);
+        param.dev_id = dev_id;
+        param.count = ranges.size();
+        param.ranges = ranges.data();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to append storage for snapshot.");
+    };
+
+    void ProcessEventCorrupted(unsigned int time_label, struct blk_snap_event_corrupted *data)
+    {
+        std::cout << time_label << " - The snapshot was corrupted for device [" <<
+            data->orig_dev_id.mj << ":" << data->orig_dev_id.mn << "] with error \"" <<
+            std::strerror(data->err_code) << "\"." << std::endl;
+    };
+
+public:
+    StretchSnapshotArgsProc()
+        :IArgsProc()
+    {
+        m_usage = std::string("[TBD]Start stretch snapshot service.");
+        m_desc.add_options()
+            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
+            ("path,p", po::value<std::string>(), "[TBD]Path for diff storage files.")
+            ("limit,l", po::value<unsigned int>(), "[TBD]Available diff storage size in GiB.");
+    };
+
+    void Execute(po::variables_map &vm) override
+    {
+        bool terminate = false;
+        struct blk_snap_snapshot_event param;
+
+        if (!vm.count("id"))
+            throw std::invalid_argument("Argument 'id' is missed.");
+
+        char idStr[64];
+        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
+        uuid_parse(idStr, m_id);
+
+        if (!vm.count("path"))
+            throw std::invalid_argument("Argument 'path' is missed.");
+        m_path = vm["path"].as<std::string>();
+
+        if (vm.count("limit"))
+            m_limit = (1024ULL * 1024 * 1024 / SECTOR_SIZE) * vm["path"].as<unsigned int>();
+        else
+            m_limit = -1ULL;
+
+        std::cout << "Stretch snapshot service started." << std::endl;
+
+        uuid_copy(param.id, m_id);
+        param.timeout_ms = 1000;
+        m_counter = 0;
+        while (!terminate) {
+            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param)) {
+                int err = errno;
+
+                if ((err == ENOENT) || (err == EINTR))
+                    continue;
+
+                throw std::system_error(err, std::generic_category(),
+                        "[TBD]Failed to get event from snapshot.");
+            }
+
+            switch (param.code) {
+            case BLK_SNAP_EVENT_LOW_FREE_SPACE:
+                ProcessLowFreeSpace(param.time_label, (struct blk_snap_event_low_free_space *)param.data);
+                break;
+            case BLK_SNAP_EVENT_CORRUPTED:
+                ProcessEventCorrupted(param.time_label, (struct blk_snap_event_corrupted *)param.data);
+                terminate = true;
+                break;
+            case BLK_SNAP_EVENT_TERMINATE:
+                std::cout << param.time_label << " - The snapshot was destroyed." << std::endl;
+                terminate = true;
+                break;
+            default:
+                std::cout << param.time_label << " - unsupported event #" << param.code << "." << std::endl;
+            }
+        }
+
+        for (const std::string &filename : m_allocatedFiles)
+            if (::remove(filename.c_str()))
+                std::cout << "Failed to cleanup diff storage file \"" << filename << "\". " << std::strerror(errno) << std::endl;
+
+        std::cout << "Stretch snapshot service finished." << std::endl;
+    };
+};
+
 static
 std::map<std::string, std::shared_ptr<IArgsProc> > argsProcMap {
     {"version", std::make_shared<VersionArgsProc>()},
@@ -651,6 +789,7 @@ std::map<std::string, std::shared_ptr<IArgsProc> > argsProcMap {
     {"snapshot_take", std::make_shared<SnapshotTakeArgsProc>()},
     {"snapshot_waitevent", std::make_shared<SnapshotWaitEventArgsProc>()},
     {"snapshot_collect", std::make_shared<SnapshotCollectArgsProc>()},
+    {"stretch_snapshot", std::make_shared<StretchSnapshotArgsProc>()},
 };
 
 static
