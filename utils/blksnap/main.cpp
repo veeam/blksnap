@@ -731,47 +731,53 @@ public:
         m_path = vm["path"].as<std::string>();
 
         if (vm.count("limit"))
-            m_limit = (1024ULL * 1024 / SECTOR_SIZE) * vm["path"].as<unsigned int>();
+            m_limit = (1024ULL * 1024 / SECTOR_SIZE) * vm["limit"].as<unsigned int>();
         else
             m_limit = -1ULL;
 
         std::cout << "Stretch snapshot service started." << std::endl;
 
-        uuid_copy(param.id, m_id);
-        param.timeout_ms = 1000;
-        m_counter = 0;
-        while (!terminate) {
-            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param)) {
-                int err = errno;
+        try {
+            uuid_copy(param.id, m_id);
+            param.timeout_ms = 1000;
+            m_counter = 0;
+            while (!terminate) {
+                if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param)) {
+                    int err = errno;
 
-                if ((err == ENOENT) || (err == EINTR))
-                    continue;
+                    if ((err == ENOENT) || (err == EINTR))
+                        continue;
 
-                throw std::system_error(err, std::generic_category(),
-                        "[TBD]Failed to get event from snapshot.");
+                    throw std::system_error(err, std::generic_category(),
+                            "[TBD]Failed to get event from snapshot.");
+                }
+
+                switch (param.code) {
+                case BLK_SNAP_EVENT_LOW_FREE_SPACE:
+                    ProcessLowFreeSpace(param.time_label, (struct blk_snap_event_low_free_space *)param.data);
+                    break;
+                case BLK_SNAP_EVENT_CORRUPTED:
+                    ProcessEventCorrupted(param.time_label, (struct blk_snap_event_corrupted *)param.data);
+                    terminate = true;
+                    break;
+                case BLK_SNAP_EVENT_TERMINATE:
+                    std::cout << param.time_label << " - The snapshot was destroyed." << std::endl;
+                    terminate = true;
+                    break;
+                default:
+                    std::cout << param.time_label << " - unsupported event #" << param.code << "." << std::endl;
+                }
             }
 
-            switch (param.code) {
-            case BLK_SNAP_EVENT_LOW_FREE_SPACE:
-                ProcessLowFreeSpace(param.time_label, (struct blk_snap_event_low_free_space *)param.data);
-                break;
-            case BLK_SNAP_EVENT_CORRUPTED:
-                ProcessEventCorrupted(param.time_label, (struct blk_snap_event_corrupted *)param.data);
-                terminate = true;
-                break;
-            case BLK_SNAP_EVENT_TERMINATE:
-                std::cout << param.time_label << " - The snapshot was destroyed." << std::endl;
-                terminate = true;
-                break;
-            default:
-                std::cout << param.time_label << " - unsupported event #" << param.code << "." << std::endl;
-            }
+            for (const std::string &filename : m_allocatedFiles)
+                if (::remove(filename.c_str()))
+                    std::cout << "Failed to cleanup diff storage file \"" << filename << "\". " << std::strerror(errno) << std::endl;
         }
-
-        for (const std::string &filename : m_allocatedFiles)
-            if (::remove(filename.c_str()))
-                std::cout << "Failed to cleanup diff storage file \"" << filename << "\". " << std::strerror(errno) << std::endl;
-
+        catch(std::exception& ex)
+        {
+            std::cerr << "Stretch snapshot service failed." << std::endl;
+            throw ex;
+        }
         std::cout << "Stretch snapshot service finished." << std::endl;
     };
 };
