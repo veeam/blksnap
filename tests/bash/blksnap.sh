@@ -72,6 +72,7 @@ blksnap_tracker_collect()
 blksnap_stretch_snapshot()
 {
 	local DIFF_STORAGE_PATH=$1
+	local LIMIT_MB=$2
 
-	${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE_PATH} &
+	${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE_PATH} --limit=${LIMIT_MB} &
 }

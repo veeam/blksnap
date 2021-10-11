@@ -711,7 +711,7 @@ public:
         m_desc.add_options()
             ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
             ("path,p", po::value<std::string>(), "[TBD]Path for diff storage files.")
-            ("limit,l", po::value<unsigned int>(), "[TBD]Available diff storage size in GiB.");
+            ("limit,l", po::value<unsigned int>(), "[TBD]Available diff storage size in MiB.");
     };
 
     void Execute(po::variables_map &vm) override
@@ -731,7 +731,7 @@ public:
         m_path = vm["path"].as<std::string>();
 
         if (vm.count("limit"))
-            m_limit = (1024ULL * 1024 * 1024 / SECTOR_SIZE) * vm["path"].as<unsigned int>();
+            m_limit = (1024ULL * 1024 / SECTOR_SIZE) * vm["path"].as<unsigned int>();
         else
             m_limit = -1ULL;
 
