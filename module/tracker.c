@@ -477,8 +477,7 @@ int collect_cbt_info(dev_t dev_id, struct blk_snap_cbt_info *cbt_info)
 		cbt_info->blk_size = (__u32)cbt_map_blk_size(tracker->cbt_map);
 		cbt_info->blk_count = (__u32)tracker->cbt_map->blk_count;
 		cbt_info->snap_number = (__u8)tracker->cbt_map->snap_number_previous;
-		uuid_copy((uuid_t *)(cbt_info->generationId),
-				     &tracker->cbt_map->generationId);
+		uuid_copy(&cbt_info->generationId, &tracker->cbt_map->generationId);
 	}
 	cbt_info->dev_id.mj = MAJOR(dev_id);
 	cbt_info->dev_id.mn = MINOR(dev_id);

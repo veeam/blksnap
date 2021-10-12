@@ -104,16 +104,16 @@ struct blk_snap_tracker_remove {
  * @blk_count:
  *	Number of blocks.
  * @generationId:
- *	[TBD] Uuid, but need correct description
+ *	Change tracking generation unique identification.
  * @snap_number:
- *	[TBD] ?
+ *	Current changes number.
  */
 struct blk_snap_cbt_info {
 	struct blk_snap_dev_t dev_id;
 	__u32 blk_size;
 	__u64 device_capacity;
 	__u32 blk_count;
-	__u8 generationId[16];
+	uuid_t generationId;
 	__u8 snap_number;
 };
 /**
