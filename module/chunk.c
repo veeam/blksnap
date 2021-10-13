@@ -82,7 +82,8 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	if (!chunk)
 		return NULL;
 
-	INIT_LIST_HEAD(&chunk->link);
+	INIT_LIST_HEAD(&chunk->storage_link);
+	INIT_LIST_HEAD(&chunk->cache_link);
 	init_rwsem(&chunk->lock);
 	chunk->diff_area = diff_area;
 	chunk->number = number;

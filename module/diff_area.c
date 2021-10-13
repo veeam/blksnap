@@ -75,25 +75,11 @@ struct chunk *get_chunk_from_storing_list(struct diff_area *diff_area)
 {
 	struct chunk *chunk;
 
-	spin_lock(&diff_area->chunks_list_lock);
-	chunk = list_first_entry_or_null(&diff_area->storing_chunks, struct chunk, link);
+	spin_lock(&diff_area->storage_list_lock);
+	chunk = list_first_entry_or_null(&diff_area->storing_chunks, struct chunk, storage_link);
 	if (chunk)
-		list_del(&chunk->link);
-	spin_unlock(&diff_area->chunks_list_lock);
-
-	return chunk;
-}
-
-static inline
-struct chunk *get_chunk_from_cache(struct diff_area *diff_area)
-{
-	struct chunk *chunk;
-
-	spin_lock(&diff_area->chunks_list_lock);
-	chunk = list_first_entry_or_null(&diff_area->caching_chunks, struct chunk, link);
-	if (chunk)
-		list_del(&chunk->link);
-	spin_unlock(&diff_area->chunks_list_lock);
+		list_del(&chunk->storage_link);
+	spin_unlock(&diff_area->storage_list_lock);
 
 	return chunk;
 }
@@ -130,17 +116,17 @@ void schedule_cache(struct chunk *chunk)
 
 	pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
 
-	spin_lock(&diff_area->chunks_list_lock);
+	spin_lock(&diff_area->cache_list_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
-		pr_err("Add chunk #%lu to cache", chunk->number); //DEBUG
+		pr_info("Add chunk #%lu to cache", chunk->number); //DEBUG
 
 		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
-		list_add_tail(&chunk->link, &diff_area->caching_chunks);
+		list_add_tail(&chunk->cache_link, &diff_area->caching_chunks);
 		need_to_cleanup =
 			atomic_inc_return(&diff_area->caching_chunks_count) >=
 			chunk_maximum_in_cache;
 	}
-	spin_unlock(&diff_area->chunks_list_lock);
+	spin_unlock(&diff_area->cache_list_lock);
 
 	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	up_read(&chunk->lock);
@@ -203,7 +189,9 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 	struct chunk *chunk;
 
 	pr_info("%s ", __FUNCTION__);
-
+	/*
+	 *
+	 */
 	while ((chunk = get_chunk_from_storing_list(diff_area))) {
 		if (!chunk->diff_store) {
 			struct diff_store *diff_store;
@@ -229,46 +217,56 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 	}
 }
 
+static inline
+bool too_many_chunks_in_cache(struct diff_area *diff_area)
+{
+	return atomic_read(&diff_area->caching_chunks_count) > chunk_maximum_in_cache;
+}
+
+static noinline
+struct chunk *chunk_get_from_cache_and_write_lock(struct diff_area *diff_area)
+{
+	struct chunk *iter;
+	struct chunk *chunk = NULL;
+
+	spin_lock(&diff_area->cache_list_lock);
+	list_for_each_entry(iter, &diff_area->caching_chunks, cache_link) {
+		if (down_write_trylock(&iter->lock)) {
+			chunk = iter;
+			pr_info("%s down_write chunk #%lu", __FUNCTION__, iter->number);
+			break;
+		}
+		/*
+		 * If it is not possible to lock a chunk for writing,
+		 * then it is currently in use and we try to cleanup
+		 * next chunk.
+		 */
+	}
+	if (likely(chunk)) {
+		pr_info("cleanup chunk #%lu", chunk->number);
+
+		list_del(&chunk->cache_link);
+		chunk_state_unset(chunk, CHUNK_ST_IN_CACHE);
+		atomic_dec(&diff_area->caching_chunks_count);
+	}
+	spin_unlock(&diff_area->cache_list_lock);
+
+	return chunk;
+}
+
 static
 void diff_area_caching_chunks_work(struct work_struct *work)
 {
 	struct diff_area *diff_area = container_of(work, struct diff_area, caching_chunks_work);
-	struct chunk *chunk = NULL;
+	struct chunk *chunk;
 
 	pr_info("%s \n", __FUNCTION__); //DEBUG
-
-	while (atomic_read(&diff_area->caching_chunks_count) >
-	       chunk_maximum_in_cache) {
-
-		chunk = get_chunk_from_cache(diff_area);
+	while (too_many_chunks_in_cache(diff_area)) {
+		chunk = chunk_get_from_cache_and_write_lock(diff_area);
 		if (!chunk)
 			break;
 
-		pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
-		/*
-		 * If it is not possible to lock a chunk for writing,
-		 * then it is currently in use.
-		 */
-		pr_info("%s chunk #%lu is %s", __FUNCTION__, chunk->number,
-	        	rwsem_is_locked(&chunk->lock) ? "locked" : "released");
-		if (!down_write_trylock(&chunk->lock)) {
-			/*
-			 * This chunk is returned back to the cache to the end
-			 * of queue.
-			 */
-			spin_lock(&diff_area->chunks_list_lock);
-			list_add_tail(&chunk->link, &diff_area->caching_chunks);
-			spin_unlock(&diff_area->chunks_list_lock);
-
-			continue;
-		}
-		pr_info("%s down_write chunk #%lu", __FUNCTION__, chunk->number);
-
-		pr_info("cleanup chunk #%lu", chunk->number);
-
-		chunk_state_unset(chunk, CHUNK_ST_IN_CACHE);
 		chunk_free_buffer(chunk);
-		atomic_dec(&diff_area->caching_chunks_count);
 
 		WARN_ON(!rwsem_is_locked(&chunk->lock));
 		up_write(&chunk->lock);
@@ -323,7 +321,8 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		pr_info("Only the memory cache will be used to store the snapshots difference.\n") ;
 	}
 
-	spin_lock_init(&diff_area->chunks_list_lock);
+	spin_lock_init(&diff_area->storage_list_lock);
+	spin_lock_init(&diff_area->cache_list_lock);
 
 	INIT_LIST_HEAD(&diff_area->storing_chunks);
 	INIT_WORK(&diff_area->storing_chunks_work, diff_area_storing_chunks_work);
@@ -380,9 +379,9 @@ void schedule_storing_diff(struct chunk *chunk)
 		return;
 	}
 
-	spin_lock(&diff_area->chunks_list_lock);
-	list_add_tail(&chunk->link, &diff_area->storing_chunks);
-	spin_unlock(&diff_area->chunks_list_lock);
+	spin_lock(&diff_area->storage_list_lock);
+	list_add_tail(&chunk->storage_link, &diff_area->storing_chunks);
+	spin_unlock(&diff_area->storage_list_lock);
 
 	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	downgrade_write(&chunk->lock);
@@ -520,7 +519,7 @@ void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
 		schedule_cache(io_ctx->chunk);
 }
 
-static
+static /**/noinline/**/
 struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
                                                 sector_t sector)
 {
@@ -601,6 +600,13 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 
 		/* Set the flag that the buffer contains the required data. */
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
+	} else {
+		spin_lock(&diff_area->cache_list_lock);
+		if (chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
+			pr_info("Up chunk #%lu in cache", chunk->number); //DEBUG
+			list_move_tail(&chunk->cache_link, &diff_area->caching_chunks);
+		}
+		spin_unlock(&diff_area->cache_list_lock);
 	}
 
 	if (!io_ctx->is_write) {

@@ -47,8 +47,10 @@ struct chunk;
  *	diff storage is performed in workqueue.
  *	The chunks that need to be stored in diff storage are accumitale in
  *	this list.
- * @chunks_list_lock:
- * 	Spin lock for the @storing_chunks and @caching_chunks list.
+ * @storage_list_lock:
+ * 	Spin lock for the @storing_chunks list.
+ * cache_list_lock:
+ *      Spin lock for the @caching_chunks list.
  * @storing_chunks_work:
  *	The workqueue work item. This worker saves the chunks to the diff
  * 	storage.
@@ -84,7 +86,8 @@ struct diff_area {
 	struct xarray chunk_map;
 
         bool in_memory;
-        spinlock_t chunks_list_lock;
+        spinlock_t storage_list_lock;
+        spinlock_t cache_list_lock;
 
 	struct list_head storing_chunks;
 	struct work_struct storing_chunks_work;

@@ -119,7 +119,8 @@ enum {
  * when executing the COW algorithm and when performing IO to snapshot images.
  */
 struct chunk {
-	struct list_head link;
+	struct list_head storage_link;
+        struct list_head cache_link;
 	struct diff_area *diff_area;
 
 	unsigned long number;
