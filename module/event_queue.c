@@ -36,6 +36,8 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 	event->code = code;
 	memcpy(event->data, data, data_size);
 
+	pr_info("%s send event=%lld code=%d\n", __FUNCTION__, event->time, event->code);
+
 	spin_lock(&event_queue->lock);
 	list_add_tail(&event->link, &event_queue->list);
 	spin_unlock(&event_queue->lock);
@@ -67,27 +69,34 @@ int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const 
 struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_ms)
 {
 	int ret;
-	struct event *event;
 
 	ret = wait_event_interruptible_timeout(
 		event_queue->wq_head,
-		(!list_empty(&event_queue->list)),
+		!list_empty(&event_queue->list),
 		timeout_ms);
 
 	if (ret == 1) {
+		struct event *event;
+
 		spin_lock(&event_queue->lock);
 		event = list_first_entry(&event_queue->list, struct event, link);
 		list_del(&event->link);
 		spin_unlock(&event_queue->lock);
 
+		pr_info("%s received event=%lld code=%d\n", __FUNCTION__, event->time, event->code);
 		return event;
 	}
-	if (ret == 0)
+	if (ret == 0) {
+		pr_info("%s - timeout\n", __FUNCTION__);
 		return ERR_PTR(-ENOENT);
+	}
 
-	if (ret == -ERESTARTSYS)
+	if (ret == -ERESTARTSYS) {
+		pr_info("%s - interrupted\n", __FUNCTION__);
 		return ERR_PTR(-EINTR);
+	}
 
+	pr_err("Failed to wait event. errno=%d\n", abs(ret));
 	return ERR_PTR(ret);
 }
 

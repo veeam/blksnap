@@ -329,6 +329,7 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 	struct blk_snap_snapshot_event *karg;
 	struct event *event;
 
+	pr_info("%s\n", __FUNCTION__);
 	karg = kzalloc(sizeof(struct blk_snap_snapshot_event), GFP_KERNEL);
 	if (!karg)
 		return -ENOMEM;
@@ -345,8 +346,9 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 		goto out;
 	}
 
-	karg->time_label = event->time;
+	pr_info("%s event received\n", __FUNCTION__);
 	karg->code = event->code;
+	karg->time_label = event->time;
 
 	if (event->data_size > sizeof(karg->data)) {
 		pr_err("Event size %zd is too big. ", event->data_size);
