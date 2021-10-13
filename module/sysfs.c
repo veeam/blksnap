@@ -29,7 +29,7 @@ int sysfs_init(void)
 	struct device *dev;
 	int res;
 
-	blk_snap_class = class_create(THIS_MODULE, MODULE_NAME);
+	blk_snap_class = class_create(THIS_MODULE, BLK_SNAP_MODULE_NAME);
 	if (IS_ERR(blk_snap_class)) {
 		res = PTR_ERR(blk_snap_class);
 
@@ -48,7 +48,7 @@ int sysfs_init(void)
 	}
 
 	dev = device_create(blk_snap_class, NULL, MKDEV(get_blk_snap_major(), 0), NULL,
-			    MODULE_NAME);
+			    BLK_SNAP_MODULE_NAME);
 	if (IS_ERR(dev)) {
 		res = PTR_ERR(dev);
 		pr_err("Failed to create device, errno=%d\n", abs(res));

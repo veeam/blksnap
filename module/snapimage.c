@@ -87,7 +87,7 @@ int snapimage_prepare_worker(struct snapimage *snapimage)
 	kthread_init_worker(&snapimage->worker);
 
 	task = kthread_run(snapimage_kthread_worker_fn, &snapimage->worker,
-	                   SNAPIMAGE_NAME "%d", MINOR(snapimage->image_dev_id));
+	                   BLK_SNAP_IMAGE_NAME "%d", MINOR(snapimage->image_dev_id));
 	if (IS_ERR(task))
 		return -ENOMEM;
 
@@ -307,7 +307,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
 
-	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d", SNAPIMAGE_NAME, minor) < 0) {
+	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d", BLK_SNAP_IMAGE_NAME, minor) < 0) {
 		pr_err("Unable to set disk name for snapshot image device: invalid minor %u\n",
 		       minor);
 		ret = -EINVAL;
@@ -366,7 +366,7 @@ int snapimage_init(void)
 {
 	int mj = 0;
 
-	mj = register_blkdev(mj, SNAPIMAGE_NAME);
+	mj = register_blkdev(mj, BLK_SNAP_IMAGE_NAME);
 	if (mj < 0) {
 		pr_err("Failed to register snapshot image block device. errno=%d\n",
 			abs(mj));
@@ -380,7 +380,7 @@ int snapimage_init(void)
 
 void snapimage_done(void)
 {
-	unregister_blkdev(_major, SNAPIMAGE_NAME);
+	unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
 	pr_info("Snapshot image block device [%d] was unregistered\n", _major);
 
 	idr_destroy(&_minor_idr);

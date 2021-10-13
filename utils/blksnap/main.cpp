@@ -31,7 +31,7 @@ namespace fs = boost::filesystem;
 #endif
 
 static int blksnap_fd = 0;
-static const char* blksnap_filename = "/dev/" MODULE_NAME;
+static const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
 
 static inline
 struct blk_snap_dev_t deviceByName(const std::string &name)
@@ -181,7 +181,7 @@ public:
     VersionArgsProc()
         :IArgsProc()
     {
-        m_usage = std::string("[TBD]Print " MODULE_NAME " module version.");
+        m_usage = std::string("[TBD]Print " BLK_SNAP_MODULE_NAME " module version.");
         m_desc.add_options()
             ("compatibility,c", "[TBD]Print only compatibility flag value in decimal form.")
             ("modification,m", "[TBD]Print only module modification name.")
