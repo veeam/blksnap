@@ -68,11 +68,21 @@ echo "press..."
 read -n 1
 generate_bulk_MB ${MOUNTPOINT_1} "overflow" 10
 
+echo "Umount images"
+echo "press..."
 umount ${IMAGE_1}
+
+echo "Destroy snapshot"
+echo "press..."
 blksnap_snapshot_destroy
 
 echo "Check generated data"
 check_files ${MOUNTPOINT_1}
+
+echo "Destroy first device"
+umount ${MOUNTPOINT_1}
+loop_device_detach ${DEVICE_1}
+imagefile_cleanup ${IMAGEFILE_1}
 
 echo "Stretch snapshot test finish"
 echo "---"
