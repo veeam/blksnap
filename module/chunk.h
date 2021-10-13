@@ -54,11 +54,6 @@ bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct 
 
         page_inx = ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
 
-        //DEBUG
-        BUG_ON(diff_buffer == NULL);
-        BUG_ON(diff_buffer->pages == NULL);
-        BUG_ON(diff_buffer->pages[page_inx].page == NULL);
-
 	iter->page = diff_buffer->pages[page_inx].page;
 	iter->offset = (size_t)(ofs & (SECTOR_IN_PAGE - 1)) << SECTOR_SHIFT;
         /*
@@ -68,11 +63,6 @@ bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct 
          * buffer.
          */
 	iter->bytes = min_t(size_t, (PAGE_SIZE - iter->offset), (diff_buffer->size - (ofs << SECTOR_SHIFT)));
-
-        //DEBUG
-        //pr_info("page_inx=%zu", page_inx); //DEBUG
-        //pr_info("offset=%zu", iter->offset); //DEBUG
-        //pr_info("bytes=%zu", iter->bytes); //DEBUG
 
 	return true;
 };

@@ -216,8 +216,6 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	struct storage_block *storage_block;
 	sector_t sectors_left;
 
-	pr_info("%s count: %llu", __FUNCTION__, count);
-
 	if (atomic_read(&diff_storage->overflow_flag))
 		return ERR_PTR(-ENOSPC);
 
@@ -229,10 +227,6 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	do {
 		storage_block = first_empty_storage_block(diff_storage);
 		if (!storage_block) {
-			/*
-			 *
-			 *
-			 */
 			atomic_inc(&diff_storage->overflow_flag);
 			ret = -ENOSPC;
 			break;
@@ -266,14 +260,11 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		return ERR_PTR(ret);
 	}
 
-	pr_info("%s allocated diff_store sectors count: %llu", __FUNCTION__, diff_store->count);
-
 	if ((sectors_left <= (diff_storage_minimum >> SECTOR_SHIFT)) &&
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
 		struct blk_snap_event_low_free_space data = {
 			.requested_nr_sect = diff_storage_minimum >> SECTOR_SHIFT
 		};
-
 
 		pr_info("%s EVENT_LOW_FREE_SPACE requested: %llu", __FUNCTION__, data.requested_nr_sect);
 		diff_storage->requested += data.requested_nr_sect;

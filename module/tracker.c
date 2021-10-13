@@ -55,7 +55,7 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 	filter_read_unlock(bdev);
 	return tracker;
 }
-//Failed to attach tracker
+
 static
 enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
@@ -79,8 +79,6 @@ enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
 		return FLT_ST_PASS;
-
-	//pr_info("%s - snapshot_is_taken", __FUNCTION__);
 
 	err = diff_area_copy(tracker->diff_area, sector, count,
 	                     (bool)(bio->bi_opf & REQ_NOWAIT));

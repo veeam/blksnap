@@ -173,8 +173,6 @@ int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn)
 		.client = chunk->diff_area->io_client,
 	};
 
-	pr_info("%s chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
-
 	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
 
@@ -200,7 +198,6 @@ int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn)
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
-	pr_info("%s\n", __FUNCTION__); //DEBUG
 
 	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
@@ -227,7 +224,6 @@ int chunk_load_orig(struct chunk *chunk)
 		.notify.context = NULL,
 		.client = chunk->diff_area->io_client,
 	};
-	pr_info("%s for chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
 
 	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
@@ -254,8 +250,6 @@ int chunk_load_diff(struct chunk *chunk)
 		.notify.context = NULL,
 		.client = chunk->diff_area->io_client,
 	};
-
-	pr_info("%s for chunk #%lu\n", __FUNCTION__, chunk->number); //DEBUG
 
 	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
