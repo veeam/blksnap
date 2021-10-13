@@ -352,10 +352,12 @@ struct blk_snap_snapshot_collect_images {
 struct blk_snap_snapshot_event {
 	uuid_t id;
 	__u32 timeout_ms;
-	__u32 time_label;
-	__u32 code;
-	__u8  data[4096 - 28];	/* up to PAGE_SIZE */
+        __u32 code;
+	__s64 time_label;
+	__u8  data[4096 - 32];	/* up to PAGE_SIZE */
 };
+static_assert(sizeof(struct blk_snap_snapshot_event) == PAGE_SIZE, "struct blk_snap_snapshot_event should be PAGE_SIZE");
+
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get event from snapshot.
  *
