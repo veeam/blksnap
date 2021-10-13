@@ -775,8 +775,8 @@ public:
         }
         catch(std::exception& ex)
         {
-            std::cerr << "Stretch snapshot service failed." << std::endl;
-            throw ex;
+            std::cerr << ex.what() << std::endl;
+            throw std::runtime_error("Stretch snapshot service failed.");
         }
         std::cout << "Stretch snapshot service finished." << std::endl;
     };
