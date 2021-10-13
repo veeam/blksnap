@@ -53,7 +53,7 @@ int ctrl_init(void)
 {
 	int ret;
 
-	ret = register_chrdev(0, MODULE_NAME, &ctrl_fops);
+	ret = register_chrdev(0, BLK_SNAP_MODULE_NAME, &ctrl_fops);
 	if (ret < 0) {
 		pr_err("Failed to register a character device. errno=%d\n", abs(blk_snap_major));
 		return ret;
@@ -68,7 +68,7 @@ void ctrl_done(void)
 {
 	pr_info("Unregister control device\n");
 
-	unregister_chrdev(blk_snap_major, MODULE_NAME);
+	unregister_chrdev(blk_snap_major, BLK_SNAP_MODULE_NAME);
 }
 /*
 static

@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#define MODULE_NAME "blk-snap"
-#define SNAP_IMAGE_NAME "blk-snap-image"
+//!! TODO This file is not correct now. It must be the same as module/blk_snap.h
+#define BLK_SNAP_MODULE_NAME "blk-snap"
+#define BLK_SNAP_IMAGE_NAME "blk-snap-image"
 
 #define SUCCESS 0
 

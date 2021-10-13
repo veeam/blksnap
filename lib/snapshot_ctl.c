@@ -13,7 +13,7 @@
 #include <poll.h>
 
 
-const char* SNAPSHOT_IMAGE_NAME = "/dev/"MODULE_NAME;
+const char* MODULE_DEV_PATH = "/dev/" BLK_SNAP_MODULE_NAME;
 
 struct snap_ctx
 {
@@ -30,7 +30,7 @@ int snap_ctx_create(struct snap_ctx** ctx)
     if (*ctx == NULL)
         return -1;
 
-    (*ctx)->fd = open( SNAPSHOT_IMAGE_NAME, O_RDWR );
+    (*ctx)->fd = open( MODULE_DEV_PATH, O_RDWR );
     if ((*ctx)->fd == -1)
     {
         error = errno;
@@ -266,5 +266,5 @@ int snap_collect_snapshot_images(struct snap_ctx* ctx, struct image_info_s* imag
 //@todo: delete this func
 void set_snapshot_image_name(const char* image_name)
 {
-    SNAPSHOT_IMAGE_NAME = image_name;
+    MODULE_DEV_PATH = image_name;
 }
