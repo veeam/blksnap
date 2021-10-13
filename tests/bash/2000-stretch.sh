@@ -3,13 +3,12 @@
 . ./functions.sh
 . ./blksnap.sh
 
+echo "---"
+echo "Stretch snapshot test"
 
 # diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB dikk_storage portion size
 modprobe blk-snap diff_storage_minimum=262144
 sleep 2s
-
-echo "---"
-echo "Stretch snapshot test"
 
 # check module is ready
 blksnap_version
@@ -47,11 +46,11 @@ blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
 echo "Call: ${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE} --limit=1024"
 echo "Press for taking snapshot..."
 read -n 1
-blksnap_snapshot_take
-
 #blksnap_stretch_snapshot ${DIFF_STORAGE} 1024
 
-generate_bulk_MB ${MOUNTPOINT_1} "after" 10
+blksnap_snapshot_take
+
+generate_bulk_MB ${MOUNTPOINT_1} "after" 300
 check_files ${MOUNTPOINT_1}
 
 echo "Check snapshot before overflow."
@@ -66,7 +65,7 @@ check_files ${IMAGE_1}
 echo "Try to make snapshot overflow."
 echo "press..."
 read -n 1
-generate_bulk_MB ${MOUNTPOINT_1} "overflow" 10
+generate_bulk_MB ${MOUNTPOINT_1} "overflow" 100
 
 echo "Umount images"
 echo "press..."
@@ -84,9 +83,10 @@ umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
-echo "Stretch snapshot test finish"
-echo "---"
-
+echo "Unload module"
 echo 0 > /sys/kernel/livepatch/blk_snap/enabled
 sleep 2s
 modprobe -r blk-snap
+
+echo "Stretch snapshot test finish"
+echo "---"
