@@ -284,20 +284,20 @@ void tracker_done(void)
 	struct tracked_device *tr_dev;
 
 	pr_info("Cleanup trackers\n");
-
-	spin_lock(&tracked_device_lock);
-	while ((tr_dev = list_first_entry_or_null(&tracked_device_list,
-	                                          struct tracked_device,
-	                                          link))) {
-		list_del(&tr_dev->link);
+	while(true) {
+		spin_lock(&tracked_device_lock);
+		tr_dev = list_first_entry_or_null(&tracked_device_list,
+	                                 struct tracked_device, link);
+		if (tr_dev)
+			list_del(&tr_dev->link);
 		spin_unlock(&tracked_device_lock);
 
-		tracker_remove(tr_dev->dev_id);
+		if (!tr_dev)
+			break;
 
+		tracker_remove(tr_dev->dev_id);
 		kfree(tr_dev);
-		spin_lock(&tracked_device_lock);
 	}
-	spin_unlock(&tracked_device_lock);
 
 	filter_done();
 }
@@ -331,9 +331,6 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		kfree(tr_dev);
 		goto put_bdev;
 	}
-
-	pr_info("Create tracker for device [%u:%u]\n",
-		MAJOR(dev_id), MINOR(dev_id));
 
 	tracker = tracker_new(bdev);
 	if (IS_ERR(tracker)) {
@@ -450,9 +447,8 @@ put_bdev:
 }
 
 static inline
-int collect_cbt_info(dev_t dev_id, struct blk_snap_cbt_info *cbt_info)
+void collect_cbt_info(dev_t dev_id, struct blk_snap_cbt_info *cbt_info)
 {
-	int ret = 0;
 	struct block_device *bdev;
 	struct tracker *tracker;
 
@@ -460,37 +456,30 @@ int collect_cbt_info(dev_t dev_id, struct blk_snap_cbt_info *cbt_info)
 	if (IS_ERR(bdev)) {
 		pr_info("Cannot open device [%u:%u]\n",
 		        MAJOR(dev_id), MINOR(dev_id));
-		return PTR_ERR(bdev);
+		return;
 	}
 
 	tracker = tracker_get_by_dev(bdev);
-	if (!tracker) {
-		ret = -ENODATA;
+	if (!tracker || !tracker->cbt_map)
 		goto put_bdev;
-	}
 
-	if (tracker->cbt_map) {
-		cbt_info->device_capacity =
-				(__u64)(tracker->cbt_map->device_capacity << SECTOR_SHIFT);
-		cbt_info->blk_size = (__u32)cbt_map_blk_size(tracker->cbt_map);
-		cbt_info->blk_count = (__u32)tracker->cbt_map->blk_count;
-		cbt_info->snap_number = (__u8)tracker->cbt_map->snap_number_previous;
-		uuid_copy(&cbt_info->generationId, &tracker->cbt_map->generationId);
-	}
-	cbt_info->dev_id.mj = MAJOR(dev_id);
-	cbt_info->dev_id.mn = MINOR(dev_id);
+	cbt_info->device_capacity =
+		(__u64)(tracker->cbt_map->device_capacity << SECTOR_SHIFT);
+	cbt_info->blk_size = (__u32)cbt_map_blk_size(tracker->cbt_map);
+	cbt_info->blk_count = (__u32)tracker->cbt_map->blk_count;
+	cbt_info->snap_number = (__u8)tracker->cbt_map->snap_number_previous;
+	uuid_copy(&cbt_info->generationId, &tracker->cbt_map->generationId);
 
 put_bdev:
 	blkdev_put(bdev, 0);
-	return ret;
 }
 
 int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info, int *pcount)
 {
 	int ret = 0;
 	int count = 0;
+	int iter = 0;
 	struct tracked_device *tr_dev;
-	dev_t dev_id;
 
 	if (!cbt_info) {
 		/**
@@ -509,25 +498,28 @@ int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info, int *pcou
 			ret = -ENOBUFS;
 			break;
 		}
-		dev_id = tr_dev->dev_id;
-		spin_unlock(&tracked_device_lock);
 
-		ret = collect_cbt_info(dev_id, &cbt_info[count]);
-		if (ret) {
-			spin_lock(&tracked_device_lock);
-			break;
-		}
-
+		cbt_info[count].dev_id.mj = MAJOR(tr_dev->dev_id);
+		cbt_info[count].dev_id.mn = MINOR(tr_dev->dev_id);
 		++count;
-		spin_lock(&tracked_device_lock);
 	}
 	spin_unlock(&tracked_device_lock);
 
-	if (!count)
-		ret = -ENODATA;
+	if (ret)
+		return ret;
+
+	for (iter = 0; iter < count; iter++){
+		dev_t dev_id = MKDEV(cbt_info[iter].dev_id.mj,
+		                     cbt_info[iter].dev_id.mn);
+
+		collect_cbt_info(dev_id, &cbt_info[iter]);
+	}
 out:
 	*pcount = count;
-	return ret;
+	if (!count)
+		return -ENODATA;
+
+	return 0;
 }
 
 int tracker_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_ranges,
