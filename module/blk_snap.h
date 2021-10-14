@@ -315,7 +315,8 @@ struct blk_snap_image_info {
  *	Snapshot ID.
  * @count:
  *	Size of @image_info_array in the number of &struct blk_snap_image_info.
- *	If @image_info_array has not enough space, it will contain the required size of the array.
+ *	If @image_info_array has not enough space, it will contain the required
+ *      size of the array.
  * @image_info_array:
  *	Pointer to the array for output.
  */
@@ -354,9 +355,10 @@ struct blk_snap_snapshot_event {
 	__u32 timeout_ms;
         __u32 code;
 	__s64 time_label;
-	__u8  data[4096 - 32];	/* up to PAGE_SIZE */
+	__u8  data[4096 - 32];
 };
-static_assert(sizeof(struct blk_snap_snapshot_event) == PAGE_SIZE, "struct blk_snap_snapshot_event should be PAGE_SIZE");
+static_assert(sizeof(struct blk_snap_snapshot_event) == 4096, \
+              "The size struct blk_snap_snapshot_event should be equal to the size of the page.");
 
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get event from snapshot.
