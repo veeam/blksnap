@@ -100,16 +100,16 @@ void snapshot_get(struct snapshot *snapshot)
 {
 	kref_get(&snapshot->kref);
 	//DEBUG
-	pr_info("%s - refcount=%u\n", __FUNCTION__,
-	        refcount_read(&snapshot->kref.refcount));
+	//pr_info("%s - refcount=%u\n", __FUNCTION__,
+	//        refcount_read(&snapshot->kref.refcount));
 };
 static inline
 void snapshot_put(struct snapshot *snapshot)
 {
 	if (likely(snapshot)) {
 		//DEBUG
-		pr_info("%s - refcount=%u\n", __FUNCTION__,
-		        refcount_read(&snapshot->kref.refcount));
+		//pr_info("%s - refcount=%u\n", __FUNCTION__,
+		//        refcount_read(&snapshot->kref.refcount));
 		kref_put(&snapshot->kref, snapshot_free);
 	}
 };

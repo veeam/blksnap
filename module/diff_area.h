@@ -62,7 +62,7 @@ struct chunk;
  *	The number of chunks in the cache.
  * @caching_chunks_work:
  *	The workqueue work item which controls the cache size.
- * @corrupted_flag:
+ * @corrupt_flag:
  *	The flag is set if an error occurred in the operation of the data
  *	saving mechanism in the diff area. In this case, an error will be
  *	generated when reading from the snapshot image.
@@ -85,9 +85,9 @@ struct diff_area {
 	unsigned long chunk_count;
 	struct xarray chunk_map;
 
-        bool in_memory;
-        spinlock_t storage_list_lock;
-        spinlock_t cache_list_lock;
+	bool in_memory;
+	spinlock_t storage_list_lock;
+	spinlock_t cache_list_lock;
 
 	struct list_head storing_chunks;
 	struct work_struct storing_chunks_work;
@@ -96,7 +96,9 @@ struct diff_area {
 	atomic_t caching_chunks_count;
 	struct work_struct caching_chunks_work;
 
-	atomic_t corrupted_flag;
+	atomic_t corrupt_flag;
+	int corrupt_err_code;
+	struct work_struct corrupt_work;
 };
 
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage);
@@ -105,26 +107,18 @@ static inline
 void diff_area_get(struct diff_area *diff_area)
 {
 	kref_get(&diff_area->kref);
-        //DEBUG
-        pr_info("%s - refcount=%u\n", __FUNCTION__,
-                refcount_read(&diff_area->kref.refcount));
 };
 static inline
 void diff_area_put(struct diff_area *diff_area)
 {
-	if (likely(diff_area)) {
-                //DEBUG
-                pr_info("%s - refcount=%u\n", __FUNCTION__,
-                        refcount_read(&diff_area->kref.refcount));
-
+	if (likely(diff_area))
 		kref_put(&diff_area->kref, diff_area_free);
-        }
 };
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code);
 static inline
 bool diff_area_is_corrupted(struct diff_area *diff_area)
 {
-	return !!atomic_read(&diff_area->corrupted_flag);
+	return !!atomic_read(&diff_area->corrupt_flag);
 };
 static inline
 sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
@@ -132,7 +126,7 @@ sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
 	return (sector_t)(1ULL << (diff_area->chunk_shift - SECTOR_SHIFT));
 };
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
-                   bool is_nowait);
+		   bool is_nowait);
 
 /**
  * struct diff_area_image_ctx - The context for processing an io request to
@@ -153,8 +147,8 @@ struct diff_area_image_ctx {
 
 static inline
 void diff_area_image_ctx_init(struct diff_area_image_ctx *io_ctx,
-                              struct diff_area *diff_area,
-                              bool is_write)
+			      struct diff_area *diff_area,
+			      bool is_write)
 {
 	io_ctx->diff_area = diff_area;
 	io_ctx->is_write = is_write;

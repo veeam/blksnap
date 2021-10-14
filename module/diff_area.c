@@ -92,6 +92,7 @@ void diff_area_free(struct kref *kref)
 
 	flush_work(&diff_area->storing_chunks_work);
 	flush_work(&diff_area->caching_chunks_work);
+	flush_work(&diff_area->corrupt_work);
 
 	xa_for_each(&diff_area->chunk_map, inx, chunk)
 		chunk_free(chunk);//chunk_put(chunk);
@@ -133,12 +134,13 @@ void schedule_cache(struct chunk *chunk)
 	}
 }
 
-static inline
+//static inline
+static noinline //DEBUG
 void chunk_store_failed(struct chunk *chunk, int error)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	diff_area_set_corrupted(chunk->diff_area, error);
-	pr_err("Failed to store chunk #%lu\n", chunk->number);
+	//pr_err("Failed to store chunk #%lu\n", chunk->number);
 
 	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	up_read(&chunk->lock);
@@ -149,7 +151,7 @@ void chunk_load_failed(struct chunk *chunk, int error)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	diff_area_set_corrupted(chunk->diff_area, error);
-	pr_err("Failed to load chunk #%lu\n", chunk->number);
+	//pr_err("Failed to load chunk #%lu\n", chunk->number);
 
 	WARN_ON(!rwsem_is_locked(&chunk->lock));
 	up_write(&chunk->lock);
@@ -184,8 +186,7 @@ void diff_area_storing_chunks_work(struct work_struct *work)
 					diff_area->diff_storage,
 					diff_area_chunk_sectors(diff_area));
 			if (unlikely(IS_ERR(diff_store))) {
-				pr_err("Cannot get new diff storage for chunk #%lu", chunk->number);
-
+				//pr_err("Cannot get new diff storage for chunk #%lu", chunk->number);
 				chunk_store_failed(chunk, PTR_ERR(diff_store));
 				continue;
 			}
@@ -249,6 +250,24 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 		WARN_ON(!rwsem_is_locked(&chunk->lock));
 		up_write(&chunk->lock);
 	}
+}
+
+static
+void diff_area_corrupt_work(struct work_struct *work)
+{
+	struct blk_snap_event_corrupted data;
+	struct diff_area *diff_area = container_of(work, struct diff_area, corrupt_work);
+
+	pr_info("%s", __FUNCTION__); //DEBUG
+	data.orig_dev_id.mj = MAJOR(diff_area->orig_bdev->bd_dev);
+	data.orig_dev_id.mn = MINOR(diff_area->orig_bdev->bd_dev);
+	data.err_code = abs(diff_area->corrupt_err_code);
+
+	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO, BLK_SNAP_EVENT_CORRUPTED,
+		&data, sizeof(struct blk_snap_event_corrupted));
+
+	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
+	       data.orig_dev_id.mj, data.orig_dev_id.mn, abs(data.err_code));
 }
 
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
@@ -338,7 +357,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	recalculate_last_chunk_size(chunk);
 
-	atomic_set(&diff_area->corrupted_flag, 0);
+	atomic_set(&diff_area->corrupt_flag, 0);
+	diff_area->corrupt_err_code = 0;
+	INIT_WORK(&diff_area->corrupt_work, diff_area_corrupt_work);
+
 	return diff_area;
 }
 
@@ -612,22 +634,12 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 
 	return BLK_STS_OK;
 }
-
+noinline //DEBUG
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 {
-	struct blk_snap_event_corrupted data;
-
-	if (atomic_inc_return(&diff_area->corrupted_flag) != 1)
+	if (atomic_inc_return(&diff_area->corrupt_flag) != 1)
 		return;
 
-	data.orig_dev_id.mj = MAJOR(diff_area->orig_bdev->bd_dev);
-	data.orig_dev_id.mn = MINOR(diff_area->orig_bdev->bd_dev);
-	data.err_code = abs(err_code);
-
-	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO,
-		BLK_SNAP_EVENT_CORRUPTED,
-		&data, sizeof(data));
-
-	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
-	       data.orig_dev_id.mj, data.orig_dev_id.mn, abs(data.err_code));
+	diff_area->corrupt_err_code = err_code;
+	queue_work(system_wq, &diff_area->corrupt_work);
 }
