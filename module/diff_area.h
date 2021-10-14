@@ -86,19 +86,13 @@ struct diff_area {
 	struct xarray chunk_map;
 
 	bool in_memory;
-	spinlock_t storage_list_lock;
+
 	spinlock_t cache_list_lock;
-
-	struct list_head storing_chunks;
-	struct work_struct storing_chunks_work;
-
 	struct list_head caching_chunks;
 	atomic_t caching_chunks_count;
 	struct work_struct caching_chunks_work;
 
 	atomic_t corrupt_flag;
-	int corrupt_err_code;
-	struct work_struct corrupt_work;
 };
 
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage);

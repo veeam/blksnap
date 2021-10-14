@@ -16,11 +16,6 @@ sector_t bdev_nr_sectors(struct block_device *bdev)
 };
 #endif
 
-/*static inline
-unsigned long chunk_pages(struct diff_area *diff_area)
-{
-	return (1UL << (diff_area->chunk_shift - PAGE_SHIFT));
-};*/
 static inline
 unsigned long chunk_number(struct diff_area *diff_area, sector_t sector)
 {
@@ -70,29 +65,15 @@ void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	diff_area->chunk_count = count;
 }
 
-static inline
-struct chunk *get_chunk_from_storing_list(struct diff_area *diff_area)
-{
-	struct chunk *chunk;
-
-	spin_lock(&diff_area->storage_list_lock);
-	chunk = list_first_entry_or_null(&diff_area->storing_chunks, struct chunk, storage_link);
-	if (chunk)
-		list_del(&chunk->storage_link);
-	spin_unlock(&diff_area->storage_list_lock);
-
-	return chunk;
-}
-
 void diff_area_free(struct kref *kref)
 {
 	unsigned long inx;
 	struct chunk *chunk;
 	struct diff_area *diff_area = container_of(kref, struct diff_area, kref);
 
-	flush_work(&diff_area->storing_chunks_work);
+	//flush_work(&diff_area->storing_chunks_work);
 	flush_work(&diff_area->caching_chunks_work);
-	flush_work(&diff_area->corrupt_work);
+	//flush_work(&diff_area->corrupt_work);
 
 	xa_for_each(&diff_area->chunk_map, inx, chunk)
 		chunk_free(chunk);//chunk_put(chunk);
@@ -106,97 +87,6 @@ void diff_area_free(struct kref *kref)
 	if (diff_area->orig_bdev) {
 		blkdev_put(diff_area->orig_bdev, FMODE_READ | FMODE_WRITE);
 		diff_area->orig_bdev = NULL;
-	}
-}
-
-static inline
-void schedule_cache(struct chunk *chunk)
-{
-	bool need_to_cleanup = false;
-	struct diff_area *diff_area = chunk->diff_area;
-
-	spin_lock(&diff_area->cache_list_lock);
-	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
-		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
-		list_add_tail(&chunk->cache_link, &diff_area->caching_chunks);
-		need_to_cleanup =
-			atomic_inc_return(&diff_area->caching_chunks_count) >
-			chunk_maximum_in_cache;
-	}
-	spin_unlock(&diff_area->cache_list_lock);
-
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
-	up_read(&chunk->lock);
-
-	if (need_to_cleanup) {
-		/* Initiate the cache clearing process. */
-		queue_work(system_wq, &diff_area->caching_chunks_work);
-	}
-}
-
-//static inline
-static noinline //DEBUG
-void chunk_store_failed(struct chunk *chunk, int error)
-{
-	chunk_state_set(chunk, CHUNK_ST_FAILED);
-	diff_area_set_corrupted(chunk->diff_area, error);
-	//pr_err("Failed to store chunk #%lu\n", chunk->number);
-
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
-	up_read(&chunk->lock);
-};
-
-static inline
-void chunk_load_failed(struct chunk *chunk, int error)
-{
-	chunk_state_set(chunk, CHUNK_ST_FAILED);
-	diff_area_set_corrupted(chunk->diff_area, error);
-	//pr_err("Failed to load chunk #%lu\n", chunk->number);
-
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
-	up_write(&chunk->lock);
-};
-
-static
-void notify_store_fn(unsigned long error, void *context)
-{
-	struct chunk *chunk = (struct chunk *)context;
-
-	if (error) {
-		chunk_store_failed(chunk, error);
-		return;
-	}
-	chunk_state_set(chunk, CHUNK_ST_STORE_READY);
-
-	schedule_cache(chunk);
-}
-
-static
-void diff_area_storing_chunks_work(struct work_struct *work)
-{
-	int ret;
-	struct diff_area *diff_area = container_of(work, struct diff_area, storing_chunks_work);
-	struct chunk *chunk;
-
-	while ((chunk = get_chunk_from_storing_list(diff_area))) {
-		if (!chunk->diff_store) {
-			struct diff_store *diff_store;
-
-			diff_store = diff_storage_get_store(
-					diff_area->diff_storage,
-					diff_area_chunk_sectors(diff_area));
-			if (unlikely(IS_ERR(diff_store))) {
-				//pr_err("Cannot get new diff storage for chunk #%lu", chunk->number);
-				chunk_store_failed(chunk, PTR_ERR(diff_store));
-				continue;
-			}
-
-			chunk->diff_store = diff_store;
-		}
-
-		ret = chunk_async_store_diff(chunk, notify_store_fn);
-		if (ret)
-			chunk_store_failed(chunk, ret);
 	}
 }
 
@@ -252,24 +142,6 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 	}
 }
 
-static
-void diff_area_corrupt_work(struct work_struct *work)
-{
-	struct blk_snap_event_corrupted data;
-	struct diff_area *diff_area = container_of(work, struct diff_area, corrupt_work);
-
-	pr_info("%s", __FUNCTION__); //DEBUG
-	data.orig_dev_id.mj = MAJOR(diff_area->orig_bdev->bd_dev);
-	data.orig_dev_id.mn = MINOR(diff_area->orig_bdev->bd_dev);
-	data.err_code = abs(diff_area->corrupt_err_code);
-
-	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO, BLK_SNAP_EVENT_CORRUPTED,
-		&data, sizeof(struct blk_snap_event_corrupted));
-
-	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
-	       data.orig_dev_id.mj, data.orig_dev_id.mn, abs(data.err_code));
-}
-
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 {
 	int ret = 0;
@@ -317,12 +189,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		pr_info("Only the memory cache will be used to store the snapshots difference.\n") ;
 	}
 
-	spin_lock_init(&diff_area->storage_list_lock);
 	spin_lock_init(&diff_area->cache_list_lock);
-
-	INIT_LIST_HEAD(&diff_area->storing_chunks);
-	INIT_WORK(&diff_area->storing_chunks_work, diff_area_storing_chunks_work);
-
 	INIT_LIST_HEAD(&diff_area->caching_chunks);
 	INIT_WORK(&diff_area->caching_chunks_work, diff_area_caching_chunks_work);
 
@@ -358,54 +225,8 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	recalculate_last_chunk_size(chunk);
 
 	atomic_set(&diff_area->corrupt_flag, 0);
-	diff_area->corrupt_err_code = 0;
-	INIT_WORK(&diff_area->corrupt_work, diff_area_corrupt_work);
 
 	return diff_area;
-}
-
-static inline
-void schedule_storing_diff(struct chunk *chunk)
-{
-	struct diff_area *diff_area = chunk->diff_area;
-
-	if (diff_area->in_memory) {
-		WARN_ON(!rwsem_is_locked(&chunk->lock));
-		up_write(&chunk->lock);
-		return;
-	}
-
-	spin_lock(&diff_area->storage_list_lock);
-	list_add_tail(&chunk->storage_link, &diff_area->storing_chunks);
-	spin_unlock(&diff_area->storage_list_lock);
-
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
-	downgrade_write(&chunk->lock);
-
-	/*
-	 * I believe that the priority of the COW algorithm completion process
-	 * should be high so that the scheduler can preempt other threads to
-	 * complete the write.
-	 */
-	queue_work(system_highpri_wq, &diff_area->storing_chunks_work);
-}
-
-static
-void notify_load_fn(unsigned long error, void *context)
-{
-	struct chunk *chunk = (struct chunk *)context;
-
-	if (error) {
-		chunk_load_failed(chunk, error);
-		return;
-	}
-
-	chunk_state_set(chunk, CHUNK_ST_DIRTY);
-	chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
-
-	pr_debug("Chunk 0x%lu was read\n", chunk->number);
-
-	schedule_storing_diff(chunk);
 }
 
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
@@ -450,7 +271,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			 * into memory, and need to store it in diff storage.
 			 */
 			chunk_state_set(chunk, CHUNK_ST_DIRTY);
-			schedule_storing_diff(chunk);
+			chunk_schedule_storing(chunk);
 			continue;
 		}
 
@@ -471,7 +292,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			}
 		}
 
-		ret = chunk_asunc_load_orig(chunk, notify_load_fn);
+		ret = chunk_asunc_load_orig(chunk);
 		if (ret) {
 			WARN_ON(!rwsem_is_locked(&chunk->lock));
 			up_write(&chunk->lock);
@@ -488,9 +309,9 @@ void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
 		return;
 
 	if (io_ctx->is_write)
-		schedule_storing_diff(io_ctx->chunk);
+		chunk_schedule_storing(io_ctx->chunk);
 	else
-		schedule_cache(io_ctx->chunk);
+		chunk_schedule_caching(io_ctx->chunk);
 }
 
 static
@@ -509,14 +330,13 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		 * If the sector falls into a new chunk, then we release
 		 * the old chunk.
 		 */
-		if (chunk) {
-			if (io_ctx->is_write)
-				schedule_storing_diff(chunk);
-			else
-				schedule_cache(chunk);
 
-			io_ctx->chunk = NULL;
-		}
+		if (io_ctx->is_write)
+			chunk_schedule_storing(chunk);
+		else
+			chunk_schedule_caching(chunk);
+
+		io_ctx->chunk = NULL;
 	}
 
 	/* Take a next chunk. */
@@ -634,12 +454,29 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 
 	return BLK_STS_OK;
 }
-noinline //DEBUG
+
+static inline
+void diff_area_event_corrupted(struct diff_area *diff_area, int err_code)
+{
+	struct blk_snap_event_corrupted data = {
+		.orig_dev_id.mj = MAJOR(diff_area->orig_bdev->bd_dev),
+		.orig_dev_id.mn = MINOR(diff_area->orig_bdev->bd_dev),
+		.err_code = abs(err_code),
+	};
+
+	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO, BLK_SNAP_EVENT_CORRUPTED,
+		&data, sizeof(struct blk_snap_event_corrupted));
+}
+
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 {
 	if (atomic_inc_return(&diff_area->corrupt_flag) != 1)
 		return;
 
-	diff_area->corrupt_err_code = err_code;
-	queue_work(system_wq, &diff_area->corrupt_work);
+	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
+	       MAJOR(diff_area->orig_bdev->bd_dev),
+	       MINOR(diff_area->orig_bdev->bd_dev),
+	       abs(err_code));
+
+	diff_area_event_corrupted(diff_area, err_code);
 }

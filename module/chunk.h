@@ -73,6 +73,8 @@ enum {
 	CHUNK_ST_BUFFER_READY,	/* The data of the chunk is ready to be read from the RAM buffer */
 	CHUNK_ST_STORE_READY,	/* The data of the chunk was wrote to the difference storage */
         CHUNK_ST_IN_CACHE,      /* The chunk in the cache in the queue for release. */
+        CHUNK_ST_LOADING,
+        CHUNK_ST_STORING,
 };
 
 /**
@@ -109,7 +111,6 @@ enum {
  * when executing the COW algorithm and when performing IO to snapshot images.
  */
 struct chunk {
-	struct list_head storage_link;
         struct list_head cache_link;
 	struct diff_area *diff_area;
 
@@ -118,6 +119,9 @@ struct chunk {
 	atomic_t state;
 
 	struct rw_semaphore lock;
+
+        int error;
+        struct work_struct notify_work;
 
 	struct diff_buffer *diff_buffer;
 	struct diff_store *diff_store;
@@ -149,9 +153,12 @@ void chunk_free(struct chunk *chunk);
 int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask);
 void chunk_free_buffer(struct chunk *chunk);
 
+void chunk_schedule_storing(struct chunk *chunk);
+void chunk_schedule_caching(struct chunk *chunk);
+
 /* Asynchronous operations are used to implement the COW algorithm. */
-int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn);
-int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn);
+int chunk_async_store_diff(struct chunk *chunk);
+int chunk_asunc_load_orig(struct chunk *chunk);
 
 /* Synchronous operations are used to implement reading and writing to the snapshot image. */
 int chunk_load_orig(struct chunk *chunk);

@@ -2,7 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-chunk: " fmt
 #include <linux/slab.h>
 #include <linux/dm-io.h>
-
+#include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
 #include "diff_storage.h"
@@ -72,7 +72,116 @@ fail:
 	return NULL;
 }
 
+static inline
+void chunk_store_failed(struct chunk *chunk, int error)
+{
+	chunk_state_set(chunk, CHUNK_ST_FAILED);
+	diff_area_set_corrupted(chunk->diff_area, error);
+	up_read(&chunk->lock);
+};
 
+void chunk_schedule_storing(struct chunk *chunk)
+{
+	int ret;
+	struct diff_area *diff_area = chunk->diff_area;
+
+	might_sleep();
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
+
+	if (diff_area->in_memory) {
+		up_write(&chunk->lock);
+		return;
+	}
+
+	downgrade_write(&chunk->lock);
+
+	if (!chunk->diff_store) {
+		struct diff_store *diff_store;
+
+		diff_store = diff_storage_get_store(
+				diff_area->diff_storage,
+				diff_area_chunk_sectors(diff_area));
+		if (unlikely(IS_ERR(diff_store))) {
+			//pr_err("Cannot get new diff storage for chunk #%lu", chunk->number);
+			chunk_store_failed(chunk, PTR_ERR(diff_store));
+			return;
+		}
+
+		chunk->diff_store = diff_store;
+	}
+
+	ret = chunk_async_store_diff(chunk);
+	if (ret)
+		chunk_store_failed(chunk, ret);
+}
+
+void chunk_schedule_caching(struct chunk *chunk)
+{
+	bool need_to_cleanup = false;
+	struct diff_area *diff_area = chunk->diff_area;
+
+	might_sleep();
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
+
+	spin_lock(&diff_area->cache_list_lock);
+	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
+		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
+		list_add_tail(&chunk->cache_link, &diff_area->caching_chunks);
+		need_to_cleanup =
+			atomic_inc_return(&diff_area->caching_chunks_count) >
+			chunk_maximum_in_cache;
+	}
+	spin_unlock(&diff_area->cache_list_lock);
+
+	up_read(&chunk->lock);
+
+	// Initiate the cache clearing process.
+	if (need_to_cleanup)
+		queue_work(system_wq, &diff_area->caching_chunks_work);
+}
+
+static
+void chunk_notify_work(struct work_struct *work)
+{
+	struct chunk *chunk = container_of(work, struct chunk, notify_work);
+
+	might_sleep();
+
+	if (unlikely(chunk->error)) {
+		chunk_state_set(chunk, CHUNK_ST_FAILED);
+		diff_area_set_corrupted(chunk->diff_area, chunk->error);
+
+		WARN_ON(!rwsem_is_locked(&chunk->lock));
+		if (chunk_state_check(chunk, CHUNK_ST_LOADING))
+			up_write(&chunk->lock);
+
+		if (chunk_state_check(chunk, CHUNK_ST_STORING))
+			up_read(&chunk->lock);
+
+		return;
+	}
+
+	if (chunk_state_check(chunk, CHUNK_ST_LOADING)) {
+		chunk_state_unset(chunk, CHUNK_ST_LOADING);
+
+		chunk_state_set(chunk, CHUNK_ST_DIRTY);
+		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
+
+		pr_debug("Chunk 0x%lu was read\n", chunk->number);
+
+		chunk_schedule_storing(chunk);
+		return;
+	}
+
+	if (chunk_state_check(chunk, CHUNK_ST_STORING)) {
+		chunk_state_unset(chunk, CHUNK_ST_STORING);
+
+		chunk_state_set(chunk, CHUNK_ST_STORE_READY);
+
+		chunk_schedule_caching(chunk);
+		return;
+	}
+}
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 {
@@ -82,11 +191,13 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	if (!chunk)
 		return NULL;
 
-	INIT_LIST_HEAD(&chunk->storage_link);
 	INIT_LIST_HEAD(&chunk->cache_link);
 	init_rwsem(&chunk->lock);
 	chunk->diff_area = diff_area;
 	chunk->number = number;
+
+	chunk->error = 0;
+	INIT_WORK(&chunk->notify_work, chunk_notify_work);
 
 	return chunk;
 }
@@ -149,12 +260,23 @@ struct page_list *chunk_first_page(struct chunk *chunk)
 	return chunk->diff_buffer->pages;
 };
 
+
+static
+void notify_fn(unsigned long error, void *context)
+{
+	struct chunk *chunk = context;
+
+	cant_sleep();
+	chunk->error = error;
+	queue_work(system_wq, &chunk->notify_work);
+}
+
 /**
  * chunk_async_store_diff() - Starts asynchronous storing of a chunk to the
  *	difference storage.
  *
  */
-int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn)
+int chunk_async_store_diff(struct chunk *chunk)
 {
 	unsigned long sync_error_bits;
 	struct dm_io_region region = {
@@ -168,11 +290,12 @@ int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn)
 		.mem.type = DM_IO_PAGE_LIST,
 		.mem.offset = 0,
 		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = fn,
+		.notify.fn = notify_fn,
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
 
+	chunk_state_set(chunk, CHUNK_ST_STORING);
 	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
 
@@ -180,7 +303,7 @@ int chunk_async_store_diff(struct chunk *chunk, io_notify_fn fn)
  * chunk_asunc_load_orig() - Starts asynchronous loading of a chunk from
  * 	the origian block device.
  */
-int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn)
+int chunk_asunc_load_orig(struct chunk *chunk)
 {
 	unsigned long sync_error_bits;
 	struct dm_io_region region = {
@@ -194,11 +317,12 @@ int chunk_asunc_load_orig(struct chunk *chunk, io_notify_fn fn)
 		.mem.type = DM_IO_PAGE_LIST,
 		.mem.offset = 0,
 		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = fn,
+		.notify.fn = notify_fn,
 		.notify.context = chunk,
 		.client = chunk->diff_area->io_client,
 	};
 
+	chunk_state_set(chunk, CHUNK_ST_LOADING);
 	return dm_io(&reguest, 1, &region, &sync_error_bits);
 }
 
