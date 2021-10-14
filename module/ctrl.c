@@ -346,7 +346,8 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 		goto out;
 	}
 
-	pr_info("%s event received\n", __FUNCTION__);
+	pr_info("%s received event=%lld code=%d data_size=%zu\n", __FUNCTION__,
+		event->time, event->code, event->data_size);
 	karg->code = event->code;
 	karg->time_label = event->time;
 
@@ -356,7 +357,8 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 		/* If we can't copy all the data, we copy only part of it. */
 	}
 	memcpy(karg->data, event->data,
-	       min_t(size_t, event->data_size, sizeof(karg->data)));
+		event->data_size);
+	       //min_t(size_t, event->data_size, sizeof(karg->data)));
 	kfree(event);
 
 	if (copy_to_user((void *)arg, karg, sizeof(struct blk_snap_snapshot_event))) {

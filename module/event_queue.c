@@ -23,7 +23,7 @@ void event_queue_done(struct event_queue *event_queue)
 	}
 	spin_unlock(&event_queue->lock);
 }
-
+noinline //DEBUG
 int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void *data, int data_size)
 {
 	struct event *event;
@@ -70,10 +70,8 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 {
 	int ret;
 
-	ret = wait_event_interruptible_timeout(
-		event_queue->wq_head,
-		!list_empty(&event_queue->list),
-		timeout_ms);
+	ret = wait_event_interruptible_timeout(event_queue->wq_head,
+		!list_empty(&event_queue->list), timeout_ms);
 
 	if (ret > 0) {
 		struct event *event;
@@ -87,12 +85,11 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 		return event;
 	}
 	if (ret == 0) {
-		pr_info("%s - timeout\n", __FUNCTION__);
+		pr_info("%s - timeout\n", __FUNCTION__); //DEBUG
 		return ERR_PTR(-ENOENT);
 	}
-
 	if (ret == -ERESTARTSYS) {
-		pr_info("%s - interrupted\n", __FUNCTION__);
+		pr_info("%s - interrupted\n", __FUNCTION__); //DEBUG
 		return ERR_PTR(-EINTR);
 	}
 
