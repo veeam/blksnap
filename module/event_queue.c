@@ -75,7 +75,7 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 		!list_empty(&event_queue->list),
 		timeout_ms);
 
-	if (ret == 1) {
+	if (ret > 0) {
 		struct event *event;
 
 		spin_lock(&event_queue->lock);
