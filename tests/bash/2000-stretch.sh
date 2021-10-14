@@ -50,7 +50,7 @@ read -n 1
 
 blksnap_snapshot_take
 
-generate_bulk_MB ${MOUNTPOINT_1} "after" 300
+generate_bulk_MB ${MOUNTPOINT_1} "after" 100
 check_files ${MOUNTPOINT_1}
 
 echo "Check snapshot before overflow."
@@ -65,7 +65,7 @@ check_files ${IMAGE_1}
 echo "Try to make snapshot overflow."
 echo "press..."
 read -n 1
-generate_bulk_MB ${MOUNTPOINT_1} "overflow" 100
+generate_bulk_MB ${MOUNTPOINT_1} "overflow" 300
 
 echo "Umount images"
 echo "press..."
@@ -75,10 +75,11 @@ echo "Destroy snapshot"
 echo "press..."
 blksnap_snapshot_destroy
 
-echo "Check generated data"
-check_files ${MOUNTPOINT_1}
+#echo "Check generated data"
+#check_files ${MOUNTPOINT_1}
 
 echo "Destroy first device"
+echo "press..."
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
