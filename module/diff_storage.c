@@ -32,6 +32,22 @@ struct storage_block
 	sector_t used;
 };
 
+
+static inline
+void diff_storage_event_low(struct diff_storage *diff_storage)
+{
+	struct blk_snap_event_low_free_space data = {
+		.requested_nr_sect = diff_storage_minimum,
+	};
+
+	pr_info("%s EVENT_LOW_FREE_SPACE requested: %llu", __FUNCTION__, data.requested_nr_sect);
+	diff_storage->requested += data.requested_nr_sect;
+	pr_info("%s requested=%llu sectors", __FUNCTION__, diff_storage->requested);//DEBUG
+	event_gen(&diff_storage->event_queue, GFP_NOIO,
+		BLK_SNAP_EVENT_LOW_FREE_SPACE,
+		&data, sizeof(data));
+}
+
 struct diff_storage *diff_storage_new(void)
 {
 	struct diff_storage *diff_storage;
@@ -47,6 +63,7 @@ struct diff_storage *diff_storage_new(void)
 	INIT_LIST_HEAD(&diff_storage->filled_blocks);
 
 	event_queue_init(&diff_storage->event_queue);
+	diff_storage_event_low(diff_storage);
 
 	return diff_storage;
 }
@@ -152,7 +169,7 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 	struct storage_block *storage_block;
 
 	pr_info("%s [%u:%u] %llu:%llu", __FUNCTION__,
-		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
+		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count); //DEBUG
 
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
@@ -260,18 +277,9 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		return ERR_PTR(ret);
 	}
 
-	if ((sectors_left <= (diff_storage_minimum >> SECTOR_SHIFT)) &&
-	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
-		struct blk_snap_event_low_free_space data = {
-			.requested_nr_sect = diff_storage_minimum >> SECTOR_SHIFT
-		};
-
-		pr_info("%s EVENT_LOW_FREE_SPACE requested: %llu", __FUNCTION__, data.requested_nr_sect);
-		diff_storage->requested += data.requested_nr_sect;
-		event_gen(&diff_storage->event_queue, GFP_NOIO,
-			BLK_SNAP_EVENT_LOW_FREE_SPACE,
-			&data, sizeof(data));
-	}
+	if ((sectors_left <= diff_storage_minimum) &&
+	    (atomic_inc_return(&diff_storage->low_space_flag) == 1))
+		diff_storage_event_low(diff_storage);
 
 	return diff_store;
 }

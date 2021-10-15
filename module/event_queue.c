@@ -23,7 +23,7 @@ void event_queue_done(struct event_queue *event_queue)
 	}
 	spin_unlock(&event_queue->lock);
 }
-noinline //DEBUG
+
 int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void *data, int data_size)
 {
 	struct event *event;
