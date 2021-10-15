@@ -40,8 +40,8 @@ blksnap_snapshot_create "${DEVICE_1}"
 generate_files ${MOUNTPOINT_1} "tracked" 5
 drop_cache
 
-fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
-blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
+#fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
+#blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
 
 echo "Call: ${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE} --limit=1024"
 echo "Press for taking snapshot..."
