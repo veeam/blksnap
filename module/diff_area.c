@@ -229,6 +229,11 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	return diff_area;
 }
 
+/**
+ * diff_area_copy() - Implements the copy-on-write mechanism.
+ *
+ *
+ */
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
                    bool is_nowait)
 {
@@ -248,9 +253,6 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			break;
 		}
 
-		if (chunk_state_check(chunk, CHUNK_ST_DIRTY))
-			continue;
-
 		if (is_nowait) {
 			if (!down_write_trylock(&chunk->lock)) {
 				ret = -EAGAIN;
@@ -259,18 +261,23 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		} else
 			down_write(&chunk->lock);
 
-		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
+		if (chunk_state_check(chunk, CHUNK_ST_DIRTY) ||
+		    chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
+			/**
+			 * The сhunk has already been changed when writing
+			 * to the snapshot.
+			 */
 			WARN_ON(!rwsem_is_locked(&chunk->lock));
 			up_write(&chunk->lock);
 			continue;
 		}
 
-		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
+		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY) &&
+			!chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
 			/*
 			 * The chunk has already been read from original device
 			 * into memory, and need to store it in diff storage.
 			 */
-			chunk_state_set(chunk, CHUNK_ST_DIRTY);
 			chunk_schedule_storing(chunk);
 			continue;
 		}
@@ -278,28 +285,24 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		if (is_nowait) {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO | GFP_NOWAIT);
 			if (ret) {
-				WARN_ON(!rwsem_is_locked(&chunk->lock));
-				up_write(&chunk->lock);
 				ret = -EAGAIN;
-				break;
+				goto fail_unlock_chunk;
 			}
 		} else {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
-			if (ret) {
-				WARN_ON(!rwsem_is_locked(&chunk->lock));
-				up_write(&chunk->lock);
-				break;
-			}
+			if (unlikely(ret))
+				goto fail_unlock_chunk;
 		}
 
 		ret = chunk_asunc_load_orig(chunk);
-		if (ret) {
-			WARN_ON(!rwsem_is_locked(&chunk->lock));
-			up_write(&chunk->lock);
-			break;
-		}
+		if (unlikely(ret))
+			goto fail_unlock_chunk;
 	}
 
+	return ret;
+fail_unlock_chunk:
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
+	up_write(&chunk->lock);
 	return ret;
 }
 
@@ -318,6 +321,7 @@ static
 struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
                                                 sector_t sector)
 {
+	int ret;
 	struct chunk* chunk = io_ctx->chunk;
 	struct diff_area *diff_area = io_ctx->diff_area;
 	unsigned long new_chunk_number = chunk_number(diff_area, sector);
@@ -347,9 +351,8 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	down_write(&chunk->lock);
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
-		WARN_ON(!rwsem_is_locked(&chunk->lock));
-		up_write(&chunk->lock);
-		return ERR_PTR(-EIO);
+		ret = -EIO;
+		goto fail_unlock_chunk;
 	}
 
 	/*
@@ -358,15 +361,10 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	 * from diff storage.
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
-		int ret;
-
 		if (!chunk->diff_buffer) {
 			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
-			if (ret) {
-				WARN_ON(!rwsem_is_locked(&chunk->lock));
-				up_write(&chunk->lock);
-				return ERR_PTR(ret);
-			}
+			if (unlikely(ret))
+				goto fail_unlock_chunk;
 		}
 
 		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
@@ -374,12 +372,8 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		else
 			ret = chunk_load_orig(chunk);
 
-		if (ret) {
-			pr_err("Failed to load chunk #%ld\n", chunk->number);
-			WARN_ON(!rwsem_is_locked(&chunk->lock));
-			up_write(&chunk->lock);
-			return ERR_PTR(ret);
-		}
+		if (unlikely(ret))
+			goto fail_unlock_chunk;
 
 		/* Set the flag that the buffer contains the required data. */
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
@@ -391,13 +385,25 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		spin_unlock(&diff_area->cache_list_lock);
 	}
 
-	if (!io_ctx->is_write) {
+	if (io_ctx->is_write) {
+		/**
+		 * Since the chunk was taken to perform a writing,
+		 * we mark it as dirty.
+		 */
+		chunk_state_set(chunk, CHUNK_ST_DIRTY);
+	} else {
 		WARN_ON(!rwsem_is_locked(&chunk->lock));
 		downgrade_write(&chunk->lock);
 	}
 
 	io_ctx->chunk = chunk;
 	return chunk;
+
+fail_unlock_chunk:
+	pr_err("Failed to load chunk #%ld\n", chunk->number);
+	WARN_ON(!rwsem_is_locked(&chunk->lock));
+	up_write(&chunk->lock);
+	return ERR_PTR(ret);
 }
 
 static inline
@@ -407,8 +413,8 @@ sector_t diff_area_chunk_start(struct diff_area *diff_area, struct chunk *chunk)
 }
 
 /**
- * diff_area_image_io - implements copying data from chunk to bio_vec when
- * reading or from bio_tec to chunk when writing.
+ * diff_area_image_io - Implements copying data from chunk to bio_vec when
+ * 	reading or from bio_tec to chunk when writing.
  */
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos)

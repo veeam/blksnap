@@ -164,7 +164,6 @@ void chunk_notify_work(struct work_struct *work)
 	if (chunk_state_check(chunk, CHUNK_ST_LOADING)) {
 		chunk_state_unset(chunk, CHUNK_ST_LOADING);
 
-		chunk_state_set(chunk, CHUNK_ST_DIRTY);
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 
 		pr_debug("Chunk 0x%lu was read\n", chunk->number);
