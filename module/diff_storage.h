@@ -6,7 +6,7 @@
 /**
  * struct diff_store - Describes the location of the chunks data on
  * 	difference storage.
- * 
+ *
  */
 struct diff_store {
 	struct list_head link;
@@ -17,15 +17,15 @@ struct diff_store {
 
 /**
  * struct diff_storage - Difference storage.
- * 
+ *
  * @kref:
- * 
+ *
  * @lock:
- * 
+ *
  * @storage_bdevs:
  * 	List of opened block devices. Blocks for storing snapshot data can be
  * 	located on different block devices.
- * 	So, all opened block devices are located in this list. 
+ * 	So, all opened block devices are located in this list.
  *	A storage from which blocks are allocated for storing chunks data.
  * @empty_blocks:
  * 	List of empty blocks on storage. This list can be updated while
@@ -41,9 +41,9 @@ struct diff_store {
  * @requested:
  * 	The number of sectors already requested from user-space.
  * @low_space_flag:
- * 
+ *
  * @overflow_flag:
- * 
+ *
  * @event_queue:
  * 	A queue of events to pass them to the user-space. Diff storage and his
  * 	owner can notify his snapshot about events like snapshot overflow,
@@ -85,7 +85,7 @@ void diff_storage_put(struct diff_storage *diff_storage)
 };
 
 int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
-                              struct big_buffer *ranges,
-                              unsigned int range_count);
+			      struct big_buffer *ranges,
+			      unsigned int range_count);
 struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage,
-                                          sector_t count);
+					  sector_t count);

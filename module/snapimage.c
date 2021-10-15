@@ -87,7 +87,7 @@ int snapimage_prepare_worker(struct snapimage *snapimage)
 	kthread_init_worker(&snapimage->worker);
 
 	task = kthread_run(snapimage_kthread_worker_fn, &snapimage->worker,
-	                   BLK_SNAP_IMAGE_NAME "%d", MINOR(snapimage->image_dev_id));
+			   BLK_SNAP_IMAGE_NAME "%d", MINOR(snapimage->image_dev_id));
 	if (IS_ERR(task))
 		return -ENOMEM;
 
@@ -126,7 +126,7 @@ void snapimage_queue_work(struct kthread_work *work)
 
 static
 int snapimage_init_request(struct blk_mq_tag_set *set, struct request *rq,
-                           unsigned int hctx_idx, unsigned int numa_node)
+			   unsigned int hctx_idx, unsigned int numa_node)
 {
 	struct snapimage_cmd *cmd = blk_mq_rq_to_pdu(rq);
 
@@ -203,7 +203,7 @@ int snapimage_alloc_tag_set(struct snapimage *snapimage)
 void snapimage_free(struct snapimage *snapimage)
 {
 	pr_info("Snapshot image disk [%u:%u] delete\n",
-	        MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
+		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 
 	blk_mq_freeze_queue(snapimage->disk->queue);
 	snapimage->is_ready = false;
@@ -230,7 +230,7 @@ void snapimage_free(struct snapimage *snapimage)
 }
 
 struct snapimage *snapimage_create(struct diff_area *diff_area,
-                                   struct cbt_map *cbt_map)
+				   struct cbt_map *cbt_map)
 {
 	int ret = 0;
 	int minor;
@@ -241,8 +241,8 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 #endif
 
 	pr_info("Create snapshot image for device [%u:%u]\n",
-	        MAJOR(diff_area->orig_bdev->bd_dev),
-	        MINOR(diff_area->orig_bdev->bd_dev));
+		MAJOR(diff_area->orig_bdev->bd_dev),
+		MINOR(diff_area->orig_bdev->bd_dev));
 
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
@@ -259,7 +259,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage->capacity = cbt_map->device_capacity;
 	snapimage->image_dev_id = MKDEV(_major, minor);
 	pr_info("Snapshot image device id [%u:%u]\n",
-	        MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
+		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 
 	ret = snapimage_prepare_worker(snapimage);
 	if (ret) {

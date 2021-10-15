@@ -28,15 +28,15 @@ struct cbt_map;
 struct snapimage {
 	dev_t image_dev_id;
 	sector_t capacity;
-        bool is_ready;
+	bool is_ready;
 
-        struct kthread_worker worker;
-        struct task_struct *worker_task;
+	struct kthread_worker worker;
+	struct task_struct *worker_task;
 
 	struct blk_mq_tag_set tag_set;
 	struct gendisk *disk;
 #ifndef HAVE_BLK_MQ_ALLOC_DISK
-        struct request_queue *queue;
+	struct request_queue *queue;
 #endif
 
 	struct diff_area *diff_area;

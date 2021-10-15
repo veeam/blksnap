@@ -49,19 +49,19 @@ bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct 
 {
 	size_t page_inx;
 
-        if (diff_buffer->size <= (ofs << SECTOR_SHIFT))
-                return false;
+	if (diff_buffer->size <= (ofs << SECTOR_SHIFT))
+		return false;
 
-        page_inx = ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
+	page_inx = ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
 
 	iter->page = diff_buffer->pages[page_inx].page;
 	iter->offset = (size_t)(ofs & (SECTOR_IN_PAGE - 1)) << SECTOR_SHIFT;
-        /*
-         * The size cannot exceed the size of the page, taking into account
-         * the offset in this page.
-         * But at the same time it is unacceptable to go beyond the allocated
-         * buffer.
-         */
+	/*
+	 * The size cannot exceed the size of the page, taking into account
+	 * the offset in this page.
+	 * But at the same time it is unacceptable to go beyond the allocated
+	 * buffer.
+	 */
 	iter->bytes = min_t(size_t, (PAGE_SIZE - iter->offset), (diff_buffer->size - (ofs << SECTOR_SHIFT)));
 
 	return true;
@@ -72,9 +72,9 @@ enum {
 	CHUNK_ST_DIRTY,		/* The data on the original device and the snapshot image differ in this chunk */
 	CHUNK_ST_BUFFER_READY,	/* The data of the chunk is ready to be read from the RAM buffer */
 	CHUNK_ST_STORE_READY,	/* The data of the chunk was wrote to the difference storage */
-        CHUNK_ST_IN_CACHE,      /* The chunk in the cache in the queue for release. */
-        CHUNK_ST_LOADING,
-        CHUNK_ST_STORING,
+	CHUNK_ST_IN_CACHE,      /* The chunk in the cache in the queue for release. */
+	CHUNK_ST_LOADING,
+	CHUNK_ST_STORING,
 };
 
 /**
@@ -111,7 +111,7 @@ enum {
  * when executing the COW algorithm and when performing IO to snapshot images.
  */
 struct chunk {
-        struct list_head cache_link;
+	struct list_head cache_link;
 	struct diff_area *diff_area;
 
 	unsigned long number;
@@ -120,8 +120,8 @@ struct chunk {
 
 	struct mutex lock;
 
-        int error;
-        struct work_struct notify_work;
+	int error;
+	struct work_struct notify_work;
 
 	struct diff_buffer *diff_buffer;
 	struct diff_store *diff_store;

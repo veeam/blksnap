@@ -178,8 +178,8 @@ int ioctl_tracker_read_cbt_map(unsigned long arg)
 	}
 
 	return tracker_read_cbt_bitmap(MKDEV(karg.dev_id.mj, karg.dev_id.mn),
-	                               karg.offset, karg.length,
-	                               (char __user*)karg.buff);
+				       karg.offset, karg.length,
+				       (char __user*)karg.buff);
 }
 
 static
@@ -206,7 +206,7 @@ int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 		ret = -ENODATA;
 	} else
 		ret = tracker_mark_dirty_blocks(MKDEV(karg.dev_id.mj, karg.dev_id.mn),
-		                                dirty_blocks_array, karg.count);
+						dirty_blocks_array, karg.count);
 
 	kfree(dirty_blocks_array);
 
@@ -232,7 +232,7 @@ int ioctl_snapshot_create(unsigned long arg)
 	}
 
 	if (copy_from_user(dev_id_array, (void *)karg.dev_id_array,
-	                   karg.count * sizeof(struct blk_snap_dev_t))) {
+			   karg.count * sizeof(struct blk_snap_dev_t))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		ret = -ENODATA;
 		goto out;

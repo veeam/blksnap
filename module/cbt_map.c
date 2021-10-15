@@ -161,7 +161,7 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 
 static inline
 int _cbt_map_set(struct cbt_map *cbt_map,
-                 sector_t sector_start, sector_t sector_cnt,
+		 sector_t sector_start, sector_t sector_cnt,
 		 u8 snap_number, struct big_buffer *map)
 {
 	int res = 0;
@@ -198,7 +198,7 @@ int _cbt_map_set(struct cbt_map *cbt_map,
 }
 
 int cbt_map_set(struct cbt_map *cbt_map,
-                sector_t sector_start, sector_t sector_cnt)
+		sector_t sector_start, sector_t sector_cnt)
 {
 	int res;
 
@@ -219,7 +219,7 @@ int cbt_map_set(struct cbt_map *cbt_map,
 }
 
 int cbt_map_set_both(struct cbt_map *cbt_map,
-                     sector_t sector_start, sector_t sector_cnt)
+		     sector_t sector_start, sector_t sector_cnt)
 {
 	int res;
 
@@ -240,7 +240,7 @@ int cbt_map_set_both(struct cbt_map *cbt_map,
 }
 
 size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buff,
-                            size_t offset, size_t size)
+			    size_t offset, size_t size)
 {
 	size_t readed = 0;
 	size_t left_size;

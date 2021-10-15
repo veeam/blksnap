@@ -55,21 +55,21 @@ static inline
 struct storage_block *first_empty_storage_block(struct diff_storage *diff_storage)
 {
 	return list_first_entry_or_null(&diff_storage->empty_blocks,
-	                                struct storage_block, link);
+					struct storage_block, link);
 };
 
 static inline
 struct storage_block *first_filled_storage_block(struct diff_storage *diff_storage)
 {
 	return list_first_entry_or_null(&diff_storage->filled_blocks,
-	                                struct storage_block, link);
+					struct storage_block, link);
 };
 
 static inline
 struct storage_bdev *first_storage_bdev(struct diff_storage *diff_storage)
 {
 	return list_first_entry_or_null(&diff_storage->storage_bdevs,
-	                                struct storage_bdev, link);
+					struct storage_bdev, link);
 };
 
 void diff_storage_free(struct kref *kref)
@@ -146,13 +146,13 @@ struct block_device *diff_storage_add_storage_bdev(struct diff_storage *diff_sto
 
 static inline
 int diff_storage_add_range(struct diff_storage *diff_storage,
-                           struct block_device *bdev,
-                           sector_t sector, sector_t count)
+			   struct block_device *bdev,
+			   sector_t sector, sector_t count)
 {
 	struct storage_block *storage_block;
 
 	pr_info("%s [%u:%u] %llu:%llu", __FUNCTION__,
-	        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
+		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
 
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
@@ -172,8 +172,8 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 }
 
 int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
-                              struct big_buffer *ranges,
-                              unsigned int range_count)
+			      struct big_buffer *ranges,
+			      unsigned int range_count)
 {
 	int ret;
 	int inx;
@@ -196,8 +196,8 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 			return -EINVAL;
 
 		ret = diff_storage_add_range(diff_storage, bdev,
-		                             range->sector_offset,
-		                             range->sector_count);
+					     range->sector_offset,
+					     range->sector_count);
 		if (unlikely(ret))
 			return ret;
 	}

@@ -69,8 +69,8 @@ struct blk_snap_version {
  * and minor parts.
  */
 struct blk_snap_dev_t {
-        __u32 mj;
-        __u32 mn;
+	__u32 mj;
+	__u32 mn;
 };
 
 /**
@@ -353,12 +353,12 @@ struct blk_snap_snapshot_collect_images {
 struct blk_snap_snapshot_event {
 	uuid_t id;
 	__u32 timeout_ms;
-        __u32 code;
+	__u32 code;
 	__s64 time_label;
 	__u8  data[4096 - 32];
 };
 static_assert(sizeof(struct blk_snap_snapshot_event) == 4096, \
-              "The size struct blk_snap_snapshot_event should be equal to the size of the page.");
+	      "The size struct blk_snap_snapshot_event should be equal to the size of the page.");
 
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get event from snapshot.

@@ -252,7 +252,7 @@ enum flt_st filters_apply(struct bio *bio)
 static
 blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
 	(blk_qc_t (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
-	                             CALL_INSTRUCTION_LENGTH);
+				     CALL_INSTRUCTION_LENGTH);
 
 static
 blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)

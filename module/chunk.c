@@ -27,7 +27,7 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 
 static
 struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-                                    gfp_t gfp_mask)
+				    gfp_t gfp_mask)
 {
 	struct diff_buffer *diff_buffer;
 	size_t inx;
@@ -39,7 +39,7 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		return NULL;
 
 	diff_buffer = kzalloc(sizeof(struct diff_buffer) + page_count * sizeof(struct page_list),
-	                      gfp_mask);
+			      gfp_mask);
 	if (!diff_buffer)
 		return NULL;
 

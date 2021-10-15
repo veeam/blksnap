@@ -287,7 +287,7 @@ int snapshot_destroy(uuid_t *id)
 }
 
 int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
-                            struct big_buffer *ranges, unsigned int range_count)
+			    struct big_buffer *ranges, unsigned int range_count)
 {
 	int ret = 0;
 	struct snapshot *snapshot;
@@ -299,8 +299,8 @@ int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
 		return -ESRCH;
 
 	ret = diff_storage_append_block(snapshot->diff_storage,
-	                                MKDEV(dev_id.mj, dev_id.mn),
-	                                ranges, range_count);
+					MKDEV(dev_id.mj, dev_id.mn),
+					ranges, range_count);
 	snapshot_put(snapshot);
 	return ret;
 }
@@ -507,7 +507,7 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 	}
 
 	len = copy_to_user(user_image_info_array, image_info_array,
-	                   snapshot->count * sizeof(struct blk_snap_image_info));
+			   snapshot->count * sizeof(struct blk_snap_image_info));
 	if (len != 0) {
 		pr_err("Unable to collect snapshot images: failed to copy data to user buffer\n");
 		ret = -ENODATA;

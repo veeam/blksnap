@@ -49,12 +49,12 @@ void tracker_done(void);
 struct tracker *tracker_create_or_get(dev_t dev_id);
 int tracker_remove(dev_t dev_id);
 int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
-                    int *pcount);
+		    int *pcount);
 int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 			     char __user *user_buff);
 int tracker_mark_dirty_blocks(dev_t dev_id,
-                              struct blk_snap_block_range *block_ranges,
-                              unsigned int count);
+			      struct blk_snap_block_range *block_ranges,
+			      unsigned int count);
 
 int tracker_take_snapshot(struct tracker *tracker);
 void tracker_release_snapshot(struct tracker *tracker);
@@ -88,7 +88,7 @@ int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
 	}
 
 	pr_info("Device [%u:%u] was frozen\n",
-	        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	*psuperblock = superblock;
 
 	return 0;
@@ -104,6 +104,6 @@ void _thaw_bdev(struct block_device *bdev, struct super_block *superblock)
 		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	else
 		pr_info("Device [%u:%u] was unfrozen\n",
-		        MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 }
 #endif
