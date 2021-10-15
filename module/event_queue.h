@@ -13,7 +13,7 @@ struct event {
 	struct list_head link;
 	ktime_t time;
 	int code;
-	size_t data_size;
+	int data_size;
 	char data[1]; /* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
 };
 

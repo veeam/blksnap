@@ -346,13 +346,13 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 		goto out;
 	}
 
-	pr_info("%s received event=%lld code=%d data_size=%zu\n", __FUNCTION__,
+	pr_info("%s received event=%lld code=%d data_size=%d\n", __FUNCTION__,
 		event->time, event->code, event->data_size);
 	karg->code = event->code;
 	karg->time_label = event->time;
 
 	if (event->data_size > sizeof(karg->data)) {
-		pr_err("Event size %zd is too big. ", event->data_size);
+		pr_err("Event size %d is too big. ", event->data_size);
 		ret = -ENOSPC;
 		/* If we can't copy all the data, we copy only part of it. */
 	}

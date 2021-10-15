@@ -34,9 +34,11 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 
 	event->time = ktime_get();
 	event->code = code;
+	event->data_size = data_size;
 	memcpy(event->data, data, data_size);
 
-	pr_info("%s send event=%lld code=%d\n", __FUNCTION__, event->time, event->code);
+	pr_info("%s send event=%lld code=%d data_size=%d\n", __FUNCTION__,
+		event->time, event->code, event->data_size);
 
 	spin_lock(&event_queue->lock);
 	list_add_tail(&event->link, &event_queue->list);
