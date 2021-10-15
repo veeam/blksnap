@@ -126,6 +126,8 @@ void fiemapStorage(const std::string &filename,
             ranges.push_back(rg);
 
             fileOffset = extent->fe_logical + extent->fe_length;
+
+            std::cout << "allocate range: ofs=" << rg.sector_offset << " cnt=" << rg.sector_count << std::endl;
         }
     }
 
@@ -646,19 +648,23 @@ class StretchSnapshotArgsProc : public IArgsProc
 private:
     uuid_t m_id;
     std::string m_path;
-    std::vector<std::string> m_allocatedFiles;
+    std::vector<std::string> m_allocated_sectFiles;
     int m_counter;
-    unsigned long long m_allocated;
-    unsigned long long m_limit;
+    unsigned long long m_allocated_sect;
+    unsigned long long m_limit_sect;
 private:
     void ProcessLowFreeSpace(unsigned int time_label, struct blk_snap_event_low_free_space *data)
     {
         std::string filename;
         int fd;
-        std::cout << time_label << " - Low free space in diff storage." << std::endl;
 
-        if (m_allocated > m_limit)
+        std::cout << time_label << " - Low free space in diff storage. Requested "
+            << data->requested_nr_sect << " sectors." << std::endl;
+
+        if (m_allocated_sect > m_limit_sect) {
             std::cerr << "The diff storage limit has been achieved." << std::endl;
+            return;
+        }
 
         fs::path filepath(m_path);
         filepath += "diff_storage#";
@@ -669,9 +675,9 @@ private:
         if (fd < 0)
                 throw std::system_error(errno, std::generic_category(),
                                         "[TBD]Failed to create file for diff storage.");
-        m_allocatedFiles.push_back(filename);
+        m_allocated_sectFiles.push_back(filename);
 
-        if (::fallocate64(fd, 0, 0, data->requested_nr_sect)) {
+        if (::fallocate64(fd, 0, 0, data->requested_nr_sect * SECTOR_SIZE)) {
             int err = errno;
 
             ::close(fd);
@@ -679,7 +685,7 @@ private:
                                     "[TBD]Failed to allocate file for diff storage.");
         }
         ::close(fd);
-        m_allocated += data->requested_nr_sect;
+        m_allocated_sect += data->requested_nr_sect;
 
         std::vector<struct blk_snap_block_range> ranges;
         struct blk_snap_dev_t dev_id = {0};
@@ -731,9 +737,9 @@ public:
         m_path = vm["path"].as<std::string>();
 
         if (vm.count("limit"))
-            m_limit = (1024ULL * 1024 / SECTOR_SIZE) * vm["limit"].as<unsigned int>();
+            m_limit_sect = (1024ULL * 1024 / SECTOR_SIZE) * vm["limit"].as<unsigned int>();
         else
-            m_limit = -1ULL;
+            m_limit_sect = -1ULL;
 
         std::cout << "Stretch snapshot service started." << std::endl;
 
@@ -769,7 +775,7 @@ public:
                 }
             }
 
-            for (const std::string &filename : m_allocatedFiles)
+            for (const std::string &filename : m_allocated_sectFiles)
                 if (::remove(filename.c_str()))
                     std::cout << "Failed to cleanup diff storage file \"" << filename << "\". " << std::strerror(errno) << std::endl;
         }
