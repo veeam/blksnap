@@ -77,7 +77,7 @@ void chunk_store_failed(struct chunk *chunk, int error)
 {
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	diff_area_set_corrupted(chunk->diff_area, error);
-	up_read(&chunk->lock);
+	mutex_unlock(&chunk->lock);
 };
 
 void chunk_schedule_storing(struct chunk *chunk)
@@ -86,14 +86,12 @@ void chunk_schedule_storing(struct chunk *chunk)
 	struct diff_area *diff_area = chunk->diff_area;
 
 	might_sleep();
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
+	WARN_ON(!mutex_is_locked(&chunk->lock));
 
 	if (diff_area->in_memory) {
-		up_write(&chunk->lock);
+		mutex_unlock(&chunk->lock);
 		return;
 	}
-
-	downgrade_write(&chunk->lock);
 
 	if (!chunk->diff_store) {
 		struct diff_store *diff_store;
@@ -102,7 +100,6 @@ void chunk_schedule_storing(struct chunk *chunk)
 				diff_area->diff_storage,
 				diff_area_chunk_sectors(diff_area));
 		if (unlikely(IS_ERR(diff_store))) {
-			//pr_err("Cannot get new diff storage for chunk #%lu", chunk->number);
 			chunk_store_failed(chunk, PTR_ERR(diff_store));
 			return;
 		}
@@ -121,7 +118,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	struct diff_area *diff_area = chunk->diff_area;
 
 	might_sleep();
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
+	WARN_ON(!mutex_is_locked(&chunk->lock));
 
 	spin_lock(&diff_area->cache_list_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
@@ -133,7 +130,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	}
 	spin_unlock(&diff_area->cache_list_lock);
 
-	up_read(&chunk->lock);
+	mutex_unlock(&chunk->lock);
 
 	// Initiate the cache clearing process.
 	if (need_to_cleanup)
@@ -146,18 +143,13 @@ void chunk_notify_work(struct work_struct *work)
 	struct chunk *chunk = container_of(work, struct chunk, notify_work);
 
 	might_sleep();
+	WARN_ON(!mutex_is_locked(&chunk->lock));
 
 	if (unlikely(chunk->error)) {
 		chunk_state_set(chunk, CHUNK_ST_FAILED);
 		diff_area_set_corrupted(chunk->diff_area, chunk->error);
 
-		WARN_ON(!rwsem_is_locked(&chunk->lock));
-		if (chunk_state_check(chunk, CHUNK_ST_LOADING))
-			up_write(&chunk->lock);
-
-		if (chunk_state_check(chunk, CHUNK_ST_STORING))
-			up_read(&chunk->lock);
-
+		mutex_unlock(&chunk->lock);
 		return;
 	}
 
@@ -165,8 +157,6 @@ void chunk_notify_work(struct work_struct *work)
 		chunk_state_unset(chunk, CHUNK_ST_LOADING);
 
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
-
-		pr_debug("Chunk 0x%lu was read\n", chunk->number);
 
 		chunk_schedule_storing(chunk);
 		return;
@@ -191,7 +181,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 		return NULL;
 
 	INIT_LIST_HEAD(&chunk->cache_link);
-	init_rwsem(&chunk->lock);
+	mutex_init(&chunk->lock);
 	chunk->diff_area = diff_area;
 	chunk->number = number;
 

@@ -104,7 +104,7 @@ struct chunk *chunk_get_from_cache_and_write_lock(struct diff_area *diff_area)
 
 	spin_lock(&diff_area->cache_list_lock);
 	list_for_each_entry(iter, &diff_area->caching_chunks, cache_link) {
-		if (down_write_trylock(&iter->lock)) {
+		if (mutex_trylock(&iter->lock)) {
 			chunk = iter;
 			break;
 		}
@@ -135,10 +135,9 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 		if (!chunk)
 			break;
 
+		WARN_ON(!mutex_is_locked(&chunk->lock));
 		chunk_free_buffer(chunk);
-
-		WARN_ON(!rwsem_is_locked(&chunk->lock));
-		up_write(&chunk->lock);
+		mutex_unlock(&chunk->lock);
 	}
 }
 
@@ -254,12 +253,12 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 
 		if (is_nowait) {
-			if (!down_write_trylock(&chunk->lock)) {
+			if (!mutex_trylock(&chunk->lock)) {
 				ret = -EAGAIN;
 				break;
 			}
 		} else
-			down_write(&chunk->lock);
+			mutex_lock(&chunk->lock);
 
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY) ||
 		    chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
@@ -267,8 +266,8 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			 * The сhunk has already been changed when writing
 			 * to the snapshot.
 			 */
-			WARN_ON(!rwsem_is_locked(&chunk->lock));
-			up_write(&chunk->lock);
+			WARN_ON(!mutex_is_locked(&chunk->lock));
+			mutex_unlock(&chunk->lock);
 			continue;
 		}
 
@@ -301,8 +300,8 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 
 	return ret;
 fail_unlock_chunk:
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
-	up_write(&chunk->lock);
+	WARN_ON(!mutex_is_locked(&chunk->lock));
+	mutex_unlock(&chunk->lock);
 	return ret;
 }
 
@@ -348,7 +347,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	if (unlikely(!chunk))
 		return ERR_PTR(-EINVAL);
 
-	down_write(&chunk->lock);
+	mutex_lock(&chunk->lock);
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		ret = -EIO;
@@ -391,9 +390,6 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		 * we mark it as dirty.
 		 */
 		chunk_state_set(chunk, CHUNK_ST_DIRTY);
-	} else {
-		WARN_ON(!rwsem_is_locked(&chunk->lock));
-		downgrade_write(&chunk->lock);
 	}
 
 	io_ctx->chunk = chunk;
@@ -401,8 +397,8 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 
 fail_unlock_chunk:
 	pr_err("Failed to load chunk #%ld\n", chunk->number);
-	WARN_ON(!rwsem_is_locked(&chunk->lock));
-	up_write(&chunk->lock);
+	WARN_ON(!mutex_is_locked(&chunk->lock));
+	mutex_unlock(&chunk->lock);
 	return ERR_PTR(ret);
 }
 

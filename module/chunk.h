@@ -118,7 +118,7 @@ struct chunk {
 	sector_t sector_count;
 	atomic_t state;
 
-	struct rw_semaphore lock;
+	struct mutex lock;
 
         int error;
         struct work_struct notify_work;
