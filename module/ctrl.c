@@ -32,10 +32,10 @@ struct file_operations ctrl_fops = {
 
 static const
 struct blk_snap_version version = {
-	.major = FILEVER_MAJOR,
-	.minor = FILEVER_MINOR,
-	.revision = FILEVER_REVISION,
-	.build = FILEVER_BUILD,
+	.major = VERSION_MAJOR,
+	.minor = VERSION_MINOR,
+	.revision = VERSION_REVISION,
+	.build = VERSION_BUILD,
 	.compatibility_flags = 0ULL,
 #ifdef MOD_NAME
 	.mod_name = MOD_NAME,
