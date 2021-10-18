@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -e
+
+checkModule()
+{
+  if ! lsmod | grep "$1" > /dev/null
+  then
+    return 1
+  fi
+  return 0
+}
+
+case "$1" in
+
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear|purge)
+
+        if checkModule "blk-snap"
+        then
+            rmmod blk-snap || true
+        fi
+    ;;
+
+    *)
+
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+
+    ;;
+
+esac
+
+exit 0
+

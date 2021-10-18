@@ -1,0 +1,15 @@
+Source: blk-snap
+Section: admin
+Priority: standard
+Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
+Build-Depends: debhelper (>= 9.0.0)
+Standards-Version: 3.9.3
+
+Package: blk-snap
+Architecture: all
+Depends: ${misc:Depends}
+Description: Veeam Agent for Linux (kernel module)
+ This kernel module implements snapshot and changed block tracking
+ functionality used by Veeam Agent for Linux - simple and FREE backup agent
+ designed to ensure the Availability of your Linux server instances, whether
+ they reside in the public cloud or on premises.
