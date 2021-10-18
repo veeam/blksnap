@@ -16,6 +16,9 @@ blksnap_version
 TESTDIR=~/blk-snap-test
 MPDIR=/mnt/blk-snap-test
 DIFF_STORAGE=~/diff_storage/
+rm -rf ${TESTDIR}
+rm -rf ${MPDIR}
+rm -rf ${DIFF_STORAGE}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
 mkdir -p ${DIFF_STORAGE}

@@ -13,10 +13,13 @@ sleep 2s
 blksnap_version
 
 TESTDIR=/tmp/blk-snap-test
+rm -rf ${TESTDIR}
 mkdir -p ${TESTDIR}
 
 MPDIR=/mnt/blk-snap-test
+rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
+
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
@@ -51,6 +54,7 @@ echo "Block device prepared, press ..."
 blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
 
 DIFF_STORAGE=~/diff_storage0
+rm -f ${DIFF_STORAGE}
 fallocate --length 1GiB ${DIFF_STORAGE}
 blksnap_snapshot_append ${DIFF_STORAGE}
 

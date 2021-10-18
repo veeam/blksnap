@@ -16,6 +16,9 @@ blksnap_version
 TESTDIR=~/blk-snap-test
 MPDIR=/mnt/blk-snap-test
 DIFF_STORAGE=~/diff_storage/
+rm -rf ${TESTDIR}
+rm -rf ${MPDIR}
+rm -rf ${DIFF_STORAGE}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
 mkdir -p ${DIFF_STORAGE}
@@ -43,10 +46,10 @@ drop_cache
 #fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
 #blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
 
-echo "Call: ${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE} --limit=1024"
+#echo "Call: ${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE} --limit=1024"
+blksnap_stretch_snapshot ${DIFF_STORAGE} 1024
 echo "Press for taking snapshot..."
 read -n 1
-#blksnap_stretch_snapshot ${DIFF_STORAGE} 1024
 
 blksnap_snapshot_take
 
