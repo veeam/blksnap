@@ -81,6 +81,29 @@ blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt2_.map
 blksnap_snapshot_destroy
 cmp -l ${TESTDIR}/cbt2.map ${TESTDIR}/cbt2_.map
 
+# increment 3
+echo "Second increment"
+blksnap_snapshot_create ${DEVICE_1}
+blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_take
+
+blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3.map
+fallocate --length 2MiB "${MOUNTPOINT_1}/dirty_file"
+blksnap_markdirty ${DEVICE_1} "${MOUNTPOINT_1}/dirty_file"
+blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3_.map
+
+blksnap_snapshot_destroy
+set +e
+echo "dirty blocks:"
+cmp -l ${TESTDIR}/cbt3.map ${TESTDIR}/cbt3_.map 2>&1
+set -e
+
+echo "Destroy first device"
+echo "press..."
+umount ${MOUNTPOINT_1}
+loop_device_detach ${DEVICE_1}
+imagefile_cleanup ${IMAGEFILE_1}
+
 echo "Unload module"
 echo 0 > /sys/kernel/livepatch/blk_snap/enabled
 sleep 2s

@@ -76,6 +76,13 @@ blksnap_readcbt()
 	${BLKSNAP} tracker_readcbtmap --device=${DEVICE} --file=${CBTMAP}
 }
 
+blksnap_markdirty()
+{
+	local DIRTYFILE=$2
+
+	${BLKSNAP} tracker_markdirtyblock --file=${DIRTYFILE}
+}
+
 blksnap_stretch_snapshot()
 {
 	local DIFF_STORAGE_PATH=$1

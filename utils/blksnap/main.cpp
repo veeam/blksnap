@@ -346,6 +346,7 @@ public:
     {
         m_usage = std::string("[TBD]Mark blocks as changed in change tracking map.");
         m_desc.add_options()
+            ("file,f", po::value<std::string>(), "[TBD]File name with dirty blocks.")
             ("device,d", po::value<std::string>(), "[TBD]Device name.")
             ("ranges,r", po::value<std::vector<std::string> >()->multitoken(),
                 "[TBD]Sectors range in format 'sector:count'. It's multitoken argument.");
@@ -356,14 +357,18 @@ public:
         struct blk_snap_tracker_mark_dirty_blocks param;
         std::vector<struct blk_snap_block_range> ranges;
 
-        if (!vm.count("device"))
-            throw std::invalid_argument("Argument 'device' is missed.");
-        param.dev_id = deviceByName(vm["device"].as<std::string>());
+        if (vm.count("file")) {
+            fiemapStorage(vm["file"].as<std::string>(), param.dev_id, ranges);
+        } else {
+            if (!vm.count("device"))
+                throw std::invalid_argument("Argument 'device' is missed.");
+            param.dev_id = deviceByName(vm["device"].as<std::string>());
 
-        if (!vm.count("ranges"))
-            throw std::invalid_argument("Argument 'ranges' is missed.");
-        for (const std::string& range : vm["ranges"].as<std::vector<std::string> >())
-            ranges.push_back(parseRange(range));
+            if (!vm.count("ranges"))
+                throw std::invalid_argument("Argument 'ranges' is missed.");
+            for (const std::string& range : vm["ranges"].as<std::vector<std::string> >())
+                ranges.push_back(parseRange(range));
+        }
 
         param.count = ranges.size();
         param.dirty_blocks_array = ranges.data();
