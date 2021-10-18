@@ -315,6 +315,13 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		return ERR_PTR(PTR_ERR(bdev));
 	}
 
+	tracker = tracker_get_by_dev(bdev);
+	if (tracker){
+		pr_info("Device [%u:%u] is already under tracking\n",
+			MAJOR(dev_id), MINOR(dev_id));
+		goto put_bdev;
+	}
+
 	tr_dev = kzalloc(sizeof(struct tracked_device), GFP_KERNEL);
 	if (!tr_dev) {
 		tracker = ERR_PTR(-ENOMEM);
@@ -322,15 +329,6 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 	}
 	INIT_LIST_HEAD(&tr_dev->link);
 	tr_dev->dev_id = dev_id;
-
-	tracker = tracker_get_by_dev(bdev);
-	if (tracker){
-		pr_info("Device [%u:%u] is already under tracking\n",
-			MAJOR(dev_id), MINOR(dev_id));
-		tracker_put(tracker);
-		kfree(tr_dev);
-		goto put_bdev;
-	}
 
 	tracker = tracker_new(bdev);
 	if (IS_ERR(tracker)) {
