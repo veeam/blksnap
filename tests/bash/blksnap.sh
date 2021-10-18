@@ -68,6 +68,13 @@ blksnap_tracker_collect()
 	${BLKSNAP} tracker_collect
 }
 
+blksnap_readcbt()
+{
+	local DEVICE=$1
+	local CBTMAP=$2
+
+	${BLKSNAP} tracker_readcbtmap --device=${DEVICE} --file=${CBTMAP}
+}
 
 blksnap_stretch_snapshot()
 {
