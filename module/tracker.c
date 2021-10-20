@@ -514,9 +514,6 @@ int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info, int *pcou
 	}
 out:
 	*pcount = count;
-	if (!count)
-		return -ENODATA;
-
 	return 0;
 }
 
