@@ -17,6 +17,8 @@ case "$1" in
 
         if checkModule "blk-snap"
         then
+            echo 0 > /sys/kernel/livepatch/blk_snap/enabled || true
+            sleep 2s
             rmmod blk-snap || true
         fi
     ;;

@@ -7,7 +7,9 @@
 # This special exception was added by Craig Small in version 0.37 of dh-make.
 
 # Uncomment this to turn on verbose mode.
-#export DH_VERBOSE=1
+# export DH_VERBOSE=1
+
+include /usr/share/dpkg/pkg-info.mk
 
 VERSION=$(shell dpkg-parsechangelog | grep ^Version:|cut -d ' ' -f 2)
 
