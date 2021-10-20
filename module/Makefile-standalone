@@ -1,29 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
-# Additions for standalone module lp modification
+# Additions for standalone module modification
 
-$(KERNEL_MODULE_NAME)-y += lp_filter.o
-
-EXTRA_CFLAGS += "-DMOD_NAME=\"lp\" "
-EXTRA_CFLAGS += "-DHAVE_LP_FILTER "
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&&	\
-		echo -DHAVE_SUBMIT_BIO_NOACCT)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "struct super_block \*freeze_bdev"				\
-		$(srctree)/include/linux/blkdev.h &&				\
-		echo -DHAVE_SUPER_BLOCK_FREEZE)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -DHAVE_BI_BDEV)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -DHAVE_BI_BDISK)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
-		echo -DHAVE_BDEV_NR_SECTORS)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
-		echo -DHAVE_BLK_MQ_ALLOC_DISK)
+EXTRA_CFLAGS += "-DMOD_NAME=\"standalone\" "
 
 # The power of 2 for minimum trackings block size.
 # The minimum tracking block size by default is 64 KB (shift 16)
