@@ -35,9 +35,7 @@ struct snapimage {
 
 	struct blk_mq_tag_set tag_set;
 	struct gendisk *disk;
-#ifndef HAVE_BLK_MQ_ALLOC_DISK
 	struct request_queue *queue;
-#endif
 
 	struct diff_area *diff_area;
 	struct cbt_map *cbt_map;

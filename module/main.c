@@ -11,28 +11,6 @@
 #include "snapshot.h"
 #include "tracker.h"
 
-#ifdef HAVE_LP_FILTER
-#pragma message ("Have livepatch filter")
-#endif
-#ifdef HAVE_SUBMIT_BIO_NOACCT
-#pragma message ("The submit_bio_noacct() function was found.")
-#endif
-#ifdef HAVE_SUPER_BLOCK_FREEZE
-#pragma message ("The freeze_bdev() and thaw_bdev() have struct super_block.")
-#endif
-#ifdef HAVE_BI_BDEV
-#pragma message ("The struct bio have pointer to struct block_device.")
-#endif
-#ifdef HAVE_BI_BDISK
-#pragma message ("The struct bio have pointer to struct gendisk.")
-#endif
-#ifdef HAVE_BDEV_NR_SECTORS
-#pragma message ("The bdev_nr_sectors() function was found.")
-#endif
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-#pragma message ("The blk_mq_alloc_disk() function was found.")
-#endif
-
 static
 int __init blk_snap_init(void)
 {

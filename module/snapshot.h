@@ -48,9 +48,7 @@ struct snapshot {
 	int count;
 	struct tracker **tracker_array;
 	struct snapimage **snapimage_array;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block **superblock_array;
-#endif
 };
 
 void snapshot_done(void);

@@ -33,14 +33,7 @@ void snapshot_release(struct snapshot *snapshot)
 
 		if (!tracker || !tracker->diff_area)
 			continue;
-
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &snapshot->superblock_array[inx]);
-#else
-		if (freeze_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to freeze device [%u:%u]\n",
-			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-#endif
 	}
 
 	/* Set tracker as available for new snapshots */
@@ -53,14 +46,7 @@ void snapshot_release(struct snapshot *snapshot)
 
 		if (!tracker || !tracker->diff_area)
 			continue;
-
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(tracker->diff_area->orig_bdev, snapshot->superblock_array[inx]);
-#else
-		if (thaw_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to thaw device [%u:%u]\n",
-			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-#endif
 	}
 
 	/* destroy diff area for each tracker */
@@ -87,9 +73,9 @@ void snapshot_free(struct kref *kref)
 
 	kfree(snapshot->snapimage_array);
 	kfree(snapshot->tracker_array);
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
+
 	kfree(snapshot->superblock_array);
-#endif
+
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
@@ -138,14 +124,12 @@ struct snapshot *snapshot_new(unsigned int count)
 		goto fail_free_trackers;
 	}
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 	snapshot->superblock_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->superblock_array) {
 		ret = -ENOMEM;
 		goto fail_free_snapimage;
 	}
 
-#endif
 	snapshot->diff_storage = diff_storage_new();
 	if (!snapshot->diff_storage) {
 		ret = -ENOMEM;
@@ -160,9 +144,7 @@ struct snapshot *snapshot_new(unsigned int count)
 	return snapshot;
 
 fail_free_snapimage:
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 	kfree(snapshot->superblock_array);
-#endif
 	kfree(snapshot->snapimage_array);
 fail_free_trackers:
 	kfree(snapshot->tracker_array);
@@ -347,14 +329,7 @@ int snapshot_take(uuid_t *id)
 
 		if (!tracker)
 			continue;
-
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &snapshot->superblock_array[inx]);
-#else
-		if (freeze_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to freeze device [%u:%u]\n",
-			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-#endif
 	}
 
 	/* take snapshot - switch CBT tables and enable COW logic for each tracker */
@@ -377,14 +352,7 @@ int snapshot_take(uuid_t *id)
 
 		if (!tracker)
 			continue;
-
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(tracker->diff_area->orig_bdev, snapshot->superblock_array[inx]);
-#else
-		if (thaw_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to thaw device [%u:%u]\n",
-			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-#endif
 	}
 
 	/**

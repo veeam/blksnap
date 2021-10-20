@@ -59,7 +59,6 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 int tracker_take_snapshot(struct tracker *tracker);
 void tracker_release_snapshot(struct tracker *tracker);
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 static inline
 int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
 {
@@ -106,4 +105,3 @@ void _thaw_bdev(struct block_device *bdev, struct super_block *superblock)
 		pr_info("Device [%u:%u] was unfrozen\n",
 			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 }
-#endif

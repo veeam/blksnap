@@ -14,8 +14,4 @@ $(KERNEL_MODULE_NAME)-y += snapshot.o
 $(KERNEL_MODULE_NAME)-y += sysfs.o
 $(KERNEL_MODULE_NAME)-y += tracker.o
 
-# for upstream, we don't need any addition makefiles,
-# but for a standalone module the configuration is necessary
-include ${M}/Makefile-*
-
 obj-m	 += $(KERNEL_MODULE_NAME).o

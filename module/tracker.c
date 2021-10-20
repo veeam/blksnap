@@ -10,17 +10,11 @@
 #include "cbt_map.h"
 #include "diff_area.h"
 
-#ifdef HAVE_LP_FILTER
-#include "lp_filter.h"
-#endif
-
-#ifndef HAVE_BDEV_NR_SECTORS
 static inline
 sector_t bdev_nr_sectors(struct block_device *bdev)
 {
 	return i_size_read(bdev->bd_inode) >> 9;
 };
-#endif
 
 struct tracked_device {
 	struct list_head link;
@@ -119,26 +113,11 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 {
 	int ret;
 	unsigned int current_flag;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *superblock = NULL;
-#else
-	bool is_frozen = false;
-#endif
 	//DEBUG
 	pr_info("%s %s filter", __FUNCTION__, (flt_cmd == filter_cmd_add) ? "add" : "delete");
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_freeze_bdev(bdev, &superblock);
-#else
-	if (freeze_bdev(bdev))
-		pr_err("Failed to freeze device [%u:%u]\n",
-		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	else {
-		is_frozen = true;
-		pr_info("Device [%u:%u] was frozen\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	}
-#endif
 
 	current_flag = memalloc_noio_save();
 	filter_write_lock(bdev);
@@ -157,18 +136,7 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 	filter_write_unlock(bdev);
 	memalloc_noio_restore(current_flag);
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
-#else
-	if (is_frozen) {
-		if (thaw_bdev(bdev))
-			pr_err("Failed to thaw device [%u:%u]\n",
-			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-		else
-			pr_info("Device [%u:%u] was unfrozen\n",
-				MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	}
-#endif
 
 	if (ret)
 		pr_err("Failed to %s device [%u:%u]\n",

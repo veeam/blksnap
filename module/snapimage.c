@@ -211,16 +211,10 @@ void snapimage_free(struct snapimage *snapimage)
 
 	snapimage_unprepare_worker(snapimage);
 
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-	del_gendisk(snapimage->disk);
-	blk_cleanup_disk(snapimage->disk);
-	blk_mq_free_tag_set(&snapimage->tag_set);
-#else
 	del_gendisk(snapimage->disk);
 	blk_cleanup_queue(snapimage->queue);
 	blk_mq_free_tag_set(&snapimage->tag_set);
 	put_disk(snapimage->disk);
-#endif
 
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
@@ -236,9 +230,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	int minor;
 	struct snapimage *snapimage = NULL;
 	struct gendisk *disk;
-#ifndef HAVE_BLK_MQ_ALLOC_DISK
 	struct request_queue *queue;
-#endif
 
 	pr_info("Create snapshot image for device [%u:%u]\n",
 		MAJOR(diff_area->orig_bdev->bd_dev),
@@ -273,14 +265,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		goto fail_free_worker;
 	}
 
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-	disk = blk_mq_alloc_disk(&snapimage->tag_set, snapimage);
-	if (IS_ERR(disk)) {
-		ret = PTR_ERR(disk);
-		pr_err("Failed to allocate disk. errno=%d\n", abs(ret));
-		goto fail_free_tagset;
-	}
-#else
 	queue = blk_mq_init_queue(&snapimage->tag_set);
 	if (IS_ERR(queue)) {
 		ret = PTR_ERR(queue);
@@ -299,7 +283,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage->queue->queuedata = snapimage;
 
 	blk_queue_bounce_limit(snapimage->queue, BLK_BOUNCE_HIGH);
-#endif
 
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
@@ -341,13 +324,9 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	return snapimage;
 
 fail_cleanup_disk:
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-	blk_cleanup_disk(disk);
-#else
 	del_gendisk(disk);
 fail_free_queue:
 	blk_cleanup_queue(queue);
-#endif
 fail_free_tagset:
 	blk_mq_free_tag_set(&snapimage->tag_set);
 fail_free_worker:

@@ -8,13 +8,11 @@
 #include "diff_area.h"
 #include "diff_storage.h"
 
-#ifndef HAVE_BDEV_NR_SECTORS
 static inline
 sector_t bdev_nr_sectors(struct block_device *bdev)
 {
 	return i_size_read(bdev->bd_inode) >> 9;
 };
-#endif
 
 static inline
 unsigned long chunk_number(struct diff_area *diff_area, sector_t sector)
