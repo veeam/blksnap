@@ -30,6 +30,42 @@ namespace fs = boost::filesystem;
 #define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
 
+namespace {
+class Uuid
+{
+public:
+    Uuid ()
+    {};
+    Uuid (const uuid_t & id)
+    {
+        uuid_copy(m_id, id);
+    };
+    Uuid (const std::string &idStr)
+    {
+        uuid_parse(idStr.c_str(), m_id);
+    };
+
+    void FromString(const std::string &idStr)
+    {
+        uuid_parse(idStr.c_str(), m_id);
+    };
+    const uuid_t& Get() const
+    {
+        return m_id;
+    };
+    std::string ToString() const
+    {
+        char idStr[64];
+
+        uuid_unparse(m_id, idStr);
+
+        return std::string(idStr);
+    };
+private:
+    uuid_t m_id;
+};
+
+
 static int blksnap_fd = 0;
 static const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
 
@@ -141,6 +177,8 @@ fail:
         ::close(fd);
     throw std::system_error(ret, std::generic_category(), errMessage);
 }
+
+}//namespace
 
 class IArgsProc
 {
@@ -433,9 +471,8 @@ public:
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
-        char idStr[64];
-        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
-        uuid_parse(idStr, param.id);
+        Uuid id(vm["id"].as<std::string>());
+        uuid_copy(param.id, id.Get());
 
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
             throw std::system_error(errno, std::generic_category(),
@@ -467,9 +504,8 @@ public:
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
-        char idStr[64];
-        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
-        uuid_parse(idStr, param.id);
+        Uuid id(vm["id"].as<std::string>());
+        uuid_copy(param.id, id.Get());
 
         if (vm.count("file"))
             fiemapStorage(vm["file"].as<std::string>(), dev_id, ranges);
@@ -510,9 +546,8 @@ public:
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
-        char idStr[64];
-        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
-        uuid_parse(idStr, param.id);
+        Uuid id(vm["id"].as<std::string>());
+        uuid_copy(param.id, id.Get());
 
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
             throw std::system_error(errno, std::generic_category(),
@@ -540,9 +575,8 @@ public:
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
-        char idStr[64];
-        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
-        uuid_parse(idStr, param.id);
+        Uuid id(vm["id"].as<std::string>());
+        uuid_copy(param.id, id.Get());
 
         if (!vm.count("timeout"))
             throw std::invalid_argument("Argument 'timeout' is missed.");
@@ -586,6 +620,49 @@ public:
 
 class SnapshotCollectArgsProc : public IArgsProc
 {
+private:
+    void CollectSnapshots(std::vector<Uuid> &ids)
+    {
+        struct blk_snap_snapshot_collect param = {0};
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to get list of active snapshots.");
+
+        if (param.count == 0)
+            return;
+
+        std::vector<uuid_t> id_array(param.count);
+        param.ids = id_array.data();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to get list of snapshots.");
+
+        for (int inx=0; inx<param.count; inx++)
+            ids.emplace_back(id_array[inx]);
+    };
+
+    void CollectImages(const Uuid &id, std::vector<struct blk_snap_image_info> &imageInfoVector)
+    {
+        struct blk_snap_snapshot_collect_images param = {0};
+
+        uuid_copy(param.id, id.Get());
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to get device collection for snapshot images.");
+
+        if (param.count == 0)
+            return;
+
+        imageInfoVector.resize(param.count);
+        param.image_info_array = imageInfoVector.data();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
+            throw std::system_error(errno, std::generic_category(),
+                "[TBD]Failed to get device collection for snapshot images.");
+    };
+
 public:
     SnapshotCollectArgsProc()
         :IArgsProc()
@@ -598,57 +675,38 @@ public:
 
     void Execute(po::variables_map &vm) override
     {
-        struct blk_snap_snapshot_collect_images param = {0};
-        std::vector<struct blk_snap_image_info> imageInfoVector;
+        std::vector<Uuid> ids;
 
         if (vm.count("json"))
             throw std::invalid_argument("Argument 'json' is not supported yet.");
 
-        if (!vm.count("id"))
-            throw std::invalid_argument("Argument 'id' is missed.");
+        if (vm.count("id"))
+            ids.emplace_back(vm["id"].as<std::string>());
+        else
+            CollectSnapshots(ids);
 
-        char idStr[64];
-        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
-        uuid_parse(idStr, param.id);
+        for (const Uuid &id : ids) {
+            std::cout << "snapshot=" << id.ToString() << std::endl;
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param)) {
-            if (errno == ENODATA) {
-                // it's ok. We have not received any data.
-            } else {
-                throw std::system_error(errno, std::generic_category(),
-                    "[TBD]Failed to get device collection for snapshot.");
+            std::vector<struct blk_snap_image_info> imageInfoVector;
+            CollectImages(id, imageInfoVector);
+
+            std::cout << "count=" << imageInfoVector.size() << std::endl;
+            for (struct blk_snap_image_info &info : imageInfoVector) {
+
+                std::cout << "," << std::endl;
+                std::cout << "orig_dev_id=" << info.orig_dev_id.mj << ":" << info.orig_dev_id.mn << std::endl;
+                std::cout << "image_dev_id=" << info.image_dev_id.mj << ":" << info.image_dev_id.mn << std::endl;
             }
-        }
-
-        if (param.count == 0) {
-            std::cout << "count=" << param.count << std::endl;
             std::cout << "." << std::endl;
-            return;
         }
-
-        imageInfoVector.resize(param.count);
-        param.image_info_array = imageInfoVector.data();
-
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
-            throw std::system_error(errno, std::generic_category(),
-                "[TBD]Failed to get device collection for snapshot.");
-
-        std::cout << "count=" << param.count << std::endl;
-        for (int inx=0; inx < param.count; inx++) {
-            struct blk_snap_image_info *it = &imageInfoVector[inx];
-
-            std::cout << "," << std::endl;
-            std::cout << "orig_dev_id=" << it->orig_dev_id.mj << ":" << it->orig_dev_id.mn << std::endl;
-            std::cout << "image_dev_id=" << it->image_dev_id.mj << ":" << it->image_dev_id.mn << std::endl;
-        }
-        std::cout << "." << std::endl;
     };
 };
 
 class StretchSnapshotArgsProc : public IArgsProc
 {
 private:
-    uuid_t m_id;
+    Uuid m_id;
     std::string m_path;
     std::vector<std::string> m_allocated_sectFiles;
     int m_counter;
@@ -694,7 +752,7 @@ private:
         fiemapStorage(filename, dev_id, ranges);
 
         struct blk_snap_snapshot_append_storage param;
-        uuid_copy(param.id, m_id);
+        uuid_copy(param.id, m_id.Get());
         param.dev_id = dev_id;
         param.count = ranges.size();
         param.ranges = ranges.data();
@@ -730,9 +788,7 @@ public:
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
-        char idStr[64];
-        strncpy(idStr, vm["id"].as<std::string>().c_str(), sizeof(idStr));
-        uuid_parse(idStr, m_id);
+        m_id.FromString(vm["id"].as<std::string>());
 
         if (!vm.count("path"))
             throw std::invalid_argument("Argument 'path' is missed.");
@@ -746,7 +802,7 @@ public:
         std::cout << "Stretch snapshot service started." << std::endl;
 
         try {
-            uuid_copy(param.id, m_id);
+            uuid_copy(param.id, m_id.Get());
             param.timeout_ms = 1000;
             m_counter = 0;
             while (!terminate) {
