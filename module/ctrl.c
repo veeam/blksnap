@@ -371,6 +371,27 @@ out:
 }
 
 static
+int ioctl_snapshot_collect(unsigned long arg)
+{
+	int ret;
+	struct blk_snap_snapshot_collect karg;
+
+	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
+		pr_err("Unable to collect available snapshots: invalid user buffer\n");
+		return -ENODATA;
+	}
+
+	ret = snapshot_collect(&karg.count, karg.ids);
+
+	if (copy_to_user((void *)arg, &karg, sizeof(karg))) {
+		pr_err("Unable to collect available snapshots: invalid user buffer\n");
+		return -ENODATA;
+	}
+
+	return ret;
+}
+
+static
 int ioctl_snapshot_collect_images(unsigned long arg)
 {
 	int ret;
@@ -402,6 +423,7 @@ int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_snapshot_destroy,
 	ioctl_snapshot_append_storage,
 	ioctl_snapshot_take,
+	ioctl_snapshot_collect,
 	ioctl_snapshot_collect_images,
 	ioctl_snapshot_wait_event,
 };

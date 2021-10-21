@@ -297,6 +297,29 @@ struct blk_snap_snapshot_take {
 	_IOR(BLK_SNAP, 8, struct blk_snap_snapshot_take)
 
 /**
+ * struct blk_snap_snapshot_collect - Argument for
+ * 	&IOCTL_BLK_SNAP_SNAPSHOT_COLLECT control.
+ * @count:
+ *	Size of @ids in the number of &uuid_t.
+ *	If @ids has not enough space, it will contain the required
+ *      size of the array.
+ * @ids:
+ *	Pointer to the array with snapshot ID for output. If the pointer is
+ * 	zero, the ioctl simply returns the number of active snapshots in &count.
+ *
+ */
+struct blk_snap_snapshot_collect {
+	__u32 count;
+	uuid_t *ids;
+};
+/**
+ * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT - Get collection of created snapshots.
+ *
+ * This information can also be obtained from files from sysfs.
+ */
+#define IOCTL_BLK_SNAP_SNAPSHOT_COLLECT \
+	_IOW(BLK_SNAP, 9, struct blk_snap_snapshot_collect)
+/**
  * struct blk_snap_image_info - Associates the original device in the snapshot
  * 	and the corresponding snapshot image.
  * @orig_dev_id:
@@ -334,7 +357,30 @@ struct blk_snap_snapshot_collect_images {
  * This information can also be obtained from files from sysfs.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES \
-	_IOW(BLK_SNAP, 9, struct blk_snap_snapshot_collect_images)
+	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_collect_images)
+
+enum blk_snap_codes {
+	/**
+	 * Low free space in difference storage event.
+	 *
+	 * If the free space in the difference storage is reduced to the
+	 * specified limit, the module generates this event.
+	 */
+	blk_snap_code_low_free_space = 0x41,
+	/**
+	 * Snapshot image is corrupted event.
+	 *
+	 * If a chunk could not be allocated when trying to save data to
+	 * difference storage, this event is generated.
+	 * However, this does not mean that the backup process was interrupted
+	 * with an error. If the snapshot image has been read to the end by this
+	 * time, the backup process is considered successful.
+	 */
+	blk_snap_code_corrupted,
+};
+//#define BLK_SNAP_EVENT_LOW_FREE_SPACE 0x41
+//#define BLK_SNAP_EVENT_CORRUPTED 0x42
+//#define BLK_SNAP_EVENT_TERMINATE 0x43
 
 /**
  * struct blk_snap_snapshot_event - Argument for
@@ -360,6 +406,7 @@ struct blk_snap_snapshot_event {
 static_assert(sizeof(struct blk_snap_snapshot_event) == 4096, \
 	      "The size struct blk_snap_snapshot_event should be equal to the size of the page.");
 
+
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get event from snapshot.
  *
@@ -371,35 +418,19 @@ static_assert(sizeof(struct blk_snap_snapshot_event) == 4096, \
 #define IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT \
 	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_event)
 
-/**
- * BLK_SNAP_EVENT_MSG_ERROR - Unused
- */
-//#define BLK_SNAP_EVENT_MSG_ERROR 0x30
-
-/**
- * Unused.
- */
-//#define BLK_SNAP_EVENT_MSG_WARNING 0x31
 
 /**
  * struct blk_snap_event_low_free_space - Data for
- * 	&BLK_SNAP_EVENT_LOW_FREE_SPACE event.
+ * 	&blk_snap_code_low_free_space event.
  * @requested_nr_sect:
  *	The required number of sectors.
  */
 struct blk_snap_event_low_free_space {
 	__u64 requested_nr_sect;
 };
-/**
- * BLK_SNAP_EVENT_LOW_FREE_SPACE - Low free space in difference storage event.
- *
- * If the free space in the difference storage is reduced to the specified
- * limit, the module generates this event.
- */
-#define BLK_SNAP_EVENT_LOW_FREE_SPACE 0x41
 
 /**
- * struct blk_snap_event_corrupted - Data for &BLK_SNAP_EVENT_CORRUPTED event.
+ * struct blk_snap_event_corrupted - Data for &blk_snap_code_corrupted event.
  * @orig_dev_id:
  *	Device ID.
  * @err_code:
@@ -409,23 +440,5 @@ struct blk_snap_event_corrupted {
 	struct blk_snap_dev_t orig_dev_id;
 	__s32 err_code;
 };
-/**
- * BLK_SNAP_EVENT_CORRUPTED - Snapshot image is corrupted event.
- *
- * If a chunk could not be allocated when trying to save data to difference
- * storage, this event is generated.
- * However, this does not mean that the backup process was interrupted with an
- * error. If the snapshot image has been read to the end by this time, the
- * backup process is considered successful.
- */
-#define BLK_SNAP_EVENT_CORRUPTED 0x42
 
-/**
- * BLK_SNAP_EVENT_TERMINATE - Snapshot terminated event.
- *
- * If the event reader thread is still waiting for an event when the snapshot
- * is destroyed, it will receive this event.
- * Subsequent ioctl to read the event will end with the error code -EINVAL,
- * since the snapshot is destroyed.
- */
-#define BLK_SNAP_EVENT_TERMINATE 0x43
+

@@ -570,15 +570,12 @@ public:
             std::cout << "time=" << param.time_label << std::endl;
 
             switch (param.code) {
-            case BLK_SNAP_EVENT_LOW_FREE_SPACE:
+            case blk_snap_code_low_free_space:
                 std::cout << "event=low_free_space" << std::endl;
                 std::cout << "requested_nr_sect=" << *(__u64*)(param.data) << std::endl;
                 break;
-            case BLK_SNAP_EVENT_CORRUPTED:
+            case blk_snap_code_corrupted:
                 std::cout << "event=corrupted" << std::endl;
-                break;
-            case BLK_SNAP_EVENT_TERMINATE:
-                std::cout << "event=terminate" << std::endl;
                 break;
             default:
                 std::cout << "event=" << param.code << std::endl;
@@ -595,7 +592,7 @@ public:
     {
         m_usage = std::string("[TBD]Get collection of devices and his snapshot images.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
+            ("id,i", po::value<std::string>(), "[TBD]Optional parameter snapshot uuid.")
             ("json,j", "[TBD]Use json format for output.");
     };
 
@@ -764,15 +761,11 @@ public:
                 }
 
                 switch (param.code) {
-                case BLK_SNAP_EVENT_LOW_FREE_SPACE:
+                case blk_snap_code_low_free_space:
                     ProcessLowFreeSpace(param.time_label, (struct blk_snap_event_low_free_space *)param.data);
                     break;
-                case BLK_SNAP_EVENT_CORRUPTED:
+                case blk_snap_code_corrupted:
                     ProcessEventCorrupted(param.time_label, (struct blk_snap_event_corrupted *)param.data);
-                    terminate = true;
-                    break;
-                case BLK_SNAP_EVENT_TERMINATE:
-                    std::cout << param.time_label << " - The snapshot was destroyed." << std::endl;
                     terminate = true;
                     break;
                 default:
