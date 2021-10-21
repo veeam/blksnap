@@ -63,7 +63,7 @@ blksnap_snapshot_take
 echo "Snapshot was token, press ..."
 read -n 1
 
-blksnap_snapshot_collect
+blksnap_snapshot_collect_all
 
 echo "Write to original"
 #echo "Write something" > ${MOUNTPOINT_1}/something.txt

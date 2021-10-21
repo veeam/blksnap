@@ -56,6 +56,11 @@ blksnap_snapshot_collect()
 	${BLKSNAP} snapshot_collect --id=${ID}
 }
 
+blksnap_snapshot_collect_all()
+{
+	${BLKSNAP} snapshot_collect
+}
+
 blksnap_tracker_remove()
 {
 	local DEVICE=$1
