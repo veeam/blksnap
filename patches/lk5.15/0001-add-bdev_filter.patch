@@ -1,0 +1,361 @@
+From 0caf950e156492d4f5b74ffef9ef292985d6e254 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Fri, 22 Oct 2021 17:58:14 +0200
+Subject: [PATCH] add bdev_filter
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ block/bdev.c              | 151 ++++++++++++++++++++++++++++++++++++++
+ block/blk-core.c          |  51 +++++++++++++
+ include/linux/blk_types.h |   3 +
+ include/linux/blkdev.h    |  64 ++++++++++++++++
+ 4 files changed, 269 insertions(+)
+
+diff --git a/block/bdev.c b/block/bdev.c
+index 485a258b0ab3..022721b92c05 100644
+--- a/block/bdev.c
++++ b/block/bdev.c
+@@ -400,6 +400,7 @@ static void bdev_free_inode(struct inode *inode)
+ {
+ 	struct block_device *bdev = I_BDEV(inode);
+ 
++	percpu_free_rwsem(&bdev->bd_filters_lock);
+ 	free_percpu(bdev->bd_stats);
+ 	kfree(bdev->bd_meta_info);
+ 
+@@ -422,8 +423,12 @@ static void init_once(void *data)
+ 	inode_init_once(&ei->vfs_inode);
+ }
+ 
++static void bdev_filter_cleanup(struct block_device *bdev);
++
+ static void bdev_evict_inode(struct inode *inode)
+ {
++	bdev_filter_cleanup(I_BDEV(inode));
++
+ 	truncate_inode_pages_final(&inode->i_data);
+ 	invalidate_inode_buffers(inode); /* is it needed here? */
+ 	clear_inode(inode);
+@@ -498,6 +503,9 @@ struct block_device *bdev_alloc(struct gendisk *disk, u8 partno)
+ 		return NULL;
+ 	}
+ 	bdev->bd_disk = disk;
++
++	INIT_LIST_HEAD(&bdev->bd_filters);
++	percpu_init_rwsem(&bdev->bd_filters_lock);
+ 	return bdev;
+ }
+ 
+@@ -1056,3 +1064,146 @@ void iterate_bdevs(void (*func)(struct block_device *, void *), void *arg)
+ 	spin_unlock(&blockdev_superblock->s_inode_list_lock);
+ 	iput(old_inode);
+ }
++
++/**
++ * bdev_filter - Internal
++ *
++ */
++struct bdev_filter {
++	struct list_head link;
++	char name[32];
++	const struct bdev_filter_operations *fops;
++	void *ctx;
++};
++
++static void bdev_filter_cleanup(struct block_device *bdev)
++{
++	struct bdev_filter *flt;
++
++	might_sleep();
++	bdev_filter_write_lock(bdev);
++	while ((flt = list_first_entry_or_null(&bdev->bd_filters, struct bdev_filter, link))) {
++		if (flt->fops && flt->fops->detach_cb)
++			flt->fops->detach_cb(flt->ctx);
++		list_del(&flt->link);
++	}
++	bdev_filter_write_unlock(bdev);
++}
++
++bool bdev_filter_apply(struct bio *bio)
++{
++	bool pass = true;
++	struct bdev_filter *flt;
++
++	list_for_each_entry(flt, &bio->bi_bdev->bd_filters, link) {
++		pass = flt->fops->submit_bio_cb(bio, flt->ctx);
++		if (!pass)
++			break;
++	}
++	return pass;
++}
++
++static inline struct bdev_filter *bdev_filter_find(struct block_device *bdev, const char *name)
++{
++	struct bdev_filter *flt;
++
++	list_for_each_entry(flt, &bdev->bd_filters, link) {
++		if (strncmp(flt->name, name, BDEV_FILTER_NAME_MAX_LENGTH) == 0)
++			return flt;
++	}
++	return NULL;
++}
++
++/**
++ * bdev_filter_add - Attach a filter to original block device.
++ * @bdev:
++ *	Block device.
++ * @name:
++ *	Name of new block device filter.
++ * @fops:
++ *	Table of filter callbacks.
++ * @ctx:
++ *	Filter specific private data.
++ *
++ * Before adding a filter, it is necessary to lock the processing
++ * of bio requests of the original device by calling bdev_filter_write_lock().
++ *
++ * The filter_del() function allows to delete the filter from the block device.
++ */
++int bdev_filter_add(struct block_device *bdev, const char *name,
++	       const struct bdev_filter_operations *fops, void *ctx)
++{
++	struct bdev_filter *flt;
++
++	if (strlen(name) >= BDEV_FILTER_NAME_MAX_LENGTH)
++		return -EINVAL;
++
++	if (bdev_filter_find(bdev, name))
++		return -EALREADY;
++
++	flt = kzalloc(sizeof(struct bdev_filter), GFP_NOIO);
++	if (!flt)
++		return -ENOMEM;
++
++	INIT_LIST_HEAD(&flt->link);
++	strncpy(flt->name, name, BDEV_FILTER_NAME_MAX_LENGTH);
++	flt->fops = fops;
++	flt->ctx = ctx;
++	list_add(&flt->link, &bdev->bd_filters);
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(bdev_filter_add);
++
++/**
++ * bdev_filter_del - Delete filter from the block device.
++ * @bdev:
++ *	Block device.
++ * @name:
++ *	Name of new block device filter.
++ *
++ * Before deleting a filter, it is necessary to lock the processing
++ * of bio requests of the device by calling filter_write_lock().
++ *
++ * The filter should be added using the bdev_filter_add() function.
++ */
++int bdev_filter_del(struct block_device *bdev, const char *name)
++{
++	struct bdev_filter *flt;
++
++	flt = bdev_filter_find(bdev, name);
++	if (!flt)
++		return -ENOENT;
++
++	if (flt->fops->detach_cb)
++		flt->fops->detach_cb(flt->ctx);
++	list_del(&flt->link);
++	kfree(flt);
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(bdev_filter_del);
++
++/**
++ * bdev_filter_get_ctx - Get filters context value.
++ * @bdev:
++ *	Block device.
++ * @name:
++ *	Name of new block device filter.
++ *
++ * Return &ctx value from &struct blk_filter or NULL.
++ * NULL is returned if the filter was not found.
++ *
++ * Necessary to lock list of filters by calling filter_read_lock().
++ */
++void *bdev_filter_get_ctx(struct block_device *bdev, const char *name)
++{
++	struct bdev_filter *flt;
++
++	flt = bdev_filter_find(bdev, name);
++	if (flt)
++		return flt->ctx;
++	else
++		return NULL;
++}
++EXPORT_SYMBOL_GPL(bdev_filter_get_ctx);
+diff --git a/block/blk-core.c b/block/blk-core.c
+index 4d8f5fe91588..9dd25c3a7b0a 100644
+--- a/block/blk-core.c
++++ b/block/blk-core.c
+@@ -1013,6 +1013,53 @@ static blk_qc_t __submit_bio_noacct_mq(struct bio *bio)
+ 	return ret;
+ }
+ 
++/**
++ * filter_bio_apply() - Passing a bio to the block device filter.
++ * @bio:
++ *	original I/O unit
++ *
++ * Return true if bio should be passed.
++ */
++static inline bool filter_bio_apply(struct bio *bio)
++{
++	bool pass = true;
++	struct block_device *bdev;
++	struct bio_list bio_list_on_stack[2];
++	struct bio *new_bio;
++
++	bdev = bio->bi_bdev;
++	bio_list_init(&bio_list_on_stack[0]);
++	current->bio_list = bio_list_on_stack;
++
++	if (bio->bi_opf & REQ_NOWAIT) {
++		if (!percpu_down_read_trylock(&bdev->bd_filters_lock)) {
++			bio_wouldblock_error(bio);
++			current->bio_list = NULL;
++			return false;
++		}
++	} else
++		percpu_down_read(&bdev->bd_filters_lock);
++
++	if (!list_empty(&bdev->bd_filters))
++		pass = bdev_filter_apply(bio);
++
++	percpu_up_read(&bdev->bd_filters_lock);
++
++	current->bio_list = NULL;
++	while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
++		/*
++		 * A recursive call for submit_bio_noacct() allows
++		 * to call filters for new bios too.
++		 * If the filter creates a new bio during its
++		 * processing for same device, then it should set
++		 * the BIO_FILTERED flag to avoid infinite recursion.
++		 */
++		submit_bio_noacct(new_bio);
++	}
++
++	return pass;
++}
++
+ /**
+  * submit_bio_noacct - re-submit a bio to the block device layer for I/O
+  * @bio:  The bio describing the location in memory and on the device.
+@@ -1035,6 +1082,10 @@ blk_qc_t submit_bio_noacct(struct bio *bio)
+ 		return BLK_QC_T_NONE;
+ 	}
+ 
++	if (!bio_flagged(bio, BIO_FILTERED))
++		if (!filter_bio_apply(bio))
++			return BLK_QC_T_NONE;
++
+ 	if (!bio->bi_bdev->bd_disk->fops->submit_bio)
+ 		return __submit_bio_noacct_mq(bio);
+ 	return __submit_bio_noacct(bio);
+diff --git a/include/linux/blk_types.h b/include/linux/blk_types.h
+index be622b5a21ed..1279ddd5d6d5 100644
+--- a/include/linux/blk_types.h
++++ b/include/linux/blk_types.h
+@@ -49,6 +49,8 @@ struct block_device {
+ #ifdef CONFIG_FAIL_MAKE_REQUEST
+ 	bool			bd_make_it_fail;
+ #endif
++	struct list_head	bd_filters;
++	struct percpu_rw_semaphore bd_filters_lock;
+ } __randomize_layout;
+ 
+ #define bdev_whole(_bdev) \
+@@ -299,6 +301,7 @@ enum {
+ 	BIO_REMAPPED,
+ 	BIO_ZONE_WRITE_LOCKED,	/* Owns a zoned device zone write lock */
+ 	BIO_PERCPU_CACHE,	/* can participate in per-cpu alloc cache */
++	BIO_FILTERED,		/**/
+ 	BIO_FLAG_LAST
+ };
+ 
+diff --git a/include/linux/blkdev.h b/include/linux/blkdev.h
+index 12b9dbcc980e..5ace013a46a9 100644
+--- a/include/linux/blkdev.h
++++ b/include/linux/blkdev.h
+@@ -2005,4 +2005,68 @@ int fsync_bdev(struct block_device *bdev);
+ int freeze_bdev(struct block_device *bdev);
+ int thaw_bdev(struct block_device *bdev);
+ 
++
++#define BDEV_FILTER_NAME_MAX_LENGTH 32
++
++struct bdev_filter_operations {
++	bool (*submit_bio_cb)(struct bio *bio, void *ctx);
++	void (*detach_cb)(void *ctx);
++};
++
++bool bdev_filter_apply(struct bio *bio);
++
++/**
++ * filter_write_lock() - Locks the processing of I/O requests for block device.
++ * @bdev:
++ *	Pointer to &struct block_device.
++ *
++ * Locks block device the execution of the submit_bio_noacct() function for it.
++ * To avoid calling a deadlock, do not call I/O operations after this lock.
++ * To do this, using the memalloc_noio_save() function can be useful.
++ *
++ */
++static inline void bdev_filter_write_lock(struct block_device *bdev)
++{
++	percpu_down_write(&bdev->bd_filters_lock);
++};
++/**
++ * filter_write_unlock - Unlocks the processing of I/O requests for block device.
++ * @bdev:
++ *	Pointer to &struct block_device.
++ *
++ * The submit_bio_noacct() function can be continued.
++ */
++static inline void bdev_filter_write_unlock(struct block_device *bdev)
++{
++	percpu_up_write(&bdev->bd_filters_lock);
++};
++/**
++ * filter_read_lock - Lock filters list, protecting them from changes.
++ * @bdev:
++ *	Pointer to &struct block_device.
++ *
++ * The lock ensures that the filter will not be removed from the list until
++ * the lock is removed.
++ */
++static inline void bdev_filter_read_lock(struct block_device *bdev)
++{
++	percpu_down_read(&bdev->bd_filters_lock);
++};
++/**
++ * filter_read_unlock - Unlock filters list.
++ * @bdev:
++ *	Pointer to &struct block_device.
++ */
++static inline void bdev_filter_read_unlock(struct block_device *bdev)
++{
++	percpu_up_read(&bdev->bd_filters_lock);
++};
++
++int bdev_filter_add(struct block_device *bdev, const char *name,
++			const struct bdev_filter_operations *fops, void *ctx);
++int bdev_filter_del(struct block_device *bdev, const char *name);
++
++void *bdev_filter_get_ctx(struct block_device *bdev, const char *name);
++
++
+ #endif /* _LINUX_BLKDEV_H */
+-- 
+2.20.1
+
