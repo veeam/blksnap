@@ -4,29 +4,23 @@
 #include <linux/list.h>
 #include <linux/blk_types.h>
 
-/*
- * Each filter can skip the bio request or complete it,
- * or even redirect it to another block device.
- */
-enum flt_st {
-	FLT_ST_PASS,
-	FLT_ST_COMPLETE,
-};
+#define BDEV_FILTER_NAME_MAX_LENGTH 32
 
-struct filter_operations {
-	enum flt_st (*submit_bio_cb)(struct bio *bio, void *ctx);
+struct bdev_filter_operations {
+	bool (*submit_bio_cb)(struct bio *bio, void *ctx);
 	void (*detach_cb)(void *ctx);
 };
 
-void filter_write_lock(struct block_device *bdev );
-void filter_write_unlock(struct block_device *bdev );
-void filter_read_lock(struct block_device *bdev );
-void filter_read_unlock(struct block_device *bdev );
+bool bdev_filter_apply(struct bio *bio);
 
-int filter_add(struct block_device *bdev, const struct filter_operations *fops, void *ctx);
-int filter_del(struct block_device *bdev);
 
-void* filter_find_ctx(struct block_device *bdev);
+void bdev_filter_write_lock(struct block_device *bdev);
+void bdev_filter_write_unlock(struct block_device *bdev);
+void bdev_filter_read_lock(struct block_device *bdev);
+void bdev_filter_read_unlock(struct block_device *bdev);
 
-int filter_init(void );
-void filter_done(void );
+int bdev_filter_add(struct block_device *bdev, const char *name,
+			const struct bdev_filter_operations *fops, void *ctx);
+int bdev_filter_del(struct block_device *bdev, const char *name);
+
+void *bdev_filter_get_ctx(struct block_device *bdev, const char *name);

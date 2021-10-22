@@ -44,10 +44,6 @@ int __init blk_snap_init(void)
 	if (result)
 		return result;
 
-	result = tracker_init();
-	if (result)
-		return result;
-
 	result = ctrl_init();
 	if (result)
 		return result;
@@ -56,12 +52,6 @@ int __init blk_snap_init(void)
 	return result;
 }
 
-/*
- * For standalone only:
- *
- * Before unload module livepatch should be detached.
- * echo 0 > /sys/kernel/livepatch/blk_snap/enabled
- */
 static
 void __exit blk_snap_exit(void)
 {
@@ -110,5 +100,3 @@ MODULE_DESCRIPTION("Block Layer Snapshot Kernel Module");
 MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
-MODULE_INFO(livepatch, "Y");
-

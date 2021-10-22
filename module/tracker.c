@@ -46,18 +46,18 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 {
 	struct tracker *tracker;
 
-	filter_read_lock(bdev);
+	bdev_filter_read_lock(bdev);
 
-	tracker = filter_find_ctx(bdev);
+	tracker = bdev_filter_get_ctx(bdev, KBUILD_MODNAME);
 	if (likely(tracker))
 		kref_get(&tracker->kref);
 
-	filter_read_unlock(bdev);
+	bdev_filter_read_unlock(bdev);
 	return tracker;
 }
 
 static
-enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
+bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
 	struct tracker *tracker = ctx;
@@ -65,33 +65,33 @@ enum flt_st tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	sector_t count;
 
 	if (!op_is_write(bio_op(bio)))
-		return FLT_ST_PASS;
+		return true;
 
 	if (!bio->bi_iter.bi_size)
-		return FLT_ST_PASS;
+		return true;
 
 	sector = bio->bi_iter.bi_sector;
 	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) / SECTOR_SIZE);
 
 	err = cbt_map_set(tracker->cbt_map, sector, count);
 	if (unlikely(err))
-		return FLT_ST_PASS;
+		return true;
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
-		return FLT_ST_PASS;
+		return true;
 
 	err = diff_area_copy(tracker->diff_area, sector, count,
 			     (bool)(bio->bi_opf & REQ_NOWAIT));
 	if (likely(!err))
-		return FLT_ST_PASS;
+		return true;
 
 	if (err == -EAGAIN) {
 		bio_wouldblock_error(bio);
-		return FLT_ST_COMPLETE;
+		return false;
 	}
 
 	pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
-	return FLT_ST_PASS;
+	return true;
 }
 
 static
@@ -103,7 +103,7 @@ void tracker_detach_cb(void *ctx)
 }
 
 static const
-struct filter_operations tracker_fops = {
+struct bdev_filter_operations tracker_fops = {
 	.submit_bio_cb = tracker_submit_bio_cb,
 	.detach_cb = tracker_detach_cb
 };
@@ -141,20 +141,20 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 #endif
 
 	current_flag = memalloc_noio_save();
-	filter_write_lock(bdev);
+	bdev_filter_write_lock(bdev);
 
 	switch (flt_cmd) {
 	case filter_cmd_add:
-		ret = filter_add(bdev, &tracker_fops, tracker);
+		ret = bdev_filter_add(bdev, KBUILD_MODNAME, &tracker_fops, tracker);
 		break;
 	case filter_cmd_del:
-		ret = filter_del(bdev);
+		ret = bdev_filter_del(bdev, KBUILD_MODNAME);
 		break;
 	default:
 		ret = -EINVAL;
 	}
 
-	filter_write_unlock(bdev);
+	bdev_filter_write_unlock(bdev);
 	memalloc_noio_restore(current_flag);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -274,11 +274,6 @@ void tracker_release_snapshot(struct tracker *tracker)
 	atomic_set(&tracker->snapshot_is_taken, false);
 }
 
-int tracker_init(void)
-{
-	return filter_init();
-}
-
 void tracker_done(void)
 {
 	struct tracked_device *tr_dev;
@@ -298,8 +293,6 @@ void tracker_done(void)
 		tracker_remove(tr_dev->dev_id);
 		kfree(tr_dev);
 	}
-
-	filter_done();
 }
 
 struct tracker *tracker_create_or_get(dev_t dev_id)

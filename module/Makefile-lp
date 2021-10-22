@@ -1,10 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # Additions for standalone module lp modification
 
-$(KERNEL_MODULE_NAME)-y += lp_filter.o
-
-EXTRA_CFLAGS += "-DMOD_NAME=\"lp\" "
-EXTRA_CFLAGS += "-DHAVE_LP_FILTER "
+EXTRA_CFLAGS += "-DMOD_NAME=\"standalone\" "
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&&	\
 		echo -DHAVE_SUBMIT_BIO_NOACCT)
@@ -56,3 +53,7 @@ EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=64"
 # The minimum allowable size of the difference storage in sectors.
 # When reached, an event is generated about the lack of free space.
 EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM=2097152"
+
+EXTRA_CFLAGS += "-DHAVE_LP_FILTER "
+bdev-filter-y += lp_filter.o
+obj-m	 += bdev-filter.o

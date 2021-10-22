@@ -43,7 +43,6 @@ void tracker_put(struct tracker *tracker)
 };
 struct tracker *tracker_get_by_dev(struct block_device *bdev);
 
-int tracker_init(void);
 void tracker_done(void);
 
 struct tracker *tracker_create_or_get(dev_t dev_id);
