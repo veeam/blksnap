@@ -28,31 +28,54 @@ case "$CMD" in
 		echo Completed.
 		;;
 	install)
-		echo Installing ...
+		echo "Installing ${MODULE_NAME}"
 		mkdir -p ${MODULE_PATH}
-		cp ${FILTER_NAME}.ko ${MODULE_PATH}
 		cp ${MODULE_NAME}.ko ${MODULE_PATH}
 		depmod
 		echo Completed.
 		;;
 	uninstall)
-		rm -f ${MODULE_PATH}/${FILTER_NAME}.ko
-		rm -f ${FILTER_NAME}/${MODULE_NAME}.ko
+		echo "Uninstalling ${MODULE_NAME}"
+		rm -f ${MODULE_PATH}/${MODULE_NAME}.ko
 		;;
 	load)
 		echo "Loading ${MODULE_NAME} kernel module from current folder"
 		modprobe dm-mod
-		insmod ./${FILTER_NAME}.ko
 		insmod ./${MODULE_NAME}.ko
 		;;
 	unload)
 		echo "Unloading ${MODULE_NAME} kernel module"
 		rmmod ${MODULE_NAME}
+		;;
+	install-flt)
+		echo "Installing ${FILTER_NAME}"
+		mkdir -p ${MODULE_PATH}
+		cp ${FILTER_NAME}.ko ${MODULE_PATH}
+		depmod
+		echo Completed.
+		;;
+	uninstall-flt)
+		echo "Uninstalling ${FILTER_NAME}"
+		rm -f ${MODULE_PATH}/${FILTER_NAME}.ko
+		;;
+	load-flt)
+		echo "Loading ${FILTER_NAME} kernel module from current folder"
+		modprobe dm-mod
+		insmod ./${FILTER_NAME}.ko
+		;;
+	unload-flt)
+		echo "Unloading ${FILTER_NAME} kernel module"
 		echo 0 > /sys/kernel/livepatch/bdev_filter/enabled
 		sleep 2s
 		rmmod ${FILTER_NAME}
 		;;
 	*)
-		echo "usage: $0 {build | clean | install | uninstall | load | unload}"
+		echo "Usage "
+		echo "Compile project: "
+		echo "	$0 {build | clean} [<kernel release>]"
+		echo "for ${MODULE_NAME} module : "
+		echo "	$0 {install | uninstall | load | unload}  [<kernel release>]"
+		echo "for ${FILTER_NAME} module : "
+		echo "	$0 {install-flt | uninstall-flt | load-flt | unload-flt}  [<kernel release>]"
 		exit 1
 esac
