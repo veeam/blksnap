@@ -108,8 +108,6 @@ loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
 echo "Unload module"
-echo 0 > /sys/kernel/livepatch/blk_snap/enabled
-sleep 2s
 modprobe -r blk-snap
 
 echo "Change tracking test finish"
