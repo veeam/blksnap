@@ -416,7 +416,7 @@ static_assert(sizeof(struct blk_snap_snapshot_event) == 4096, \
  * user's thread is in a state of interruptable sleep.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT \
-	_IOW(BLK_SNAP, 10, struct blk_snap_snapshot_event)
+	_IOW(BLK_SNAP, 11, struct blk_snap_snapshot_event)
 
 
 /**
