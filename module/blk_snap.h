@@ -428,7 +428,7 @@ struct blk_snap_snapshot_event {
 	__u8  data[4096 - 32];
 };
 static_assert(sizeof(struct blk_snap_snapshot_event) == 4096, \
-	      "The size &struct blk_snap_snapshot_event should be equal to the size of the page.");
+	      "The size struct blk_snap_snapshot_event should be equal to the size of the page.");
 
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get event from snapshot.

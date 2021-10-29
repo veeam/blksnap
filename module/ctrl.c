@@ -429,7 +429,7 @@ int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
 };
 
 static_assert(sizeof(blk_snap_ioctl_table) == (blk_snap_ioctl_end * sizeof(void *)), \
-	"The size of table &blk_snap_ioctl_table does not match the &enum blk_snap_ioctl.");
+	"The size of table blk_snap_ioctl_table does not match the enum blk_snap_ioctl.");
 
 static
 long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
