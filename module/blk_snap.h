@@ -445,7 +445,7 @@ static_assert(sizeof(struct blk_snap_snapshot_event) == 4096, \
 
 /**
  * struct blk_snap_event_low_free_space - Data for
- * 	&blk_snap_event_low_free_space event.
+ * 	&blk_snap_event_code_low_free_space event.
  * @requested_nr_sect:
  *	The required number of sectors.
  */
@@ -454,7 +454,7 @@ struct blk_snap_event_low_free_space {
 };
 
 /**
- * struct blk_snap_event_corrupted - Data for &blk_snap_event_corrupted event.
+ * struct blk_snap_event_corrupted - Data for &blk_snap_event_code_corrupted event.
  * @orig_dev_id:
  *	Device ID.
  * @err_code:
