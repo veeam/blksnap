@@ -466,7 +466,8 @@ void diff_area_event_corrupted(struct diff_area *diff_area, int err_code)
 		.err_code = abs(err_code),
 	};
 
-	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO, blk_snap_event_corrupted,
+	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO,
+		blk_snap_event_code_corrupted,
 		&data, sizeof(struct blk_snap_event_corrupted));
 }
 

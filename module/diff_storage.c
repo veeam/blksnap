@@ -44,7 +44,7 @@ void diff_storage_event_low(struct diff_storage *diff_storage)
 	diff_storage->requested += data.requested_nr_sect;
 	pr_info("%s requested=%llu sectors", __FUNCTION__, diff_storage->requested);//DEBUG
 	event_gen(&diff_storage->event_queue, GFP_NOIO,
-		blk_snap_event_low_free_space,
+		blk_snap_event_code_low_free_space,
 		&data, sizeof(data));
 }
 

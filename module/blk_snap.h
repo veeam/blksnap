@@ -386,14 +386,14 @@ struct blk_snap_snapshot_collect_images {
 	_IOW(BLK_SNAP, blk_snap_ioctl_snapshot_collect_images,			\
 		struct blk_snap_snapshot_collect_images)
 
-enum blk_snap_events {
+enum blk_snap_event_codes {
 	/**
 	 * Low free space in difference storage event.
 	 *
 	 * If the free space in the difference storage is reduced to the
 	 * specified limit, the module generates this event.
 	 */
-	blk_snap_event_low_free_space,
+	blk_snap_event_code_low_free_space,
 	/**
 	 * Snapshot image is corrupted event.
 	 *
@@ -403,7 +403,7 @@ enum blk_snap_events {
 	 * with an error. If the snapshot image has been read to the end by this
 	 * time, the backup process is considered successful.
 	 */
-	blk_snap_event_corrupted,
+	blk_snap_event_code_corrupted,
 };
 
 /**
