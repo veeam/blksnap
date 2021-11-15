@@ -37,7 +37,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 	event->data_size = data_size;
 	memcpy(event->data, data, data_size);
 
-	pr_info("%s send event=%lld code=%d data_size=%d\n", __FUNCTION__,
+	pr_debug("Send event=%lld code=%d data_size=%d\n",
 		event->time, event->code, event->data_size);
 
 	spin_lock(&event_queue->lock);
@@ -83,15 +83,15 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 		list_del(&event->link);
 		spin_unlock(&event_queue->lock);
 
-		pr_info("%s received event=%lld code=%d\n", __FUNCTION__, event->time, event->code);
+		pr_debug("%s received event=%lld code=%d\n", __FUNCTION__, event->time, event->code);
 		return event;
 	}
 	if (ret == 0) {
-		pr_info("%s - timeout\n", __FUNCTION__); //DEBUG
+		pr_debug("%s - timeout\n", __FUNCTION__);
 		return ERR_PTR(-ENOENT);
 	}
 	if (ret == -ERESTARTSYS) {
-		pr_info("%s - interrupted\n", __FUNCTION__); //DEBUG
+		pr_debug("%s - interrupted\n", __FUNCTION__);
 		return ERR_PTR(-EINTR);
 	}
 

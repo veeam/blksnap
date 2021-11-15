@@ -16,8 +16,7 @@ void snapshot_release(struct snapshot *snapshot)
 {
 	int inx;
 
-	//DEBUG
-	pr_info("%s id=%pUb\n", __FUNCTION__, &snapshot->id);
+	pr_info("Release snapshot %pUb\n", &snapshot->id);
 
 	/* destroy all snapshot images */
 	for (inx = 0; inx < snapshot->count; ++inx) {
@@ -99,19 +98,12 @@ static inline
 void snapshot_get(struct snapshot *snapshot)
 {
 	kref_get(&snapshot->kref);
-	//DEBUG
-	//pr_info("%s - refcount=%u\n", __FUNCTION__,
-	//        refcount_read(&snapshot->kref.refcount));
 };
 static inline
 void snapshot_put(struct snapshot *snapshot)
 {
-	if (likely(snapshot)) {
-		//DEBUG
-		//pr_info("%s - refcount=%u\n", __FUNCTION__,
-		//        refcount_read(&snapshot->kref.refcount));
+	if (likely(snapshot))
 		kref_put(&snapshot->kref, snapshot_free);
-	}
 };
 
 static
@@ -176,8 +168,7 @@ void snapshot_done(void)
 {
 	struct snapshot *snapshot;
 
-	pr_info("Cleanup snapshots\n");
-
+	pr_debug("Cleanup snapshots\n");
 	do {
 		down_write(&snapshots_lock);
 		snapshot = list_first_entry_or_null(&snapshots, struct snapshot, link);
@@ -231,7 +222,7 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uui
 	pr_info("Snapshot %pUb was created\n", &snapshot->id);
 	return 0;
 fail:
-	pr_info("Snapshot cannot be created\n");
+	pr_err("Snapshot cannot be created\n");
 
 	snapshot_put(snapshot);
 	return ret;
@@ -262,6 +253,7 @@ int snapshot_destroy(uuid_t *id)
 {
 	struct snapshot *snapshot = NULL;
 
+	pr_info("Destroy snapshot %pUb\n", id);
 	down_write(&snapshots_lock);
 	if (!list_empty(&snapshots)) {
 		struct snapshot *s = NULL;
@@ -281,7 +273,6 @@ int snapshot_destroy(uuid_t *id)
 		return -ENODEV;
 	}
 
-	pr_info("Destroy snapshot %pUb\n", id);
 	snapshot_put(snapshot);
 	return 0;
 }
@@ -291,8 +282,6 @@ int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
 {
 	int ret = 0;
 	struct snapshot *snapshot;
-
-	pr_info("%s", __FUNCTION__);
 
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
@@ -369,7 +358,7 @@ int snapshot_take(uuid_t *id)
 		}
 	}
 	snapshot->is_taken = true;
-	pr_info("Snapshot was taken");
+	pr_info("Snapshot was taken\n");
 
 	/* thaw file systems on original block devices */
 	for (inx = 0; inx < snapshot->count; inx++) {
@@ -439,7 +428,7 @@ struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms)
 	struct snapshot *snapshot;
 	struct event *event;
 
-	pr_info("%s\n", __FUNCTION__);
+	pr_debug("Wait event\n");
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return ERR_PTR(-ESRCH);
@@ -467,7 +456,7 @@ int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array)
 	int inx = 0;
 	struct snapshot *s;
 
-	pr_info("%s", __FUNCTION__);
+	pr_debug("Collect snapshots\n");
 
 	down_read(&snapshots_lock);
 	if (list_empty(&snapshots))
@@ -508,7 +497,7 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 	struct blk_snap_image_info *image_info_array = NULL;
 	struct snapshot *snapshot;
 
-	pr_info("%s", __FUNCTION__);
+	pr_debug("Collect images for snapshots\n");
 
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
@@ -519,9 +508,9 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 		goto out;
 	}
 
-	pr_info("Found snapshot with %d devices\n", snapshot->count);
+	pr_debug("Found snapshot with %d devices\n", snapshot->count);
 	if (!user_image_info_array) {
-		pr_info("Users buffer is not set\n");
+		pr_err("Unable to collect snapshot images: users buffer is not set\n");
 		goto out;
 	}
 
@@ -541,7 +530,7 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 		if (snapshot->tracker_array[inx]) {
 			dev_t orig_dev_id = snapshot->tracker_array[inx]->dev_id;
 
-			pr_info("Original [%u:%u]\n", MAJOR(orig_dev_id), MINOR(orig_dev_id));
+			pr_debug("Original [%u:%u]\n", MAJOR(orig_dev_id), MINOR(orig_dev_id));
 			image_info_array[inx].orig_dev_id.mj = MAJOR(orig_dev_id);
 			image_info_array[inx].orig_dev_id.mn = MINOR(orig_dev_id);
 		}
@@ -549,7 +538,7 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 		if (snapshot->snapimage_array[inx]) {
 			dev_t image_dev_id = snapshot->snapimage_array[inx]->image_dev_id;
 
-			pr_info("Image [%u:%u]\n", MAJOR(image_dev_id), MINOR(image_dev_id));
+			pr_debug("Image [%u:%u]\n", MAJOR(image_dev_id), MINOR(image_dev_id));
 			image_info_array[inx].image_dev_id.mj = MAJOR(image_dev_id);
 			image_info_array[inx].image_dev_id.mn = MINOR(image_dev_id);
 		}

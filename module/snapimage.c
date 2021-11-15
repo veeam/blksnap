@@ -290,7 +290,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	disk = alloc_disk(1);
 	if (!disk) {
-		pr_err("Failed to allocate disk.\n");
+		pr_err("Failed to allocate disk\n");
 		goto fail_free_queue;
 	}
 	disk->queue = queue;
@@ -310,7 +310,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		ret = -EINVAL;
 		goto fail_cleanup_disk;
 	}
-	pr_info("Snapshot image disk name [%s]", disk->disk_name);
+	pr_info("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
 	//disk->flags |= GENHD_FL_SUPPRESS_PARTITION_INFO;
@@ -328,7 +328,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage->disk = disk;
 
 	set_capacity(disk, snapimage->capacity);
-	pr_info("Snapshot image device capacity %lld bytes",
+	pr_debug("Snapshot image device capacity %lld bytes\n",
 		(u64)(snapimage->capacity << SECTOR_SHIFT));
 
 	diff_area_get(diff_area);

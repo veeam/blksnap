@@ -45,7 +45,7 @@ void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 static
 int cbt_map_allocate(struct cbt_map *cbt_map)
 {
-	pr_info("Allocate CBT map of %zu blocks\n", cbt_map->blk_count);
+	pr_debug("Allocate CBT map of %zu blocks\n", cbt_map->blk_count);
 
 	cbt_map->read_map = big_buffer_alloc(cbt_map->blk_count, GFP_KERNEL);
 	if (cbt_map->read_map != NULL)
@@ -102,7 +102,7 @@ int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity)
 static inline
 void cbt_map_destroy(struct cbt_map *cbt_map)
 {
-	pr_info("CBT map destroy\n");
+	pr_debug("CBT map destroy\n");
 
 	cbt_map_deallocate(cbt_map);
 	kfree(cbt_map);
@@ -112,7 +112,7 @@ struct cbt_map *cbt_map_create(struct block_device* bdev)
 {
 	struct cbt_map *cbt_map = NULL;
 
-	pr_info("CBT map create\n");
+	pr_debug("CBT map create\n");
 
 	cbt_map = kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
 	if (cbt_map == NULL)
@@ -140,7 +140,7 @@ void cbt_map_destroy_cb(struct kref *kref)
 
 void cbt_map_switch(struct cbt_map *cbt_map)
 {
-	pr_info("CBT map switch\n");
+	pr_debug("CBT map switch\n");
 	spin_lock(&cbt_map->locker);
 
 	big_buffer_memcpy(cbt_map->read_map, cbt_map->write_map);
@@ -154,7 +154,7 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 
 		generate_random_uuid(cbt_map->generationId.b);
 
-		pr_info("CBT reset\n");
+		pr_debug("CBT reset\n");
 	}
 	spin_unlock(&cbt_map->locker);
 }

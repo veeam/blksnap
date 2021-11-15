@@ -221,7 +221,7 @@ int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 
 	buf = diff_buffer_new(page_count, buffer_size, gfp_mask);
 	if (!buf) {
-		pr_err("Failed allocate memory buffer for chunk");
+		pr_err("Failed allocate memory buffer for chunk\n");
 		return -ENOMEM;
 	}
 	chunk->diff_buffer = buf;

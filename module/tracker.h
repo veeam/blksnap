@@ -86,7 +86,7 @@ int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
 		return result;
 	}
 
-	pr_info("Device [%u:%u] was frozen\n",
+	pr_debug("Device [%u:%u] was frozen\n",
 		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	*psuperblock = superblock;
 
@@ -102,7 +102,7 @@ void _thaw_bdev(struct block_device *bdev, struct super_block *superblock)
 		pr_err("Failed to unfreeze device [%u:%u]\n",
 		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	else
-		pr_info("Device [%u:%u] was unfrozen\n",
+		pr_debug("Device [%u:%u] was unfrozen\n",
 			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 }
 #endif

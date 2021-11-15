@@ -34,7 +34,7 @@ void tracker_free(struct kref *kref)
 {
 	struct tracker *tracker = container_of(kref, struct tracker, kref);
 
-	pr_info("Free tracker for device [%u:%u].\n",
+	pr_debug("Free tracker for device [%u:%u].\n",
 		MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
 	diff_area_put(tracker->diff_area);
@@ -124,8 +124,9 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 #else
 	bool is_frozen = false;
 #endif
-	//DEBUG
-	pr_info("%s %s filter", __FUNCTION__, (flt_cmd == filter_cmd_add) ? "add" : "delete");
+
+	pr_debug("Tracker %s filter\n",
+		(flt_cmd == filter_cmd_add) ? "add" : "delete");
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_freeze_bdev(bdev, &superblock);
@@ -135,7 +136,7 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	else {
 		is_frozen = true;
-		pr_info("Device [%u:%u] was frozen\n",
+		pr_debug("Device [%u:%u] was frozen\n",
 			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
 #endif
@@ -165,7 +166,7 @@ int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
-			pr_info("Device [%u:%u] was unfrozen\n",
+			pr_debug("Device [%u:%u] was unfrozen\n",
 				MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
 #endif
@@ -184,7 +185,7 @@ struct tracker *tracker_new(struct block_device* bdev)
 	struct tracker *tracker = NULL;
 	struct cbt_map *cbt_map;
 
-	pr_info("Creating tracker for device [%u:%u].\n",
+	pr_debug("Creating tracker for device [%u:%u].\n",
 		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
@@ -219,7 +220,7 @@ struct tracker *tracker_new(struct block_device* bdev)
 	 */
 	kref_get(&tracker->kref);
 
-	pr_info("New tracker for device [%u:%u] was created.\n",
+	pr_debug("New tracker for device [%u:%u] was created.\n",
 		MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
 	return tracker;
@@ -264,12 +265,8 @@ void tracker_release_snapshot(struct tracker *tracker)
 	if (!tracker)
 		return;
 
-	//DEBUG
-	pr_info("%s for device [%u:%u]", __FUNCTION__,
+	pr_debug("Tracker for device [%u:%u] release snapshot\n",
 		MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-
-	//if (!!atomic_read(&tracker->snapshot_is_taken))
-	//	return;
 
 	atomic_set(&tracker->snapshot_is_taken, false);
 }
@@ -278,7 +275,7 @@ void tracker_done(void)
 {
 	struct tracked_device *tr_dev;
 
-	pr_info("Cleanup trackers\n");
+	pr_debug("Cleanup trackers\n");
 	while(true) {
 		spin_lock(&tracked_device_lock);
 		tr_dev = list_first_entry_or_null(&tracked_device_list,
@@ -303,14 +300,14 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_info("Cannot open device [%u:%u]\n",
+		pr_err("Cannot open device [%u:%u]\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		return ERR_PTR(PTR_ERR(bdev));
 	}
 
 	tracker = tracker_get_by_dev(bdev);
 	if (tracker){
-		pr_info("Device [%u:%u] is already under tracking\n",
+		pr_debug("Device [%u:%u] is already under tracking\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		goto put_bdev;
 	}
@@ -349,7 +346,7 @@ int tracker_remove(dev_t dev_id)
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_info("Cannot open device [%u:%u]\n",
+		pr_err("Cannot open device [%u:%u]\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		return PTR_ERR(bdev);
 	}
@@ -364,7 +361,7 @@ int tracker_remove(dev_t dev_id)
 	}
 
 	if (atomic_read(&tracker->snapshot_is_taken)) {
-		pr_info("Tracker for device [%u:%u] is busy with a snapshot\n",
+		pr_err("Tracker for device [%u:%u] is busy with a snapshot\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		ret = -EBUSY;
 		goto put_tracker;
@@ -406,7 +403,7 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_info("Cannot open device [%u:%u]\n",
+		pr_err("Cannot open device [%u:%u]\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		return PTR_ERR(bdev);
 	}
@@ -445,7 +442,7 @@ void collect_cbt_info(dev_t dev_id, struct blk_snap_cbt_info *cbt_info)
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_info("Cannot open device [%u:%u]\n",
+		pr_err("Cannot open device [%u:%u]\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		return;
 	}
@@ -520,12 +517,12 @@ int tracker_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_r
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_info("Cannot open device [%u:%u]\n",
+		pr_err("Cannot open device [%u:%u]\n",
 			MAJOR(dev_id), MINOR(dev_id));
 		return PTR_ERR(bdev);
 	}
 
-	pr_info("Marking [%d] dirty blocks for device [%u:%u]\n",
+	pr_debug("Marking [%d] dirty blocks for device [%u:%u]\n",
 		count, MAJOR(dev_id), MINOR(dev_id));
 
 	tracker = tracker_get_by_dev(bdev);

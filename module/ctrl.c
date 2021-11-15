@@ -60,7 +60,7 @@ int ctrl_init(void)
 	}
 
 	blk_snap_major = ret;
-	pr_info("Module major [%d]\n", blk_snap_major);
+	pr_info("Register control device [%d:0].\n", blk_snap_major);
 	return 0;
 }
 
@@ -117,7 +117,7 @@ int ioctl_tracker_collect(unsigned long arg)
 	struct blk_snap_tracker_collect karg;
 	struct blk_snap_cbt_info *cbt_info = NULL;
 
-	pr_info("Collecting tracking devices:\n");
+	pr_debug("Collecting tracking devices:\n");
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to collect tracking devices: invalid user buffer\n");
@@ -196,7 +196,7 @@ int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 
 	dirty_blocks_array = kcalloc(karg.count, sizeof(struct blk_snap_block_range), GFP_KERNEL);
 	if (!dirty_blocks_array) {
-		pr_err("Unable to mark dirty %d blocks.\n", karg.count);
+		pr_err("Unable to mark dirty %d blocks\n", karg.count);
 		return -ENOMEM;
 	}
 
@@ -272,7 +272,7 @@ int ioctl_snapshot_append_storage(unsigned long arg)
 	struct big_buffer *ranges = NULL;
 	size_t ranges_buffer_size;
 
-	pr_info("%s", __FUNCTION__);
+	pr_debug("Append difference storage\n");
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to append difference storage: invalid user buffer\n");
@@ -329,7 +329,7 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 	struct blk_snap_snapshot_event *karg;
 	struct event *event;
 
-	pr_info("%s\n", __FUNCTION__);
+	pr_debug("Wait event\n");
 	karg = kzalloc(sizeof(struct blk_snap_snapshot_event), GFP_KERNEL);
 	if (!karg)
 		return -ENOMEM;
@@ -346,13 +346,13 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 		goto out;
 	}
 
-	pr_info("%s received event=%lld code=%d data_size=%d\n", __FUNCTION__,
+	pr_debug("Received event=%lld code=%d data_size=%d\n",
 		event->time, event->code, event->data_size);
 	karg->code = event->code;
 	karg->time_label = event->time;
 
 	if (event->data_size > sizeof(karg->data)) {
-		pr_err("Event size %d is too big. ", event->data_size);
+		pr_err("Event size %d is too big\n", event->data_size);
 		ret = -ENOSPC;
 		/* If we can't copy all the data, we copy only part of it. */
 	}

@@ -150,7 +150,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	unsigned long number;
 	struct chunk *chunk;
 
-	pr_info("Open device [%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
+	pr_debug("Open device [%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
 
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 	if (IS_ERR(bdev)) {
@@ -176,16 +176,16 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);
-	pr_info("Chunk size %llu in bytes\n", 1ULL << diff_area->chunk_shift);
-	pr_info("Chunk count %lu\n", diff_area->chunk_count);
+	pr_debug("Chunk size %llu in bytes\n", 1ULL << diff_area->chunk_shift);
+	pr_debug("Chunk count %lu\n", diff_area->chunk_count);
 
 	kref_init(&diff_area->kref);
 	xa_init(&diff_area->chunk_map);
 
 	if (!diff_storage->capacity) {
 		diff_area->in_memory = true;
-		pr_info("Difference storage is empty.\n") ;
-		pr_info("Only the memory cache will be used to store the snapshots difference.\n") ;
+		pr_debug("Difference storage is empty.\n") ;
+		pr_debug("Only the memory cache will be used to store the snapshots difference.\n") ;
 	}
 
 	spin_lock_init(&diff_area->cache_list_lock);
@@ -203,7 +203,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	for (number = 0; number < diff_area->chunk_count; number++) {
 		chunk = chunk_alloc(diff_area, number);
 		if (!chunk) {
-			pr_err("Failed allocate chunk");
+			pr_err("Failed allocate chunk\n");
 			ret = -ENOMEM;
 			break;
 		}
@@ -211,8 +211,8 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 		ret = xa_insert(&diff_area->chunk_map, number, chunk, GFP_KERNEL);
 		if (ret) {
-			pr_err("Failed insert chunk to chunk map");
-			chunk_free(chunk);//chunk_put(chunk);
+			pr_err("Failed insert chunk to chunk map\n");
+			chunk_free(chunk);
 			break;
 		}
 	}
@@ -429,7 +429,6 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 		if (IS_ERR(chunk))
 			return BLK_STS_IOERR;
 
-		BUG_ON(!chunk->diff_buffer); //DEBUG
 		buff_offset = *pos - chunk_sector(chunk);
 		while(bv_len &&
 		      diff_buffer_iter_get(chunk->diff_buffer, buff_offset, &diff_buffer_iter)) {
@@ -476,7 +475,7 @@ void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 	if (atomic_inc_return(&diff_area->corrupt_flag) != 1)
 		return;
 
-	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d.\n",
+	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d\n",
 	       MAJOR(diff_area->orig_bdev->bd_dev),
 	       MINOR(diff_area->orig_bdev->bd_dev),
 	       abs(err_code));
