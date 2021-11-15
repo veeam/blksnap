@@ -340,3 +340,5 @@ MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
 MODULE_INFO(livepatch, "Y");
+/* Allow to be loaded on OpenSUSE/SLES */
+MODULE_INFO(supported, "external");
