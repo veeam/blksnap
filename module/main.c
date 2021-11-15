@@ -100,3 +100,10 @@ MODULE_DESCRIPTION("Block Layer Snapshot Kernel Module");
 MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
+
+#ifdef HAVE_LP_FILTER
+/*
+ * Allow to be loaded on OpenSUSE/SLES
+ */
+MODULE_INFO(supported, "external");
+#endif
