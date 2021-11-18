@@ -203,10 +203,6 @@ void chunk_free(struct chunk *chunk)
 
 /**
  * chunk_allocate_buffer() - Allocate diff buffer.
- * @chunk:
- * 	?
- * @gfp_mask:
- * 	?
  *
  * Don't forget to lock the chunk for writing before allocating the buffer.
  */
@@ -220,7 +216,7 @@ int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 	buffer_size = chunk->sector_count << SECTOR_SHIFT;
 
 	buf = diff_buffer_new(page_count, buffer_size, gfp_mask);
-	if (!buf) {
+	if (unlikely(!buf)) {
 		pr_err("Failed allocate memory buffer for chunk\n");
 		return -ENOMEM;
 	}
@@ -231,8 +227,6 @@ int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
 
 /**
  * chunk_free_buffer() - Free diff buffer.
- * @chunk:
- * 	?
  *
  * Don't forget to lock the chunk for writing before freeing the buffer.
  */
@@ -267,6 +261,7 @@ void notify_fn(unsigned long error, void *context)
  */
 int chunk_async_store_diff(struct chunk *chunk)
 {
+	int ret;
 	unsigned long sync_error_bits;
 	struct dm_io_region region = {
 		.bdev = chunk->diff_store->bdev,
@@ -285,7 +280,11 @@ int chunk_async_store_diff(struct chunk *chunk)
 	};
 
 	chunk_state_set(chunk, CHUNK_ST_STORING);
-	return dm_io(&reguest, 1, &region, &sync_error_bits);
+	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
+	if (unlikely(ret))
+		pr_err("Cannot start async storing chunk #%ld to diff storage. error=%d\n",
+			chunk->number, abs(ret));
+	return ret;
 }
 
 /**
@@ -294,6 +293,7 @@ int chunk_async_store_diff(struct chunk *chunk)
  */
 int chunk_asunc_load_orig(struct chunk *chunk)
 {
+	int ret;
 	unsigned long sync_error_bits;
 	struct dm_io_region region = {
 		.bdev = chunk->diff_area->orig_bdev,
@@ -312,7 +312,11 @@ int chunk_asunc_load_orig(struct chunk *chunk)
 	};
 
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
-	return dm_io(&reguest, 1, &region, &sync_error_bits);
+	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
+	if (unlikely(ret))
+		pr_err("Cannot start async loading chunk #%ld from original device. error=%d\n",
+			chunk->number, abs(ret));
+	return ret;
 }
 
 /**
@@ -321,6 +325,7 @@ int chunk_asunc_load_orig(struct chunk *chunk)
  */
 int chunk_load_orig(struct chunk *chunk)
 {
+	int ret;
 	unsigned long sync_error_bits = 0;
 	struct dm_io_region region = {
 		.bdev = chunk->diff_area->orig_bdev,
@@ -338,7 +343,11 @@ int chunk_load_orig(struct chunk *chunk)
 		.client = chunk->diff_area->io_client,
 	};
 
-	return dm_io(&reguest, 1, &region, &sync_error_bits);
+	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
+	if (unlikely(ret))
+		pr_err("Cannot load chunk #%ld from original device. error=%d\n",
+			chunk->number, abs(ret));
+	return ret;
 }
 
 /**
@@ -347,6 +356,7 @@ int chunk_load_orig(struct chunk *chunk)
  */
 int chunk_load_diff(struct chunk *chunk)
 {
+	int ret;
 	unsigned long sync_error_bits = 0;
 	struct dm_io_region region = {
 		.bdev = chunk->diff_store->bdev,
@@ -364,5 +374,9 @@ int chunk_load_diff(struct chunk *chunk)
 		.client = chunk->diff_area->io_client,
 	};
 
-	return dm_io(&reguest, 1, &region, &sync_error_bits);
+	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
+	if (unlikely(ret))
+		pr_err("Cannot load chunk #%ld from diff storage. error=%d\n",
+			chunk->number, abs(ret));
+	return ret;
 }

@@ -37,7 +37,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 	event->data_size = data_size;
 	memcpy(event->data, data, data_size);
 
-	pr_debug("Send event=%lld code=%d data_size=%d\n",
+	pr_debug("Generate event: time=%lld code=%d data_size=%d\n",
 		event->time, event->code, event->data_size);
 
 	spin_lock(&event_queue->lock);
@@ -83,7 +83,7 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 		list_del(&event->link);
 		spin_unlock(&event_queue->lock);
 
-		pr_debug("%s received event=%lld code=%d\n", __FUNCTION__, event->time, event->code);
+		pr_debug("Event received: time=%lld code=%d\n", event->time, event->code);
 		return event;
 	}
 	if (ret == 0) {

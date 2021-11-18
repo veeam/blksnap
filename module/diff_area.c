@@ -350,6 +350,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	mutex_lock(&chunk->lock);
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
+		pr_err("Chunk #%ld corrupted\n", chunk->number);
 		ret = -EIO;
 		goto fail_unlock_chunk;
 	}
