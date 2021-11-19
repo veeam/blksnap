@@ -1,5 +1,6 @@
 Name: blk-snap
-BuildRequires: %kernel_module_package_buildreqs
+BuildRequires: modutils
+BuildRequires: kernel-syms
 License: GPL-2.0
 Packager: "#PACKAGE_VENDOR#"
 Vendor: "#PACKAGE_VENDOR#"
@@ -13,7 +14,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-build
 URL: http://github.com/veeam/%{name}
 Requires: kernel-syms modutils
 
-%kernel_module_package -n %{name} -p %{_sourcedir}/%{name}-%{version}-preamble
+%suse_kernel_module_package -n %{name} -p %{_sourcedir}/%{name}-%{version}-preamble
 
 %description
 This kernel module implements snapshot and changed block tracking

@@ -1,24 +1,36 @@
 #!/bin/bash
 
-hash rpmbuild         2>/dev/null || { echo >&2 "The 'rpmbuild' package is required."; exit; }
-hash rpmdev-setuptree 2>/dev/null || { echo >&2 "The 'rpmdevtoos' package is required."; exit; }
-hash rpmdev-bumpspec  2>/dev/null || { echo >&2 "The 'rpmdevtoos' package is required."; exit; }
-
-set -e
-
 NAME="blk-snap"
 #VERSION="1.0.0.0"
 VERSION="$1"
 VENDOR="Veeam Software Group GmbH"
 #VENDOR="$2"
+if [ -z ${VERSION} ]
+then
+	echo >&2 "Version parameters is not set."
+	exit
+fi
+if [ -z ${VENDOR} ]
+then
+	echo >&2 "Vendor parameters is not set."
+	exit
+fi
+
+hash rpmbuild 2>/dev/null || { echo >&2 "The 'rpmbuild' package is required."; exit; }
+
+set -e
 
 PROJECT_DIR=$(pwd)
 cd "../../../"
 
 . ./pkg/build_functions.sh
 
-rpmdev-setuptree
 BUILD_DIR="${HOME}/rpmbuild"
+# rpmdev-setuptree
+for DIR in BUILD BUILDROOT OTHER RPMS SOURCES SPECS SRPMS
+do
+	mkdir -p ${BUILD_DIR}/${DIR}
+done
 
 # prepare module sources
 rm -rf ${BUILD_DIR}/SOURCES/*
@@ -45,14 +57,12 @@ SPECFILE=${BUILD_DIR}/SPECS/${NAME}.spec
 cp ${PROJECT_DIR}/${NAME}.spec ${SPECFILE}
 chmod +w ${SPECFILE}
 sed -i "s/#PACKAGE_VERSION#/${VERSION}/g; s/#PACKAGE_VENDOR#/${VENDOR}/g" ${SPECFILE}
-rpmdev-bumpspec --comment="Build ${VERSION}" --userstring=${USER} ${SPECFILE}
-#echo " " >> ${SPECFILE}
-#echo "* $(date +'%a %b %d %Y') "$(whoami) >> ${SPECFILE}
-#echo "- Build ${PKG_VER}" >> ${SPECFILE}
+echo " " >> ${SPECFILE}
+echo "* $(date +'%a %b %d %Y') "$(whoami) >> ${SPECFILE}
+echo "- Build ${PKG_VER}" >> ${SPECFILE}
 echo "SPECS:"
 ls ${BUILD_DIR}/SPECS
 
-#tar -czf ./SOURCES/${NAME}.tar.gz ${NAME}
 cd ${BUILD_DIR}
 rpmbuild --ba SPECS/${NAME}.spec
 cd ${PROJECT_DIR}
