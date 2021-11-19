@@ -1,19 +1,19 @@
-Name:    blk-snap
-BuildRequires:	%kernel_module_package_buildreqs
+Name: blk-snap
+BuildRequires: %kernel_module_package_buildreqs
 License: GPL-2.0
-Packager: #PACKAGE_VENDOR#
-Vendor: #PACKAGE_VENDOR#
-Group:	System/Kernel
+Packager: "#PACKAGE_VENDOR#"
+Vendor: "#PACKAGE_VENDOR#"
+Group: System/Kernel
 Summary: Block device snapshot (kernel module)
 Version: #PACKAGE_VERSION#
 Release: 2%{?dist}
-Source0:  %{name}
-Source10: %{name}-preamble
-BuildRoot:    %{_tmppath}/%{name}-%{version}-build
+Source0: %{name}-%{version}.tar.gz
+Source10: %{name}-%{version}-preamble
+BuildRoot: %{_tmppath}/%{name}-%{version}-build
 URL: http://github.com/veeam/%{name}
 Requires: kernel-syms modutils
 
-%kernel_module_package -n %{name} -p %{_sourcedir}/%{name}-preamble
+%kernel_module_package -n %{name} -p %{_sourcedir}/%{name}-%{version}-preamble
 
 %description
 This kernel module implements snapshot and changed block tracking
