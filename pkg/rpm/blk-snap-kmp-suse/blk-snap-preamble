@@ -1,0 +1,5 @@
+Requires: kernel-%1
+Provides: %{name} = %version
+Obsoletes: %{name}-kmp-%1 < %version
+Obsoletes: %{name}-kmp < %version
+Obsoletes: %{name} < %version
