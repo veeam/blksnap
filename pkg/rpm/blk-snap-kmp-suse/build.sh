@@ -1,16 +1,19 @@
 #!/bin/bash
 
-NAME="blk-snap"
+. /etc/os-release
+PACKAGE_RELEASE=${ID/-/_}${VERSION_ID/-/_}
+
+PACKAGE_NAME="blk-snap"
 #VERSION="1.0.0.0"
-VERSION="$1"
-VENDOR="Veeam Software Group GmbH"
-#VENDOR="$2"
-if [ -z ${VERSION} ]
+PACKAGE_VERSION="$1"
+PACKAGE_VENDOR="Veeam Software Group GmbH"
+#PACKAGE_VENDOR="$2"
+if [ -z ${PACKAGE_VERSION} ]
 then
 	echo >&2 "Version parameters is not set."
 	exit
 fi
-if [ -z ${VENDOR} ]
+if [ -z ${PACKAGE_VENDOR} ]
 then
 	echo >&2 "Vendor parameters is not set."
 	exit
@@ -35,28 +38,28 @@ done
 # prepare module sources
 rm -rf ${BUILD_DIR}/SOURCES/*
 # copy '-preamble' file
-cp ${PROJECT_DIR}/${NAME}-preamble ${BUILD_DIR}/SOURCES/${NAME}-${VERSION}-preamble
+cp ${PROJECT_DIR}/${PACKAGE_NAME}-preamble ${BUILD_DIR}/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}-preamble
 # generate module sources tarbal
-SRC_DIR=${BUILD_DIR}/SOURCES/${NAME}-${VERSION}/source
+SRC_DIR=${BUILD_DIR}/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}/source
 mkdir -p ${SRC_DIR}
 cp ./module/*.c ${SRC_DIR}/
 cp ./module/*.h ${SRC_DIR}/
 cp ./module/Makefile* ${SRC_DIR}/
-generate_version ${SRC_DIR}/version.h ${VERSION}
+generate_version ${SRC_DIR}/version.h ${PACKAGE_VERSION}
 CURR_DIR=$(pwd)
 cd ${BUILD_DIR}/SOURCES
-tar --format=gnu -zcf ${NAME}-${VERSION}.tar.gz ./${NAME}-${VERSION}
-rm -rf ./${NAME}-${VERSION}
+tar --format=gnu -zcf ${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz ./${PACKAGE_NAME}-${PACKAGE_VERSION}
+rm -rf ./${PACKAGE_NAME}-${PACKAGE_VERSION}
 cd ${CURR_DIR}
 echo "SOURCES:"
 ls ${BUILD_DIR}/SOURCES/
 
 # prepare spec files
 rm -rf ${BUILD_DIR}/SPECS/*
-SPECFILE=${BUILD_DIR}/SPECS/${NAME}.spec
-cp ${PROJECT_DIR}/${NAME}.spec ${SPECFILE}
+SPECFILE=${BUILD_DIR}/SPECS/${PACKAGE_NAME}.spec
+cp ${PROJECT_DIR}/${PACKAGE_NAME}.spec ${SPECFILE}
 chmod +w ${SPECFILE}
-sed -i "s/#PACKAGE_VERSION#/${VERSION}/g; s/#PACKAGE_VENDOR#/${VENDOR}/g" ${SPECFILE}
+sed -i "s/#PACKAGE_VERSION#/${PACKAGE_VERSION}/g; s/#PACKAGE_VENDOR#/${PACKAGE_VENDOR}/g; s/#PACKAGE_RELEASE#/${PACKAGE_RELEASE}/g" ${SPECFILE}
 echo " " >> ${SPECFILE}
 echo "* $(date +'%a %b %d %Y') "$(whoami) >> ${SPECFILE}
 echo "- Build ${PKG_VER}" >> ${SPECFILE}
@@ -64,5 +67,5 @@ echo "SPECS:"
 ls ${BUILD_DIR}/SPECS
 
 cd ${BUILD_DIR}
-rpmbuild --ba SPECS/${NAME}.spec
+rpmbuild --ba SPECS/${PACKAGE_NAME}.spec
 cd ${PROJECT_DIR}

@@ -1,18 +1,17 @@
 Name: blk-snap
-BuildRequires: modutils
-BuildRequires: kernel-syms
+BuildRequires: kernel-syms modutils
 License: GPL-2.0
 Packager: "#PACKAGE_VENDOR#"
 Vendor: "#PACKAGE_VENDOR#"
 Group: System/Kernel
 Summary: Block device snapshot (kernel module)
 Version: #PACKAGE_VERSION#
-Release: 2%{?dist}
+Release: #PACKAGE_RELEASE#
 Source0: %{name}-%{version}.tar.gz
 Source10: %{name}-%{version}-preamble
 BuildRoot: %{_tmppath}/%{name}-%{version}-build
 URL: http://github.com/veeam/%{name}
-Requires: kernel-syms modutils
+Requires: modutils suse-module-tools
 
 %suse_kernel_module_package -n %{name} -p %{_sourcedir}/%{name}-%{version}-preamble
 
