@@ -3,8 +3,8 @@
 #include <linux/types.h>
 #include <linux/uuid.h>
 
-#define BLK_SNAP_MODULE_NAME "blk-snap"
-#define BLK_SNAP_IMAGE_NAME "blk-snap-image"
+#define BLK_SNAP_MODULE_NAME "blksnap"
+#define BLK_SNAP_IMAGE_NAME "blksnap-image"
 #define BLK_SNAP 'V'
 
 enum blk_snap_ioctl {

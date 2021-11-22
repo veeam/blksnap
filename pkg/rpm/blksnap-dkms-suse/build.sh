@@ -18,26 +18,26 @@ rm -rf ${BUILD_DIR}/
 mkdir -p ${BUILD_DIR}/
 
 # copy spec
-cp ${CURR_DIR}/blk-snap.spec ${BUILD_DIR}/
+cp ${CURR_DIR}/blksnap.spec ${BUILD_DIR}/
 
 # prepare content
 CONTENT_DIR="${BUILD_DIR}/content"
 mkdir -p ${CONTENT_DIR}
 
 # prepare module sources
-SRC_DIR=${CONTENT_DIR}/usr/src/blk-snap-${VERSION}
+SRC_DIR=${CONTENT_DIR}/usr/src/blksnap-${VERSION}
 mkdir -p ${SRC_DIR}
 cp ./module/*.c ${SRC_DIR}/
 cp ./module/*.h ${SRC_DIR}/
 cp ./module/Makefile* ${SRC_DIR}/
 generate_version ${SRC_DIR}/version.h ${VERSION}
-cp ./pkg/blk-snap.dkms ${SRC_DIR}/dkms.conf
+cp ./pkg/blksnap.dkms ${SRC_DIR}/dkms.conf
 
 # set package version
 find ${BUILD_DIR} -type f -exec sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' {} +
 
 cd ${BUILD_DIR}
-HOME=${BUILD_DIR} fakeroot rpmbuild -bb --buildroot ${CONTENT_DIR} --nodeps blk-snap.spec
+HOME=${BUILD_DIR} fakeroot rpmbuild -bb --buildroot ${CONTENT_DIR} --nodeps blksnap.spec
 mv ./noarch/* ../
 
 cd ${CURR_DIR}

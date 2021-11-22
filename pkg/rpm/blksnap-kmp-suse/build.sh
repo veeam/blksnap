@@ -3,7 +3,7 @@
 . /etc/os-release
 PACKAGE_RELEASE=${ID/-/_}${VERSION_ID/-/_}
 
-PACKAGE_NAME="blk-snap"
+PACKAGE_NAME="blksnap"
 #VERSION="1.0.0.0"
 PACKAGE_VERSION="$1"
 PACKAGE_VENDOR="Veeam Software Group GmbH"

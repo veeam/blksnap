@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
-# Additions for standalone bdev-filter module
+# Additions for standalone bdevfilter module
 
 EXTRA_CFLAGS += "-DHAVE_LP_FILTER "
-bdev-filter-y += lp_filter.o
-obj-m	 += bdev-filter.o
+bdevfilter-y += lp_filter.o
+obj-m	 += bdevfilter.o

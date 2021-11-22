@@ -1,4 +1,4 @@
-blk-snap (#PACKAGE_VERSION#) stable; urgency=low
+blksnap (#PACKAGE_VERSION#) stable; urgency=low
 
   * Initial Release.
 

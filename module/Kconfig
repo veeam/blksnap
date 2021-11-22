@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 #
-# blk-snap block io layer filter module configuration
+# block io layer filter module configuration
 #
 #
 #select BLK_FILTER

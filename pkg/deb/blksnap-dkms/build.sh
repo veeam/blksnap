@@ -25,8 +25,8 @@ cp module/Makefile* ${BUILD_DIR}/src/
 generate_version ${BUILD_DIR}/src/version.h ${VERSION}
 
 # prepare other package files
-cp -r pkg/deb/blk-snap-dkms/debian ${BUILD_DIR}
-cp pkg/blk-snap.dkms ${BUILD_DIR}/debian/
+cp -r pkg/deb/blksnap-dkms/debian ${BUILD_DIR}
+cp pkg/blksnap.dkms ${BUILD_DIR}/debian/
 chmod 0666 ${BUILD_DIR}/debian/control
 chmod 0766 ${BUILD_DIR}/debian/rules
 find ${BUILD_DIR} -type f -exec sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' {} +

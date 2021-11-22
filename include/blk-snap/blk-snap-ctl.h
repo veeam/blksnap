@@ -2,8 +2,8 @@
 #pragma once
 
 //!! TODO This file is not correct now. It must be the same as module/blk_snap.h
-#define BLK_SNAP_MODULE_NAME "blk-snap"
-#define BLK_SNAP_IMAGE_NAME "blk-snap-image"
+#define BLK_SNAP_MODULE_NAME "blksnap"
+#define BLK_SNAP_IMAGE_NAME "blksnap-image"
 
 #define SUCCESS 0
 

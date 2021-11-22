@@ -1,4 +1,4 @@
-Name: blk-snap
+Name: blksnap
 BuildRequires: kernel-syms modutils
 License: GPL-2.0
 Packager: "#PACKAGE_VENDOR#"

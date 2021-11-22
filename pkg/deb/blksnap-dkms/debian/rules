@@ -17,7 +17,7 @@ VERSION=$(shell dpkg-parsechangelog | grep ^Version:|cut -d ' ' -f 2)
 	dh $@ --with dkms
 
 override_dh_install:
-	dh_install src/* usr/src/blk-snap-$(VERSION)/
+	dh_install src/* usr/src/blksnap-$(VERSION)/
 
 override_dh_dkms:
 	dh_dkms -V $(VERSION)

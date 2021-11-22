@@ -15,11 +15,11 @@ case "$1" in
 
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear|purge)
 
-        if checkModule "blk-snap"
+        if checkModule "blksnap"
         then
-            echo 0 > /sys/kernel/livepatch/blk_snap/enabled || true
+            echo 0 > /sys/kernel/livepatch/blksnap/enabled || true
             sleep 2s
-            rmmod blk-snap || true
+            rmmod blksnap || true
         fi
     ;;
 

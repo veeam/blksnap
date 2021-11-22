@@ -6,17 +6,17 @@
 echo "---"
 echo "Simple test start"
 
-modprobe blk-snap
+modprobe blksnap
 sleep 2s
 
 # check module is ready
 blksnap_version
 
-TESTDIR=/tmp/blk-snap-test
+TESTDIR=/tmp/blksnap-test
 rm -rf ${TESTDIR}
 mkdir -p ${TESTDIR}
 
-MPDIR=/mnt/blk-snap-test
+MPDIR=/mnt/blksnap-test
 rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
@@ -75,27 +75,27 @@ check_files ${MOUNTPOINT_1}
 echo "Check snapshots"
 IMAGE_1=${TESTDIR}/image0
 mkdir -p ${IMAGE_1}
-mount /dev/blk-snap-image0 ${IMAGE_1}
+mount /dev/blksnap-image0 ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Write to snapshot"
 generate_files ${IMAGE_1} "snapshot" 3
 
 drop_cache
-umount /dev/blk-snap-image0
-mount /dev/blk-snap-image0 ${IMAGE_1}
+umount /dev/blksnap-image0
+mount /dev/blksnap-image0 ${IMAGE_1}
 
 check_files ${IMAGE_1}
 
 umount ${IMAGE_1}
 
-#dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=1M
+#dd if=/dev/blksnap-image0 of=${TESTDIR}/image0 bs=1M
 #generate_files ${MOUNTPOINT_1} "after" 3
-#dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=1M
+#dd if=/dev/blksnap-image0 of=${TESTDIR}/image0 bs=1M
 
-#dd if=/dev/blk-snap-image1 of=${TESTDIR}/image1 bs=1M
-#dd if=/dev/blk-snap-image0 of=${TESTDIR}/image0 bs=4096 count=1
-#dd if=/dev/blk-snap-image1 of=${TESTDIR}/image1 bs=4096 count=1
+#dd if=/dev/blksnap-image1 of=${TESTDIR}/image1 bs=1M
+#dd if=/dev/blksnap-image0 of=${TESTDIR}/image0 bs=4096 count=1
+#dd if=/dev/blksnap-image1 of=${TESTDIR}/image1 bs=4096 count=1
 
 blksnap_snapshot_destroy
 
@@ -124,7 +124,7 @@ echo "Tracking device info:"
 blksnap_tracker_collect
 
 echo "Unload module"
-modprobe -r blk-snap
+modprobe -r blksnap
 
 echo "Simple test finish"
 echo "---"

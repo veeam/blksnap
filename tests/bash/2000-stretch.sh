@@ -7,14 +7,14 @@ echo "---"
 echo "Stretch snapshot test"
 
 # diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB dikk_storage portion size
-modprobe blk-snap diff_storage_minimum=262144
+modprobe blksnap diff_storage_minimum=262144
 sleep 2s
 
 # check module is ready
 blksnap_version
 
-TESTDIR=~/blk-snap-test
-MPDIR=/mnt/blk-snap-test
+TESTDIR=~/blksnap-test
+MPDIR=/mnt/blksnap-test
 DIFF_STORAGE=~/diff_storage/
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
@@ -62,7 +62,7 @@ read -n 1
 
 IMAGE_1=${MPDIR}/image0
 mkdir -p ${IMAGE_1}
-mount /dev/blk-snap-image0 ${IMAGE_1}
+mount /dev/blksnap-image0 ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Try to make snapshot overflow."
@@ -88,7 +88,7 @@ loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
 echo "Unload module"
-modprobe -r blk-snap
+modprobe -r blksnap
 
 echo "Stretch snapshot test finish"
 echo "---"

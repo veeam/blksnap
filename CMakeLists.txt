@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(blk-snap)
+project(blk_snap)
 
 set(CMAKE_CXX_STANDARD 14)
 

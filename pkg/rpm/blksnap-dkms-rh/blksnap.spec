@@ -1,4 +1,4 @@
-Name:           blk-snap
+Name:           blksnap
 Version:        #PACKAGE_VERSION#
 Release:        1
 BuildArch:      noarch
@@ -52,7 +52,7 @@ checkModule()
 }
 
 if checkModule %{name} ; then
-  echo 0 > /sys/kernel/livepatch/blk_snap/enabled || true
+  echo 0 > /sys/kernel/livepatch/blksnap/enabled || true
   sleep 2s
   rmmod %{name} 2>/dev/null || true
 fi

@@ -1,4 +1,4 @@
-project(blk-snap-tests)
+project(blksnap-tests)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
 
 find_library(LIBUUID_LIBRARY libuuid.a REQUIRED)

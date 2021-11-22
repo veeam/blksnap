@@ -17,9 +17,9 @@ ORIGINAL_SHA=$(sha1sum "$SRC_MOUNT_DIR/test_file")
 
 #take snapshot
 echo "Take snapshot from $SRC_DEVICE"
-STORE_UUID=$(./blk-snap create-in-memory-store --snap-dev $SRC_DEVICE)
+STORE_UUID=$(./blksnap create-in-memory-store --snap-dev $SRC_DEVICE)
 echo "STORE_UUID: $STORE_UUID"
-SNAP_ID=$(./blk-snap create-snapshot --device $SRC_DEVICE --store $STORE_UUID)
+SNAP_ID=$(./blksnap create-snapshot --device $SRC_DEVICE --store $STORE_UUID)
 echo "SNAP_ID: $SNAP_ID"
 
 mount "/dev/veeamimage0" $DST_MOUNT_DIR

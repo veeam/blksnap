@@ -1,7 +1,7 @@
-# blk-snap
+# blk_snap
 
 * include/ - libs public headers
-* lib/ - lib blk-snap sources
+* lib/ - lib blk_snap sources
 * utils/ - utils for working with snapshot
 * module/ - kernel module sources
 
@@ -34,7 +34,7 @@ sudo make install
 
 
 ## How to build
-Return to blk-snap directory and execute
+Return to blk_snap directory and execute
 ``` bash
 mkdir build
 cd build
