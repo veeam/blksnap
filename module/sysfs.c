@@ -9,9 +9,9 @@
 #include "blk_snap.h"
 
 #ifdef CONFIG_DEBUGLOG
-#undef pr_info
-#define pr_info(fmt, ...) \
-	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#undef pr_debug
+#define pr_debug(fmt, ...) \
+	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 static
