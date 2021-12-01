@@ -53,3 +53,5 @@ EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=64"
 # The minimum allowable size of the difference storage in sectors.
 # When reached, an event is generated about the lack of free space.
 EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM=2097152"
+
+EXTRA_CFLAGS += "-DCONFIG_DEBUGLOG"

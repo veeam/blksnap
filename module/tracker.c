@@ -10,6 +10,12 @@
 #include "cbt_map.h"
 #include "diff_area.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 #ifdef HAVE_LP_FILTER
 #include "lp_filter.h"
 #endif

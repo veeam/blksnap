@@ -8,6 +8,12 @@
 #include "diff_area.h"
 #include "cbt_map.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 #define SNAPIMAGE_MAX_DEVICES 2048
 
 static unsigned int _major = 0;

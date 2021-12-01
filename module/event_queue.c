@@ -4,6 +4,12 @@
 #include <linux/sched.h>
 #include "event_queue.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 void event_queue_init(struct event_queue *event_queue)
 {
 	INIT_LIST_HEAD(&event_queue->list);

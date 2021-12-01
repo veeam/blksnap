@@ -15,6 +15,12 @@
 #include "tracker.h"
 #include "big_buffer.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 static
 int blk_snap_major;
 

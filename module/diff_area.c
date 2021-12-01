@@ -8,6 +8,12 @@
 #include "diff_area.h"
 #include "diff_storage.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 #ifndef HAVE_BDEV_NR_SECTORS
 static inline
 sector_t bdev_nr_sectors(struct block_device *bdev)

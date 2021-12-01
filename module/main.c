@@ -11,6 +11,12 @@
 #include "snapshot.h"
 #include "tracker.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 #ifdef HAVE_LP_FILTER
 #pragma message ("Have livepatch filter")
 #endif

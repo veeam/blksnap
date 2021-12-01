@@ -4,6 +4,12 @@
 #include <linux/uaccess.h>
 #include "big_buffer.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 static inline
 size_t page_count_calc(size_t buffer_size)
 {

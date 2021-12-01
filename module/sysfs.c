@@ -8,6 +8,12 @@
 #include "ctrl.h"
 #include "blk_snap.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 static
 ssize_t major_show(struct class *class, struct class_attribute *attr,char *buf)
 {

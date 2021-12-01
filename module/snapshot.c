@@ -8,6 +8,12 @@
 #include "diff_area.h"
 #include "snapimage.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
 
