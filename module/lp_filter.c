@@ -251,7 +251,7 @@ bool bdev_filters_apply(struct bio *bio)
 }
 
 #ifndef HAVE_SUBMIT_BIO_NOACCT
-#error "Your kernel is too old for "KBUILD_MODNAME"."
+#error "Your kernel is too old for this module."
 #endif
 
 #ifdef CONFIG_X86
