@@ -81,9 +81,11 @@ fail:
 static inline
 void chunk_store_failed(struct chunk *chunk, int error)
 {
+	struct diff_area *diff_area = chunk->diff_area;
+
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
-	diff_area_set_corrupted(chunk->diff_area, error);
 	mutex_unlock(&chunk->lock);
+	diff_area_set_corrupted(diff_area, error);
 };
 
 void chunk_schedule_storing(struct chunk *chunk)
@@ -152,9 +154,12 @@ void chunk_notify_work(struct work_struct *work)
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
 	if (unlikely(chunk->error)) {
-		chunk_state_set(chunk, CHUNK_ST_FAILED);
-		diff_area_set_corrupted(chunk->diff_area, chunk->error);
+		chunk_store_failed(chunk, chunk->error);
+		return;
+	}
 
+	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
+		pr_err("Chunk in a failed state\n");
 		mutex_unlock(&chunk->lock);
 		return;
 	}
@@ -176,6 +181,10 @@ void chunk_notify_work(struct work_struct *work)
 		chunk_schedule_caching(chunk);
 		return;
 	}
+
+	pr_err("Invalid chunk state\n");
+	mutex_unlock(&chunk->lock);
+	return;
 }
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
