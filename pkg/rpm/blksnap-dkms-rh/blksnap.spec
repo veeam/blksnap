@@ -12,8 +12,6 @@ Requires:       dkms
 Requires:       gcc, make, perl
 Requires:       kernel-devel
 Provides:       %{name} = %{version}
-# for compatibility with Veeam Agent for Linux
-Provides:       veeamsnap = %{version}
 Conflicts:      kmod-%{name}
 
 %description
