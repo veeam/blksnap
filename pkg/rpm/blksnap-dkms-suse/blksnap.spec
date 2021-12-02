@@ -11,9 +11,8 @@ AutoReqProv:    no
 Requires:       dkms
 Requires:       gcc, make, perl
 Requires:       kernel-default-devel
-Provides:       %{name}-kmp = %{version}
+Provides:       %{name} = %{version}
 # for compatibility with Veeam Agent for Linux
-Provides:       veeamsnap-kmp = %{version}
 Obsoletes:      %{name}-kmp < %{version}
 Obsoletes:      %{name} < %{version}
 
