@@ -109,6 +109,7 @@ void chunk_schedule_storing(struct chunk *chunk)
 				diff_area_chunk_sectors(diff_area));
 		if (unlikely(IS_ERR(diff_store))) {
 			chunk_store_failed(chunk, PTR_ERR(diff_store));
+			pr_err("Cannot get store for chunk #%ld\n", chunk->number);
 			return;
 		}
 
@@ -199,6 +200,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	mutex_init(&chunk->lock);
 	chunk->diff_area = diff_area;
 	chunk->number = number;
+	atomic_set(&chunk->state, 0);
 
 	chunk->error = 0;
 	INIT_WORK(&chunk->notify_work, chunk_notify_work);
