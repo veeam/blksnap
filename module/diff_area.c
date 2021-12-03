@@ -362,6 +362,12 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk #%ld corrupted\n", chunk->number);
+#ifdef CONFIG_DEBUGLOG
+		pr_err("new_chunk_number=%ld\n", new_chunk_number);
+		pr_err("sector=%llu\n", sector);
+		pr_err("Chunk size %llu in bytes\n", 1ULL << diff_area->chunk_shift);
+		pr_err("Chunk count %lu\n", diff_area->chunk_count);
+#endif
 		ret = -EIO;
 		goto fail_unlock_chunk;
 	}
