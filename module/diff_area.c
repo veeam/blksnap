@@ -521,3 +521,15 @@ void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 
 	diff_area_event_corrupted(diff_area, err_code);
 }
+
+void diff_area_throttling_io(struct diff_area *diff_area)
+{
+	u64 start_waiting;
+
+	start_waiting = jiffies_64;
+	while(atomic_read(&diff_area->pending_io_count)) {
+		schedule_timeout_interruptible(0);
+		if (jiffies_64 > (start_waiting + HZ/10))
+			break;
+	}
+}

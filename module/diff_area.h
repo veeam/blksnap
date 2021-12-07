@@ -152,3 +152,6 @@ void diff_area_image_ctx_init(struct diff_area_image_ctx *io_ctx,
 void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx);
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos);
+
+/**/
+void diff_area_throttling_io(struct diff_area *diff_area);

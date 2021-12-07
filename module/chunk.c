@@ -14,8 +14,6 @@
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-static atomic_t throttling_io_count;
-
 static
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
@@ -280,7 +278,6 @@ void notify_fn(unsigned long error, void *context)
 	chunk->error = error;
 	queue_work(system_wq, &chunk->notify_work);
 	atomic_dec(&chunk->diff_area->pending_io_count);
-	atomic_dec(&throttling_io_count);
 }
 
 /**
@@ -308,13 +305,11 @@ int chunk_async_store_diff(struct chunk *chunk)
 		.client = chunk->diff_area->io_client,
 	};
 
-	atomic_inc(&throttling_io_count);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
 	if (unlikely(ret)) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
-		atomic_dec(&throttling_io_count);
 		pr_err("Cannot start async storing chunk #%ld to diff storage. error=%d\n",
 			chunk->number, abs(ret));
 	}
@@ -345,29 +340,15 @@ int chunk_asunc_load_orig(struct chunk *chunk)
 		.client = chunk->diff_area->io_client,
 	};
 
-	atomic_inc(&throttling_io_count);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
 	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
 	if (unlikely(ret)) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
-		atomic_dec(&throttling_io_count);
 		pr_err("Cannot start async loading chunk #%ld from original device. error=%d\n",
 			chunk->number, abs(ret));
 	}
 	return ret;
-}
-
-void chunk_throttling_io(void )
-{
-	u64 start_waiting;
-
-	start_waiting = jiffies_64;
-	while(atomic_read(&throttling_io_count)) {
-		schedule_timeout_interruptible(0);
-		if (jiffies_64 > (start_waiting + HZ/10))
-			break;
-	}
 }
 
 /**
