@@ -65,7 +65,7 @@ case "$CMD" in
 		;;
 	unload-flt)
 		echo "Unloading ${FILTER_NAME} kernel module"
-		echo 0 > /sys/kernel/livepatch/bdev_filter/enabled
+		echo 0 > /sys/kernel/livepatch/bdevfilter/enabled || true
 		sleep 2s
 		rmmod ${FILTER_NAME}
 		;;

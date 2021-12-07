@@ -2,6 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-chunk: " fmt
 #include <linux/slab.h>
 #include <linux/dm-io.h>
+#include <linux/sched/mm.h>
 #include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
@@ -168,20 +169,27 @@ void chunk_notify_work(struct work_struct *work)
 	}
 
 	if (chunk_state_check(chunk, CHUNK_ST_LOADING)) {
-		chunk_state_unset(chunk, CHUNK_ST_LOADING);
+		unsigned int current_flag;
 
+		chunk_state_unset(chunk, CHUNK_ST_LOADING);
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 
+
+		current_flag = memalloc_noio_save();
 		chunk_schedule_storing(chunk);
+		memalloc_noio_restore(current_flag);
 		return;
 	}
 
 	if (chunk_state_check(chunk, CHUNK_ST_STORING)) {
-		chunk_state_unset(chunk, CHUNK_ST_STORING);
+		unsigned int current_flag;
 
+		chunk_state_unset(chunk, CHUNK_ST_STORING);
 		chunk_state_set(chunk, CHUNK_ST_STORE_READY);
 
+		current_flag = memalloc_noio_save();
 		chunk_schedule_caching(chunk);
+		memalloc_noio_restore(current_flag);
 		return;
 	}
 

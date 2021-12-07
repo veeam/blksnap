@@ -69,6 +69,7 @@ bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	struct tracker *tracker = ctx;
 	sector_t sector;
 	sector_t count;
+	unsigned int current_flag;
 
 	if (!op_is_write(bio_op(bio)))
 		return true;
@@ -79,15 +80,19 @@ bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	sector = bio->bi_iter.bi_sector;
 	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) / SECTOR_SIZE);
 
+	current_flag = memalloc_noio_save();
 	err = cbt_map_set(tracker->cbt_map, sector, count);
+	memalloc_noio_restore(current_flag);
 	if (unlikely(err))
 		return true;
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
 		return true;
 
+	current_flag = memalloc_noio_save();
 	err = diff_area_copy(tracker->diff_area, sector, count,
 			     (bool)(bio->bi_opf & REQ_NOWAIT));
+	memalloc_noio_restore(current_flag);
 	if (likely(!err))
 		return true;
 
