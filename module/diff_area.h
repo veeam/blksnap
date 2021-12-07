@@ -93,6 +93,7 @@ struct diff_area {
 	struct work_struct caching_chunks_work;
 
 	atomic_t corrupt_flag;
+	atomic_t pending_io_count;
 };
 
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage);

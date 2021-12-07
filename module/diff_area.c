@@ -79,8 +79,24 @@ void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 void diff_area_free(struct kref *kref)
 {
 	unsigned long inx;
+	u64 start_waiting;
 	struct chunk *chunk;
 	struct diff_area *diff_area = container_of(kref, struct diff_area, kref);
+
+	inx = 0;
+	start_waiting = jiffies_64;
+	while(atomic_read(&diff_area->pending_io_count)) {
+		schedule_timeout_interruptible(1);
+		if (jiffies_64 > (start_waiting + HZ)) {
+			start_waiting = jiffies_64;
+			inx++;
+			pr_warn("Waiting for pending I/O to complete\n");
+			if (inx > 5) {
+				pr_err("Failed to complete pending I/O\n");
+				break;
+			}
+		}
+	}
 
 	//flush_work(&diff_area->storing_chunks_work);
 	flush_work(&diff_area->caching_chunks_work);
@@ -99,6 +115,8 @@ void diff_area_free(struct kref *kref)
 		blkdev_put(diff_area->orig_bdev, FMODE_READ | FMODE_WRITE);
 		diff_area->orig_bdev = NULL;
 	}
+
+	kfree(diff_area);
 }
 
 static inline
@@ -202,6 +220,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	spin_lock_init(&diff_area->cache_list_lock);
 	INIT_LIST_HEAD(&diff_area->caching_chunks);
 	INIT_WORK(&diff_area->caching_chunks_work, diff_area_caching_chunks_work);
+	atomic_set(&diff_area->pending_io_count, 0);
 
 	/**
 	 * Allocating all chunks in advance allows not to do this in
