@@ -6,6 +6,7 @@
 #include "blk_snap.h"
 #include "snapimage.h"
 #include "diff_area.h"
+#include "chunk.h"
 #include "cbt_map.h"
 
 #ifdef CONFIG_DEBUGLOG
@@ -119,6 +120,7 @@ void snapimage_queue_work(struct kthread_work *work)
 	struct diff_area_image_ctx io_ctx;
 	sector_t pos = blk_rq_pos(rq);
 
+	chunk_throttling_io();
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area, op_is_write(req_op(rq)));
 	rq_for_each_segment(bvec, rq, iter) {
 		status = diff_area_image_io(&io_ctx, &bvec, &pos);
