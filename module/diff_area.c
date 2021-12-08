@@ -164,6 +164,12 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 		if (!chunk)
 			break;
 
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+		pr_debug("Free buffer for chunk #%ld\n", chunk->number);
+		pr_debug("caching_chunks_count=%d. chunk_maximum_in_cache=%d\n",
+			atomic_read(&diff_area->caching_chunks_count),
+			chunk_maximum_in_cache);
+#endif
 		WARN_ON(!mutex_is_locked(&chunk->lock));
 		chunk_free_buffer(chunk);
 		mutex_unlock(&chunk->lock);

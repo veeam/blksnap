@@ -174,11 +174,7 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 			   sector_t sector, sector_t count)
 {
 	struct storage_block *storage_block;
-#ifdef CONFIG_DIFF_STORAGE_DEBUG_LISTS
-	pr_info("Add range to diff storage: [%u:%u] %llu:%llu\n",
-#else
 	pr_debug("Add range to diff storage: [%u:%u] %llu:%llu\n",
-#endif
 		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
 
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
@@ -192,13 +188,13 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 
 	spin_lock(&diff_storage->lock);
 	list_add_tail(&storage_block->link, &diff_storage->empty_blocks);
-#ifdef CONFIG_DIFF_STORAGE_DEBUG_LISTS
+#ifdef CONFIG_DEBUG_DIFF_STORAGE_LISTS
 	atomic_inc(&diff_storage->free_block_count);
 #endif
 	diff_storage->capacity += count;
 	spin_unlock(&diff_storage->lock);
-#ifdef CONFIG_DIFF_STORAGE_DEBUG_LISTS
-	pr_err("free storage blocks %d\n", atomic_read(&diff_storage->free_block_count));
+#ifdef CONFIG_DEBUG_DIFF_STORAGE_LISTS
+	pr_debug("free storage blocks %d\n", atomic_read(&diff_storage->free_block_count));
 #endif
 
 	return 0;
@@ -242,6 +238,13 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	return 0;
 }
 
+/**
+ *
+ * !!! TODO redesign needed !!!
+ * It is too expensive to allocate such a small portion of data separately.
+ * Remove the allocation. Explicitly add to the piece.
+ *
+ */
 struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sector_t count)
 {
 	int ret = 0;
@@ -276,7 +279,7 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		}
 		list_del(&storage_block->link);
 		list_add_tail(&storage_block->link, &diff_storage->filled_blocks);
-#ifdef CONFIG_DIFF_STORAGE_DEBUG_LISTS
+#ifdef CONFIG_DEBUG_DIFF_STORAGE_LISTS
 		atomic_dec(&diff_storage->free_block_count);
 		atomic_inc(&diff_storage->user_block_count);
 #endif
@@ -292,9 +295,9 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	sectors_left = diff_storage->requested - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
 
-#ifdef CONFIG_DIFF_STORAGE_DEBUG_LISTS
-	pr_err("free storage blocks %d\n", atomic_read(&diff_storage->free_block_count));
-	pr_err("user storage blocks %d\n", atomic_read(&diff_storage->user_block_count));
+#ifdef CONFIG_DEBUG_DIFF_STORAGE_LISTS
+	pr_debug("free storage blocks %d\n", atomic_read(&diff_storage->free_block_count));
+	pr_debug("user storage blocks %d\n", atomic_read(&diff_storage->user_block_count));
 #endif
 
 	if (ret) {

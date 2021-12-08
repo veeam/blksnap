@@ -6,6 +6,7 @@
 #include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
+#include "diff_buffer.h"
 #include "diff_storage.h"
 
 #ifdef CONFIG_DEBUGLOG
@@ -14,22 +15,29 @@
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+static atomic_t diff_buffer_allocated_counter;
+#endif
+
 static
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
-	struct page_list *curr_page;
+	size_t inx = 0;
+	struct page *page;
 
 	if (unlikely(!diff_buffer))
 		return;
 
-	curr_page = diff_buffer->pages;
-	while(curr_page) {
-		if (curr_page->page)
-			__free_page(curr_page->page);
-
-		curr_page = curr_page->next;
+	for (inx = 0; inx < diff_buffer->page_count; inx++) {
+		page = diff_buffer->pages[inx].page;
+		if (page)
+			__free_page(page);
 	}
+
 	kfree(diff_buffer);
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	atomic_dec(&diff_buffer_allocated_counter);
+#endif
 }
 
 static
@@ -37,9 +45,7 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 				    gfp_t gfp_mask)
 {
 	struct diff_buffer *diff_buffer;
-	size_t inx;
-	struct page_list *prev_page;
-	struct page_list *curr_page;
+	size_t inx = 0;
 	struct page *page;
 
 	if (unlikely(page_count <= 0))
@@ -51,6 +57,7 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		return NULL;
 
 	diff_buffer->size = buffer_size;
+	diff_buffer->page_count = page_count;
 
 	/* Allocate first page */
 	page = alloc_page(gfp_mask);
@@ -58,7 +65,6 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		goto fail;
 
 	diff_buffer->pages[0].page = page;
-	prev_page = diff_buffer->pages;
 
 	/* Allocate all other pages and make list link */
 	for (inx = 1; inx < page_count; inx++) {
@@ -66,13 +72,17 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		if (!page)
 			goto fail;
 
-		curr_page = prev_page + 1;
-		curr_page->page = page;
+		diff_buffer->pages[inx].page = page;
+		diff_buffer->pages[inx - 1].next = &diff_buffer->pages[inx];
 
-		prev_page->next = curr_page;
-		prev_page = curr_page;
 	}
+	diff_buffer->pages[inx].next = NULL;
 
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	if (atomic_inc_return(&diff_buffer_allocated_counter) > chunk_maximum_in_cache)
+		pr_debug("Too many chunks has buffer. Allocated %d buffers\n",
+			atomic_read(&diff_buffer_allocated_counter));
+#endif
 	return diff_buffer;
 fail:
 	diff_buffer_free(diff_buffer);
@@ -130,6 +140,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
+	pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->cache_list_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
 		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
@@ -143,8 +154,15 @@ void chunk_schedule_caching(struct chunk *chunk)
 	mutex_unlock(&chunk->lock);
 
 	// Initiate the cache clearing process.
-	if (need_to_cleanup)
+	if (need_to_cleanup) {
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+		pr_debug("Need to cleanup cache. caching_chunks_count=%d. chunk_maximum_in_cache=%d. Total chunks in cache #%d\n",
+			atomic_read(&diff_area->caching_chunks_count),
+			chunk_maximum_in_cache,
+			atomic_read(&diff_buffer_allocated_counter));
+#endif
 		queue_work(system_wq, &diff_area->caching_chunks_work);
+	}
 }
 
 static

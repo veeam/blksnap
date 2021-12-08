@@ -21,7 +21,9 @@ struct diff_store;
  * Describes the memory buffer for chunk in memory.
  */
 struct diff_buffer {
+        //struct list_head link;
 	size_t size;
+        size_t page_count;
 	struct page_list pages[0];
 };
 

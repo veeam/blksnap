@@ -66,7 +66,7 @@ struct diff_storage
 	atomic_t overflow_flag;
 
 	struct event_queue event_queue;
-#ifdef CONFIG_DIFF_STORAGE_DEBUG_LISTS
+#ifdef CONFIG_DEBUG_DIFF_STORAGE_LISTS
 	atomic_t free_block_count;
 	atomic_t user_block_count;
 #endif
