@@ -164,8 +164,10 @@ struct diff_buffer *diff_area_take_buffer(struct diff_area *diff_area, gfp_t gfp
 
 	spin_lock(&diff_area->free_diff_buffers_lock);
 	diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
-	if (diff_buffer)
+	if (diff_buffer) {
 		list_del(&diff_buffer->link);
+		atomic_dec(&diff_area->free_diff_buffers_count);
+	}
 	spin_unlock(&diff_area->free_diff_buffers_lock);
 
 	/* Return free buffer if it was found in a pool */
@@ -193,8 +195,13 @@ void diff_area_release_buffer(struct diff_area *diff_area, struct diff_buffer *d
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
 	pr_debug("Release buffer");
 #endif
+	if (atomic_read(&diff_area->free_diff_buffers_count) > free_diff_buffer_pool_size) {
+		diff_buffer_free(diff_buffer);
+		return;
+	}
 	spin_lock(&diff_area->free_diff_buffers_lock);
 	list_add_tail(&diff_buffer->link, &diff_area->free_diff_buffers);
+	atomic_inc(&diff_area->free_diff_buffers_count);
 	spin_unlock(&diff_area->free_diff_buffers_lock);
 }
 
@@ -248,8 +255,10 @@ void diff_area_free(struct kref *kref)
 	do {
 		spin_lock(&diff_area->free_diff_buffers_lock);
 		diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
-		if (diff_buffer)
+		if (diff_buffer) {
 			list_del(&diff_buffer->link);
+			atomic_dec(&diff_area->free_diff_buffers_count);
+		}
 		spin_unlock(&diff_area->free_diff_buffers_lock);
 
 		if (diff_buffer)

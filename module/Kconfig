@@ -63,6 +63,17 @@ config BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE
 	  increases, memory consumption also increases.
 	  The minimum recommended value is four.
 
+config BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE
+	depends on BLK_SNAP
+	int "The maximum size of the free buffers pool"
+	default 128
+	help
+	  A buffer can be allocated for each chunk. After use, this buffer is
+	  not released immediately, but is sent to the pool of free buffers.
+	  However, if there are too many free buffers in the pool, they are
+	  released immediately. The maximum size of the pool is regulated by
+	  this define.
+
 config BLK_SNAP_DIFF_STORAGE_MINIMUM
 	depends on BLK_SNAP
 	int "The minimum allowable size of the difference storage in sectors"

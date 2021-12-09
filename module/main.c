@@ -81,6 +81,7 @@ int tracking_block_maximum_count = CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT;
 int chunk_minimum_shift = CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT;
 int chunk_maximum_count = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT;
 int chunk_maximum_in_cache = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE;
+int free_diff_buffer_pool_size = CONFIG_BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE;
 int diff_storage_minimum = CONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM;
 
 module_param_named(tracking_block_minimum_shift, tracking_block_minimum_shift, int, 0644);
@@ -98,6 +99,9 @@ MODULE_PARM_DESC(chunk_maximum_count,
 module_param_named(chunk_maximum_in_cache, chunk_maximum_in_cache, int, 0644);
 MODULE_PARM_DESC(chunk_maximum_in_cache,
 		 "The limit of the maximum chunks in memory cache");
+module_param_named(free_diff_buffer_pool_size, free_diff_buffer_pool_size, int, 0644);
+MODULE_PARM_DESC(free_diff_buffer_pool_size,
+		 "The maximum size of the free buffers pool");
 module_param_named(diff_storage_minimum, diff_storage_minimum, int, 0644);
 MODULE_PARM_DESC(diff_storage_minimum,
 		 "The minimum allowable size of the difference storage in sectors");

@@ -6,7 +6,6 @@
 #include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
-#include "diff_buffer.h"
 #include "diff_storage.h"
 
 #ifdef CONFIG_DEBUGLOG

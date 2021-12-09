@@ -155,6 +155,7 @@ struct diff_area {
 
         spinlock_t free_diff_buffers_lock;
         struct list_head free_diff_buffers;
+        atomic_t free_diff_buffers_count;
 
 	atomic_t corrupt_flag;
 	atomic_t pending_io_count;
