@@ -604,11 +604,11 @@ public:
             std::cout << "time=" << param.time_label << std::endl;
 
             switch (param.code) {
-            case blk_snap_event_low_free_space:
+            case blk_snap_event_code_low_free_space:
                 std::cout << "event=low_free_space" << std::endl;
                 std::cout << "requested_nr_sect=" << *(__u64*)(param.data) << std::endl;
                 break;
-            case blk_snap_event_corrupted:
+            case blk_snap_event_code_corrupted:
                 std::cout << "event=corrupted" << std::endl;
                 break;
             default:
@@ -817,10 +817,10 @@ public:
                 }
 
                 switch (param.code) {
-                case blk_snap_event_low_free_space:
+                case blk_snap_event_code_low_free_space:
                     ProcessLowFreeSpace(param.time_label, (struct blk_snap_event_low_free_space *)param.data);
                     break;
-                case blk_snap_event_corrupted:
+                case blk_snap_event_code_corrupted:
                     ProcessEventCorrupted(param.time_label, (struct blk_snap_event_corrupted *)param.data);
                     terminate = true;
                     break;
