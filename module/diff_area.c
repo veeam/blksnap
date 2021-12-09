@@ -14,6 +14,10 @@
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+static atomic_t diff_buffer_allocated_counter;
+#endif
+
 #ifndef HAVE_BDEV_NR_SECTORS
 static inline
 sector_t bdev_nr_sectors(struct block_device *bdev)
@@ -76,11 +80,130 @@ void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 		MINOR(diff_area->orig_bdev->bd_dev));
 }
 
+
+static
+void diff_buffer_free(struct diff_buffer *diff_buffer)
+{
+	size_t inx = 0;
+	struct page *page;
+
+	if (unlikely(!diff_buffer))
+		return;
+
+	for (inx = 0; inx < diff_buffer->page_count; inx++) {
+		page = diff_buffer->pages[inx].page;
+		if (page)
+			__free_page(page);
+	}
+
+	kfree(diff_buffer);
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	pr_debug("Free buffer #%d \n",
+		atomic_read(&diff_buffer_allocated_counter));
+	atomic_dec(&diff_buffer_allocated_counter);
+#endif
+}
+
+static
+struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
+				    gfp_t gfp_mask)
+{
+	struct diff_buffer *diff_buffer;
+	size_t inx = 0;
+	struct page *page;
+
+	if (unlikely(page_count <= 0))
+		return NULL;
+
+	diff_buffer = kzalloc(sizeof(struct diff_buffer) + page_count * sizeof(struct page_list),
+			      gfp_mask);
+	if (!diff_buffer)
+		return NULL;
+
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	atomic_inc(&diff_buffer_allocated_counter);
+	pr_debug("Allocate buffer #%d \n",
+		atomic_read(&diff_buffer_allocated_counter));
+#endif
+	INIT_LIST_HEAD(&diff_buffer->link);
+	diff_buffer->size = buffer_size;
+	diff_buffer->page_count = page_count;
+
+	/* Allocate first page */
+	page = alloc_page(gfp_mask);
+	if (!page)
+		goto fail;
+
+	diff_buffer->pages[0].page = page;
+
+	/* Allocate all other pages and make list link */
+	for (inx = 1; inx < page_count; inx++) {
+		page = alloc_page(gfp_mask);
+		if (!page)
+			goto fail;
+
+		diff_buffer->pages[inx].page = page;
+		diff_buffer->pages[inx - 1].next = &diff_buffer->pages[inx];
+
+	}
+	diff_buffer->pages[inx].next = NULL;
+
+	return diff_buffer;
+fail:
+	diff_buffer_free(diff_buffer);
+	return NULL;
+}
+
+static
+struct diff_buffer *diff_area_take_buffer(struct diff_area *diff_area, gfp_t gfp_mask)
+{
+	struct diff_buffer *diff_buffer = NULL;
+	sector_t chunk_sectors;
+	size_t page_count;
+	size_t buffer_size;
+
+	spin_lock(&diff_area->free_diff_buffers_lock);
+	diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
+	if (diff_buffer)
+		list_del(&diff_buffer->link);
+	spin_unlock(&diff_area->free_diff_buffers_lock);
+
+	/* Return free buffer if it was found in a pool */
+	if (diff_buffer) {
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	pr_debug("Took buffer from pool");
+#endif
+		return diff_buffer;
+	}
+
+	/* Allocate new buffer */
+	chunk_sectors = diff_area_chunk_sectors(diff_area);
+	page_count = round_up(chunk_sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
+	buffer_size = chunk_sectors << SECTOR_SHIFT;
+
+	diff_buffer = diff_buffer_new(page_count, buffer_size, gfp_mask);
+	if (unlikely(!diff_buffer))
+		return ERR_PTR(-ENOMEM);
+
+	return diff_buffer;
+}
+
+void diff_area_release_buffer(struct diff_area *diff_area, struct diff_buffer *diff_buffer)
+{
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	pr_debug("Release buffer");
+#endif
+	spin_lock(&diff_area->free_diff_buffers_lock);
+	list_add_tail(&diff_buffer->link, &diff_area->free_diff_buffers);
+	spin_unlock(&diff_area->free_diff_buffers_lock);
+}
+
 void diff_area_free(struct kref *kref)
 {
 	unsigned long inx;
 	u64 start_waiting;
 	struct chunk *chunk;
+	struct diff_buffer *diff_buffer = NULL;
 	struct diff_area *diff_area = container_of(kref, struct diff_area, kref);
 
 	inx = 0;
@@ -102,8 +225,9 @@ void diff_area_free(struct kref *kref)
 	flush_work(&diff_area->caching_chunks_work);
 	//flush_work(&diff_area->corrupt_work);
 
-	xa_for_each(&diff_area->chunk_map, inx, chunk)
-		chunk_free(chunk);//chunk_put(chunk);
+	xa_for_each(&diff_area->chunk_map, inx, chunk) {
+		chunk_free(chunk);
+	}
 	xa_destroy(&diff_area->chunk_map);
 
 	if (diff_area->io_client) {
@@ -116,6 +240,26 @@ void diff_area_free(struct kref *kref)
 		diff_area->orig_bdev = NULL;
 	}
 
+	/* Cleanup free_diff_buffers */
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	pr_debug("Cleanup %d buffers\n",
+		atomic_read(&diff_buffer_allocated_counter));
+#endif
+	do {
+		spin_lock(&diff_area->free_diff_buffers_lock);
+		diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
+		if (diff_buffer)
+			list_del(&diff_buffer->link);
+		spin_unlock(&diff_area->free_diff_buffers_lock);
+
+		if (diff_buffer)
+			diff_buffer_free(diff_buffer);
+	} while(diff_buffer);
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	if (atomic_read(&diff_buffer_allocated_counter))
+		pr_debug("Some buffers %d still available\n",
+			atomic_read(&diff_buffer_allocated_counter));
+#endif
 	kfree(diff_area);
 }
 
@@ -130,7 +274,9 @@ struct chunk *chunk_get_from_cache_and_write_lock(struct diff_area *diff_area)
 {
 	struct chunk *iter;
 	struct chunk *chunk = NULL;
-
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	int locked_mutex_counter = 0;
+#endif
 	spin_lock(&diff_area->cache_list_lock);
 	list_for_each_entry(iter, &diff_area->caching_chunks, cache_link) {
 		if (mutex_trylock(&iter->lock)) {
@@ -142,6 +288,9 @@ struct chunk *chunk_get_from_cache_and_write_lock(struct diff_area *diff_area)
 		 * then it is currently in use and we try to cleanup
 		 * next chunk.
 		 */
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+		locked_mutex_counter++;
+#endif
 	}
 	if (likely(chunk)) {
 		list_del(&chunk->cache_link);
@@ -149,7 +298,10 @@ struct chunk *chunk_get_from_cache_and_write_lock(struct diff_area *diff_area)
 		atomic_dec(&diff_area->caching_chunks_count);
 	}
 	spin_unlock(&diff_area->cache_list_lock);
-
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	if (locked_mutex_counter)
+		pr_debug("Found %d locked chunk\n", locked_mutex_counter);
+#endif
 	return chunk;
 }
 
@@ -161,17 +313,23 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 
 	while (too_many_chunks_in_cache(diff_area)) {
 		chunk = chunk_get_from_cache_and_write_lock(diff_area);
-		if (!chunk)
+		if (!chunk) {
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+			pr_debug("Cannot get unlocked chunk\n");
+#endif
 			break;
+		}
 
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
-		pr_debug("Free buffer for chunk #%ld\n", chunk->number);
-		pr_debug("caching_chunks_count=%d. chunk_maximum_in_cache=%d\n",
-			atomic_read(&diff_area->caching_chunks_count),
-			chunk_maximum_in_cache);
+//		pr_debug("Free buffer for chunk #%ld\n", chunk->number);
+//		pr_debug("caching_chunks_count=%d. chunk_maximum_in_cache=%d\n",
+//			atomic_read(&diff_area->caching_chunks_count),
+//			chunk_maximum_in_cache);
 #endif
 		WARN_ON(!mutex_is_locked(&chunk->lock));
-		chunk_free_buffer(chunk);
+		diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
+		chunk->diff_buffer = NULL;
+		chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 		mutex_unlock(&chunk->lock);
 	}
 }
@@ -228,6 +386,9 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	INIT_WORK(&diff_area->caching_chunks_work, diff_area_caching_chunks_work);
 	atomic_set(&diff_area->pending_io_count, 0);
 
+        spin_lock_init(&diff_area->free_diff_buffers_lock);
+        INIT_LIST_HEAD(&diff_area->free_diff_buffers);
+
 	/**
 	 * Allocating all chunks in advance allows not to do this in
 	 * the process of filtering bio.
@@ -275,6 +436,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 	int ret = 0;
 	sector_t offset;
 	struct chunk *chunk;
+	struct diff_buffer *diff_buffer;
 	sector_t area_sect_first;
 	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
 
@@ -318,16 +480,19 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 
 		if (is_nowait) {
-			ret = chunk_allocate_buffer(chunk, GFP_NOIO | GFP_NOWAIT);
-			if (ret) {
+			diff_buffer = diff_area_take_buffer(chunk->diff_area, GFP_NOIO | GFP_NOWAIT);
+			if (IS_ERR(diff_buffer)) {
 				ret = -EAGAIN;
 				goto fail_unlock_chunk;
 			}
 		} else {
-			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
-			if (unlikely(ret))
+			diff_buffer = diff_area_take_buffer(chunk->diff_area, GFP_NOIO);
+			if (IS_ERR(diff_buffer)) {
+				ret = PTR_ERR(diff_buffer);
 				goto fail_unlock_chunk;
+			}
 		}
+		chunk->diff_buffer = diff_buffer;
 
 		ret = chunk_asunc_load_orig(chunk);
 		if (unlikely(ret))
@@ -404,9 +569,14 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 		if (!chunk->diff_buffer) {
-			ret = chunk_allocate_buffer(chunk, GFP_NOIO);
-			if (unlikely(ret))
+			struct diff_buffer *diff_buffer;
+
+			diff_buffer = diff_area_take_buffer(diff_area, GFP_NOIO);
+			if (IS_ERR(diff_buffer)) {
+				ret = PTR_ERR(diff_buffer);
 				goto fail_unlock_chunk;
+			}
+			chunk->diff_buffer = diff_buffer;
 		}
 
 		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))

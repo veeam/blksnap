@@ -9,66 +9,6 @@
 struct diff_area;
 struct diff_store;
 
-/**
- * struct diff_buffer - Difference buffer.
- *
- * @size:
- *	Number of bytes in byffer.
- * @pages:
- * 	An array and at the same time a singly linked list of pages.
- * 	It is convenient to use with dm-io.
- *
- * Describes the memory buffer for chunk in memory.
- */
-struct diff_buffer {
-        //struct list_head link;
-	size_t size;
-        size_t page_count;
-	struct page_list pages[0];
-};
-
-/**
- * struct diff_buffer_iter - Iterator for &struct diff_buffer
- * @page:
- * 	A pointer to the current page.
- * @offset:
- * 	The offset in bytes in the current page.
- * @bytes:
- * 	The number of bytes that can be read or written from this page.
- *
- * It is convenient to use when copying data from or to &struct bio_vec.
- */
-struct diff_buffer_iter {
-	struct page *page;
-	size_t offset;
-	size_t bytes;
-};
-
-#define SECTOR_IN_PAGE (1 << (PAGE_SHIFT - SECTOR_SHIFT))
-
-static inline
-bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct diff_buffer_iter *iter)
-{
-	size_t page_inx;
-
-	if (diff_buffer->size <= (ofs << SECTOR_SHIFT))
-		return false;
-
-	page_inx = ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
-
-	iter->page = diff_buffer->pages[page_inx].page;
-	iter->offset = (size_t)(ofs & (SECTOR_IN_PAGE - 1)) << SECTOR_SHIFT;
-	/*
-	 * The size cannot exceed the size of the page, taking into account
-	 * the offset in this page.
-	 * But at the same time it is unacceptable to go beyond the allocated
-	 * buffer.
-	 */
-	iter->bytes = min_t(size_t, (PAGE_SIZE - iter->offset), (diff_buffer->size - (ofs << SECTOR_SHIFT)));
-
-	return true;
-};
-
 enum {
 	CHUNK_ST_FAILED,	/* An error occurred while processing the chunks data */
 	CHUNK_ST_DIRTY,		/* The data on the original device and the snapshot image differ in this chunk */
@@ -151,9 +91,6 @@ bool chunk_state_check(struct chunk* chunk, int st)
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
 void chunk_free(struct chunk *chunk);
-
-int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask);
-void chunk_free_buffer(struct chunk *chunk);
 
 void chunk_schedule_storing(struct chunk *chunk);
 void chunk_schedule_caching(struct chunk *chunk);

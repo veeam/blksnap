@@ -15,80 +15,6 @@
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-static atomic_t diff_buffer_allocated_counter;
-#endif
-
-static
-void diff_buffer_free(struct diff_buffer *diff_buffer)
-{
-	size_t inx = 0;
-	struct page *page;
-
-	if (unlikely(!diff_buffer))
-		return;
-
-	for (inx = 0; inx < diff_buffer->page_count; inx++) {
-		page = diff_buffer->pages[inx].page;
-		if (page)
-			__free_page(page);
-	}
-
-	kfree(diff_buffer);
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	atomic_dec(&diff_buffer_allocated_counter);
-#endif
-}
-
-static
-struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-				    gfp_t gfp_mask)
-{
-	struct diff_buffer *diff_buffer;
-	size_t inx = 0;
-	struct page *page;
-
-	if (unlikely(page_count <= 0))
-		return NULL;
-
-	diff_buffer = kzalloc(sizeof(struct diff_buffer) + page_count * sizeof(struct page_list),
-			      gfp_mask);
-	if (!diff_buffer)
-		return NULL;
-
-	diff_buffer->size = buffer_size;
-	diff_buffer->page_count = page_count;
-
-	/* Allocate first page */
-	page = alloc_page(gfp_mask);
-	if (!page)
-		goto fail;
-
-	diff_buffer->pages[0].page = page;
-
-	/* Allocate all other pages and make list link */
-	for (inx = 1; inx < page_count; inx++) {
-		page = alloc_page(gfp_mask);
-		if (!page)
-			goto fail;
-
-		diff_buffer->pages[inx].page = page;
-		diff_buffer->pages[inx - 1].next = &diff_buffer->pages[inx];
-
-	}
-	diff_buffer->pages[inx].next = NULL;
-
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	if (atomic_inc_return(&diff_buffer_allocated_counter) > chunk_maximum_in_cache)
-		pr_debug("Too many chunks has buffer. Allocated %d buffers\n",
-			atomic_read(&diff_buffer_allocated_counter));
-#endif
-	return diff_buffer;
-fail:
-	diff_buffer_free(diff_buffer);
-	return NULL;
-}
-
 static inline
 void chunk_store_failed(struct chunk *chunk, int error)
 {
@@ -140,7 +66,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
-	pr_debug("Add chunk #%ld to cache\n", chunk->number);
+//	pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->cache_list_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
 		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
@@ -156,10 +82,9 @@ void chunk_schedule_caching(struct chunk *chunk)
 	// Initiate the cache clearing process.
 	if (need_to_cleanup) {
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
-		pr_debug("Need to cleanup cache. caching_chunks_count=%d. chunk_maximum_in_cache=%d. Total chunks in cache #%d\n",
-			atomic_read(&diff_area->caching_chunks_count),
-			chunk_maximum_in_cache,
-			atomic_read(&diff_buffer_allocated_counter));
+//		pr_debug("Need to cleanup cache: caching_chunks_count=%d, chunk_maximum_in_cache=%d\n",
+//			atomic_read(&diff_area->caching_chunks_count),
+//			chunk_maximum_in_cache);
 #endif
 		queue_work(system_wq, &diff_area->caching_chunks_work);
 	}
@@ -238,46 +163,20 @@ void chunk_free(struct chunk *chunk)
 {
 	if (unlikely(!chunk))
 		return;
-
-	diff_buffer_free(chunk->diff_buffer);
-	kfree(chunk->diff_store);
-	kfree(chunk);
-}
-
-/**
- * chunk_allocate_buffer() - Allocate diff buffer.
- *
- * Don't forget to lock the chunk for writing before allocating the buffer.
- */
-int chunk_allocate_buffer(struct chunk *chunk, gfp_t gfp_mask)
-{
-	struct diff_buffer *buf;
-	size_t page_count;
-	size_t buffer_size;
-
-	page_count = round_up(chunk->sector_count, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
-	buffer_size = chunk->sector_count << SECTOR_SHIFT;
-
-	buf = diff_buffer_new(page_count, buffer_size, gfp_mask);
-	if (unlikely(!buf)) {
-		pr_err("Failed allocate memory buffer for chunk\n");
-		return -ENOMEM;
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+	if (mutex_is_locked(&chunk->lock))
+		pr_debug("Chunk %ld locked", chunk->number);
+#endif
+	mutex_lock(&chunk->lock);
+	if (chunk->diff_buffer) {
+		diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
+		chunk->diff_buffer = NULL;
 	}
-	chunk->diff_buffer = buf;
+	kfree(chunk->diff_store);
+	chunk_state_set(chunk, CHUNK_ST_FAILED);
+	mutex_unlock(&chunk->lock);
 
-	return 0;
-}
-
-/**
- * chunk_free_buffer() - Free diff buffer.
- *
- * Don't forget to lock the chunk for writing before freeing the buffer.
- */
-void chunk_free_buffer(struct chunk *chunk)
-{
-	diff_buffer_free(chunk->diff_buffer);
-	chunk->diff_buffer = NULL;
-	chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
+	kfree(chunk);
 }
 
 static inline
