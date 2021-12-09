@@ -21,6 +21,11 @@ void chunk_store_failed(struct chunk *chunk, int error)
 	struct diff_area *diff_area = chunk->diff_area;
 
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
+	if (chunk->diff_buffer) {
+		diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
+		chunk->diff_buffer = NULL;
+	}
+	kfree(chunk->diff_store);
 	mutex_unlock(&chunk->lock);
 	diff_area_set_corrupted(diff_area, error);
 };
