@@ -192,6 +192,9 @@ struct diff_buffer *diff_area_take_buffer(struct diff_area *diff_area, gfp_t gfp
 
 void diff_area_release_buffer(struct diff_area *diff_area, struct diff_buffer *diff_buffer)
 {
+	if (unlikely(!diff_buffer))
+		return;
+
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
 	pr_debug("Release buffer");
 #endif
@@ -336,8 +339,10 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 //			chunk_maximum_in_cache);
 #endif
 		WARN_ON(!mutex_is_locked(&chunk->lock));
-		diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
-		chunk->diff_buffer = NULL;
+		if (chunk->diff_buffer) {
+			diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
+			chunk->diff_buffer = NULL;
+		}
 		chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 		mutex_unlock(&chunk->lock);
 	}
