@@ -17,18 +17,32 @@ void notify_fn(unsigned long error, void *context)
 	atomic_dec(&chunk->diff_area->pending_io_count);
 }
 
-// static it's should be nonstatic
-void chunk_endio(struct bio *bio)
-{
 
-
-}
 static
 void diff_io_notify_cb(struct work_struct *work)
 {
 
 }
 
+// static it's should be nonstatic
+void diff_io_endio(struct bio *bio)
+{
+	struct diff_io *diff_io = bio->bi_private;
+
+	cant_sleep();
+	if (bio->bi_status != BLK_STS_OK)
+		diff_io->error = -EIO;
+
+	if (atomic_dec_and_test(&diff_io->endio_count) == 0) {
+
+		if (diff_io->is_sync_io) {
+			completion(&diff_io->notify.sync.completion);
+		} else {
+			queue_work(system_wq, &diff_io->notify.async.work);
+		}
+	}
+
+}
 
 static inline
 void diff_io_init(struct diff_io *diff_io, bool is_write)

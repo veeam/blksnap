@@ -63,7 +63,7 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 }
 
 #ifdef HAVE_LP_FILTER
-void diff_area_endio(struct bio *bio);
+void diff_io_endio(struct bio *bio);
 #endif
 
 static
@@ -83,7 +83,7 @@ bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	 * But for the standalone version of the module, we can only use the
 	 * context of bio.
 	 */
-	if (bio->bi_end_io == diff_area_endio)
+	if (bio->bi_end_io == diff_io_endio)
 		return true;
 #endif
 	if (!op_is_write(bio_op(bio)))
