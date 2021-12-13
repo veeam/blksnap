@@ -7,6 +7,7 @@
 #include "chunk.h"
 #include "diff_area.h"
 #include "diff_storage.h"
+#include "diff_io.h"
 
 #ifdef CONFIG_DEBUGLOG
 #undef pr_debug
@@ -81,132 +82,6 @@ void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 }
 
 
-static
-void diff_buffer_free(struct diff_buffer *diff_buffer)
-{
-	size_t inx = 0;
-	struct page *page;
-
-	if (unlikely(!diff_buffer))
-		return;
-
-	for (inx = 0; inx < diff_buffer->page_count; inx++) {
-		page = diff_buffer->pages[inx].page;
-		if (page)
-			__free_page(page);
-	}
-
-	kfree(diff_buffer);
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	pr_debug("Free buffer #%d \n",
-		atomic_read(&diff_buffer_allocated_counter));
-	atomic_dec(&diff_buffer_allocated_counter);
-#endif
-}
-
-static
-struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-				    gfp_t gfp_mask)
-{
-	struct diff_buffer *diff_buffer;
-	size_t inx = 0;
-	struct page *page;
-
-	if (unlikely(page_count <= 0))
-		return NULL;
-
-	diff_buffer = kzalloc(sizeof(struct diff_buffer) + page_count * sizeof(struct page_list),
-			      gfp_mask);
-	if (!diff_buffer)
-		return NULL;
-
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	atomic_inc(&diff_buffer_allocated_counter);
-	pr_debug("Allocate buffer #%d \n",
-		atomic_read(&diff_buffer_allocated_counter));
-#endif
-	INIT_LIST_HEAD(&diff_buffer->link);
-	diff_buffer->size = buffer_size;
-	diff_buffer->page_count = page_count;
-
-	/* Allocate first page */
-	page = alloc_page(gfp_mask);
-	if (!page)
-		goto fail;
-
-	diff_buffer->pages[0].page = page;
-
-	/* Allocate all other pages and make list link */
-	for (inx = 1; inx < page_count; inx++) {
-		page = alloc_page(gfp_mask);
-		if (!page)
-			goto fail;
-
-		diff_buffer->pages[inx].page = page;
-		diff_buffer->pages[inx - 1].next = &diff_buffer->pages[inx];
-
-	}
-	diff_buffer->pages[inx].next = NULL;
-
-	return diff_buffer;
-fail:
-	diff_buffer_free(diff_buffer);
-	return NULL;
-}
-
-static
-struct diff_buffer *diff_area_take_buffer(struct diff_area *diff_area, gfp_t gfp_mask)
-{
-	struct diff_buffer *diff_buffer = NULL;
-	sector_t chunk_sectors;
-	size_t page_count;
-	size_t buffer_size;
-
-	spin_lock(&diff_area->free_diff_buffers_lock);
-	diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
-	if (diff_buffer) {
-		list_del(&diff_buffer->link);
-		atomic_dec(&diff_area->free_diff_buffers_count);
-	}
-	spin_unlock(&diff_area->free_diff_buffers_lock);
-
-	/* Return free buffer if it was found in a pool */
-	if (diff_buffer) {
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	pr_debug("Took buffer from pool");
-#endif
-		return diff_buffer;
-	}
-
-	/* Allocate new buffer */
-	chunk_sectors = diff_area_chunk_sectors(diff_area);
-	page_count = round_up(chunk_sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
-	buffer_size = chunk_sectors << SECTOR_SHIFT;
-
-	diff_buffer = diff_buffer_new(page_count, buffer_size, gfp_mask);
-	if (unlikely(!diff_buffer))
-		return ERR_PTR(-ENOMEM);
-
-	return diff_buffer;
-}
-
-void diff_area_release_buffer(struct diff_area *diff_area, struct diff_buffer *diff_buffer)
-{
-	if (unlikely(!diff_buffer))
-		return;
-
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	pr_debug("Release buffer");
-#endif
-	if (atomic_read(&diff_area->free_diff_buffers_count) > free_diff_buffer_pool_size) {
-		diff_buffer_free(diff_buffer);
-		return;
-	}
-	spin_lock(&diff_area->free_diff_buffers_lock);
-	list_add_tail(&diff_buffer->link, &diff_area->free_diff_buffers);
-	atomic_inc(&diff_area->free_diff_buffers_count);
-	spin_unlock(&diff_area->free_diff_buffers_lock);
-}
 
 void diff_area_free(struct kref *kref)
 {
@@ -340,7 +215,7 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 #endif
 		WARN_ON(!mutex_is_locked(&chunk->lock));
 		if (chunk->diff_buffer) {
-			diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
+			diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 			chunk->diff_buffer = NULL;
 		}
 		chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
@@ -494,13 +369,13 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 
 		if (is_nowait) {
-			diff_buffer = diff_area_take_buffer(chunk->diff_area, GFP_NOIO | GFP_NOWAIT);
+			diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO | GFP_NOWAIT);
 			if (IS_ERR(diff_buffer)) {
 				ret = -EAGAIN;
 				goto fail_unlock_chunk;
 			}
 		} else {
-			diff_buffer = diff_area_take_buffer(chunk->diff_area, GFP_NOIO);
+			diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO);
 			if (IS_ERR(diff_buffer)) {
 				ret = PTR_ERR(diff_buffer);
 				goto fail_unlock_chunk;
@@ -508,7 +383,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 		chunk->diff_buffer = diff_buffer;
 
-		ret = chunk_asunc_load_orig(chunk);
+		ret = chunk_asunc_load_orig(chunk, is_nowait);
 		if (unlikely(ret))
 			goto fail_unlock_chunk;
 	}
@@ -585,7 +460,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		if (!chunk->diff_buffer) {
 			struct diff_buffer *diff_buffer;
 
-			diff_buffer = diff_area_take_buffer(diff_area, GFP_NOIO);
+			diff_buffer = diff_buffer_take(diff_area, GFP_NOIO);
 			if (IS_ERR(diff_buffer)) {
 				ret = PTR_ERR(diff_buffer);
 				goto fail_unlock_chunk;

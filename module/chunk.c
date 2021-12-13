@@ -21,7 +21,7 @@ void chunk_store_failed(struct chunk *chunk, int error)
 
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	if (chunk->diff_buffer) {
-		diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
+		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}
 	kfree(chunk->diff_store);
@@ -93,7 +93,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 		queue_work(system_wq, &diff_area->caching_chunks_work);
 	}
 }
-
+#if 0
 static
 void chunk_notify_work(struct work_struct *work)
 {
@@ -142,6 +142,78 @@ void chunk_notify_work(struct work_struct *work)
 	mutex_unlock(&chunk->lock);
 	return;
 }
+#else
+static
+void chunk_notify_load(struct work_struct *work)
+{
+	struct chunk *chunk = container_of(work, struct chunk, notify_work);
+
+	might_sleep();
+	WARN_ON(!mutex_is_locked(&chunk->lock));
+
+	if (unlikely(chunk->error)) {
+		chunk_store_failed(chunk, chunk->error);
+		return;
+	}
+
+	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
+		pr_err("Chunk in a failed state\n");
+		mutex_unlock(&chunk->lock);
+		return;
+	}
+
+	if (chunk_state_check(chunk, CHUNK_ST_LOADING)) {
+		unsigned int current_flag;
+
+		chunk_state_unset(chunk, CHUNK_ST_LOADING);
+		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
+
+		current_flag = memalloc_noio_save();
+		chunk_schedule_storing(chunk);
+		memalloc_noio_restore(current_flag);
+		return;
+	}
+
+	pr_err("Invalid chunk state\n");
+	mutex_unlock(&chunk->lock);
+	return;
+}
+
+static
+void chunk_notify_store(struct work_struct *work)
+{
+	struct chunk *chunk = container_of(work, struct chunk, notify_work);
+
+	might_sleep();
+	WARN_ON(!mutex_is_locked(&chunk->lock));
+
+	if (unlikely(chunk->error)) {
+		chunk_store_failed(chunk, chunk->error);
+		return;
+	}
+
+	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
+		pr_err("Chunk in a failed state\n");
+		mutex_unlock(&chunk->lock);
+		return;
+	}
+	if (chunk_state_check(chunk, CHUNK_ST_STORING)) {
+		unsigned int current_flag;
+
+		chunk_state_unset(chunk, CHUNK_ST_STORING);
+		chunk_state_set(chunk, CHUNK_ST_STORE_READY);
+
+		current_flag = memalloc_noio_save();
+		chunk_schedule_caching(chunk);
+		memalloc_noio_restore(current_flag);
+		return;
+	}
+
+	pr_err("Invalid chunk state\n");
+	mutex_unlock(&chunk->lock);
+	return;
+}
+#endif
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 {
@@ -157,9 +229,6 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk->number = number;
 	atomic_set(&chunk->state, 0);
 
-	chunk->error = 0;
-	INIT_WORK(&chunk->notify_work, chunk_notify_work);
-
 	return chunk;
 }
 
@@ -173,7 +242,7 @@ void chunk_free(struct chunk *chunk)
 #endif
 	mutex_lock(&chunk->lock);
 	if (chunk->diff_buffer) {
-		diff_area_release_buffer(chunk->diff_area, chunk->diff_buffer);
+		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}
 	kfree(chunk->diff_store);
@@ -183,14 +252,64 @@ void chunk_free(struct chunk *chunk)
 	kfree(chunk);
 }
 
+
+#if 1
+
+/**
+ * chunk_async_store_diff() - Starts asynchronous storing of a chunk to the
+ *	difference storage.
+ *
+ */
+int chunk_async_store_diff(struct chunk *chunk)
+{
+	struct diff_io *diff_io;
+
+	diff_io = kzalloc(sizeof(struct diff_io), GFP_NOIO);
+	if (unlikely(!diff_io)) {
+		return -ENOMEM;
+
+	diff_io_init_async(diff_io, chunk, true, chunk_notify_store);
+}
+
+int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
+{
+	struct diff_io *diff_io;
+
+	if (is_nowait) {
+		diff_io = kzalloc(sizeof(struct diff_io), GFP_NOIO | GFP_NOWAIT);
+		if (unlikely(!diff_io)) {
+			return -EAGAIN;
+	} else {
+		diff_io = kzalloc(sizeof(struct diff_io), GFP_NOIO);
+		if (unlikely(!diff_io)) {
+			return -ENOMEM;
+	}
+
+	diff_io_init_async(diff_io, chunk, false, chunk_notify_load);
+
+	diff_io()
+
+}
+
+int chunk_load_orig(struct chunk *chunk)
+{
+
+}
+
+int chunk_load_diff(struct chunk *chunk)
+{
+
+}
+
+#else
+
 static inline
-struct page_list *chunk_first_page(struct chunk *chunk)
+struct page *chunk_first_page(struct chunk *chunk)
 {
 	return chunk->diff_buffer->pages;
 };
 
-
-static
+static inline
 void notify_fn(unsigned long error, void *context)
 {
 	struct chunk *chunk = context;
@@ -200,7 +319,6 @@ void notify_fn(unsigned long error, void *context)
 	queue_work(system_wq, &chunk->notify_work);
 	atomic_dec(&chunk->diff_area->pending_io_count);
 }
-
 /**
  * chunk_async_store_diff() - Starts asynchronous storing of a chunk to the
  *	difference storage.
@@ -333,3 +451,4 @@ int chunk_load_diff(struct chunk *chunk)
 			chunk->number, abs(ret));
 	return ret;
 }
+#endif

@@ -4,10 +4,10 @@
 #include <linux/blkdev.h>
 #include <linux/rwsem.h>
 #include <linux/atomic.h>
-#include <linux/dm-io.h>
 
 struct diff_area;
 struct diff_store;
+struct diff_io;
 
 enum {
 	CHUNK_ST_FAILED,	/* An error occurred while processing the chunks data */
@@ -18,6 +18,7 @@ enum {
 	CHUNK_ST_LOADING,
 	CHUNK_ST_STORING,
 };
+
 
 /**
  * struct chunk - Elementary IO block.
@@ -62,11 +63,9 @@ struct chunk {
 
 	struct mutex lock;
 
-	int error;
-	struct work_struct notify_work;
-
 	struct diff_buffer *diff_buffer;
 	struct diff_store *diff_store;
+	struct diff_io *diff_io;
 };
 
 unsigned long long chunk_calculate_optimal_size_shift(struct block_device *bdev);
