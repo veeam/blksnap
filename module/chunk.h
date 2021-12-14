@@ -6,7 +6,7 @@
 #include <linux/atomic.h>
 
 struct diff_area;
-struct diff_store;
+struct diff_region;
 struct diff_io;
 
 enum {
@@ -48,8 +48,8 @@ enum {
  * 	Pointer to &struct diff_buffer. Describes a buffer in memory for
  * 	storing chunk data.
  * @diff_store:
- * 	Pointer to &struc diff_store. Describes a copy of the chunk data
- * 	on the storage.
+ * 	Pointer to &struc diff_region. Describes a copy of the chunk data
+ * 	on the difference storage.
  * This structure describes the block of data that the module operates with
  * when executing the COW algorithm and when performing IO to snapshot images.
  */
@@ -64,7 +64,7 @@ struct chunk {
 	struct mutex lock;
 
 	struct diff_buffer *diff_buffer;
-	struct diff_store *diff_store;
+	struct diff_region *diff_store;
 	struct diff_io *diff_io;
 };
 

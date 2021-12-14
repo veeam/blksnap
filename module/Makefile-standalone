@@ -21,6 +21,9 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
 		echo -DHAVE_BLK_MQ_ALLOC_DISK)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "BIO_MAX_PAGES" $(srctree)/include/linux/bio.h &&	\
+		echo -DHAVE_BIO_MAX_PAGES)
 
 # The power of 2 for minimum trackings block size.
 # The minimum tracking block size by default is 64 KB (shift 16)

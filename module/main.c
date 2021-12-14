@@ -10,6 +10,7 @@
 #include "snapimage.h"
 #include "snapshot.h"
 #include "tracker.h"
+#include "diff_io.h"
 
 #ifdef CONFIG_DEBUGLOG
 #undef pr_debug
@@ -38,13 +39,19 @@
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
 #pragma message ("The blk_mq_alloc_disk() function was found.")
 #endif
-
+#ifdef HAVE_BIO_MAX_PAGES
+#pragma message ("The BIO_MAX_PAGES define was found.")
+#endif
 static
 int __init blk_snap_init(void)
 {
 	int result;
 
 	pr_info("Loading\n");
+
+	result = diff_io_init();
+	if (result)
+		return result;
 
 	result = snapimage_init();
 	if (result)
@@ -63,6 +70,7 @@ void __exit blk_snap_exit(void)
 {
 	pr_info("Unloading module\n");
 
+	diff_io_done();
 	snapshot_done();
 	snapimage_done();
 	tracker_done();

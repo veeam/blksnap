@@ -245,18 +245,18 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
  * Remove the allocation. Explicitly add to the piece.
  *
  */
-struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sector_t count)
+struct diff_region *diff_storage_get_store(struct diff_storage *diff_storage, sector_t count)
 {
 	int ret = 0;
-	struct diff_store *diff_store;
+	struct diff_region *diff_region;
 	struct storage_block *storage_block;
 	sector_t sectors_left;
 
 	if (atomic_read(&diff_storage->overflow_flag))
 		return ERR_PTR(-ENOSPC);
 
-	diff_store = kzalloc(sizeof(struct diff_store), GFP_NOIO);
-	if (!diff_store)
+	diff_region = kzalloc(sizeof(struct diff_region), GFP_NOIO);
+	if (!diff_region)
 		return ERR_PTR(-ENOMEM);
 
 	spin_lock(&diff_storage->lock);
@@ -269,9 +269,9 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 		}
 
 		if ((storage_block->count - storage_block->used) >= count) {
-			diff_store->bdev = storage_block->bdev;
-			diff_store->sector = storage_block->sector + storage_block->used;
-			diff_store->count = count;
+			diff_region->bdev = storage_block->bdev;
+			diff_region->sector = storage_block->sector + storage_block->used;
+			diff_region->count = count;
 
 			storage_block->used += count;
 			diff_storage->filled += count;
@@ -302,7 +302,7 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 
 	if (ret) {
 		pr_err("Cannot get empty storage block\n");
-		kfree(diff_store);
+		kfree(diff_region);
 		return ERR_PTR(ret);
 	}
 
@@ -310,5 +310,5 @@ struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage, sec
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1))
 		diff_storage_event_low(diff_storage);
 
-	return diff_store;
+	return diff_region;
 }

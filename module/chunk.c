@@ -43,7 +43,7 @@ void chunk_schedule_storing(struct chunk *chunk)
 	}
 
 	if (!chunk->diff_store) {
-		struct diff_store *diff_store;
+		struct diff_region *diff_store;
 
 		diff_store = diff_storage_get_store(
 				diff_area->diff_storage,
@@ -93,73 +93,28 @@ void chunk_schedule_caching(struct chunk *chunk)
 		queue_work(system_wq, &diff_area->caching_chunks_work);
 	}
 }
-#if 0
+
 static
-void chunk_notify_work(struct work_struct *work)
+void chunk_notify_load(void *ctx)
 {
-	struct chunk *chunk = container_of(work, struct chunk, notify_work);
+	struct chunk *chunk = ctx;
+	struct diff_io *diff_io;
+
+	diff_io = chunk->diff_io;
+	chunk->diff_io = NULL;
 
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
-	if (unlikely(chunk->error)) {
-		chunk_store_failed(chunk, chunk->error);
-		return;
+	if (unlikely(diff_io->error)) {
+		chunk_store_failed(chunk, diff_io->error);
+		goto out;
 	}
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk in a failed state\n");
 		mutex_unlock(&chunk->lock);
-		return;
-	}
-
-	if (chunk_state_check(chunk, CHUNK_ST_LOADING)) {
-		unsigned int current_flag;
-
-		chunk_state_unset(chunk, CHUNK_ST_LOADING);
-		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
-
-
-		current_flag = memalloc_noio_save();
-		chunk_schedule_storing(chunk);
-		memalloc_noio_restore(current_flag);
-		return;
-	}
-
-	if (chunk_state_check(chunk, CHUNK_ST_STORING)) {
-		unsigned int current_flag;
-
-		chunk_state_unset(chunk, CHUNK_ST_STORING);
-		chunk_state_set(chunk, CHUNK_ST_STORE_READY);
-
-		current_flag = memalloc_noio_save();
-		chunk_schedule_caching(chunk);
-		memalloc_noio_restore(current_flag);
-		return;
-	}
-
-	pr_err("Invalid chunk state\n");
-	mutex_unlock(&chunk->lock);
-	return;
-}
-#else
-static
-void chunk_notify_load(struct work_struct *work)
-{
-	struct chunk *chunk = container_of(work, struct chunk, notify_work);
-
-	might_sleep();
-	WARN_ON(!mutex_is_locked(&chunk->lock));
-
-	if (unlikely(chunk->error)) {
-		chunk_store_failed(chunk, chunk->error);
-		return;
-	}
-
-	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
-		pr_err("Chunk in a failed state\n");
-		mutex_unlock(&chunk->lock);
-		return;
+		goto out;
 	}
 
 	if (chunk_state_check(chunk, CHUNK_ST_LOADING)) {
@@ -171,31 +126,37 @@ void chunk_notify_load(struct work_struct *work)
 		current_flag = memalloc_noio_save();
 		chunk_schedule_storing(chunk);
 		memalloc_noio_restore(current_flag);
-		return;
+		goto out;
 	}
 
 	pr_err("Invalid chunk state\n");
 	mutex_unlock(&chunk->lock);
+out:
+	diff_io_free(diff_io);
 	return;
 }
 
 static
-void chunk_notify_store(struct work_struct *work)
+void chunk_notify_store(void *ctx)
 {
-	struct chunk *chunk = container_of(work, struct chunk, notify_work);
+	struct chunk *chunk = ctx;
+	struct diff_io *diff_io;
+
+	diff_io = chunk->diff_io;
+	chunk->diff_io = NULL;
 
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
-	if (unlikely(chunk->error)) {
-		chunk_store_failed(chunk, chunk->error);
-		return;
+	if (unlikely(diff_io->error)) {
+		chunk_store_failed(chunk, diff_io->error);
+		goto out;
 	}
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk in a failed state\n");
 		mutex_unlock(&chunk->lock);
-		return;
+		goto out;
 	}
 	if (chunk_state_check(chunk, CHUNK_ST_STORING)) {
 		unsigned int current_flag;
@@ -206,14 +167,15 @@ void chunk_notify_store(struct work_struct *work)
 		current_flag = memalloc_noio_save();
 		chunk_schedule_caching(chunk);
 		memalloc_noio_restore(current_flag);
-		return;
+		goto out;
 	}
 
 	pr_err("Invalid chunk state\n");
 	mutex_unlock(&chunk->lock);
+out:
+	diff_io_free(diff_io);
 	return;
 }
-#endif
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 {
@@ -264,41 +226,76 @@ int chunk_async_store_diff(struct chunk *chunk)
 {
 	struct diff_io *diff_io;
 
-	diff_io = kzalloc(sizeof(struct diff_io), GFP_NOIO);
-	if (unlikely(!diff_io)) {
+	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, false);
+	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	diff_io_init_async(diff_io, chunk, true, chunk_notify_store);
+	chunk->diff_io = diff_io;
+	return diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
 }
 
 int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 {
 	struct diff_io *diff_io;
+	struct diff_region region = {
+		.bdev = chunk->diff_area->orig_bdev,
+		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
+		.count = chunk->sector_count,
+	};
 
-	if (is_nowait) {
-		diff_io = kzalloc(sizeof(struct diff_io), GFP_NOIO | GFP_NOWAIT);
-		if (unlikely(!diff_io)) {
+	diff_io = diff_io_async_read(chunk_notify_load, chunk, is_nowait);
+	if (unlikely(!diff_io)) {
+		if (is_nowait)
 			return -EAGAIN;
-	} else {
-		diff_io = kzalloc(sizeof(struct diff_io), GFP_NOIO);
-		if (unlikely(!diff_io)) {
+		else
 			return -ENOMEM;
 	}
 
-	diff_io_init_async(diff_io, chunk, false, chunk_notify_load);
-
-	diff_io()
-
+	chunk->diff_io = diff_io;
+	return diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait);
 }
 
 int chunk_load_orig(struct chunk *chunk)
 {
+	int ret;
+	struct diff_io *diff_io;
+	struct diff_region region = {
+		.bdev = chunk->diff_area->orig_bdev,
+		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
+		.count = chunk->sector_count,
+	};
 
+	diff_io = diff_io_new_sync_read();
+	if (unlikely(!diff_io))
+		return -ENOMEM;
+
+	chunk->diff_io = diff_io;
+	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer);
+
+	if (!ret)
+		ret = diff_io->error;
+
+	diff_io_free(diff_io);
+	return ret;
 }
 
 int chunk_load_diff(struct chunk *chunk)
 {
+	int ret;
+	struct diff_io *diff_io;
 
+	diff_io = diff_io_new_sync_write();
+	if (unlikely(!diff_io))
+		return -ENOMEM;
+
+	chunk->diff_io = diff_io;
+	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer);
+
+	if (!ret)
+		ret = diff_io->error;
+
+	diff_io_free(diff_io);
+	return ret;
 }
 
 #else

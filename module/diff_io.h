@@ -1,24 +1,28 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-struct diff_store;
+struct diff_region;
 struct diff_buffer;
 
+/* for synchronous IO */
 struct diff_io_sync
 {
-	struct completion completion;	// for synch IO
+	struct completion completion;
 };
 
+/* for asynchronous IO */
 struct diff_io_async
 {
-	struct work_struct work;	// for async IO
+	struct work_struct work;
 	void (*notify_cb)(void *ctx);
 	struct void *ctx;
 };
 
 struct diff_io {
 	int error;
+#ifdef HAVE_BIO_MAX_PAGES
 	atomic_t endio_count;
+#endif
 	bool is_write;
 	bool is_sync_io;
 	union notify {
@@ -27,24 +31,39 @@ struct diff_io {
 	};
 };
 
+int diff_io_init(void );
+int diff_io_done(void );
 
-
-void diff_io_init_sync(struct diff_io *diff_io,  bool is_write);
-void diff_io_init_async(struct diff_io *diff_io, bool is_write,
-			void (*notify_cb)(void *ctx),
-			void *ctx);
-
-int diff_io_do(struct diff_io *diff_io, struct diff_store *diff_store,
-		struct diff_buffer *diff_buffer, bool is_write);
 static inline
-int diff_io_read(struct diff_io *diff_io, struct diff_store *diff_store,
-		struct diff_buffer *diff_buffer)
+void diff_io_free(struct diff_io *diff_io)
 {
-	return diff_io_do(diff_io, diff_store, diff_buffer, false);
+	kfree(diff_io);
+}
+
+struct diff_io *diff_io_new_sync(bool is_write);
+static inline
+struct diff_io *diff_io_new_sync_read(void )
+{
+	return diff_io_new_sync(false);
 };
 static inline
-int diff_io_write(struct diff_io *diff_io, struct diff_store *diff_store,
-		struct diff_buffer *diff_buffer)
+struct diff_io *diff_io_new_sync_write(void )
 {
-	return diff_io_do(diff_io, diff_store, diff_buffer, true);
+	return diff_io_new_sync(true);
 };
+
+struct diff_io *diff_io_new_async(bool is_write, bool is_nowait,
+				  void (*notify_cb)(void *ctx), void *ctx);
+static inline
+struct diff_io *diff_io_new_async_read(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
+{
+	return diff_io_new_async(false, is_nowait, notify_cb, ctx);
+};
+static inline
+struct diff_io *diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
+{
+	return diff_io_new_async(true, is_nowait, notify_cb, ctx);
+};
+
+int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
+		struct diff_buffer *diff_buffer, bool is_nowait);
