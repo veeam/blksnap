@@ -7,73 +7,11 @@
 #include <linux/spinlock.h>
 #include <linux/blkdev.h>
 #include <linux/xarray.h>
-#include <linux/dm-io.h>
-#include <linux/workqueue.h>
 #include "event_queue.h"
 
 struct diff_storage;
 struct chunk;
 
-
-/**
- * struct diff_buffer - Difference buffer.
- *
- * @size:
- *      Number of bytes in byffer.
- * @pages:
- *      An array and at the same time a singly linked list of pages.
- *      It is convenient to use with dm-io.
- *
- * Describes the memory buffer for chunk in memory.
- */
-struct diff_buffer {
-        struct list_head link;
-        size_t size;
-        size_t page_count;
-        struct page_list pages[0];
-};
-
-/**
- * struct diff_buffer_iter - Iterator for &struct diff_buffer
- * @page:
- *      A pointer to the current page.
- * @offset:
- *      The offset in bytes in the current page.
- * @bytes:
- *      The number of bytes that can be read or written from this page.
- *
- * It is convenient to use when copying data from or to &struct bio_vec.
- */
-struct diff_buffer_iter {
-        struct page *page;
-        size_t offset;
-        size_t bytes;
-};
-
-#define SECTOR_IN_PAGE (1 << (PAGE_SHIFT - SECTOR_SHIFT))
-
-static inline
-bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct diff_buffer_iter *iter)
-{
-        size_t page_inx;
-
-        if (diff_buffer->size <= (ofs << SECTOR_SHIFT))
-                return false;
-
-        page_inx = ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
-
-        iter->page = diff_buffer->pages[page_inx].page;
-        iter->offset = (size_t)(ofs & (SECTOR_IN_PAGE - 1)) << SECTOR_SHIFT;
-        /*
-         * The size cannot exceed the size of the page, taking into account
-         * the offset in this page.
-         * But at the same time it is unacceptable to go beyond the allocated
-         * buffer.
-         */
-        iter->bytes = min_t(size_t, (PAGE_SIZE - iter->offset), (diff_buffer->size - (ofs << SECTOR_SHIFT)));
-
-        return true;
-};
 
 /**
  * struct diff_area - Discribes the difference area for one original device.
@@ -82,8 +20,6 @@ bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct 
  *	snapimage.
  * @orig_bdev:
  *	A pointer to the structure of an open block device.
- * @io_client:
- *	dm-io is used for disk read and write operations.
  * @diff_storage:
  *	The same &struct diff_area can use the same diff_storage to store
  *	its data.
@@ -139,7 +75,6 @@ struct diff_area {
 	struct kref kref;
 
 	struct block_device *orig_bdev;
-	struct dm_io_client *io_client;
 	struct diff_storage *diff_storage;
 
 	unsigned long long chunk_shift;
@@ -160,8 +95,6 @@ struct diff_area {
 	atomic_t corrupt_flag;
 	atomic_t pending_io_count;
 };
-
-void diff_area_release_buffer(struct diff_area *diff_area, struct diff_buffer *diff_buffer);
 
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage);
 void diff_area_free(struct kref *kref);

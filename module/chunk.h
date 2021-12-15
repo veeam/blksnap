@@ -4,12 +4,12 @@
 #include <linux/blkdev.h>
 #include <linux/rwsem.h>
 #include <linux/atomic.h>
-#include <linux/dm-io.h>
 
 struct diff_area;
-struct diff_store;
+struct diff_region;
+struct diff_io;
 
-enum {
+enum chunk_st {
 	CHUNK_ST_FAILED,	/* An error occurred while processing the chunks data */
 	CHUNK_ST_DIRTY,		/* The data on the original device and the snapshot image differ in this chunk */
 	CHUNK_ST_BUFFER_READY,	/* The data of the chunk is ready to be read from the RAM buffer */
@@ -18,6 +18,7 @@ enum {
 	CHUNK_ST_LOADING,
 	CHUNK_ST_STORING,
 };
+
 
 /**
  * struct chunk - Elementary IO block.
@@ -47,8 +48,8 @@ enum {
  * 	Pointer to &struct diff_buffer. Describes a buffer in memory for
  * 	storing chunk data.
  * @diff_store:
- * 	Pointer to &struc diff_store. Describes a copy of the chunk data
- * 	on the storage.
+ * 	Pointer to &struc diff_region. Describes a copy of the chunk data
+ * 	on the difference storage.
  * This structure describes the block of data that the module operates with
  * when executing the COW algorithm and when performing IO to snapshot images.
  */
@@ -62,11 +63,9 @@ struct chunk {
 
 	struct mutex lock;
 
-	int error;
-	struct work_struct notify_work;
-
 	struct diff_buffer *diff_buffer;
-	struct diff_store *diff_store;
+	struct diff_region *diff_store;
+	struct diff_io *diff_io;
 };
 
 unsigned long long chunk_calculate_optimal_size_shift(struct block_device *bdev);
@@ -97,7 +96,7 @@ void chunk_schedule_caching(struct chunk *chunk);
 
 /* Asynchronous operations are used to implement the COW algorithm. */
 int chunk_async_store_diff(struct chunk *chunk);
-int chunk_asunc_load_orig(struct chunk *chunk);
+int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait);
 
 /* Synchronous operations are used to implement reading and writing to the snapshot image. */
 int chunk_load_orig(struct chunk *chunk);

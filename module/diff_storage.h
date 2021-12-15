@@ -3,17 +3,7 @@
 #include "event_queue.h"
 #include "big_buffer.h"
 
-/**
- * struct diff_store - Describes the location of the chunks data on
- * 	difference storage.
- *
- */
-struct diff_store {
-	struct list_head link;
-	struct block_device *bdev;
-	sector_t sector;
-	sector_t count;
-};
+struct diff_region;
 
 /**
  * struct diff_storage - Difference storage.
@@ -91,5 +81,5 @@ void diff_storage_put(struct diff_storage *diff_storage)
 int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 			      struct big_buffer *ranges,
 			      unsigned int range_count);
-struct diff_store *diff_storage_get_store(struct diff_storage *diff_storage,
-					  sector_t count);
+struct diff_region *diff_storage_get_store(struct diff_storage *diff_storage,
+					   sector_t count);

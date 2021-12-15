@@ -62,6 +62,10 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 	return tracker;
 }
 
+#ifdef HAVE_LP_FILTER
+void diff_io_endio(struct bio *bio);
+#endif
+
 static
 bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
@@ -71,6 +75,17 @@ bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	sector_t count;
 	unsigned int current_flag;
 
+#ifdef HAVE_LP_FILTER
+	/**
+	 * For the upstream version of the module, the definition of bio that
+	 * does not need to be intercepted is performed using the flag
+	 * BIO_FILTERED.
+	 * But for the standalone version of the module, we can only use the
+	 * context of bio.
+	 */
+	if (bio->bi_end_io == diff_io_endio)
+		return true;
+#endif
 	if (!op_is_write(bio_op(bio)))
 		return true;
 
@@ -87,6 +102,9 @@ bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 		return true;
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
+		return true;
+
+	if (diff_area_is_corrupted(tracker->diff_area))
 		return true;
 
 	current_flag = memalloc_noio_save();
