@@ -104,6 +104,9 @@ bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	if (!atomic_read(&tracker->snapshot_is_taken))
 		return true;
 
+	if (diff_area_is_corrupted(tracker->diff_area))
+		return true;
+
 	current_flag = memalloc_noio_save();
 	err = diff_area_copy(tracker->diff_area, sector, count,
 			     (bool)(bio->bi_opf & REQ_NOWAIT));
