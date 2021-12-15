@@ -131,10 +131,11 @@ void chunk_notify_load(void *ctx)
 		goto out;
 	}
 
-	pr_err("Invalid chunk state\n");
+	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__, atomic_read(&chunk->state));
 	mutex_unlock(&chunk->lock);
 out:
 	diff_io_free(diff_io);
+	atomic_dec(&chunk->diff_area->pending_io_count);
 	return;
 }
 
@@ -172,10 +173,11 @@ void chunk_notify_store(void *ctx)
 		goto out;
 	}
 
-	pr_err("Invalid chunk state\n");
+	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__, atomic_read(&chunk->state));
 	mutex_unlock(&chunk->lock);
 out:
 	diff_io_free(diff_io);
+	atomic_dec(&chunk->diff_area->pending_io_count);
 	return;
 }
 
@@ -230,6 +232,9 @@ int chunk_async_store_diff(struct chunk *chunk)
 		return -ENOMEM;
 
 	chunk->diff_io = diff_io;
+	chunk_state_set(chunk, CHUNK_ST_STORING);
+	atomic_inc(&chunk->diff_area->pending_io_count);
+
 	return diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
 }
 
@@ -255,6 +260,9 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 	}
 
 	chunk->diff_io = diff_io;
+	chunk_state_set(chunk, CHUNK_ST_LOADING);
+	atomic_inc(&chunk->diff_area->pending_io_count);
+
 	return diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
 }
 

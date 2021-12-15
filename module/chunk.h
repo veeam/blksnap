@@ -9,7 +9,7 @@ struct diff_area;
 struct diff_region;
 struct diff_io;
 
-enum {
+enum chunk_st {
 	CHUNK_ST_FAILED,	/* An error occurred while processing the chunks data */
 	CHUNK_ST_DIRTY,		/* The data on the original device and the snapshot image differ in this chunk */
 	CHUNK_ST_BUFFER_READY,	/* The data of the chunk is ready to be read from the RAM buffer */

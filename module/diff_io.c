@@ -22,10 +22,9 @@ void diff_io_done(void )
 static
 void diff_io_notify_cb(struct work_struct *work)
 {
-	struct diff_io_async *async;
+	struct diff_io_async *async = container_of(work, struct diff_io_async, work);
 
 	might_sleep();
-	async = container_of(work, struct diff_io_async, work);
 	async->notify_cb(async->ctx);
 }
 
@@ -96,6 +95,7 @@ struct diff_io *diff_io_new_async(bool is_write, bool is_nowait,
 	diff_io->is_sync_io = false;
 	INIT_WORK(&diff_io->notify.async.work, diff_io_notify_cb);
 	diff_io->notify.async.ctx = ctx;
+	diff_io->notify.async.notify_cb = notify_cb;
 	return diff_io;
 }
 
