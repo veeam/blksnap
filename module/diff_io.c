@@ -180,7 +180,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			sector_t bvec_len_sect;
 			unsigned int bvec_len;
 
-			bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE, (portion - offset));
+			bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE, portion - offset);
 			bvec_len = (unsigned int)(SECTOR_SIZE * bvec_len_sect);
 
 			if (unlikely(bio_full(bio, bvec_len))) {
@@ -219,6 +219,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	struct page **current_page_ptr;
 	struct bio *bio;
 	unsigned short nr_iovecs;
+	sector_t processed = 0;
 
 	if (unlikely(!check_page_aligned(diff_region->sector))) {
 		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
@@ -241,7 +242,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			return -ENOMEM;
 	}
 
-#ifdef(HAVE_LP_FILTER)
+#ifdef HAVE_LP_FILTER
 	/*
 	 * do nothing because the bi_end_io field is checked for
 	 * the standalone module.
@@ -263,7 +264,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		sector_t bvec_len_sect;
 		unsigned int bvec_len;
 
-		bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE, (diff_region->count - processed));
+		bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE, diff_region->count - processed);
 		bvec_len = (unsigned int)(SECTOR_SIZE * bvec_len_sect);
 
 		if (unlikely(bio_full(bio, bvec_len))) {
