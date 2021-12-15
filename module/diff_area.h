@@ -7,8 +7,6 @@
 #include <linux/spinlock.h>
 #include <linux/blkdev.h>
 #include <linux/xarray.h>
-#include <linux/dm-io.h>
-#include <linux/workqueue.h>
 #include "event_queue.h"
 
 struct diff_storage;
@@ -22,8 +20,6 @@ struct chunk;
  *	snapimage.
  * @orig_bdev:
  *	A pointer to the structure of an open block device.
- * @io_client:
- *	dm-io is used for disk read and write operations.
  * @diff_storage:
  *	The same &struct diff_area can use the same diff_storage to store
  *	its data.
@@ -79,7 +75,6 @@ struct diff_area {
 	struct kref kref;
 
 	struct block_device *orig_bdev;
-	struct dm_io_client *io_client;
 	struct diff_storage *diff_storage;
 
 	unsigned long long chunk_shift;

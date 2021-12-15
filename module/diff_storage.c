@@ -8,6 +8,8 @@
 #include "blk_snap.h"
 #include "params.h"
 #include "chunk.h"
+#include "diff_io.h"
+#include "diff_buffer.h"
 #include "diff_storage.h"
 
 #ifdef CONFIG_DEBUGLOG

@@ -96,7 +96,7 @@ void chunk_schedule_caching(struct chunk *chunk);
 
 /* Asynchronous operations are used to implement the COW algorithm. */
 int chunk_async_store_diff(struct chunk *chunk);
-int chunk_asunc_load_orig(struct chunk *chunk);
+int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait);
 
 /* Synchronous operations are used to implement reading and writing to the snapshot image. */
 int chunk_load_orig(struct chunk *chunk);

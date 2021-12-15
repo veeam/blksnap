@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-io: " fmt
+#include <linux/genhd.h>
+#include <linux/slab.h>
+#include "diff_io.h"
+#include "diff_buffer.h"
+
+#define SECTORS_IN_PAGE (PAGE_SIZE / SECTOR_SIZE)
 
 struct bio_set diff_io_bioset = { 0 };
 
@@ -8,7 +14,7 @@ int diff_io_init(void )
 	return bioset_init(&diff_io_bioset, 64, 0, BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
 }
 
-int diff_io_done(void )
+void diff_io_done(void )
 {
 	bioset_exit(&diff_io_bioset);
 }
@@ -19,7 +25,7 @@ void diff_io_notify_cb(struct work_struct *work)
 	struct diff_io_async *async;
 
 	might_sleep();
-	async = container_of(work, struct diff_io_async, notify_work);
+	async = container_of(work, struct diff_io_async, work);
 	async->notify_cb(async->ctx);
 }
 
@@ -34,13 +40,13 @@ void diff_io_endio(struct bio *bio)
 #ifdef HAVE_BIO_MAX_PAGES
 	if (atomic_dec_and_test(&diff_io->bio_count) == 0) {
 		if (diff_io->is_sync_io)
-			completion(&diff_io->notify.sync.completion);
+			complete(&diff_io->notify.sync.completion);
 		else
 			queue_work(system_wq, &diff_io->notify.async.work);
 	}
 #else
 	if (diff_io->is_sync_io)
-		completion(&diff_io->notify.sync.completion);
+		complete(&diff_io->notify.sync.completion);
 	else
 		queue_work(system_wq, &diff_io->notify.async.work);
 #endif
@@ -74,16 +80,16 @@ struct diff_io *diff_io_new_sync(bool is_write)
 		return NULL;
 
 	diff_io->is_sync_io = true;
-	init_completion(&chunk->notify.sync.completion);
+	init_completion(&diff_io->notify.sync.completion);
 	return diff_io;
 }
 
 struct diff_io *diff_io_new_async(bool is_write, bool is_nowait,
-				  void (*notify_cb)(struct work_struct *work), void *ctx)
+				  void (*notify_cb)(void *ctx), void *ctx)
 {
 	struct diff_io *diff_io;
 
-	diff_io = diff_io_create(is_write, is_nowait);
+	diff_io = diff_io_new(is_write, is_nowait);
 	if (unlikely(!diff_io))
 		return NULL;
 
@@ -140,20 +146,20 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		}
 
 		if (is_nowait) {
-			bio = bio_alloc(GFP_NOIO | GFP_NOWAIT, nr_iovecs, &diff_io_bioset);
+			bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, nr_iovecs, &diff_io_bioset);
 			if (unlikely(!bio)) {
 				ret = -EAGAIN;
 				goto fail;
 			}
 		} else {
-			bio = bio_alloc(GFP_NOIO, nr_iovecs, &diff_io_bioset);
+			bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &diff_io_bioset);
 			if (unlikely(!bio)) {
 				ret = -ENOMEM;
 				goto fail;
 			}
 		}
 
-#ifdef(HAVE_LP_FILTER)
+#ifdef HAVE_LP_FILTER
 		/*
 		 * do nothing because the bi_end_io field is checked for
 		 * the standalone module.
@@ -164,7 +170,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		bio->bi_end_io = diff_io_endio;
 		bio->bi_private = diff_io;
 		bio_set_dev(bio, diff_region->bdev);
-		bio->bi_sector = diff_region->sector + processed;
+		bio->bi_iter.bi_sector = diff_region->sector + processed;
 		if (diff_io->is_write)
 			bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
 		else
@@ -194,7 +200,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		processed += offset;
 	}
 
-	while ((bio = bio_list_pop(bio_list_head)))
+	while ((bio = bio_list_pop(&bio_list_head)))
 		submit_bio(bio);
 
 	if (diff_io->is_sync_io)
@@ -202,7 +208,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 	return 0;
 fail:
-	while ((bio = bio_list_pop(bio_list_head)))
+	while ((bio = bio_list_pop(&bio_list_head)))
 		bio_put(bio);
 	return ret;
 }
@@ -226,11 +232,11 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	}
 
 	if (is_nowait) {
-		bio = bio_alloc(GFP_NOIO | GFP_NOWAIT, nr_iovecs);
+		bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, nr_iovecs, &diff_io_bioset);
 		if (unlikely(!bio))
 			return -EAGAIN;
 	} else {
-		bio = bio_alloc(GFP_NOIO, nr_iovecs);
+		bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &diff_io_bioset);
 		if (unlikely(!bio))
 			return -ENOMEM;
 	}
@@ -246,7 +252,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	bio->bi_end_io = diff_io_endio;
 	bio->bi_private = diff_io;
 	bio_set_dev(bio, diff_region->bdev);
-	bio->bi_sector = diff_region->sector;
+	bio->bi_iter.bi_sector = diff_region->sector;
 	if (diff_io->is_write)
 		bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
 	else

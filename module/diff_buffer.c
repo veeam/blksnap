@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
 
+#include "params.h"
+#include "diff_buffer.h"
+#include "diff_area.h"
+
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	size_t inx = 0;
@@ -33,7 +37,11 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 	if (unlikely(page_count <= 0))
 		return NULL;
 
-	diff_buffer = kzalloc(sizeof(struct diff_buffer) + page_count * sizeof(struct page_list),
+	/*
+	 * In case of overflow, it is better to get a null pointer
+	 * than a pointer to some memory area. Therefore + 1.
+	 */
+	diff_buffer = kzalloc(sizeof(struct diff_buffer) + (page_count + 1) * sizeof(struct page *),
 			      gfp_mask);
 	if (!diff_buffer)
 		return NULL;

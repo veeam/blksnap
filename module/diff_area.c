@@ -6,6 +6,7 @@
 #include "blk_snap.h"
 #include "chunk.h"
 #include "diff_area.h"
+#include "diff_buffer.h"
 #include "diff_storage.h"
 #include "diff_io.h"
 
@@ -115,11 +116,6 @@ void diff_area_free(struct kref *kref)
 	}
 	xa_destroy(&diff_area->chunk_map);
 
-	if (diff_area->io_client) {
-		dm_io_client_destroy(diff_area->io_client);
-		diff_area->io_client = NULL;
-	}
-
 	if (diff_area->orig_bdev) {
 		blkdev_put(diff_area->orig_bdev, FMODE_READ | FMODE_WRITE);
 		diff_area->orig_bdev = NULL;
@@ -227,7 +223,6 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 {
 	int ret = 0;
 	struct diff_area *diff_area = NULL;
-	struct dm_io_client *cli;
 	struct block_device *bdev;
 	unsigned long number;
 	struct chunk *chunk;
@@ -240,21 +235,13 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		return ERR_PTR(PTR_ERR(bdev));
 	}
 
-	cli = dm_io_client_create();
-	if (IS_ERR(cli)) {
-		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
-		return ERR_PTR(PTR_ERR(cli));
-	}
-
 	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
 	if (!diff_area) {
-		dm_io_client_destroy(cli);
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	diff_area->orig_bdev = bdev;
-	diff_area->io_client = cli;
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);

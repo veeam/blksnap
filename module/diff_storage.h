@@ -3,16 +3,7 @@
 #include "event_queue.h"
 #include "big_buffer.h"
 
-/**
- * struct diff_region - Describes the location of the chunks data on
- * 	difference storage.
- *
- */
-struct diff_region {
-	struct block_device *bdev;
-	sector_t sector;
-	sector_t count;
-};
+struct diff_region;
 
 /**
  * struct diff_storage - Difference storage.

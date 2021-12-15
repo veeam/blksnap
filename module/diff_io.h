@@ -1,8 +1,20 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
+#include <linux/workqueue.h>
+#include <linux/completion.h>
 
-struct diff_region;
 struct diff_buffer;
+
+/**
+ * struct diff_region - Describes the location of the chunks data on
+ * 	difference storage.
+ *
+ */
+struct diff_region {
+	struct block_device *bdev;
+	sector_t sector;
+	sector_t count;
+};
 
 /* for synchronous IO */
 struct diff_io_sync
@@ -15,24 +27,24 @@ struct diff_io_async
 {
 	struct work_struct work;
 	void (*notify_cb)(void *ctx);
-	struct void *ctx;
+	void *ctx;
 };
 
 struct diff_io {
 	int error;
 #ifdef HAVE_BIO_MAX_PAGES
-	atomic_t endio_count;
+	atomic_t bio_count;
 #endif
 	bool is_write;
 	bool is_sync_io;
-	union notify {
+	union {
 		struct diff_io_sync sync;
 		struct diff_io_async async;
-	};
+	} notify;
 };
 
 int diff_io_init(void );
-int diff_io_done(void );
+void diff_io_done(void );
 
 static inline
 void diff_io_free(struct diff_io *diff_io)

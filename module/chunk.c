@@ -5,6 +5,8 @@
 #include <linux/sched/mm.h>
 #include "params.h"
 #include "chunk.h"
+#include "diff_io.h"
+#include "diff_buffer.h"
 #include "diff_area.h"
 #include "diff_storage.h"
 
@@ -214,9 +216,6 @@ void chunk_free(struct chunk *chunk)
 	kfree(chunk);
 }
 
-
-#if 1
-
 /**
  * chunk_async_store_diff() - Starts asynchronous storing of a chunk to the
  *	difference storage.
@@ -234,6 +233,10 @@ int chunk_async_store_diff(struct chunk *chunk)
 	return diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
 }
 
+/**
+ * chunk_asunc_load_orig() - Starts asynchronous loading of a chunk from
+ * 	the origian block device.
+ */
 int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 {
 	struct diff_io *diff_io;
@@ -243,7 +246,7 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 		.count = chunk->sector_count,
 	};
 
-	diff_io = diff_io_async_read(chunk_notify_load, chunk, is_nowait);
+	diff_io = diff_io_new_async_read(chunk_notify_load, chunk, is_nowait);
 	if (unlikely(!diff_io)) {
 		if (is_nowait)
 			return -EAGAIN;
@@ -252,9 +255,13 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 	}
 
 	chunk->diff_io = diff_io;
-	return diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait);
+	return diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
 }
 
+/**
+ * chunk_load_orig() - Performs synchronous loading of a chunk from the
+ * 	original block device.
+ */
 int chunk_load_orig(struct chunk *chunk)
 {
 	int ret;
@@ -270,151 +277,12 @@ int chunk_load_orig(struct chunk *chunk)
 		return -ENOMEM;
 
 	chunk->diff_io = diff_io;
-	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer);
+	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, false);
 
 	if (!ret)
 		ret = diff_io->error;
 
 	diff_io_free(diff_io);
-	return ret;
-}
-
-int chunk_load_diff(struct chunk *chunk)
-{
-	int ret;
-	struct diff_io *diff_io;
-
-	diff_io = diff_io_new_sync_write();
-	if (unlikely(!diff_io))
-		return -ENOMEM;
-
-	chunk->diff_io = diff_io;
-	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer);
-
-	if (!ret)
-		ret = diff_io->error;
-
-	diff_io_free(diff_io);
-	return ret;
-}
-
-#else
-
-static inline
-struct page *chunk_first_page(struct chunk *chunk)
-{
-	return chunk->diff_buffer->pages;
-};
-
-static inline
-void notify_fn(unsigned long error, void *context)
-{
-	struct chunk *chunk = context;
-
-	cant_sleep();
-	chunk->error = error;
-	queue_work(system_wq, &chunk->notify_work);
-	atomic_dec(&chunk->diff_area->pending_io_count);
-}
-/**
- * chunk_async_store_diff() - Starts asynchronous storing of a chunk to the
- *	difference storage.
- *
- */
-int chunk_async_store_diff(struct chunk *chunk)
-{
-	int ret;
-	unsigned long sync_error_bits;
-	struct dm_io_region region = {
-		.bdev = chunk->diff_store->bdev,
-		.sector = chunk->diff_store->sector,
-		.count = chunk->sector_count,
-	};
-	struct dm_io_request reguest = {
-		.bi_op = REQ_OP_WRITE,
-		.bi_op_flags = 0,
-		.mem.type = DM_IO_PAGE_LIST,
-		.mem.offset = 0,
-		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = notify_fn,
-		.notify.context = chunk,
-		.client = chunk->diff_area->io_client,
-	};
-
-	atomic_inc(&chunk->diff_area->pending_io_count);
-	chunk_state_set(chunk, CHUNK_ST_STORING);
-	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
-	if (unlikely(ret)) {
-		atomic_dec(&chunk->diff_area->pending_io_count);
-		pr_err("Cannot start async storing chunk #%ld to diff storage. error=%d\n",
-			chunk->number, abs(ret));
-	}
-	return ret;
-}
-
-/**
- * chunk_asunc_load_orig() - Starts asynchronous loading of a chunk from
- * 	the origian block device.
- */
-int chunk_asunc_load_orig(struct chunk *chunk)
-{
-	int ret;
-	unsigned long sync_error_bits;
-	struct dm_io_region region = {
-		.bdev = chunk->diff_area->orig_bdev,
-		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
-		.count = chunk->sector_count,
-	};
-	struct dm_io_request reguest = {
-		.bi_op = REQ_OP_READ,
-		.bi_op_flags = 0,
-		.mem.type = DM_IO_PAGE_LIST,
-		.mem.offset = 0,
-		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = notify_fn,
-		.notify.context = chunk,
-		.client = chunk->diff_area->io_client,
-	};
-
-	atomic_inc(&chunk->diff_area->pending_io_count);
-	chunk_state_set(chunk, CHUNK_ST_LOADING);
-	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
-	if (unlikely(ret)) {
-		atomic_dec(&chunk->diff_area->pending_io_count);
-		pr_err("Cannot start async loading chunk #%ld from original device. error=%d\n",
-			chunk->number, abs(ret));
-	}
-	return ret;
-}
-
-/**
- * chunk_load_orig() - Performs synchronous loading of a chunk from the
- * 	original block device.
- */
-int chunk_load_orig(struct chunk *chunk)
-{
-	int ret;
-	unsigned long sync_error_bits = 0;
-	struct dm_io_region region = {
-		.bdev = chunk->diff_area->orig_bdev,
-		.sector = (sector_t)chunk->number * diff_area_chunk_sectors(chunk->diff_area),
-		.count = chunk->sector_count,
-	};
-	struct dm_io_request reguest = {
-		.bi_op = REQ_OP_READ,
-		.bi_op_flags = 0,
-		.mem.type = DM_IO_PAGE_LIST,
-		.mem.offset = 0,
-		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = NULL,
-		.notify.context = NULL,
-		.client = chunk->diff_area->io_client,
-	};
-
-	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
-	if (unlikely(ret))
-		pr_err("Cannot load chunk #%ld from original device. error=%d\n",
-			chunk->number, abs(ret));
 	return ret;
 }
 
@@ -425,27 +293,18 @@ int chunk_load_orig(struct chunk *chunk)
 int chunk_load_diff(struct chunk *chunk)
 {
 	int ret;
-	unsigned long sync_error_bits = 0;
-	struct dm_io_region region = {
-		.bdev = chunk->diff_store->bdev,
-		.sector = chunk->diff_store->sector,
-		.count = chunk->diff_store->count,
-	};
-	struct dm_io_request reguest = {
-		.bi_op = REQ_OP_READ,
-		.bi_op_flags = 0,
-		.mem.type = DM_IO_PAGE_LIST,
-		.mem.offset = 0,
-		.mem.ptr.pl = chunk_first_page(chunk),
-		.notify.fn = NULL,
-		.notify.context = NULL,
-		.client = chunk->diff_area->io_client,
-	};
+	struct diff_io *diff_io;
 
-	ret = dm_io(&reguest, 1, &region, &sync_error_bits);
-	if (unlikely(ret))
-		pr_err("Cannot load chunk #%ld from diff storage. error=%d\n",
-			chunk->number, abs(ret));
+	diff_io = diff_io_new_sync_write();
+	if (unlikely(!diff_io))
+		return -ENOMEM;
+
+	chunk->diff_io = diff_io;
+	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
+
+	if (!ret)
+		ret = diff_io->error;
+
+	diff_io_free(diff_io);
 	return ret;
 }
-#endif
