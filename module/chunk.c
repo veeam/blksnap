@@ -52,7 +52,7 @@ void chunk_schedule_storing(struct chunk *chunk)
 				diff_area_chunk_sectors(diff_area));
 		if (unlikely(IS_ERR(diff_store))) {
 			chunk_store_failed(chunk, PTR_ERR(diff_store));
-			pr_err("Cannot get store for chunk #%ld\n", chunk->number);
+			pr_debug("Cannot get store for chunk #%ld\n", chunk->number);
 			return;
 		}
 

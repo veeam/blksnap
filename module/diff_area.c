@@ -559,14 +559,12 @@ void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 	if (atomic_inc_return(&diff_area->corrupt_flag) != 1)
 		return;
 
-	WARN(true, "DEBUG!");
+	diff_area_event_corrupted(diff_area, err_code);
 
 	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d\n",
 	       MAJOR(diff_area->orig_bdev->bd_dev),
 	       MINOR(diff_area->orig_bdev->bd_dev),
 	       abs(err_code));
-
-	diff_area_event_corrupted(diff_area, err_code);
 }
 
 void diff_area_throttling_io(struct diff_area *diff_area)
