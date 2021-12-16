@@ -5,6 +5,12 @@
 #include "diff_io.h"
 #include "diff_buffer.h"
 
+#ifdef CONFIG_DEBUGLOG
+#undef pr_debug
+#define pr_debug(fmt, ...) \
+	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 #define SECTORS_IN_PAGE (PAGE_SIZE / SECTOR_SIZE)
 
 struct bio_set diff_io_bioset = { 0 };
@@ -37,7 +43,7 @@ void diff_io_endio(struct bio *bio)
 	if (bio->bi_status != BLK_STS_OK)
 		diff_io->error = -EIO;
 #ifdef HAVE_BIO_MAX_PAGES
-	if (atomic_dec_and_test(&diff_io->bio_count) == 0) {
+	if (atomic_dec_and_test(&diff_io->bio_count)) {
 		if (diff_io->is_sync_io)
 			complete(&diff_io->notify.sync.completion);
 		else
@@ -208,6 +214,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 	return 0;
 fail:
+	pr_err("%s failed\n", __FUNCTION__);
 	while ((bio = bio_list_pop(&bio_list_head)))
 		bio_put(bio);
 	return ret;

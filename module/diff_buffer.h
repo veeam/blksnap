@@ -67,6 +67,10 @@ bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct 
         return true;
 };
 
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+int diff_buffer_allocated_counter_get(void );
+#endif
+
 void diff_buffer_free(struct diff_buffer *diff_buffer);
 struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 				    gfp_t gfp_mask);

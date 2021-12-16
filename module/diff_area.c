@@ -16,10 +16,6 @@
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-static atomic_t diff_buffer_allocated_counter;
-#endif
-
 #ifndef HAVE_BDEV_NR_SECTORS
 static inline
 sector_t bdev_nr_sectors(struct block_device *bdev)
@@ -123,8 +119,7 @@ void diff_area_free(struct kref *kref)
 
 	/* Cleanup free_diff_buffers */
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
-	pr_debug("Cleanup %d buffers\n",
-		atomic_read(&diff_buffer_allocated_counter));
+	pr_debug("Cleanup %d buffers\n", diff_buffer_allocated_counter_get());
 #endif
 	do {
 		spin_lock(&diff_area->free_diff_buffers_lock);
@@ -139,9 +134,9 @@ void diff_area_free(struct kref *kref)
 			diff_buffer_free(diff_buffer);
 	} while(diff_buffer);
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
-	if (atomic_read(&diff_buffer_allocated_counter))
+	if (diff_buffer_allocated_counter_get())
 		pr_debug("Some buffers %d still available\n",
-			atomic_read(&diff_buffer_allocated_counter));
+			diff_buffer_allocated_counter_get());
 #endif
 	kfree(diff_area);
 }
