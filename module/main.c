@@ -21,8 +21,11 @@
 #ifdef HAVE_LP_FILTER
 #pragma message ("Have livepatch filter")
 #endif
-#ifdef HAVE_SUBMIT_BIO_NOACCT
-#pragma message ("The submit_bio_noacct() function was found.")
+#ifdef HAVE_QC_SUBMIT_BIO_NOACCT
+#pragma message ("The blk_qc_t submit_bio_noacct(struct bio *) function was found.")
+#endif
+#ifdef HAVE_VOID_SUBMIT_BIO_NOACCT
+#pragma message ("The void submit_bio_noacct(struct bio *) function was found.")
 #endif
 #ifdef HAVE_SUPER_BLOCK_FREEZE
 #pragma message ("The freeze_bdev() and thaw_bdev() have struct super_block.")
@@ -42,6 +45,10 @@
 #ifdef HAVE_BIO_MAX_PAGES
 #pragma message ("The BIO_MAX_PAGES define was found.")
 #endif
+#ifdef HAVE_ADD_DISK_RESULT
+#pragma message ("The function add_disk() has a return code.")
+#endif
+
 static
 int __init blk_snap_init(void)
 {

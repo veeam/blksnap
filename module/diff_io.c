@@ -274,12 +274,10 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE, diff_region->count - processed);
 		bvec_len = (unsigned int)(SECTOR_SIZE * bvec_len_sect);
 
-		if (unlikely(bio_full(bio, bvec_len))) {
+		if (bio_add_page(bio, *current_page_ptr, bvec_len, 0) == 0) {
 			bio_put(bio);
 			return -EFAULT;
 		}
-		/* All pages offset aligned to PAGE_SIZE */
-		__bio_add_page(bio, *current_page_ptr, bvec_len, 0);
 
 		current_page_ptr++;
 		processed += bvec_len_sect;

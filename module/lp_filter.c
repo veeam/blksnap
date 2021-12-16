@@ -250,23 +250,31 @@ bool bdev_filters_apply(struct bio *bio)
 	return pass;
 }
 
-#ifndef HAVE_SUBMIT_BIO_NOACCT
-#error "Your kernel is too old for this module."
-#endif
-
 #ifdef CONFIG_X86
 #define CALL_INSTRUCTION_LENGTH	5
 #else
 #pragma error "Current CPU is not supported yet"
 #endif
 
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 static
-bool (*submit_bio_noacct_notrace)(struct bio *) =
-	(bool (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
+blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
+	(blk_qc_t (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
 				     CALL_INSTRUCTION_LENGTH);
 
 static
-bool notrace submit_bio_noacct_handler(struct bio *bio)
+blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
+static
+void (*submit_bio_noacct_notrace)(struct bio *) =
+	(void (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
+				     CALL_INSTRUCTION_LENGTH);
+
+static
+void notrace submit_bio_noacct_handler(struct bio *bio)
+#else
+#error "Your kernel is too old for this module."
+#endif
 {
 	if (!current->bio_list) {
 		struct bio_list bio_list_on_stack[2];
@@ -282,15 +290,35 @@ bool notrace submit_bio_noacct_handler(struct bio *bio)
 		current->bio_list = NULL;
 		barrier();
 
-		while ((new_bio = bio_list_pop(&bio_list_on_stack[0])))
+		while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
+			/*
+			 * The result from submitting a bio from the filter
+			 * itself does not need to be processed,
+			 * even if this function has a return code.
+			 */
 			submit_bio_noacct_notrace(new_bio);
+		}
 
-		if (!pass)
+		if (!pass) {
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 			return BLK_QC_T_NONE;
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
+			return;
+#else
+#error "Your kernel is too old for this module."
+#endif
+		}
 	}
 
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 	return submit_bio_noacct_notrace(bio);
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
+	submit_bio_noacct_notrace(bio);
+#else
+#error "Your kernel is too old for this module."
+#endif
 }
+
 
 static
 struct klp_func funcs[] = {

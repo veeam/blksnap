@@ -344,7 +344,17 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	cbt_map_get(cbt_map);
 	snapimage->cbt_map = cbt_map;
 
+#ifdef HAVE_ADD_DISK_RESULT
+	ret = add_disk(disk);
+	if (ret) {
+		pr_err("Failed to add disk [%s] for snapshot image device\n",
+		       disk->disk_name);
+		goto fail_cleanup_disk;
+	}
+
+#else
 	add_disk(disk);
+#endif
 
 	return snapimage;
 
