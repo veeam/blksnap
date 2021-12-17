@@ -225,6 +225,7 @@ void chunk_free(struct chunk *chunk)
  */
 int chunk_async_store_diff(struct chunk *chunk)
 {
+	int ret;
 	struct diff_io *diff_io;
 
 	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, false);
@@ -235,7 +236,13 @@ int chunk_async_store_diff(struct chunk *chunk)
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	return diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
+	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
+	if (ret) {
+		atomic_dec(&chunk->diff_area->pending_io_count);
+		diff_io_free(diff_io);
+	}
+
+	return ret;
 }
 
 /**
@@ -244,6 +251,7 @@ int chunk_async_store_diff(struct chunk *chunk)
  */
 int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 {
+	int ret;
 	struct diff_io *diff_io;
 	struct diff_region region = {
 		.bdev = chunk->diff_area->orig_bdev,
@@ -263,7 +271,12 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	return diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
+	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
+	if (ret) {
+		atomic_dec(&chunk->diff_area->pending_io_count);
+		diff_io_free(diff_io);
+	}
+	return ret;
 }
 
 /**
@@ -286,7 +299,6 @@ int chunk_load_orig(struct chunk *chunk)
 
 	chunk->diff_io = diff_io;
 	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, false);
-
 	if (!ret)
 		ret = diff_io->error;
 
@@ -309,7 +321,6 @@ int chunk_load_diff(struct chunk *chunk)
 
 	chunk->diff_io = diff_io;
 	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
-
 	if (!ret)
 		ret = diff_io->error;
 
