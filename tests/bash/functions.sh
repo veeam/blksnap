@@ -45,10 +45,11 @@ generate_files()
 	for ((ITER = 0 ; ITER < ${CNT} ; ITER++))
 	do
 		local FILE="./${PREFIX}-${ITER}"
-		local SZ=${RANDOM:1:2}
+		local SZ=$RANDOM
 
+		let "SZ = ${SZ} % 100 + 8"
 		echo "file: ${FILE} size: ${SZ} sectors"
-		dd if=/dev/urandom of=${FILE} count=$((SZ + 8)) bs=512 >/dev/null 2>&1
+		dd if=/dev/urandom of=${FILE} count=${SZ} bs=512 >/dev/null 2>&1
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 	done
 	cd ${GEN_FILE_PWD}
