@@ -187,7 +187,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			unsigned int bvec_len;
 
 			bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE, portion - offset);
-			bvec_len = (unsigned int)(SECTOR_SIZE * bvec_len_sect);
+			bvec_len = (unsigned int)(bvec_len_sect << SECTOR_SHIFT);
 
 			if (unlikely(bio_full(bio, bvec_len))) {
 				ret = -EFAULT;
@@ -206,8 +206,11 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		processed += offset;
 	}
 
-	while ((bio = bio_list_pop(&bio_list_head)))
+	while ((bio = bio_list_pop(&bio_list_head))) {
+		pr_debug("bi_sector=%llu\n", bio->bi_iter.bi_sector);
+		pr_debug("bi_size=%u\n", bio->bi_iter.bi_size);
 		submit_bio(bio);
+	}
 
 	if (diff_io->is_sync_io)
 		wait_for_completion_io(&diff_io->notify.sync.completion);
@@ -272,7 +275,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		unsigned int bvec_len;
 
 		bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE, diff_region->count - processed);
-		bvec_len = (unsigned int)(SECTOR_SIZE * bvec_len_sect);
+		bvec_len = (unsigned int)(bvec_len_sect << SECTOR_SHIFT);
 
 		if (bio_add_page(bio, *current_page_ptr, bvec_len, 0) == 0) {
 			bio_put(bio);

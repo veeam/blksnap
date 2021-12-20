@@ -100,11 +100,9 @@ static
 void chunk_notify_load(void *ctx)
 {
 	struct chunk *chunk = ctx;
-	struct diff_io *diff_io;
+	struct diff_io *diff_io = chunk->diff_io;
 
-	diff_io = chunk->diff_io;
 	chunk->diff_io = NULL;
-
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
@@ -143,11 +141,9 @@ static
 void chunk_notify_store(void *ctx)
 {
 	struct chunk *chunk = ctx;
-	struct diff_io *diff_io;
+	struct diff_io *diff_io = chunk->diff_io;
 
-	diff_io = chunk->diff_io;
 	chunk->diff_io = NULL;
-
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
@@ -228,10 +224,16 @@ int chunk_async_store_diff(struct chunk *chunk)
 	int ret;
 	struct diff_io *diff_io;
 
+#ifdef CONFIG_DEBUG_CHUNK_IO
+	pr_debug("%s", __FUNCTION__);
+	pr_debug("sector=%llu\n", chunk->diff_store->sector);
+	pr_debug("count=%llu\n", chunk->diff_store->count);
+#endif
 	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, false);
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
+	WARN_ON(chunk->diff_io);
 	chunk->diff_io = diff_io;
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
@@ -259,6 +261,11 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 		.count = chunk->sector_count,
 	};
 
+#ifdef CONFIG_DEBUG_CHUNK_IO
+	pr_debug("%s", __FUNCTION__);
+	pr_debug("sector=%llu\n", region.sector);
+	pr_debug("count=%llu\n", region.count);
+#endif
 	diff_io = diff_io_new_async_read(chunk_notify_load, chunk, is_nowait);
 	if (unlikely(!diff_io)) {
 		if (is_nowait)
@@ -267,6 +274,7 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 			return -ENOMEM;
 	}
 
+	WARN_ON(chunk->diff_io);
 	chunk->diff_io = diff_io;
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
@@ -292,11 +300,16 @@ int chunk_load_orig(struct chunk *chunk)
 		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
-
+#ifdef CONFIG_DEBUG_CHUNK_IO
+	pr_debug("%s", __FUNCTION__);
+	pr_debug("sector=%llu\n", region.sector);
+	pr_debug("count=%llu\n", region.count);
+#endif
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
+	WARN_ON(chunk->diff_io);
 	chunk->diff_io = diff_io;
 	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, false);
 	if (!ret)
@@ -314,11 +327,16 @@ int chunk_load_diff(struct chunk *chunk)
 {
 	int ret;
 	struct diff_io *diff_io;
-
+#ifdef CONFIG_DEBUG_CHUNK_IO
+	pr_debug("%s", __FUNCTION__);
+	pr_debug("sector=%llu\n", chunk->diff_store->sector);
+	pr_debug("count=%llu\n", chunk->diff_store->count);
+#endif
 	diff_io = diff_io_new_sync_write();
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
+	WARN_ON(chunk->diff_io);
 	chunk->diff_io = diff_io;
 	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
 	if (!ret)

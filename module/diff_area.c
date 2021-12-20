@@ -414,6 +414,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		io_ctx->chunk = NULL;
 	}
 
+	pr_err("Take chunk #%ld\n", new_chunk_number);
 	/* Take a next chunk. */
 	chunk = xa_load(&diff_area->chunk_map, new_chunk_number);
 	if (unlikely(!chunk))
@@ -426,7 +427,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 #ifdef CONFIG_DEBUGLOG
 		pr_err("new_chunk_number=%ld\n", new_chunk_number);
 		pr_err("sector=%llu\n", sector);
-		pr_err("Chunk size %llu in bytes\n", 1ULL << diff_area->chunk_shift);
+		pr_err("Chunk size %llu in bytes\n", (1ULL << diff_area->chunk_shift));
 		pr_err("Chunk count %lu\n", diff_area->chunk_count);
 #endif
 		ret = -EIO;
@@ -514,8 +515,8 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 			return BLK_STS_IOERR;
 
 		buff_offset = *pos - chunk_sector(chunk);
-		while(bv_len &&
-		      diff_buffer_iter_get(chunk->diff_buffer, buff_offset, &diff_buffer_iter)) {
+		while(bv_len && diff_buffer_iter_get(chunk->diff_buffer,
+						     buff_offset, &diff_buffer_iter)) {
 			ssize_t sz;
 
 			if (io_ctx->is_write)
