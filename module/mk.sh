@@ -40,7 +40,6 @@ case "$CMD" in
 		;;
 	load)
 		echo "Loading ${MODULE_NAME} kernel module from current folder"
-		modprobe dm-mod
 		insmod ./${MODULE_NAME}.ko
 		;;
 	unload)
