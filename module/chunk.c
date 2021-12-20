@@ -36,6 +36,8 @@ void chunk_schedule_storing(struct chunk *chunk)
 	int ret;
 	struct diff_area *diff_area = chunk->diff_area;
 
+
+	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
@@ -72,7 +74,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
-//	pr_debug("Add chunk #%ld to cache\n", chunk->number);
+	//pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->cache_list_lock);
 	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
 		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
@@ -100,14 +102,16 @@ static
 void chunk_notify_load(void *ctx)
 {
 	struct chunk *chunk = ctx;
-	struct diff_io *diff_io = chunk->diff_io;
+	int error = chunk->diff_io->error;
 
+	diff_io_free(chunk->diff_io);
 	chunk->diff_io = NULL;
+
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
-	if (unlikely(diff_io->error)) {
-		chunk_store_failed(chunk, diff_io->error);
+	if (unlikely(error)) {
+		chunk_store_failed(chunk, error);
 		goto out;
 	}
 
@@ -132,7 +136,6 @@ void chunk_notify_load(void *ctx)
 	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__, atomic_read(&chunk->state));
 	mutex_unlock(&chunk->lock);
 out:
-	diff_io_free(diff_io);
 	atomic_dec(&chunk->diff_area->pending_io_count);
 	return;
 }
@@ -141,14 +144,16 @@ static
 void chunk_notify_store(void *ctx)
 {
 	struct chunk *chunk = ctx;
-	struct diff_io *diff_io = chunk->diff_io;
+	int error = chunk->diff_io->error;
 
+	diff_io_free(chunk->diff_io);
 	chunk->diff_io = NULL;
+
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
 
-	if (unlikely(diff_io->error)) {
-		chunk_store_failed(chunk, diff_io->error);
+	if (unlikely(error)) {
+		chunk_store_failed(chunk, error);
 		goto out;
 	}
 
@@ -172,7 +177,6 @@ void chunk_notify_store(void *ctx)
 	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__, atomic_read(&chunk->state));
 	mutex_unlock(&chunk->lock);
 out:
-	diff_io_free(diff_io);
 	atomic_dec(&chunk->diff_area->pending_io_count);
 	return;
 }
@@ -241,7 +245,8 @@ int chunk_async_store_diff(struct chunk *chunk)
 	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
-		diff_io_free(diff_io);
+		diff_io_free(chunk->diff_io);
+		chunk->diff_io = NULL;
 	}
 
 	return ret;
@@ -282,7 +287,8 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
-		diff_io_free(diff_io);
+		diff_io_free(chunk->diff_io);
+		chunk->diff_io = NULL;
 	}
 	return ret;
 }
@@ -309,9 +315,7 @@ int chunk_load_orig(struct chunk *chunk)
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	WARN_ON(chunk->diff_io);
-	chunk->diff_io = diff_io;
-	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, false);
+	ret = diff_io_do(diff_io, &region, chunk->diff_buffer, false);
 	if (!ret)
 		ret = diff_io->error;
 
@@ -336,9 +340,7 @@ int chunk_load_diff(struct chunk *chunk)
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	WARN_ON(chunk->diff_io);
-	chunk->diff_io = diff_io;
-	ret = diff_io_do(chunk->diff_io, chunk->diff_store, chunk->diff_buffer, false);
+	ret = diff_io_do(diff_io, chunk->diff_store, chunk->diff_buffer, false);
 	if (!ret)
 		ret = diff_io->error;
 

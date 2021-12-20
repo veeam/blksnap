@@ -205,11 +205,11 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 //			chunk_maximum_in_cache);
 #endif
 		WARN_ON(!mutex_is_locked(&chunk->lock));
-		if (chunk->diff_buffer) {
+		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 			diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 			chunk->diff_buffer = NULL;
+			chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 		}
-		chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 		mutex_unlock(&chunk->lock);
 	}
 }
@@ -329,25 +329,22 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		} else
 			mutex_lock(&chunk->lock);
 
-		if (chunk_state_check(chunk, CHUNK_ST_DIRTY) ||
-		    chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
-			/**
-			 * The сhunk has already been changed when writing
-			 * to the snapshot.
+		if (chunk_state_check(chunk, CHUNK_ST_FAILED | CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY)) {
+			/*
+			 * The сhunk has already been:
+			 * - failed, when snapshot corrupted,
+			 * - overwritten in the image of a snapshot,
+			 * - already store in diff storage.
 			 */
 			WARN_ON(!mutex_is_locked(&chunk->lock));
 			mutex_unlock(&chunk->lock);
 			continue;
 		}
 
-		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY) &&
-			!chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
-			/*
-			 * The chunk has already been read from original device
-			 * into memory, and need to store it in diff storage.
-			 */
-			chunk_schedule_storing(chunk);
-			continue;
+		if (unlikely(chunk_state_check(chunk, CHUNK_ST_LOADING | CHUNK_ST_STORING))) {
+			pr_err("Invalid chunk state\n");
+			ret = -EFAULT;
+			goto fail_unlock_chunk;
 		}
 
 		if (is_nowait) {
@@ -377,15 +374,25 @@ fail_unlock_chunk:
 	return ret;
 }
 
+static inline
+void diff_area_image_put_chunk(struct chunk* chunk, bool is_write)
+{
+	if (is_write) {
+		//pr_err("chunk #%ld should be stored\n", chunk->number);
+		chunk_schedule_storing(chunk);
+	}
+	else {
+		//pr_err("chunk #%ld should be in cache\n", chunk->number);
+		chunk_schedule_caching(chunk);
+	}
+}
+
 void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
 {
 	if (!io_ctx->chunk)
 		return;
 
-	if (io_ctx->is_write)
-		chunk_schedule_storing(io_ctx->chunk);
-	else
-		chunk_schedule_caching(io_ctx->chunk);
+	diff_area_image_put_chunk(io_ctx->chunk, io_ctx->is_write);
 }
 
 static
@@ -405,16 +412,12 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		 * If the sector falls into a new chunk, then we release
 		 * the old chunk.
 		 */
-
-		if (io_ctx->is_write)
-			chunk_schedule_storing(chunk);
-		else
-			chunk_schedule_caching(chunk);
-
+		diff_area_image_put_chunk(chunk, io_ctx->is_write);
 		io_ctx->chunk = NULL;
 	}
 
-	pr_err("Take chunk #%ld\n", new_chunk_number);
+
+	//pr_err("Take chunk #%ld\n", new_chunk_number);
 	/* Take a next chunk. */
 	chunk = xa_load(&diff_area->chunk_map, new_chunk_number);
 	if (unlikely(!chunk))
@@ -451,10 +454,14 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 			chunk->diff_buffer = diff_buffer;
 		}
 
-		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
+		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
+			//pr_err("load diff chunk #%ld\n", chunk->number);
 			ret = chunk_load_diff(chunk);
-		else
+		}
+		else {
+			//pr_err("load orig chunk #%ld\n", chunk->number);
 			ret = chunk_load_orig(chunk);
+		}
 
 		if (unlikely(ret))
 			goto fail_unlock_chunk;
@@ -462,6 +469,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		/* Set the flag that the buffer contains the required data. */
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 	} else {
+		//pr_err("up cache chunk #%ld\n", chunk->number);
 		spin_lock(&diff_area->cache_list_lock);
 		if (chunk_state_check(chunk, CHUNK_ST_IN_CACHE))
 			list_move_tail(&chunk->cache_link, &diff_area->caching_chunks);
@@ -475,6 +483,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		 * we mark it as dirty.
 		 */
 		chunk_state_set(chunk, CHUNK_ST_DIRTY);
+		//pr_err("chunk #%ld is dirty\n", chunk->number);
 	}
 
 	io_ctx->chunk = chunk;
