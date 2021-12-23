@@ -551,7 +551,7 @@ public:
 
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
             throw std::system_error(errno, std::generic_category(),
-                "[TBD]Failed to append storage for snapshot.");
+                "[TBD]Failed to take snapshot.");
     };
 };
 
