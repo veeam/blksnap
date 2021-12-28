@@ -54,6 +54,17 @@ struct STestSector
     char body[SECTOR_SIZE-sizeof(STestHeader)];
 };
 
+struct SRange
+{
+    sector_t sector;
+    sector_t count;
+
+    SRange(sector_t inSector, sector_t inCount)
+        : sector(inSector)
+        , count(inCount)
+    {};
+};
+
 class CTestSectorGenetor
 {
 public:
@@ -89,47 +100,76 @@ public:
         }
     };
 
-    int Check(unsigned char *buffer, size_t size, sector_t sector)
+    void Check(unsigned char *buffer, size_t size, sector_t sector)
     {
-        int fails = 0;
-
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
             struct STestSector *current = (STestSector *)buffer;
             long crc = crc32(0, buffer+sizeof(long), SECTOR_SIZE-sizeof(long));
             STestHeader *header = &current->header;
 
             if (unlikely(crc != header->crc)) {
-                if ((m_fails + fails) < 100) {
+                if (m_fails < 10) {
                     std::cerr << "Corrupted sector" << std::endl;
                     std::cerr << "crc " << header->crc << " != " << crc << std::endl;
                     std::cerr << "sector " << header->sector << " != " << sector << std::endl;
                     //std::cerr << "sequence #" << header->seq_number << std::endl;
-                } else if ((m_fails + fails) == 100)
+                } else if (m_fails == 10)
                     std::cerr << "Corrupted too many sectors" << std::endl;
 
-                fails++;
+                SetFailedSector(sector);
+                m_fails++;
             }
 
             if (unlikely(sector != header->sector)) {
-                if ((m_fails + fails) < 100) {
+                if (m_fails < 10) {
                     std::cerr << "Incorrect sector" << std::endl;
                     std::cerr << "sector " << header->sector << " != " << sector << std::endl;
                     //std::cerr << "sequence #" << header->seq_number << std::endl;
-                } else if ((m_fails + fails) == 100)
+                } else if (m_fails == 10)
                     std::cerr << "Incorrect too many sectors" << std::endl;
 
-                fails++;
+                SetFailedSector(sector);
+                m_fails++;
             }
 
             sector++;
             buffer += SECTOR_SIZE;
         }
-        m_fails += fails;
-        return fails;
     };
+
+    int Fails()
+    {
+        return m_fails;
+    };
+
+    void ShowFails()
+    {
+        std::cerr << m_fails << " corrupted sectors" << std::endl;
+        std::cerr << failedRanges.size() << " corrupted ranges" << std::endl;
+        std::cerr << "Ranges of corrupted sectors:" << std::endl;
+        for (const SRange &range : failedRanges)
+            std::cerr << range.sector << ":" << range.count << std::endl;
+    };
+
 private:
     long m_seqNumber;
     int  m_fails;
+    std::vector<SRange> failedRanges;
+
+private:
+    void SetFailedSector(sector_t sector)
+    {
+        if (failedRanges.empty()) {
+            failedRanges.emplace_back(sector, 1);
+            return ;
+        }
+
+        SRange &lastRange = failedRanges[failedRanges.size()-1];
+        if ((lastRange.sector + lastRange.count) == sector)
+            lastRange.count++;
+        else
+            failedRanges.emplace_back(sector, 1);
+    };
 };
 
 /**
@@ -160,8 +200,6 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
 void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                       const std::shared_ptr<CBlockDevice>& ptrBdev)
 {
-    int fails = 0;
-
     AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024*1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
@@ -171,13 +209,15 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
 
         ptrBdev->Read(portion.Data(), portionSize, offset);
 
-        fails += ptrGen->Check(portion.Data(), portionSize, sector);
+        ptrGen->Check(portion.Data(), portionSize, sector);
 
         sector += (portionSize >> SECTOR_SHIFT);
     }
 
-    if (fails > 0)
-        throw std::runtime_error(std::to_string(fails) + " corrupted sectors were found");
+    if (ptrGen->Fails() > 0) {
+        ptrGen->ShowFails();
+        throw std::runtime_error(std::to_string(ptrGen->Fails()) + " corrupted sectors were found");
+    }
 }
 
 
