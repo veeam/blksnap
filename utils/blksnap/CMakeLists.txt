@@ -1,8 +1,13 @@
+cmake_minimum_required(VERSION 3.5)
 project(blksnap)
+
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
 
-find_library(LIBUUID_LIBRARY libuuid.a REQUIRED)
+set(Boost_USE_STATIC_LIBS ON)
+FIND_PACKAGE( Boost COMPONENTS program_options filesystem REQUIRED)
 
+find_library(LIBUUID_LIBRARY libuuid.a REQUIRED)
 if (NOT LIBUUID_LIBRARY)
     message(FATAL_ERROR "libuuid not found. please install uuid-dev package.")
 endif ()

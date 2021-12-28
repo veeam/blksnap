@@ -551,7 +551,7 @@ public:
 
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
             throw std::system_error(errno, std::generic_category(),
-                "[TBD]Failed to append storage for snapshot.");
+                "[TBD]Failed to take snapshot.");
     };
 };
 
@@ -729,6 +729,8 @@ private:
         fs::path filepath(m_path);
         filepath += "diff_storage#";
         filepath += std::to_string(m_counter++);
+        if (fs::exists(filepath))
+            fs::remove(filepath);
         filename = filepath.string();
 
         fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);

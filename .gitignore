@@ -3,7 +3,8 @@
 !.editorconfig
 cmake*
 /build/
-/bin/
+/utils/blksnap/bin/
+/tests/cpp/bin/
 *.o
 *.a
 *.so

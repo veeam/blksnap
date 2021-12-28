@@ -1,5 +1,5 @@
 #!/bin/bash -e
-BLKSNAP="$(cd ../../; pwd)/bin/blksnap"
+BLKSNAP="$(cd ../../; pwd)/utils/blksnap/bin/blksnap"
 ID=""
 
 blksnap_version()
