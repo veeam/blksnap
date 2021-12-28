@@ -729,6 +729,8 @@ private:
         fs::path filepath(m_path);
         filepath += "diff_storage#";
         filepath += std::to_string(m_counter++);
+        if (fs::exists(filepath))
+            fs::remove(filepath);
         filename = filepath.string();
 
         fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);
