@@ -1,3 +1,4 @@
+#include <string>
 #include <sys/types.h>
 
 class CBlockDevice
