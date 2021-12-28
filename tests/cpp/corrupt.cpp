@@ -188,7 +188,7 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                       const std::shared_ptr<CBlockDevice>& ptrBdev)
 {
     off_t sizeBdev = ptrBdev->Size();
-    long count = CRandomHelper::GenerateLong() & 0x3F;
+    long count = CRandomHelper::GenerateLong() & 0xF/*0x3F*/;
 
     for (; count > 0; count--)
     {
@@ -199,7 +199,7 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> ptrGen,
         if (offset > (sizeBdev - portionSize))
             offset = offset % (sizeBdev - portionSize);
 
-        std::cout << "Write "<< offset << ":" << portionSize << std::endl;
+        std::cout << "Write sectors:"<< (offset >> SECTOR_SHIFT) << ":" << (portionSize >> SECTOR_SHIFT) << std::endl;
 
         ptrGen->Generate(portion.Data(), portionSize, offset >> SECTOR_SHIFT);
         ptrBdev->Write(portion.Data(), portionSize, offset);
@@ -228,7 +228,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     std::cout << "Found image block device "<< imageDevName << std::endl;
     auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
-    std::cout << "Check image corruption" << std::endl;
+    std::cout << "Check image content before writing to original device" << std::endl;
     CheckAll(ptrGen, ptrImage);
 
     std::time_t startTime = std::time(nullptr);
