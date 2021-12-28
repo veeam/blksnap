@@ -10,6 +10,7 @@
 
 #include "helpers/RandomHelper.h"
 #include "helpers/BlockDevice.h"
+#include "helpers/AlignedBuffer.hpp"
 #include "blksnap/BlksnapSession.h"
 
 #include <boost/program_options.hpp>
@@ -58,6 +59,7 @@ class CTestSectorGenetor
 public:
     CTestSectorGenetor()
         : m_seqNumber(0)
+        , m_fails(0)
     {
 
     };
@@ -74,48 +76,60 @@ public:
     void Generate(unsigned char *buffer, size_t size, sector_t sector)
     {
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
-            STestSector *current = (STestSector *)buffer;
+            STestSector *current = (STestSector *)(buffer + offset);
 
             CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
 
             STestHeader *header = &current->header;
             header->seq_number = m_seqNumber;
             header->sector = sector;
-            header->crc = crc32(0, buffer+sizeof(long), SECTOR_SIZE-sizeof(long));
+            header->crc = crc32(0, buffer + offset + sizeof(long), SECTOR_SIZE-sizeof(long));
 
             sector++;
-            buffer += SECTOR_SIZE;
         }
     };
 
-    void Check(unsigned char *buffer, size_t size, sector_t sector)
+    int Check(unsigned char *buffer, size_t size, sector_t sector)
     {
+        int fails = 0;
+
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
             struct STestSector *current = (STestSector *)buffer;
             long crc = crc32(0, buffer+sizeof(long), SECTOR_SIZE-sizeof(long));
             STestHeader *header = &current->header;
 
             if (unlikely(crc != header->crc)) {
-                std::cerr << "Corrupted sector" << std::endl;
-                std::cerr << "crc " << header->crc << " != " << crc << std::endl;
-                std::cerr << "sector " << header->sector << " != " << sector << std::endl;
-                std::cerr << "sequence #" << header->seq_number << std::endl;
-                throw std::runtime_error("Corrupted sector");
+                if ((m_fails + fails) < 100) {
+                    std::cerr << "Corrupted sector" << std::endl;
+                    std::cerr << "crc " << header->crc << " != " << crc << std::endl;
+                    std::cerr << "sector " << header->sector << " != " << sector << std::endl;
+                    //std::cerr << "sequence #" << header->seq_number << std::endl;
+                } else if ((m_fails + fails) == 100)
+                    std::cerr << "Corrupted too many sectors" << std::endl;
+
+                fails++;
             }
 
             if (unlikely(sector != header->sector)) {
-                std::cerr << "Incorrect sector" << std::endl;
-                std::cerr << "sector " << header->sector << " != " << sector << std::endl;
-                std::cerr << "sequence #" << header->seq_number << std::endl;
-                throw std::runtime_error("Incorrect sector");
+                if ((m_fails + fails) < 100) {
+                    std::cerr << "Incorrect sector" << std::endl;
+                    std::cerr << "sector " << header->sector << " != " << sector << std::endl;
+                    //std::cerr << "sequence #" << header->seq_number << std::endl;
+                } else if ((m_fails + fails) == 100)
+                    std::cerr << "Incorrect too many sectors" << std::endl;
+
+                fails++;
             }
 
             sector++;
             buffer += SECTOR_SIZE;
         }
+        m_fails += fails;
+        return fails;
     };
 private:
     long m_seqNumber;
+    int  m_fails;
 };
 
 /**
@@ -124,16 +138,17 @@ private:
 void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                      const std::shared_ptr<CBlockDevice>& ptrBdev)
 {
-    std::vector<unsigned char> portion(1024*1024);
+    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024*1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
-    for (off_t offset = 0; offset < sizeBdev; offset += portion.size()) {
-        size_t portionSize = std::min(portion.size(), static_cast<size_t>(sizeBdev-offset));
+    std::cout << "device [" << ptrBdev->Name() << "] size " << ptrBdev->Size() << " bytes" << std::endl;
+    for (off_t offset = 0; offset < sizeBdev; offset += portion.Size()) {
+        size_t portionSize = std::min(portion.Size(), static_cast<size_t>(sizeBdev-offset));
 
-        ptrGen->Generate(portion.data(), portionSize, sector);
+        ptrGen->Generate(portion.Data(), portionSize, sector);
 
-        ptrBdev->Write(portion.data(), portionSize, offset);
+        ptrBdev->Write(portion.Data(), portionSize, offset);
 
         sector += (portionSize >> SECTOR_SHIFT);
     }
@@ -145,19 +160,24 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
 void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                       const std::shared_ptr<CBlockDevice>& ptrBdev)
 {
-    std::vector<unsigned char> portion(1024*1024);
+    int fails = 0;
+
+    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024*1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
-    for (off_t offset = 0; offset < sizeBdev; offset += portion.size()) {
-        size_t portionSize = std::min(portion.size(), static_cast<size_t>(sizeBdev-offset));
+    for (off_t offset = 0; offset < sizeBdev; offset += portion.Size()) {
+        size_t portionSize = std::min(portion.Size(), static_cast<size_t>(sizeBdev-offset));
 
-        ptrBdev->Read(portion.data(), portionSize, offset);
+        ptrBdev->Read(portion.Data(), portionSize, offset);
 
-        ptrGen->Check(portion.data(), portionSize, sector);
+        fails += ptrGen->Check(portion.Data(), portionSize, sector);
 
         sector += (portionSize >> SECTOR_SHIFT);
     }
+
+    if (fails > 0)
+        throw std::runtime_error(std::to_string(fails) + " corrupted sectors were found");
 }
 
 
@@ -168,23 +188,21 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                       const std::shared_ptr<CBlockDevice>& ptrBdev)
 {
     off_t sizeBdev = ptrBdev->Size();
-    std::vector<unsigned char> portion;
     long count = CRandomHelper::GenerateLong() & 0x3F;
 
     for (; count > 0; count--)
     {
         size_t portionSize = static_cast<size_t>((CRandomHelper::GenerateLong() & 0x1F) + 1) << SECTOR_SHIFT;
-        portion.resize(portionSize);
+        AlignedBuffer<unsigned char> portion(SECTOR_SIZE, portionSize);
 
         off_t offset = static_cast<off_t>(CRandomHelper::GenerateLong() + 1) << SECTOR_SHIFT;
         if (offset > (sizeBdev - portionSize))
             offset = offset % (sizeBdev - portionSize);
 
-        ptrGen->Generate(portion.data(), portionSize, offset >> SECTOR_SHIFT);
+        std::cout << "Write "<< offset << ":" << portionSize << std::endl;
 
-        ptrBdev->Write(portion.data(), portionSize, offset);
-
-        std::cout << "Write "<< std::to_string(offset >> SECTOR_SHIFT) << ":"<< std::to_string(portionSize >> SECTOR_SHIFT) << std::endl;
+        ptrGen->Generate(portion.Data(), portionSize, offset >> SECTOR_SHIFT);
+        ptrBdev->Write(portion.Data(), portionSize, offset);
     }
 }
 
@@ -193,7 +211,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     std::cout << "--- Test: check corruption ---" << std::endl;
     std::cout << "device: " << origDevName << std::endl;
     std::cout << "diffStorage: " << diffStorage << std::endl;
-    std::cout << "duration: " << std::to_string(durationLimitSec) << "seconds" << std::endl;
+    std::cout << "duration: " << durationLimitSec << " seconds" << std::endl;
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName);
@@ -209,6 +227,9 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     std::string imageDevName = ptrSession->GetImageDevice(origDevName);
     std::cout << "Found image block device "<< imageDevName << std::endl;
     auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
+
+    std::cout << "Check image corruption" << std::endl;
+    CheckAll(ptrGen, ptrImage);
 
     std::time_t startTime = std::time(nullptr);
     int elapsed = (std::time(nullptr) - startTime);
@@ -232,8 +253,9 @@ void Main(int argc, char *argv[])
     std::string usage = std::string("Checking the correctness of the COW algorithm of the blksnap module.");
 
     desc.add_options()
-        ("device,d", po::value<std::string>(), "[TBD]Device name.")
-        ("diff_storage,s", po::value<std::string>(), "[TBD]Directory name for allocating diff storage files.");
+        ("help,h", "Show usage information.")
+        ("device,d", po::value<std::string>(), "Device name.")
+        ("diff_storage,s", po::value<std::string>(), "Directory name for allocating diff storage files.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);

@@ -8,9 +8,10 @@ public:
     ~CBlockDevice();
 
     void Read(void *buf, size_t count, off_t offset);
-    void Write(void *buf, size_t count, off_t offset);
+    void Write(const void *buf, size_t count, off_t offset);
 
     off_t Size();
+    const std::string& Name();
 private:
     std::string m_name;
     int m_fd;

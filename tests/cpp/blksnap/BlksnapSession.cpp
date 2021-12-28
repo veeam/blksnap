@@ -46,7 +46,7 @@ class CBlksnapSession : public IBlksnapSession
 public:
 public:
     CBlksnapSession(const std::vector<std::string>& devices, const std::string &diffStorage);
-    ~CBlksnapSession(); // override
+    ~CBlksnapSession() override;
 
     std::string GetImageDevice(const std::string& original) override;
 private:
@@ -204,6 +204,8 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SBlksna
                 {
                     fs::path filepath(ptrState->diffStorage);
                     filepath += std::string("diff_storage#" + std::to_string(diffStorageNumber++));
+                    if (fs::exists(filepath))
+                        fs::remove(filepath);
                     std::string filename = filepath.string();
 
                     {
@@ -276,6 +278,8 @@ CBlksnapSession::CBlksnapSession(const std::vector<std::string>& devices, const 
             {
                 fs::path filepath(m_ptrState->diffStorage);
                 filepath += std::string("diff_storage#" + std::to_string(0));
+                if (fs::exists(filepath))
+                    fs::remove(filepath);
                 std::string filename = filepath.string();
 
                 m_ptrState->diffStorageFiles.push_back(filename);
@@ -330,6 +334,7 @@ CBlksnapSession::CBlksnapSession(const std::vector<std::string>& devices, const 
 
 CBlksnapSession::~CBlksnapSession()
 {
+    std::cout << "Destroy blksnap session" << std::endl;
     /**
      * Stop thread
      */

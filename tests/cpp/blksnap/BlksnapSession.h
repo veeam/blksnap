@@ -4,7 +4,7 @@
 
 struct IBlksnapSession
 {
-    //virtual ~IBlksnapSession() = 0;
+    virtual ~IBlksnapSession() {};
 
     virtual std::string GetImageDevice(const std::string& original) = 0;
 };
