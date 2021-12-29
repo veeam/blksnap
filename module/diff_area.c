@@ -313,14 +313,12 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 
 	area_sect_first = round_down(sector, chunk_sectors);
 	for (offset = area_sect_first; offset < (sector + count); offset += chunk_sectors) {
-		unsigned long number = chunk_number(diff_area, offset);
-
-		chunk = xa_load(&diff_area->chunk_map, number);
+		chunk = xa_load(&diff_area->chunk_map, chunk_number(diff_area, offset));
 		if (!chunk) {
 			ret = -EINVAL;
 			break;
 		}
-
+		WARN_ON(chunk_number(diff_area, offset) != chunk->number);
 		if (is_nowait) {
 			if (!mutex_trylock(&chunk->lock)) {
 				ret = -EAGAIN;
@@ -455,7 +453,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		}
 
 		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
-			//pr_err("load diff chunk #%ld\n", chunk->number);
+			//pr_debug("DEBUG! load diff chunk #%ld\n", chunk->number);
 			ret = chunk_load_diff(chunk);
 		}
 		else {
@@ -469,7 +467,10 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		/* Set the flag that the buffer contains the required data. */
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 	} else {
-		//pr_err("up cache chunk #%ld\n", chunk->number);
+#ifdef CONFIG_DEBUG_CHUNK_IO
+		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
+			pr_debug("DEBUG! load diff chunk #%ld from cache\n", chunk->number);
+#endif
 		spin_lock(&diff_area->cache_list_lock);
 		if (chunk_state_check(chunk, CHUNK_ST_IN_CACHE))
 			list_move_tail(&chunk->cache_link, &diff_area->caching_chunks);
@@ -483,7 +484,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		 * we mark it as dirty.
 		 */
 		chunk_state_set(chunk, CHUNK_ST_DIRTY);
-		//pr_err("chunk #%ld is dirty\n", chunk->number);
+		//pr_debug("DEBUG! chunk #%ld marked as dirty\n", chunk->number);
 	}
 
 	io_ctx->chunk = chunk;
