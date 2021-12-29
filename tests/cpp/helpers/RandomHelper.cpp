@@ -4,18 +4,18 @@
 
 void CRandomHelper::GenerateBuffer(void* buffer, size_t size)
 {
-    size_t lcount = size / sizeof(long);
-    long *lbuf = static_cast<long *>(buffer);
+    size_t icount = size / sizeof(int);
+    int *ibuf = static_cast<int *>(buffer);
     char *chbuf = static_cast<char *>(buffer);
 
-    for (size_t offset = 0; offset < lcount; offset++)
-        lbuf[offset] = ::random();
+    for (size_t offset = 0; offset < icount; offset++)
+        ibuf[offset] = ::random();
 
-    for (size_t offset = (lcount * sizeof(long)); offset < size; offset++)
+    for (size_t offset = (icount * sizeof(int)); offset < size; offset++)
         chbuf[offset] = static_cast<char>(::random() & 0xFF);
 }
 
-long CRandomHelper::GenerateLong()
+int CRandomHelper::GenerateInt()
 {
     return ::random();
 }

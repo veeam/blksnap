@@ -43,8 +43,8 @@ typedef unsigned long long sector_t;
 
 struct STestHeader
 {
-    long crc;
-    long seq_number;
+    int crc;
+    int seq_number;
     sector_t sector;
 };
 
@@ -65,12 +65,19 @@ struct SRange
     {};
 };
 
+enum EFailType
+{
+    eFailCorruptedSector,
+    eFailIncorrectSector,
+};
+
 class CTestSectorGenetor
 {
 public:
     CTestSectorGenetor()
         : m_seqNumber(0)
-        , m_fails(0)
+        , m_failCount(0)
+        , m_logLineCount(0)
     {
 
     };
@@ -94,7 +101,7 @@ public:
             STestHeader *header = &current->header;
             header->seq_number = m_seqNumber;
             header->sector = sector;
-            header->crc = crc32(0, buffer + offset + sizeof(long), SECTOR_SIZE-sizeof(long));
+            header->crc = crc32(0, buffer + offset + sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
 
             sector++;
         }
@@ -104,33 +111,32 @@ public:
     {
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
             struct STestSector *current = (STestSector *)buffer;
-            long crc = crc32(0, buffer+sizeof(long), SECTOR_SIZE-sizeof(long));
             STestHeader *header = &current->header;
+            int crc = crc32(0, buffer+sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
 
-            if (unlikely(crc != header->crc)) {
-                if (m_fails < 10) {
-                    std::cerr << "Corrupted sector" << std::endl;
-                    std::cerr << "crc " << header->crc << " != " << crc << std::endl;
-                    std::cerr << "sector " << header->sector << " != " << sector << std::endl;
-                    //std::cerr << "sequence #" << header->seq_number << std::endl;
-                } else if (m_fails == 10)
-                    std::cerr << "Corrupted too many sectors" << std::endl;
+            bool isCorrupted = (crc != header->crc);
+            bool isIncorrect = (sector != header->sector);
 
-                SetFailedSector(sector);
-                m_fails++;
+            if (isCorrupted || isIncorrect) {
+                std::string failMessage;
+
+                if (m_logLineCount == 30)
+                    failMessage = "Too many sectors failed\n";
+                else if (m_logLineCount < 30) {
+                    if (isCorrupted) {
+                        failMessage += std::string("Corrupted sector\n");
+                        failMessage += std::string("sector " + std::to_string(sector) + "\n");
+                        failMessage += std::string("crc " + std::to_string(header->crc) + " != " + std::to_string(crc) + "\n");
+                    }
+                    if (isIncorrect) {
+                        failMessage += std::string("Incorrect sector\n");
+                        failMessage += std::string("sector " + std::to_string(header->sector) + " != " + std::to_string(sector) + "\n");
+                    }
+                }
+
+                SetFailedSector(sector, failMessage);
             }
 
-            if (unlikely(sector != header->sector)) {
-                if (m_fails < 10) {
-                    std::cerr << "Incorrect sector" << std::endl;
-                    std::cerr << "sector " << header->sector << " != " << sector << std::endl;
-                    //std::cerr << "sequence #" << header->seq_number << std::endl;
-                } else if (m_fails == 10)
-                    std::cerr << "Incorrect too many sectors" << std::endl;
-
-                SetFailedSector(sector);
-                m_fails++;
-            }
 
             sector++;
             buffer += SECTOR_SIZE;
@@ -139,12 +145,12 @@ public:
 
     int Fails()
     {
-        return m_fails;
+        return m_failCount;
     };
 
     void ShowFails()
     {
-        std::cerr << m_fails << " corrupted sectors" << std::endl;
+        std::cerr << m_failCount << " corrupted sectors" << std::endl;
         std::cerr << failedRanges.size() << " corrupted ranges" << std::endl;
         std::cerr << "Ranges of corrupted sectors:" << std::endl;
         for (const SRange &range : failedRanges)
@@ -152,23 +158,36 @@ public:
     };
 
 private:
-    long m_seqNumber;
-    int  m_fails;
+    int m_seqNumber;
+    int m_failCount;
+    int m_logLineCount;
     std::vector<SRange> failedRanges;
 
 private:
-    void SetFailedSector(sector_t sector)
+    void LogSector(sector_t sector, const std::string &failMessage)
     {
-        if (failedRanges.empty()) {
-            failedRanges.emplace_back(sector, 1);
-            return ;
+        if (failMessage.empty())
+            return;
+
+        m_logLineCount++;
+        std::cerr << failMessage << std::endl;
+    }
+
+    void SetFailedSector(sector_t sector, const std::string &failMessage)
+    {
+        m_failCount++;
+
+        if (!failedRanges.empty()) {
+            SRange &lastRange = failedRanges[failedRanges.size()-1];
+            if ((lastRange.sector + lastRange.count) == sector) {
+                lastRange.count++;
+                //LogSector(sector, failMessage);
+                return;
+            }
         }
 
-        SRange &lastRange = failedRanges[failedRanges.size()-1];
-        if ((lastRange.sector + lastRange.count) == sector)
-            lastRange.count++;
-        else
-            failedRanges.emplace_back(sector, 1);
+        failedRanges.emplace_back(sector, 1);
+        LogSector(sector, failMessage);
     };
 };
 
@@ -220,29 +239,34 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
     }
 }
 
+void FillBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
+                const std::shared_ptr<CBlockDevice> &ptrBdev,
+                off_t offset, size_t size)
+{
+    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, size);
+
+    std::cout << "Write sectors:"<< (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << std::endl;
+    ptrGen->Generate(portion.Data(), size, offset >> SECTOR_SHIFT);
+    ptrBdev->Write(portion.Data(), size, offset);
+}
 
 /**
  * Fill some random blocks with random offset
  */
-void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> ptrGen,
-                      const std::shared_ptr<CBlockDevice>& ptrBdev)
+void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
+                      const std::shared_ptr<CBlockDevice> &ptrBdev)
 {
     off_t sizeBdev = ptrBdev->Size();
-    long count = CRandomHelper::GenerateLong() & 0xF/*0x3F*/;
+    int count = CRandomHelper::GenerateInt() & 0xF/*0x3F*/;
 
     for (; count > 0; count--)
     {
-        size_t portionSize = static_cast<size_t>((CRandomHelper::GenerateLong() & 0x1F) + 1) << SECTOR_SHIFT;
-        AlignedBuffer<unsigned char> portion(SECTOR_SIZE, portionSize);
-
-        off_t offset = static_cast<off_t>(CRandomHelper::GenerateLong() + 1) << SECTOR_SHIFT;
+        size_t portionSize = static_cast<size_t>((CRandomHelper::GenerateInt() & 0x1F) + 1) << SECTOR_SHIFT;
+        off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << SECTOR_SHIFT;
         if (offset > (sizeBdev - portionSize))
             offset = offset % (sizeBdev - portionSize);
 
-        std::cout << "Write sectors:"<< (offset >> SECTOR_SHIFT) << ":" << (portionSize >> SECTOR_SHIFT) << std::endl;
-
-        ptrGen->Generate(portion.Data(), portionSize, offset >> SECTOR_SHIFT);
-        ptrBdev->Write(portion.Data(), portionSize, offset);
+        FillBlocks(ptrGen, ptrBdev, offset, portionSize);
     }
 }
 
@@ -269,6 +293,14 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
     std::cout << "Check image content before writing to original device" << std::endl;
+    CheckAll(ptrGen, ptrImage);
+
+    FillBlocks(ptrGen, ptrOrininal, 0, 4096);
+    FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 8) & ~(SECTOR_SIZE - 1), 4096);
+    FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 4) & ~(SECTOR_SIZE - 1), 4096);
+    FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 2) & ~(SECTOR_SIZE - 1), 4096);
+
+    std::cout << "Check image content after writing fixed data to original device" << std::endl;
     CheckAll(ptrGen, ptrImage);
 
     std::time_t startTime = std::time(nullptr);
