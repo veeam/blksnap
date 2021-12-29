@@ -206,11 +206,8 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		processed += offset;
 	}
 
-	while ((bio = bio_list_pop(&bio_list_head))) {
-		pr_debug("bi_sector=%llu\n", bio->bi_iter.bi_sector);
-		pr_debug("bi_size=%u\n", bio->bi_iter.bi_size);
+	while ((bio = bio_list_pop(&bio_list_head)))
 		submit_bio(bio);
-	}
 
 	if (diff_io->is_sync_io)
 		wait_for_completion_io(&diff_io->notify.sync.completion);
