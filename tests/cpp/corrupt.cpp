@@ -140,7 +140,7 @@ public:
                     }
                     if (isInvalidSeq) {
                         failMessage += std::string("Invalid sequence number\n");
-                        failMessage += std::string("sector " + std::to_string(header->sector) + " != " + std::to_string(sector) + "\n");
+                        failMessage += std::string("sector " + std::to_string(header->sector) + "\n");
                         failMessage += std::string("seqNumber " + std::to_string(header->seqNumber) + " != " + std::to_string(seqNumber) + "\n");
                     }
                 }
@@ -268,11 +268,11 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
                       const std::shared_ptr<CBlockDevice> &ptrBdev)
 {
     off_t sizeBdev = ptrBdev->Size();
-    int count = CRandomHelper::GenerateInt() & 0x3F;
+    int count = CRandomHelper::GenerateInt() & 0x3FF;
     int cnt = 0;
     size_t totalSize = 0;
 
-    std::cout << count << " write transaction:" << std::endl;
+    std::cout << count << " write transaction" << std::endl;
     for (; count > 0; count--)
     {
         size_t size = static_cast<size_t>((CRandomHelper::GenerateInt() & 0x1F) + 1) << SECTOR_SHIFT;
@@ -280,15 +280,15 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
         if (offset > (sizeBdev - size))
             offset = offset % (sizeBdev - size);
 
-        std::cout << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
-        if ((cnt & 0x7) == 0x7)
-            std::cout << std::endl;
+        //std::cout << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+        //if ((cnt & 0x7) == 0x7)
+        //    std::cout << std::endl;
         FillBlocks(ptrGen, ptrBdev, offset, size);
         cnt++;
         totalSize += size;
     }
-    if ((cnt & 0x7))
-        std::cout << std::endl;
+    //if ((cnt & 0x7))
+    //    std::cout << std::endl;
     std::cout << (totalSize >> SECTOR_SHIFT) << " sectors was wrote" << std::endl;
 }
 
