@@ -434,7 +434,7 @@ struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms)
 	struct snapshot *snapshot;
 	struct event *event;
 
-	pr_debug("Wait event\n");
+	//pr_debug("Wait event\n");
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return ERR_PTR(-ESRCH);

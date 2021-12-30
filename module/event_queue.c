@@ -93,7 +93,7 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 		return event;
 	}
 	if (ret == 0) {
-		pr_debug("%s - timeout\n", __FUNCTION__);
+		//pr_debug("%s - timeout\n", __FUNCTION__);
 		return ERR_PTR(-ENOENT);
 	}
 	if (ret == -ERESTARTSYS) {
