@@ -44,7 +44,7 @@ typedef unsigned long long sector_t;
 struct STestHeader
 {
     int crc;
-    int seq_number;
+    int seqNumber;
     sector_t sector;
 };
 
@@ -91,6 +91,11 @@ public:
         m_seqNumber++;
     };
 
+    int GetSequenceNumber()
+    {
+        return m_seqNumber;
+    };
+
     void Generate(unsigned char *buffer, size_t size, sector_t sector)
     {
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
@@ -99,7 +104,7 @@ public:
             CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
 
             STestHeader *header = &current->header;
-            header->seq_number = m_seqNumber;
+            header->seqNumber = m_seqNumber;
             header->sector = sector;
             header->crc = crc32(0, buffer + offset + sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
 
@@ -107,7 +112,7 @@ public:
         }
     };
 
-    void Check(unsigned char *buffer, size_t size, sector_t sector)
+    void Check(unsigned char *buffer, size_t size, sector_t sector, const int seqNumber)
     {
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
             struct STestSector *current = (STestSector *)buffer;
@@ -116,8 +121,9 @@ public:
 
             bool isCorrupted = (crc != header->crc);
             bool isIncorrect = (sector != header->sector);
+            bool isInvalidSeq = (seqNumber < header->seqNumber);
 
-            if (isCorrupted || isIncorrect) {
+            if (isCorrupted || isIncorrect || isInvalidSeq) {
                 std::string failMessage;
 
                 if (m_logLineCount == 30)
@@ -131,6 +137,11 @@ public:
                     if (isIncorrect) {
                         failMessage += std::string("Incorrect sector\n");
                         failMessage += std::string("sector " + std::to_string(header->sector) + " != " + std::to_string(sector) + "\n");
+                    }
+                    if (isInvalidSeq) {
+                        failMessage += std::string("Invalid sequence number\n");
+                        failMessage += std::string("sector " + std::to_string(header->sector) + " != " + std::to_string(sector) + "\n");
+                        failMessage += std::string("seqNumber " + std::to_string(header->seqNumber) + " != " + std::to_string(seqNumber) + "\n");
                     }
                 }
 
@@ -217,7 +228,8 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
  * Fill the contents of the block device with special test data.
  */
 void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
-                      const std::shared_ptr<CBlockDevice>& ptrBdev)
+              const std::shared_ptr<CBlockDevice>& ptrBdev,
+              const int seqNumber)
 {
     AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024*1024);
     off_t sizeBdev = ptrBdev->Size();
@@ -228,7 +240,7 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
 
         ptrBdev->Read(portion.Data(), portionSize, offset);
 
-        ptrGen->Check(portion.Data(), portionSize, sector);
+        ptrGen->Check(portion.Data(), portionSize, sector, seqNumber);
 
         sector += (portionSize >> SECTOR_SHIFT);
     }
@@ -245,7 +257,6 @@ void FillBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
 {
     AlignedBuffer<unsigned char> portion(SECTOR_SIZE, size);
 
-    std::cout << "Write sectors:"<< (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << std::endl;
     ptrGen->Generate(portion.Data(), size, offset >> SECTOR_SHIFT);
     ptrBdev->Write(portion.Data(), size, offset);
 }
@@ -257,17 +268,28 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
                       const std::shared_ptr<CBlockDevice> &ptrBdev)
 {
     off_t sizeBdev = ptrBdev->Size();
-    int count = CRandomHelper::GenerateInt() & 0xF/*0x3F*/;
+    int count = CRandomHelper::GenerateInt() & 0x3F;
+    int cnt = 0;
+    size_t totalSize = 0;
 
+    std::cout << count << " write transaction:" << std::endl;
     for (; count > 0; count--)
     {
-        size_t portionSize = static_cast<size_t>((CRandomHelper::GenerateInt() & 0x1F) + 1) << SECTOR_SHIFT;
+        size_t size = static_cast<size_t>((CRandomHelper::GenerateInt() & 0x1F) + 1) << SECTOR_SHIFT;
         off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << SECTOR_SHIFT;
-        if (offset > (sizeBdev - portionSize))
-            offset = offset % (sizeBdev - portionSize);
+        if (offset > (sizeBdev - size))
+            offset = offset % (sizeBdev - size);
 
-        FillBlocks(ptrGen, ptrBdev, offset, portionSize);
+        std::cout << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+        if ((cnt & 0x7) == 0x7)
+            std::cout << std::endl;
+        FillBlocks(ptrGen, ptrBdev, offset, size);
+        cnt++;
+        totalSize += size;
     }
+    if ((cnt & 0x7))
+        std::cout << std::endl;
+    std::cout << (totalSize >> SECTOR_SHIFT) << " sectors was wrote" << std::endl;
 }
 
 void CheckCorruption(const std::string &origDevName, const std::string &diffStorage, const int durationLimitSec)
@@ -280,43 +302,51 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName);
 
-    std::cout << "Fill original device collection by test pattern " << std::endl;
+    int testSeqNumber = ptrGen->GetSequenceNumber();
+    std::cout << "-- Fill original device collection by test pattern " << std::endl;
     FillAll(ptrGen, ptrOrininal);
 
     std::vector<std::string> devices;
     devices.push_back(origDevName);
-    std::cout << "Create snapshot" << std::endl;
-    auto ptrSession = CreateBlksnapSession(devices, diffStorage);
-
-    std::string imageDevName = ptrSession->GetImageDevice(origDevName);
-    std::cout << "Found image block device "<< imageDevName << std::endl;
-    auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
-
-    std::cout << "Check image content before writing to original device" << std::endl;
-    CheckAll(ptrGen, ptrImage);
-
-    FillBlocks(ptrGen, ptrOrininal, 0, 4096);
-    FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 8) & ~(SECTOR_SIZE - 1), 4096);
-    FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 4) & ~(SECTOR_SIZE - 1), 4096);
-    FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 2) & ~(SECTOR_SIZE - 1), 4096);
-
-    std::cout << "Check image content after writing fixed data to original device" << std::endl;
-    CheckAll(ptrGen, ptrImage);
 
     std::time_t startTime = std::time(nullptr);
     int elapsed = (std::time(nullptr) - startTime);
     while (elapsed < durationLimitSec) {
-        std::cout << "Elapsed time: "<< elapsed << "seconds" << std::endl;
+        std::cout << "-- Create snapshot" << std::endl;
+        auto ptrSession = CreateBlksnapSession(devices, diffStorage);
+        testSeqNumber = ptrGen->GetSequenceNumber();
 
-        std::cout << "Fill some random blocks" << std::endl;
-        FillRandomBlocks(ptrGen, ptrOrininal);
+        std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+        std::cout << "Found image block device "<< imageDevName << std::endl;
+        auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
-        std::cout << "Check image corruption" << std::endl;
-        CheckAll(ptrGen, ptrImage);
+        std::cout << "- Check image content before writing to original device" << std::endl;
+        CheckAll(ptrGen, ptrImage, testSeqNumber);
+
+        ptrGen->IncSequenceNumber();
+        FillBlocks(ptrGen, ptrOrininal, 0, 4096);
+        FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 8) & ~(SECTOR_SIZE - 1), 4096);
+        FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 4) & ~(SECTOR_SIZE - 1), 4096);
+        FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 2) & ~(SECTOR_SIZE - 1), 4096);
+
+        std::cout << "- Check image content after writing fixed data to original device" << std::endl;
+        CheckAll(ptrGen, ptrImage, testSeqNumber);
+
+        std::time_t startFillRandom = std::time(nullptr);
+        do {
+            std::cout << "- Fill some random blocks" << std::endl;
+            ptrGen->IncSequenceNumber();
+            FillRandomBlocks(ptrGen, ptrOrininal);
+
+            std::cout << "- Check image corruption" << std::endl;
+            CheckAll(ptrGen, ptrImage, testSeqNumber);
+        } while ((std::time(nullptr) - startFillRandom) < 30);
+
         elapsed = (std::time(nullptr) - startTime);
+        std::cout << "-- Elapsed time: "<< elapsed << " seconds" << std::endl;
     }
 
-    std::cout << "--- Complete: check corruption ---" << std::endl;
+    std::cout << "--- Success: check corruption ---" << std::endl;
 }
 
 void Main(int argc, char *argv[])
@@ -327,7 +357,8 @@ void Main(int argc, char *argv[])
     desc.add_options()
         ("help,h", "Show usage information.")
         ("device,d", po::value<std::string>(), "Device name.")
-        ("diff_storage,s", po::value<std::string>(), "Directory name for allocating diff storage files.");
+        ("diff_storage,s", po::value<std::string>(), "Directory name for allocating diff storage files.")
+        ("duration,u", po::value<int>(), "The test duration limit in minutes.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
@@ -347,7 +378,11 @@ void Main(int argc, char *argv[])
         throw std::invalid_argument("Argument 'diff_storage' is missed.");
     std::string diffStorage = vm["diff_storage"].as<std::string>();
 
-    CheckCorruption(origDevName, diffStorage, 5*60);
+    int duration = 5;
+    if (vm.count("duration"))
+        duration = vm["duration"].as<int>();
+
+    CheckCorruption(origDevName, diffStorage, duration*60);
 }
 
 int main(int argc, char *argv[])
