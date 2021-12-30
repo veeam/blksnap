@@ -213,10 +213,10 @@ void chunk_free(struct chunk *chunk)
 {
 	if (unlikely(!chunk))
 		return;
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	if (mutex_is_locked(&chunk->lock))
-		pr_debug("Chunk %ld locked", chunk->number);
-#endif
+//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//	if (mutex_is_locked(&chunk->lock))
+//		pr_debug("Chunk %ld locked", chunk->number);
+//#endif
 	mutex_lock(&chunk->lock);
 	if (chunk->diff_buffer) {
 		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);

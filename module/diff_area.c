@@ -199,17 +199,17 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 		chunk = chunk_get_from_cache_and_write_lock(diff_area);
 		if (!chunk) {
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
-			pr_debug("Cannot get unlocked chunk\n");
+			pr_debug("Cannot get chunk. All is locked\n");
 #endif
 			break;
 		}
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//#ifdef CONFIG_DEBUG_DIFF_BUFFER
 //		pr_debug("Free buffer for chunk #%ld\n", chunk->number);
 //		pr_debug("caching_chunks_count=%d. chunk_maximum_in_cache=%d\n",
 //			atomic_read(&diff_area->caching_chunks_count),
 //			chunk_maximum_in_cache);
-#endif
+//#endif
 		WARN_ON(!mutex_is_locked(&chunk->lock));
 		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 			diff_buffer_release(chunk->diff_area, chunk->diff_buffer);

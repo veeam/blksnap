@@ -113,9 +113,9 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask
 
 	/* Return free buffer if it was found in a pool */
 	if (diff_buffer) {
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	pr_debug("Took buffer from pool");
-#endif
+//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//		pr_debug("Took buffer from pool");
+//#endif
 		return diff_buffer;
 	}
 
@@ -136,9 +136,9 @@ void diff_buffer_release(struct diff_area *diff_area, struct diff_buffer *diff_b
 	if (unlikely(!diff_buffer))
 		return;
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	pr_debug("Release buffer");
-#endif
+//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//	pr_debug("Release buffer");
+//#endif
 	if (atomic_read(&diff_area->free_diff_buffers_count) > free_diff_buffer_pool_size) {
 		diff_buffer_free(diff_buffer);
 		return;
