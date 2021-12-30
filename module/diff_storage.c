@@ -4,6 +4,9 @@
 #include <linux/sched/mm.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#include "memory_checker.h"
+#endif
 #include "blk_snap.h"
 #include "params.h"
 #include "chunk.h"
@@ -63,7 +66,9 @@ struct diff_storage *diff_storage_new(void)
 	diff_storage = kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
 	if (!diff_storage)
 		return NULL;
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_diff_storage);
+#endif
 	kref_init(&diff_storage->kref);
 	spin_lock_init(&diff_storage->lock);
 	INIT_LIST_HEAD(&diff_storage->storage_bdevs);
@@ -106,20 +111,33 @@ void diff_storage_free(struct kref *kref)
 	while ((blk = first_empty_storage_block(diff_storage))) {
 		list_del(&blk->link);
 		kfree(blk);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_storage_block);
+#endif
 	}
 
 	while ((blk = first_filled_storage_block(diff_storage))) {
 		list_del(&blk->link);
 		kfree(blk);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_storage_block);
+#endif
 	}
 
 	while ((storage_bdev = first_storage_bdev(diff_storage))) {
 		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
 		list_del(&storage_bdev->link);
 		kfree(storage_bdev);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_storage_bdev);
+#endif
 	}
-
 	event_queue_done(&diff_storage->event_queue);
+
+	kfree(diff_storage);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_dec(memory_object_diff_storage);
+#endif
 }
 
 struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
@@ -157,7 +175,9 @@ struct block_device *diff_storage_add_storage_bdev(struct diff_storage *diff_sto
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_storage_bdev);
+#endif
 	storage_bdev->bdev = bdev;
 	storage_bdev->dev_id = dev_id;
 	INIT_LIST_HEAD(&storage_bdev->link);
@@ -181,7 +201,9 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
 		return -ENOMEM;
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_storage_block);
+#endif
 	INIT_LIST_HEAD(&storage_block->link);
 	storage_block->bdev = bdev;
 	storage_block->sector = sector;
@@ -246,7 +268,7 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
  * Remove the allocation. Explicitly add to the piece.
  *
  */
-struct diff_region *diff_storage_get_store(struct diff_storage *diff_storage, sector_t count)
+struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, sector_t count)
 {
 	int ret = 0;
 	struct diff_region *diff_region;
@@ -259,7 +281,9 @@ struct diff_region *diff_storage_get_store(struct diff_storage *diff_storage, se
 	diff_region = kzalloc(sizeof(struct diff_region), GFP_NOIO);
 	if (!diff_region)
 		return ERR_PTR(-ENOMEM);
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_diff_region);
+#endif
 	spin_lock(&diff_storage->lock);
 	do {
 		storage_block = first_empty_storage_block(diff_storage);
@@ -303,7 +327,7 @@ struct diff_region *diff_storage_get_store(struct diff_storage *diff_storage, se
 
 	if (ret) {
 		pr_err("Cannot get empty storage block\n");
-		kfree(diff_region);
+		diff_storage_free_store(diff_region);
 		return ERR_PTR(ret);
 	}
 

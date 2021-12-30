@@ -37,3 +37,14 @@ int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code,
 		  const char *fmt, ...);
 */
 struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_ms);
+
+static inline
+void event_free(struct event *event)
+{
+        if (event) {
+                kfree(event);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_event);
+#endif
+        }
+};

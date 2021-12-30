@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#include "memory_checker.h"
+#endif
 #include "params.h"
 #include "diff_buffer.h"
 #include "diff_area.h"
@@ -30,11 +32,18 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 
 	for (inx = 0; inx < diff_buffer->page_count; inx++) {
 		page = diff_buffer->pages[inx];
-		if (page)
+		if (page) {
 			__free_page(page);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+			memory_object_dec(memory_object_page);
+#endif
+		}
 	}
 
 	kfree(diff_buffer);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_dec(memory_object_diff_buffer);
+#endif
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
 	pr_debug("Free buffer #%d \n",
 		atomic_read(&diff_buffer_allocated_counter));
@@ -60,7 +69,9 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 			      gfp_mask);
 	if (!diff_buffer)
 		return NULL;
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_diff_buffer);
+#endif
 #ifdef CONFIG_DEBUG_DIFF_BUFFER
 	atomic_inc(&diff_buffer_allocated_counter);
 	pr_debug("Allocate buffer #%d \n",
@@ -74,7 +85,9 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		page = alloc_page(gfp_mask);
 		if (!page)
 			goto fail;
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_inc(memory_object_page);
+#endif
 		diff_buffer->pages[inx] = page;
 	}
 	return diff_buffer;

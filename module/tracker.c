@@ -3,7 +3,9 @@
 #include <linux/slab.h>
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#include "memory_checker.h"
+#endif
 #include "params.h"
 #include "blk_snap.h"
 #include "tracker.h"
@@ -46,6 +48,9 @@ void tracker_free(struct kref *kref)
 	diff_area_put(tracker->diff_area);
 	cbt_map_put(tracker->cbt_map);
 	kfree(tracker);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_dec(memory_object_tracker);
+#endif
 }
 
 struct tracker *tracker_get_by_dev(struct block_device *bdev)
@@ -220,7 +225,9 @@ struct tracker *tracker_new(struct block_device* bdev)
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
 	if (tracker == NULL)
 		return ERR_PTR(-ENOMEM);
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_tracker);
+#endif
 	kref_init(&tracker->kref);
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->dev_id = bdev->bd_dev;
@@ -318,6 +325,9 @@ void tracker_done(void)
 
 		tracker_remove(tr_dev->dev_id);
 		kfree(tr_dev);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_tracked_device);
+#endif
 	}
 }
 
@@ -346,6 +356,9 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		tracker = ERR_PTR(-ENOMEM);
 		goto put_bdev;
 	}
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_tracked_device);
+#endif
 	INIT_LIST_HEAD(&tr_dev->link);
 	tr_dev->dev_id = dev_id;
 
@@ -354,6 +367,9 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		pr_err("Failed to create tracker. errno=%d\n",
 			abs((int)PTR_ERR(tracker)));
 		kfree(tr_dev);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_tracked_device);
+#endif
 	} else {
 		spin_lock(&tracked_device_lock);
 		list_add_tail(&tr_dev->link, &tracked_device_list);
@@ -414,7 +430,12 @@ int tracker_remove(dev_t dev_id)
 		}
 		spin_unlock(&tracked_device_lock);
 
-		kfree(tr_dev);
+		if (tr_dev) {
+			kfree(tr_dev);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+			memory_object_dec(memory_object_tracked_device);
+#endif
+		}
 	}
 put_tracker:
 	tracker_put(tracker);

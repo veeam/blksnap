@@ -3,7 +3,9 @@
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#include "memory_checker.h"
+#endif
 #include "sysfs.h"
 #include "ctrl.h"
 #include "blk_snap.h"

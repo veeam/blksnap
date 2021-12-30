@@ -2,6 +2,9 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-area: " fmt
 #include <linux/genhd.h>
 #include <linux/slab.h>
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#include "memory_checker.h"
+#endif
 #include "params.h"
 #include "blk_snap.h"
 #include "chunk.h"
@@ -139,6 +142,9 @@ void diff_area_free(struct kref *kref)
 			diff_buffer_allocated_counter_get());
 #endif
 	kfree(diff_area);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_dec(memory_object_diff_area);
+#endif
 }
 
 static inline
@@ -235,7 +241,9 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_diff_area);
+#endif
 	diff_area->orig_bdev = bdev;
 	diff_area->diff_storage = diff_storage;
 

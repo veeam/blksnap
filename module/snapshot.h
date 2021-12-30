@@ -65,4 +65,3 @@ int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array);
 int snapshot_collect_images(uuid_t *id,
 			    struct blk_snap_image_info __user *image_info_array,
 			    unsigned int *pcount);
-

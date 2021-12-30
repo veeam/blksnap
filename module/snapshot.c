@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapshot: " fmt
 #include <linux/slab.h>
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#include "memory_checker.h"
+#endif
 #include "blk_snap.h"
 #include "snapshot.h"
 #include "tracker.h"
@@ -90,14 +93,32 @@ void snapshot_free(struct kref *kref)
 	if (snapshot->is_taken)
 		snapshot_release(snapshot);
 
-	kfree(snapshot->snapimage_array);
-	kfree(snapshot->tracker_array);
+	if (snapshot->snapimage_array) {
+		kfree(snapshot->snapimage_array);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_snapimage_array);
+#endif
+	}
+	if (snapshot->tracker_array) {
+		kfree(snapshot->tracker_array);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_tracker_array);
+#endif
+	}
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-	kfree(snapshot->superblock_array);
+	if (snapshot->superblock_array) {
+		kfree(snapshot->superblock_array);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_superblock_array);
+#endif
+	}
 #endif
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_dec(memory_object_snapshot);
+#endif
 }
 
 static inline
@@ -123,26 +144,34 @@ struct snapshot *snapshot_new(unsigned int count)
 		ret= -ENOMEM;
 		goto fail;
 	}
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_snapshot);
+#endif
 	snapshot->tracker_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->tracker_array) {
 		ret = -ENOMEM;
 		goto fail_free_snapshot;
 	}
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_tracker_array);
+#endif
 	snapshot->snapimage_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->snapimage_array) {
 		ret = -ENOMEM;
 		goto fail_free_trackers;
 	}
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_snapimage_array);
+#endif
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	snapshot->superblock_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->superblock_array) {
 		ret = -ENOMEM;
 		goto fail_free_snapimage;
 	}
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_superblock_array);
+#endif
 #endif
 	snapshot->diff_storage = diff_storage_new();
 	if (!snapshot->diff_storage) {
@@ -159,13 +188,33 @@ struct snapshot *snapshot_new(unsigned int count)
 
 fail_free_snapimage:
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-	kfree(snapshot->superblock_array);
+	if (snapshot->superblock_array) {
+		kfree(snapshot->superblock_array);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_superblock_array);
 #endif
-	kfree(snapshot->snapimage_array);
+	}
+#endif
+	if (snapshot->snapimage_array) {
+		kfree(snapshot->snapimage_array);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_snapimage_array);
+#endif
+	}
 fail_free_trackers:
-	kfree(snapshot->tracker_array);
+	if (snapshot->tracker_array) {
+		kfree(snapshot->tracker_array);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_tracker_array);
+#endif
+	}
 fail_free_snapshot:
-	kfree(snapshot);
+	if (snapshot) {
+		kfree(snapshot);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_dec(memory_object_snapshot);
+#endif
+	}
 fail:
 	return ERR_PTR(ret);
 }
@@ -191,6 +240,11 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uui
 	struct snapshot *snapshot = NULL;
 	int ret;
 	unsigned int inx;
+
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	pr_debug("DEBUG! Check memory leak:\n");
+	memory_object_print();
+#endif
 
 	pr_info("Create snapshot for devices:\n");
 	for (inx = 0; inx < count; ++inx)
@@ -280,6 +334,10 @@ int snapshot_destroy(uuid_t *id)
 	}
 
 	snapshot_put(snapshot);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	pr_debug("DEBUG! Check memory leak:\n");
+	memory_object_print();
+#endif
 	return 0;
 }
 
@@ -531,7 +589,9 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 		ret = -ENOMEM;
 		goto out;
 	}
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_blk_snap_image_info);
+#endif
 	for (inx=0; inx<snapshot->count; inx++) {
 		if (snapshot->tracker_array[inx]) {
 			dev_t orig_dev_id = snapshot->tracker_array[inx]->dev_id;
@@ -558,7 +618,12 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 	}
 out:
 	*pcount = snapshot->count;
-	kfree(image_info_array);
+	if (image_info_array) {
+		kfree(image_info_array);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+		memory_object_inc(memory_object_blk_snap_image_info);
+#endif
+	}
 	snapshot_put(snapshot);
 
 	return ret;

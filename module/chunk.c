@@ -3,6 +3,9 @@
 #include <linux/slab.h>
 #include <linux/dm-io.h>
 #include <linux/sched/mm.h>
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#include "memory_checker.h"
+#endif
 #include "params.h"
 #include "chunk.h"
 #include "diff_io.h"
@@ -26,7 +29,8 @@ void chunk_store_failed(struct chunk *chunk, int error)
 		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}
-	kfree(chunk->diff_store);
+	diff_storage_free_store(chunk->diff_store);
+
 	mutex_unlock(&chunk->lock);
 	diff_area_set_corrupted(diff_area, error);
 };
@@ -49,7 +53,7 @@ void chunk_schedule_storing(struct chunk *chunk)
 	if (!chunk->diff_store) {
 		struct diff_region *diff_store;
 
-		diff_store = diff_storage_get_store(
+		diff_store = diff_storage_new_store(
 				diff_area->diff_storage,
 				diff_area_chunk_sectors(diff_area));
 		if (unlikely(IS_ERR(diff_store))) {
@@ -193,7 +197,9 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
-
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_inc(memory_object_chunk);
+#endif
 	INIT_LIST_HEAD(&chunk->cache_link);
 	mutex_init(&chunk->lock);
 	chunk->diff_area = diff_area;
@@ -216,11 +222,14 @@ void chunk_free(struct chunk *chunk)
 		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}
-	kfree(chunk->diff_store);
+	diff_storage_free_store(chunk->diff_store);
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	mutex_unlock(&chunk->lock);
 
 	kfree(chunk);
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+	memory_object_dec(memory_object_chunk);
+#endif
 }
 
 /**

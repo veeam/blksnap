@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: GPL-2.0
+#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#define pr_fmt(fmt) KBUILD_MODNAME "-memory_checker: " fmt
+#include <linux/atomic.h>
+#include <linux/module.h>
+#include "memory_checker.h"
+
+#ifdef CONFIG_DEBUGLOG
+#undef pr_debug
+#define pr_debug(fmt, ...) \
+	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
+char *memory_object_names[] = {
+	/*alloc_page*/
+	"page",
+	/*kzalloc*/
+	"cbt_map",
+	"chunk",
+	"blk_snap_snaphot_event",
+	"diff_area",
+	"big_buffer",
+	"diff_io",
+	"diff_storage",
+	"storage_bdev",
+	"storage_block",
+	"diff_region",
+	"diff_buffer",
+	"event",
+	"snapimage",
+	"snapshot",
+	"tracker",
+	"tracked_device",
+	/*kcalloc*/
+	"blk_snap_cbt_info",
+	"blk_snap_block_range",
+	"blk_snap_dev_t",
+	"tracker_array",
+	"snapimage_array",
+	"superblock_array",
+	"blk_snap_image_info",
+	/*end*/
+};
+
+static_assert(sizeof(memory_object_names) == (memory_object_count * sizeof(char *)), \
+	"The size of enum memory_object_type is not equal to size of memory_object_names array.");
+
+static
+atomic_t memory_counter[memory_object_count];
+
+void memory_object_inc(enum memory_object_type type)
+{
+	if (unlikely(type >= memory_object_count))
+		return;
+
+	atomic_inc(&memory_counter[type]);
+}
+
+void memory_object_dec(enum memory_object_type type)
+{
+	if (unlikely(type >= memory_object_count))
+		return;
+
+	atomic_dec(&memory_counter[type]);
+}
+
+void memory_object_print(void )
+{
+	int cnt;
+
+	pr_debug("Statistics for objects in memory:\n");
+	for (cnt=0; cnt<memory_object_count; cnt++)
+		pr_debug("%s: %d\n", memory_object_names[cnt], atomic_read(&memory_counter[cnt]));
+}
+
+#endif
