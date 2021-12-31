@@ -621,7 +621,7 @@ out:
 	if (image_info_array) {
 		kfree(image_info_array);
 #ifdef CONFIG_DEBUG_MEMORY_LEAK
-		memory_object_inc(memory_object_blk_snap_image_info);
+		memory_object_dec(memory_object_blk_snap_image_info);
 #endif
 	}
 	snapshot_put(snapshot);
