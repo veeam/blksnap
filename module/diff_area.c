@@ -306,19 +306,17 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 	for (offset = area_sect_first; offset < (sector + count); offset += chunk_sectors) {
 		chunk = xa_load(&diff_area->chunk_map, chunk_number(diff_area, offset));
 		if (!chunk) {
-			ret = -EINVAL;
-			break;
+			diff_area_set_corrupted(diff_area, -EINVAL);
+			return -EINVAL;
 		}
 		WARN_ON(chunk_number(diff_area, offset) != chunk->number);
 		if (is_nowait) {
-			if (!mutex_trylock(&chunk->lock)) {
-				ret = -EAGAIN;
-				break;
-			}
+			if (!mutex_trylock(&chunk->lock))
+				return -EAGAIN;
 		} else
 			mutex_lock(&chunk->lock);
 
-		if (chunk_state_check(chunk, CHUNK_ST_FAILED | CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY | CHUNK_ST_BUFFER_READY)) {
+		if (chunk_state_check(chunk, CHUNK_ST_FAILED | CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY)) {
 			/*
 			 * The сhunk has already been:
 			 * - failed, when snapshot corrupted,
@@ -336,31 +334,42 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			goto fail_unlock_chunk;
 		}
 
-		if (is_nowait) {
-			diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO | GFP_NOWAIT);
-			if (IS_ERR(diff_buffer)) {
-				ret = -EAGAIN;
+		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
+			/**
+			 * The chunk has already been read, but now we need
+			 * to store it to diff_storage.
+			 */
+			ret = chunk_schedule_storing(chunk, is_nowait);
+			if (unlikely(ret))
 				goto fail_unlock_chunk;
-			}
 		} else {
-			diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO);
-			if (IS_ERR(diff_buffer)) {
-				ret = PTR_ERR(diff_buffer);
-				goto fail_unlock_chunk;
+			if (is_nowait) {
+				diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO | GFP_NOWAIT);
+				if (IS_ERR(diff_buffer)) {
+					ret = -EAGAIN;
+					goto fail_unlock_chunk;
+				}
+			} else {
+				diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO);
+				if (IS_ERR(diff_buffer)) {
+					ret = PTR_ERR(diff_buffer);
+					goto fail_unlock_chunk;
+				}
 			}
-		}
-		WARN_ON(chunk->diff_buffer);
-		chunk->diff_buffer = diff_buffer;
+			WARN_ON(chunk->diff_buffer);
+			chunk->diff_buffer = diff_buffer;
 
-		ret = chunk_asunc_load_orig(chunk, is_nowait);
-		if (unlikely(ret))
-			goto fail_unlock_chunk;
+			ret = chunk_asunc_load_orig(chunk, is_nowait);
+			if (unlikely(ret))
+				goto fail_unlock_chunk;
+		}
 	}
 
 	return ret;
 fail_unlock_chunk:
+	WARN_ON(!chunk);
 	WARN_ON(!mutex_is_locked(&chunk->lock));
-	mutex_unlock(&chunk->lock);
+	chunk_store_failed(chunk, ret);
 	return ret;
 }
 
@@ -368,11 +377,14 @@ static inline
 void diff_area_image_put_chunk(struct chunk* chunk, bool is_write)
 {
 	if (is_write) {
+		int ret;
 //#ifdef CONFIG_DEBUG_DIFF_BUFFER
 //		pr_debug("chunk #%ld should be stored\n", chunk->number);
 //		pr_debug("chunk buffer #%d \n", chunk->diff_buffer->number);
 //#endif
-		chunk_schedule_storing(chunk);
+		ret = chunk_schedule_storing(chunk, false);
+		if (ret)
+			chunk_store_failed(chunk, ret);
 	}
 	else {
 //#ifdef CONFIG_DEBUG_DIFF_BUFFER

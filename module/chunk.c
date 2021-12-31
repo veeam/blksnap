@@ -19,7 +19,6 @@
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-static inline
 void chunk_store_failed(struct chunk *chunk, int error)
 {
 	struct diff_area *diff_area = chunk->diff_area;
@@ -36,11 +35,9 @@ void chunk_store_failed(struct chunk *chunk, int error)
 	diff_area_set_corrupted(diff_area, error);
 };
 
-void chunk_schedule_storing(struct chunk *chunk)
+int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 {
-	int ret;
 	struct diff_area *diff_area = chunk->diff_area;
-
 
 	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
 	might_sleep();
@@ -48,7 +45,7 @@ void chunk_schedule_storing(struct chunk *chunk)
 
 	if (diff_area->in_memory) {
 		mutex_unlock(&chunk->lock);
-		return;
+		return 0;
 	}
 
 	if (!chunk->diff_store) {
@@ -58,17 +55,14 @@ void chunk_schedule_storing(struct chunk *chunk)
 				diff_area->diff_storage,
 				diff_area_chunk_sectors(diff_area));
 		if (unlikely(IS_ERR(diff_store))) {
-			chunk_store_failed(chunk, PTR_ERR(diff_store));
 			pr_debug("Cannot get store for chunk #%ld\n", chunk->number);
-			return;
+			return PTR_ERR(diff_store);
 		}
 
 		chunk->diff_store = diff_store;
 	}
 
-	ret = chunk_async_store_diff(chunk);
-	if (ret)
-		chunk_store_failed(chunk, ret);
+	return chunk_async_store_diff(chunk, is_nowait);
 }
 
 void chunk_schedule_caching(struct chunk *chunk)
@@ -132,14 +126,17 @@ void chunk_notify_load(void *ctx)
 	}
 
 	if (chunk_state_check(chunk, CHUNK_ST_LOADING)) {
+		int ret;
 		unsigned int current_flag;
 
 		chunk_state_unset(chunk, CHUNK_ST_LOADING);
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 
 		current_flag = memalloc_noio_save();
-		chunk_schedule_storing(chunk);
+		ret = chunk_schedule_storing(chunk, false);
 		memalloc_noio_restore(current_flag);
+		if (ret)
+			chunk_store_failed(chunk, ret);
 		goto out;
 	}
 
@@ -238,7 +235,7 @@ void chunk_free(struct chunk *chunk)
  *	difference storage.
  *
  */
-int chunk_async_store_diff(struct chunk *chunk)
+int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 {
 	int ret;
 	struct diff_io *diff_io;
@@ -251,16 +248,20 @@ int chunk_async_store_diff(struct chunk *chunk)
 	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_ADDRESS, 16, 1,
 		page_address(chunk->diff_buffer->pages[0]), 64, true);
 #endif
-	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, false);
-	if (unlikely(!diff_io))
-		return -ENOMEM;
+	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, is_nowait);
+	if (unlikely(!diff_io)) {
+		if (is_nowait)
+			return -EAGAIN;
+		else
+			return -ENOMEM;
+	}
 
 	WARN_ON(chunk->diff_io);
 	chunk->diff_io = diff_io;
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, false);
+	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
