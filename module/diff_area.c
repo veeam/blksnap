@@ -335,7 +335,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		} else
 			mutex_lock(&chunk->lock);
 
-		if (chunk_state_check(chunk, CHUNK_ST_FAILED | CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY)) {
+		if (chunk_state_check(chunk, CHUNK_ST_FAILED | CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY | CHUNK_ST_BUFFER_READY)) {
 			/*
 			 * The сhunk has already been:
 			 * - failed, when snapshot corrupted,
