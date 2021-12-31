@@ -88,7 +88,6 @@ void diff_area_free(struct kref *kref)
 	unsigned long inx;
 	u64 start_waiting;
 	struct chunk *chunk;
-	struct diff_buffer *diff_buffer = NULL;
 	struct diff_area *diff_area = container_of(kref, struct diff_area, kref);
 
 	inx = 0;
@@ -121,26 +120,8 @@ void diff_area_free(struct kref *kref)
 	}
 
 	/* Cleanup free_diff_buffers */
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	pr_debug("Cleanup %d buffers\n", diff_buffer_allocated_counter_get());
-#endif
-	do {
-		spin_lock(&diff_area->free_diff_buffers_lock);
-		diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
-		if (diff_buffer) {
-			list_del(&diff_buffer->link);
-			atomic_dec(&diff_area->free_diff_buffers_count);
-		}
-		spin_unlock(&diff_area->free_diff_buffers_lock);
+	diff_buffer_cleanup(diff_area);
 
-		if (diff_buffer)
-			diff_buffer_free(diff_buffer);
-	} while(diff_buffer);
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-	if (diff_buffer_allocated_counter_get())
-		pr_debug("Some buffers %d still available\n",
-			diff_buffer_allocated_counter_get());
-#endif
 	kfree(diff_area);
 #ifdef CONFIG_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_area);
@@ -212,9 +193,11 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 //#endif
 		WARN_ON(!mutex_is_locked(&chunk->lock));
 		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
+			chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 			diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 			chunk->diff_buffer = NULL;
-			chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
+		} else {
+			WARN_ON(chunk->diff_buffer);
 		}
 		mutex_unlock(&chunk->lock);
 	}
@@ -366,6 +349,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 				goto fail_unlock_chunk;
 			}
 		}
+		WARN_ON(chunk->diff_buffer);
 		chunk->diff_buffer = diff_buffer;
 
 		ret = chunk_asunc_load_orig(chunk, is_nowait);
@@ -384,11 +368,16 @@ static inline
 void diff_area_image_put_chunk(struct chunk* chunk, bool is_write)
 {
 	if (is_write) {
-		//pr_err("chunk #%ld should be stored\n", chunk->number);
+//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//		pr_debug("chunk #%ld should be stored\n", chunk->number);
+//		pr_debug("chunk buffer #%d \n", chunk->diff_buffer->number);
+//#endif
 		chunk_schedule_storing(chunk);
 	}
 	else {
-		//pr_err("chunk #%ld should be in cache\n", chunk->number);
+//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//		pr_debug("chunk #%ld should be in cache\n", chunk->number);
+//#endif
 		chunk_schedule_caching(chunk);
 	}
 }
@@ -449,16 +438,15 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	 * from diff storage.
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
-		if (!chunk->diff_buffer) {
-			struct diff_buffer *diff_buffer;
+		struct diff_buffer *diff_buffer;
 
-			diff_buffer = diff_buffer_take(diff_area, GFP_NOIO);
-			if (IS_ERR(diff_buffer)) {
-				ret = PTR_ERR(diff_buffer);
-				goto fail_unlock_chunk;
-			}
-			chunk->diff_buffer = diff_buffer;
+		diff_buffer = diff_buffer_take(diff_area, GFP_NOIO);
+		if (IS_ERR(diff_buffer)) {
+			ret = PTR_ERR(diff_buffer);
+			goto fail_unlock_chunk;
 		}
+		WARN_ON(chunk->diff_buffer);
+		chunk->diff_buffer = diff_buffer;
 
 		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
 			//pr_debug("DEBUG! load diff chunk #%ld\n", chunk->number);
@@ -475,14 +463,14 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		/* Set the flag that the buffer contains the required data. */
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
 	} else {
-#ifdef CONFIG_DEBUG_CHUNK_IO
-		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
-			pr_debug("DEBUG! load diff chunk #%ld from cache\n", chunk->number);
-#endif
+//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
+//			pr_debug("DEBUG! load diff chunk #%ld buffer_number=%d from cache\n",
+//				chunk->number, chunk->diff_buffer->number);
+//#endif
 		spin_lock(&diff_area->cache_list_lock);
 		if (chunk_state_check(chunk, CHUNK_ST_IN_CACHE))
 			list_move_tail(&chunk->cache_link, &diff_area->caching_chunks);
-
 		spin_unlock(&diff_area->cache_list_lock);
 	}
 

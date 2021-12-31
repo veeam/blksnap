@@ -26,6 +26,7 @@ void chunk_store_failed(struct chunk *chunk, int error)
 
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	if (chunk->diff_buffer) {
+		chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}

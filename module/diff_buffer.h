@@ -21,6 +21,9 @@ struct diff_area;
 struct diff_buffer {
         struct list_head link;
         size_t size;
+#ifdef CONFIG_DEBUG_DIFF_BUFFER
+        int number;
+#endif
         size_t page_count;
         struct page *pages[0];
 };
@@ -67,13 +70,7 @@ bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct 
         return true;
 };
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
-int diff_buffer_allocated_counter_get(void );
-#endif
-
-void diff_buffer_free(struct diff_buffer *diff_buffer);
-struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-				    gfp_t gfp_mask);
-
 struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask);
 void diff_buffer_release(struct diff_area *diff_area, struct diff_buffer *diff_buffer);
+void diff_buffer_cleanup(struct diff_area *diff_area);
+
