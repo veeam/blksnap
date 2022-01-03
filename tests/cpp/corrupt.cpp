@@ -79,6 +79,7 @@ public:
         : m_seqNumber(0)
         , m_failCount(0)
         , m_logLineCount(0)
+        , m_isCrc32Checking(true)
     {
 
     };
@@ -108,7 +109,10 @@ public:
             header->seqNumber = m_seqNumber;
             header->seqTime = std::clock();
             header->sector = sector;
-            header->crc = crc32(0, buffer + offset + sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
+            if (m_isCrc32Checking)
+                header->crc = crc32(0, buffer + offset + sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
+            else
+                header->crc = 'CC32';
 
             sector++;
         }
@@ -119,7 +123,11 @@ public:
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
             struct STestSector *current = (STestSector *)buffer;
             STestHeader *header = &current->header;
-            int crc = crc32(0, buffer+sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
+            int crc;
+            if (m_isCrc32Checking)
+                crc = crc32(0, buffer+sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
+            else
+                crc = 'CC32';
 
             bool isCorrupted = (crc != header->crc);
             bool isIncorrect = (sector != header->sector);
@@ -181,6 +189,7 @@ private:
     int m_failCount;
     int m_logLineCount;
     std::vector<SRange> failedRanges;
+    bool m_isCrc32Checking;
 
 private:
     void LogSector(sector_t sector, const std::string &failMessage)
@@ -276,7 +285,7 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
                       const std::shared_ptr<CBlockDevice> &ptrBdev)
 {
     off_t sizeBdev = ptrBdev->Size();
-    int count = CRandomHelper::GenerateInt() & 0x3FF;
+    int count = CRandomHelper::GenerateInt() & 0x3FFF;//0x3FF;
     int cnt = 0;
     size_t totalSize = 0;
 
@@ -323,6 +332,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         auto ptrSession = CreateBlksnapSession(devices, diffStorage);
         int testSeqNumber = ptrGen->GetSequenceNumber();
         clock_t testSeqTime = std::clock();
+        std::cout << "test sequence time " << testSeqTime << std::endl;
 
         std::string imageDevName = ptrSession->GetImageDevice(origDevName);
         std::cout << "Found image block device "<< imageDevName << std::endl;
