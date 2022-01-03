@@ -45,6 +45,7 @@ struct STestHeader
 {
     int crc;
     int seqNumber;
+    clock_t seqTime;
     sector_t sector;
 };
 
@@ -86,7 +87,7 @@ public:
 
     };
 
-    void IncSequenceNumber()
+    void IncSequence()
     {
         m_seqNumber++;
     };
@@ -105,6 +106,7 @@ public:
 
             STestHeader *header = &current->header;
             header->seqNumber = m_seqNumber;
+            header->seqTime = std::clock();
             header->sector = sector;
             header->crc = crc32(0, buffer + offset + sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
 
@@ -112,7 +114,7 @@ public:
         }
     };
 
-    void Check(unsigned char *buffer, size_t size, sector_t sector, const int seqNumber)
+    void Check(unsigned char *buffer, size_t size, sector_t sector, const int seqNumber, const clock_t seqTime)
     {
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
             struct STestSector *current = (STestSector *)buffer;
@@ -121,9 +123,10 @@ public:
 
             bool isCorrupted = (crc != header->crc);
             bool isIncorrect = (sector != header->sector);
-            bool isInvalidSeq = (seqNumber < header->seqNumber);
+            bool isInvalidSeqNumber = (header->seqNumber > seqNumber);
+            bool isInvalidSeqTime = (header->seqTime > seqTime);
 
-            if (isCorrupted || isIncorrect || isInvalidSeq) {
+            if (isCorrupted || isIncorrect || isInvalidSeqNumber || isInvalidSeqTime) {
                 std::string failMessage;
 
                 if (m_logLineCount == 30)
@@ -138,10 +141,15 @@ public:
                         failMessage += std::string("Incorrect sector\n");
                         failMessage += std::string("sector " + std::to_string(header->sector) + " != " + std::to_string(sector) + "\n");
                     }
-                    if (isInvalidSeq) {
+                    if (isInvalidSeqNumber) {
                         failMessage += std::string("Invalid sequence number\n");
                         failMessage += std::string("sector " + std::to_string(header->sector) + "\n");
-                        failMessage += std::string("seqNumber " + std::to_string(header->seqNumber) + " != " + std::to_string(seqNumber) + "\n");
+                        failMessage += std::string("seqNumber " + std::to_string(header->seqNumber) + " > " + std::to_string(seqNumber) + "\n");
+                    }
+                    if (isInvalidSeqTime) {
+                        failMessage += std::string("Invalid sequence time\n");
+                        failMessage += std::string("sector " + std::to_string(header->sector) + "\n");
+                        failMessage += std::string("seqTime " + std::to_string(header->seqTime) + " > " + std::to_string(seqTime) + "\n");
                     }
                 }
 
@@ -229,7 +237,7 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
  */
 void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
               const std::shared_ptr<CBlockDevice>& ptrBdev,
-              const int seqNumber)
+              const int seqNumber, const clock_t seqTime)
 {
     AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024*1024);
     off_t sizeBdev = ptrBdev->Size();
@@ -240,7 +248,7 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
 
         ptrBdev->Read(portion.Data(), portionSize, offset);
 
-        ptrGen->Check(portion.Data(), portionSize, sector, seqNumber);
+        ptrGen->Check(portion.Data(), portionSize, sector, seqNumber, seqTime);
 
         sector += (portionSize >> SECTOR_SHIFT);
     }
@@ -302,8 +310,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName);
 
-    int testSeqNumber = ptrGen->GetSequenceNumber();
-    std::cout << "-- Fill original device collection by test pattern " << std::endl;
+    std::cout << "-- Fill original device collection by test pattern" << std::endl;
     FillAll(ptrGen, ptrOrininal);
 
     std::vector<std::string> devices;
@@ -314,32 +321,33 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     while (elapsed < durationLimitSec) {
         std::cout << "-- Create snapshot" << std::endl;
         auto ptrSession = CreateBlksnapSession(devices, diffStorage);
-        testSeqNumber = ptrGen->GetSequenceNumber();
+        int testSeqNumber = ptrGen->GetSequenceNumber();
+        clock_t testSeqTime = std::clock();
 
         std::string imageDevName = ptrSession->GetImageDevice(origDevName);
         std::cout << "Found image block device "<< imageDevName << std::endl;
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
         std::cout << "- Check image content before writing to original device" << std::endl;
-        CheckAll(ptrGen, ptrImage, testSeqNumber);
+        CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
 
-        ptrGen->IncSequenceNumber();
-        FillBlocks(ptrGen, ptrOrininal, 0, 4096);
-        FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 8) & ~(SECTOR_SIZE - 1), 4096);
-        FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 4) & ~(SECTOR_SIZE - 1), 4096);
-        FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 2) & ~(SECTOR_SIZE - 1), 4096);
+        //ptrGen->IncSequence();
+        //FillBlocks(ptrGen, ptrOrininal, 0, 4096);
+        //FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 8) & ~(SECTOR_SIZE - 1), 4096);
+        //FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 4) & ~(SECTOR_SIZE - 1), 4096);
+        //FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 2) & ~(SECTOR_SIZE - 1), 4096);
 
-        std::cout << "- Check image content after writing fixed data to original device" << std::endl;
-        CheckAll(ptrGen, ptrImage, testSeqNumber);
+        //std::cout << "- Check image content after writing fixed data to original device" << std::endl;
+        //CheckAll(ptrGen, ptrImage, testSeqNumber);
 
         std::time_t startFillRandom = std::time(nullptr);
         do {
             std::cout << "- Fill some random blocks" << std::endl;
-            ptrGen->IncSequenceNumber();
+            ptrGen->IncSequence();
             FillRandomBlocks(ptrGen, ptrOrininal);
 
             std::cout << "- Check image corruption" << std::endl;
-            CheckAll(ptrGen, ptrImage, testSeqNumber);
+            CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
         } while ((std::time(nullptr) - startFillRandom) < 30);
 
         elapsed = (std::time(nullptr) - startTime);
