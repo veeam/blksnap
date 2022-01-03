@@ -38,7 +38,7 @@ struct SBlksnapState
     uuid_t id;
     std::mutex lock;
     std::vector<std::string> errorMessage;
-    std::vector<std::string> diffStorageFiles;
+    std::list<std::string> diffStorageFiles;
 };
 
 class CBlksnapSession : public IBlksnapSession
@@ -49,6 +49,7 @@ public:
     ~CBlksnapSession() override;
 
     std::string GetImageDevice(const std::string& original) override;
+    bool GetError(std::string &errorMessage) override;
 private:
     uuid_t m_id;
     std::vector<SBlksnapInfo> m_devices;
@@ -190,6 +191,7 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SBlksna
             is_eventReady = ptrBlksnap->WaitEvent(ptrState->id, 100, ev);
         }
         catch (std::exception & ex) {
+            std::cerr << ex.what() << std::endl;
             std::lock_guard<std::mutex> guard(ptrState->lock);
             ptrState->errorMessage.push_back(std::string(ex.what()));
             break;
@@ -219,6 +221,7 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SBlksna
                     FiemapStorage(filename, dev_id, ranges);
 
                     ptrBlksnap->AppendDiffStorage(ptrState->id, dev_id, ranges);
+                    std::cout << "Append " << ranges.size() << "ranges" << std::endl;
                 }
                 break;
             case blk_snap_event_code_corrupted:
@@ -232,6 +235,7 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SBlksna
             }
         }
         catch (std::exception & ex) {
+            std::cerr << ex.what() << std::endl;
             std::lock_guard<std::mutex> guard(ptrState->lock);
             ptrState->errorMessage.push_back(std::string(ex.what()));
         }
@@ -383,4 +387,15 @@ std::string CBlksnapSession::GetImageDevice(const std::string& original)
     }
 
     throw std::runtime_error("Failed to get image device for '"+original+"'.");
+}
+
+bool CBlksnapSession::GetError(std::string &errorMessage)
+{
+    std::lock_guard<std::mutex> guard(m_ptrState->lock);
+    if (!m_ptrState->diffStorageFiles.size())
+        return false;
+
+    errorMessage = m_ptrState->diffStorageFiles.front();
+    m_ptrState->diffStorageFiles.pop_front();
+    return true;
 }

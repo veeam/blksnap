@@ -340,11 +340,17 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         //std::cout << "- Check image content after writing fixed data to original device" << std::endl;
         //CheckAll(ptrGen, ptrImage, testSeqNumber);
 
+        FillBlocks(ptrGen, ptrOrininal, 0, 4096);//
+        FillBlocks(ptrGen, ptrOrininal, 4096, 4096);//
+        FillBlocks(ptrGen, ptrOrininal, 4096 + 4096, 4096);//
+
         std::time_t startFillRandom = std::time(nullptr);
         do {
             std::cout << "- Fill some random blocks" << std::endl;
             ptrGen->IncSequence();
             FillRandomBlocks(ptrGen, ptrOrininal);
+
+            FillBlocks(ptrGen, ptrOrininal, 0, 4096); //
 
             std::cout << "- Check image corruption" << std::endl;
             CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
@@ -352,6 +358,12 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
 
         elapsed = (std::time(nullptr) - startTime);
         std::cout << "-- Elapsed time: "<< elapsed << " seconds" << std::endl;
+
+        std::string errorMessage;
+        while (ptrSession->GetError(errorMessage)) {
+            std::cerr << errorMessage << std::endl;
+            elapsed = 0;
+        }
     }
 
     std::cout << "--- Success: check corruption ---" << std::endl;

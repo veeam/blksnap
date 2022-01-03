@@ -7,6 +7,7 @@ struct IBlksnapSession
     virtual ~IBlksnapSession() {};
 
     virtual std::string GetImageDevice(const std::string& original) = 0;
+    virtual bool GetError(std::string &errorMessage) = 0;
 };
 
 std::shared_ptr<IBlksnapSession>
