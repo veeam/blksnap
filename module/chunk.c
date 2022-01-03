@@ -29,7 +29,8 @@ void chunk_store_failed(struct chunk *chunk, int error)
 		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}
-	diff_storage_free_store(chunk->diff_store);
+	diff_storage_free_store(chunk->diff_region);
+	chunk->diff_region = NULL;
 
 	mutex_unlock(&chunk->lock);
 	diff_area_set_corrupted(diff_area, error);
@@ -38,6 +39,7 @@ void chunk_store_failed(struct chunk *chunk, int error)
 int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 {
 	struct diff_area *diff_area = chunk->diff_area;
+	struct diff_region *diff_region;
 
 	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
 	might_sleep();
@@ -48,19 +50,21 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 		return 0;
 	}
 
-	if (!chunk->diff_store) {
-		struct diff_region *diff_store;
-
-		diff_store = diff_storage_new_store(
-				diff_area->diff_storage,
-				diff_area_chunk_sectors(diff_area));
-		if (unlikely(IS_ERR(diff_store))) {
-			pr_debug("Cannot get store for chunk #%ld\n", chunk->number);
-			return PTR_ERR(diff_store);
-		}
-
-		chunk->diff_store = diff_store;
+	if (chunk->diff_region) {
+		mutex_unlock(&chunk->lock);
+		pr_debug("DEBUG! chunk #%ld already have diff region", chunk->number);
+		return 0;
 	}
+
+	diff_region = diff_storage_new_store(
+			diff_area->diff_storage,
+			diff_area_chunk_sectors(diff_area));
+	if (unlikely(IS_ERR(diff_region))) {
+		pr_debug("Cannot get store for chunk #%ld\n", chunk->number);
+		return PTR_ERR(diff_region);
+	}
+	WARN_ON(chunk->diff_region != NULL);
+	chunk->diff_region = diff_region;
 
 	return chunk_async_store_diff(chunk, is_nowait);
 }
@@ -81,7 +85,8 @@ void chunk_schedule_caching(struct chunk *chunk)
 		need_to_cleanup =
 			atomic_inc_return(&diff_area->caching_chunks_count) >
 			chunk_maximum_in_cache;
-	}
+	} else
+		list_move_tail(&chunk->cache_link, &diff_area->caching_chunks);
 	spin_unlock(&diff_area->cache_list_lock);
 
 	mutex_unlock(&chunk->lock);
@@ -220,7 +225,7 @@ void chunk_free(struct chunk *chunk)
 		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}
-	diff_storage_free_store(chunk->diff_store);
+	diff_storage_free_store(chunk->diff_region);
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	mutex_unlock(&chunk->lock);
 
@@ -239,7 +244,7 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 {
 	int ret;
 	struct diff_io *diff_io;
-	struct diff_region *region = chunk->diff_store;
+	struct diff_region *region = chunk->diff_region;
 
 #ifdef CONFIG_DEBUG_CHUNK_IO
 	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,
@@ -349,7 +354,7 @@ int chunk_load_diff(struct chunk *chunk)
 {
 	int ret;
 	struct diff_io *diff_io;
-	struct diff_region *region = chunk->diff_store;
+	struct diff_region *region = chunk->diff_region;
 
 #ifdef CONFIG_DEBUG_CHUNK_IO
 	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,

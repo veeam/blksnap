@@ -32,7 +32,7 @@ struct diff_io;
  * @state:
  * 	?
  * @lock:
- * 	Syncs access to the chunks fields: state, diff_buffer and diff_store.
+ * 	Syncs access to the chunks fields: state, diff_buffer and diff_region.
  * 	The semaphore is blocked for writing if there is no actual data
  * 	in the buffer, since a block of data is being read from the original
  * 	device or from a diff storage.
@@ -45,8 +45,8 @@ struct diff_io;
  * @diff_buffer:
  * 	Pointer to &struct diff_buffer. Describes a buffer in memory for
  * 	storing chunk data.
- * @diff_store:
- * 	Pointer to &struc diff_region. Describes a copy of the chunk data
+ * @diff_region:
+ * 	Pointer to &struct diff_region. Describes a copy of the chunk data
  * 	on the difference storage.
  * This structure describes the block of data that the module operates with
  * when executing the COW algorithm and when performing IO to snapshot images.
@@ -62,7 +62,7 @@ struct chunk {
 	struct mutex lock;
 
 	struct diff_buffer *diff_buffer;
-	struct diff_region *diff_store;
+	struct diff_region *diff_region;
 	struct diff_io *diff_io;
 };
 

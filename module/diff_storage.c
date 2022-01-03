@@ -265,14 +265,13 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
  *
  * !!! TODO redesign needed !!!
  * It is too expensive to allocate such a small portion of data separately.
- * Remove the allocation. Explicitly add to the piece.
+ * Remove the allocation. Explicitly add to the chunk.
  *
  */
 struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, sector_t count)
 {
 	int ret = 0;
 	struct diff_region *diff_region;
-	struct storage_block *storage_block;
 	sector_t sectors_left;
 
 	if (atomic_read(&diff_storage->overflow_flag))
@@ -286,14 +285,16 @@ struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, se
 #endif
 	spin_lock(&diff_storage->lock);
 	do {
+		struct storage_block *storage_block;
+
 		storage_block = first_empty_storage_block(diff_storage);
-		if (!storage_block) {
+		if (unlikely(!storage_block)) {
 			atomic_inc(&diff_storage->overflow_flag);
 			ret = -ENOSPC;
 			break;
 		}
 
-		if ((storage_block->count - storage_block->used) >= count) {
+		if (likely((storage_block->count - storage_block->used) >= count)) {
 			diff_region->bdev = storage_block->bdev;
 			diff_region->sector = storage_block->sector + storage_block->used;
 			diff_region->count = count;
@@ -302,6 +303,9 @@ struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, se
 			diff_storage->filled += count;
 			break;
 		}
+
+		//pr_debug("DEBUG! Switch to next storage block for chunk %ld", number);
+
 		list_del(&storage_block->link);
 		list_add_tail(&storage_block->link, &diff_storage->filled_blocks);
 #ifdef CONFIG_DEBUG_DIFF_STORAGE_LISTS
