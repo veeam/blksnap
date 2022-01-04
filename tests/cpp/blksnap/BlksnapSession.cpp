@@ -37,8 +37,8 @@ struct SBlksnapState
     std::string diffStorage;
     uuid_t id;
     std::mutex lock;
-    std::vector<std::string> errorMessage;
-    std::list<std::string> diffStorageFiles;
+    std::list<std::string> errorMessage;
+    std::vector<std::string> diffStorageFiles;
 };
 
 class CBlksnapSession : public IBlksnapSession
@@ -392,10 +392,10 @@ std::string CBlksnapSession::GetImageDevice(const std::string& original)
 bool CBlksnapSession::GetError(std::string &errorMessage)
 {
     std::lock_guard<std::mutex> guard(m_ptrState->lock);
-    if (!m_ptrState->diffStorageFiles.size())
+    if (!m_ptrState->errorMessage.size())
         return false;
 
-    errorMessage = m_ptrState->diffStorageFiles.front();
-    m_ptrState->diffStorageFiles.pop_front();
+    errorMessage = m_ptrState->errorMessage.front();
+    m_ptrState->errorMessage.pop_front();
     return true;
 }

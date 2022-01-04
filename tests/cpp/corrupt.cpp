@@ -326,8 +326,10 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     devices.push_back(origDevName);
 
     std::time_t startTime = std::time(nullptr);
-    int elapsed = (std::time(nullptr) - startTime);
-    while (elapsed < durationLimitSec) {
+    int elapsed;
+    bool isErrorFound = false;
+    while (((elapsed = (std::time(nullptr) - startTime)) < durationLimitSec) && !isErrorFound) {
+        std::cout << "-- Elapsed time: "<< elapsed << " seconds" << std::endl;
         std::cout << "-- Create snapshot" << std::endl;
         auto ptrSession = CreateBlksnapSession(devices, diffStorage);
         int testSeqNumber = ptrGen->GetSequenceNumber();
@@ -366,13 +368,11 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
             CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
         } while ((std::time(nullptr) - startFillRandom) < 30);
 
-        elapsed = (std::time(nullptr) - startTime);
-        std::cout << "-- Elapsed time: "<< elapsed << " seconds" << std::endl;
 
         std::string errorMessage;
         while (ptrSession->GetError(errorMessage)) {
             std::cerr << errorMessage << std::endl;
-            elapsed = 0;
+            isErrorFound = true;
         }
     }
 
