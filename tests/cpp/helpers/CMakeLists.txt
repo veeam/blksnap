@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
-project(libhelpers)
+project(helpers)
 
 set(SOURCE_FILES
+    Log.cpp
     BlockDevice.cpp
     RandomHelper.cpp
 )

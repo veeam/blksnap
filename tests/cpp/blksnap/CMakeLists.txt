@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(libblksnap)
+project(blksnap)
 
 set(SOURCE_FILES
     Blksnap.cpp

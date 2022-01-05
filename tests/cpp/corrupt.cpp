@@ -1,13 +1,14 @@
-#include <ctime>
-#include <iostream>
-#include <cstring>
 
+#include <ctime>
+#include <thread>
+#include <atomic>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <zlib.h>
 
+#include "helpers/Log.h"
 #include "helpers/RandomHelper.h"
 #include "helpers/BlockDevice.h"
 #include "helpers/AlignedBuffer.hpp"
@@ -28,18 +29,6 @@ typedef unsigned long long sector_t;
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
-
-/**
- * Algorithm:
- * Заполняем содержимое блочного устройства (задаётся параметром) специальными тестовыми данными.
- * Создаём снапшот.
- * Проверяем, что на образе данные корректны.
- * В цикле перезаписываем случайное количество случайных блоков на устройстве.
- * Проверяем, что на образе данные не изменились.
- * Выполняем эту проверку в течении заданного времени (задаётся параметром).
- *
- *
- */
 
 struct STestHeader
 {
@@ -174,21 +163,27 @@ public:
     {
         return m_failCount;
     };
-
+    /**
+     * The function ShowFails() does not contain locks, since it should be
+     * called when only one thread has access to used data.
+     */
     void ShowFails()
     {
-        std::cerr << m_failCount << " corrupted sectors" << std::endl;
-        std::cerr << failedRanges.size() << " corrupted ranges" << std::endl;
-        std::cerr << "Ranges of corrupted sectors:" << std::endl;
-        for (const SRange &range : failedRanges)
-            std::cerr << range.sector << ":" << range.count << std::endl;
+        std::stringstream ss;
+
+        ss << m_failCount << " corrupted sectors" << std::endl;
+        ss << m_failedRanges.size() << " corrupted ranges" << std::endl;
+        ss << "Ranges of corrupted sectors:" << std::endl;
+        for (const SRange &range : m_failedRanges)
+            ss << range.sector << ":" << range.count << std::endl;
+        logger.Err(ss);
     };
 
 private:
-    int m_seqNumber;
+    std::atomic<int> m_seqNumber;
     int m_failCount;
     int m_logLineCount;
-    std::vector<SRange> failedRanges;
+    std::vector<SRange> m_failedRanges;
     bool m_isCrc32Checking;
 
 private:
@@ -198,15 +193,15 @@ private:
             return;
 
         m_logLineCount++;
-        std::cerr << failMessage << std::endl;
+        logger.Err(failMessage);
     }
 
     void SetFailedSector(sector_t sector, const std::string &failMessage)
     {
         m_failCount++;
 
-        if (!failedRanges.empty()) {
-            SRange &lastRange = failedRanges[failedRanges.size()-1];
+        if (!m_failedRanges.empty()) {
+            SRange &lastRange = m_failedRanges[m_failedRanges.size()-1];
             if ((lastRange.sector + lastRange.count) == sector) {
                 lastRange.count++;
                 //LogSector(sector, failMessage);
@@ -214,7 +209,7 @@ private:
             }
         }
 
-        failedRanges.emplace_back(sector, 1);
+        m_failedRanges.emplace_back(sector, 1);
         LogSector(sector, failMessage);
     };
 };
@@ -229,7 +224,7 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
-    std::cout << "device [" << ptrBdev->Name() << "] size " << ptrBdev->Size() << " bytes" << std::endl;
+    logger.Info("device [" + ptrBdev->Name() + "] size " + std::to_string(ptrBdev->Size()) + " bytes");
     for (off_t offset = 0; offset < sizeBdev; offset += portion.Size()) {
         size_t portionSize = std::min(portion.Size(), static_cast<size_t>(sizeBdev-offset));
 
@@ -282,44 +277,41 @@ void FillBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
  * Fill some random blocks with random offset
  */
 void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
-                      const std::shared_ptr<CBlockDevice> &ptrBdev)
+                      const std::shared_ptr<CBlockDevice> &ptrBdev, const int count)
 {
     off_t sizeBdev = ptrBdev->Size();
-    int count = CRandomHelper::GenerateInt() & 0x3FFF;//0x3FF;
-    int cnt = 0;
     size_t totalSize = 0;
+    std::stringstream ss;
 
-    std::cout << count << " write transaction" << std::endl;
-    for (; count > 0; count--)
+    logger.Detail(std::string("write "+std::to_string(count)+" transactions"));
+    for (int cnt = 0; cnt < count; cnt++)
     {
         size_t size = static_cast<size_t>((CRandomHelper::GenerateInt() & 0x1F) + 1) << SECTOR_SHIFT;
         off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << SECTOR_SHIFT;
         if (offset > (sizeBdev - size))
             offset = offset % (sizeBdev - size);
 
-        //std::cout << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
-        //if ((cnt & 0x7) == 0x7)
-        //    std::cout << std::endl;
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
         FillBlocks(ptrGen, ptrBdev, offset, size);
-        cnt++;
         totalSize += size;
     }
-    //if ((cnt & 0x7))
-    //    std::cout << std::endl;
-    std::cout << (totalSize >> SECTOR_SHIFT) << " sectors was wrote" << std::endl;
+    logger.Detail(ss);
+
+    logger.Info("wrote " + std::to_string(count) + " transactions in total with " + std::to_string(totalSize >> SECTOR_SHIFT) + " sectors");
+
 }
 
 void CheckCorruption(const std::string &origDevName, const std::string &diffStorage, const int durationLimitSec)
 {
-    std::cout << "--- Test: check corruption ---" << std::endl;
-    std::cout << "device: " << origDevName << std::endl;
-    std::cout << "diffStorage: " << diffStorage << std::endl;
-    std::cout << "duration: " << durationLimitSec << " seconds" << std::endl;
+    logger.Info("--- Test: check corruption ---");
+    logger.Info("device: " + origDevName);
+    logger.Info("diffStorage: " + diffStorage);
+    logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName);
 
-    std::cout << "-- Fill original device collection by test pattern" << std::endl;
+    logger.Info("-- Fill original device collection by test pattern");
     FillAll(ptrGen, ptrOrininal);
 
     std::vector<std::string> devices;
@@ -329,18 +321,18 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     int elapsed;
     bool isErrorFound = false;
     while (((elapsed = (std::time(nullptr) - startTime)) < durationLimitSec) && !isErrorFound) {
-        std::cout << "-- Elapsed time: "<< elapsed << " seconds" << std::endl;
-        std::cout << "-- Create snapshot" << std::endl;
+        logger.Info("-- Elapsed time: "+std::to_string(elapsed)+" seconds");
+        logger.Info("-- Create snapshot");
         auto ptrSession = CreateBlksnapSession(devices, diffStorage);
         int testSeqNumber = ptrGen->GetSequenceNumber();
         clock_t testSeqTime = std::clock();
-        std::cout << "test sequence time " << testSeqTime << std::endl;
+        logger.Info("test sequence time "+std::to_string(testSeqTime));
 
         std::string imageDevName = ptrSession->GetImageDevice(origDevName);
-        std::cout << "Found image block device "<< imageDevName << std::endl;
+        logger.Info("Found image block device ["+imageDevName+"]");
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
-        std::cout << "- Check image content before writing to original device" << std::endl;
+        logger.Info("- Check image content before writing to original device");
         CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
 
         //ptrGen->IncSequence();
@@ -349,7 +341,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         //FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 4) & ~(SECTOR_SIZE - 1), 4096);
         //FillBlocks(ptrGen, ptrOrininal, (ptrOrininal->Size() / 2) & ~(SECTOR_SIZE - 1), 4096);
 
-        //std::cout << "- Check image content after writing fixed data to original device" << std::endl;
+        //logger.Info("- Check image content after writing fixed data to original device");
         //CheckAll(ptrGen, ptrImage, testSeqNumber);
 
         FillBlocks(ptrGen, ptrOrininal, 0, 4096);//
@@ -358,25 +350,229 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
 
         std::time_t startFillRandom = std::time(nullptr);
         do {
-            std::cout << "- Fill some random blocks" << std::endl;
+            logger.Info("- Fill some random blocks");
             ptrGen->IncSequence();
-            FillRandomBlocks(ptrGen, ptrOrininal);
+            FillRandomBlocks(ptrGen, ptrOrininal, CRandomHelper::GenerateInt() & 0x3FFF/*0x3FF*/);
 
             FillBlocks(ptrGen, ptrOrininal, 0, 4096); //
 
-            std::cout << "- Check image corruption" << std::endl;
+            logger.Info("- Check image corruption");
             CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
         } while ((std::time(nullptr) - startFillRandom) < 30);
 
 
         std::string errorMessage;
         while (ptrSession->GetError(errorMessage)) {
-            std::cerr << errorMessage << std::endl;
             isErrorFound = true;
+            logger.Err(errorMessage);
         }
     }
 
-    std::cout << "--- Success: check corruption ---" << std::endl;
+    logger.Info("--- Success: check corruption ---");
+}
+
+struct SGeneratorContext
+{
+    std::atomic_bool stop;
+    std::mutex lock;
+    std::list<std::string> errorMessages;
+    std::shared_ptr<CBlockDevice> ptrBdev;
+    std::shared_ptr<CTestSectorGenetor> ptrGen;
+
+    SGeneratorContext(const std::shared_ptr<CBlockDevice> &in_ptrBdev,
+                      const std::shared_ptr<CTestSectorGenetor> &in_ptrGen)
+        : stop(false)
+        , ptrBdev(in_ptrBdev)
+        , ptrGen(in_ptrGen)
+    {};
+};
+
+void GeneratorThreadFunction(std::shared_ptr<SGeneratorContext> ptrCtx)
+{
+    try {
+        logger.Info("- Start writing to device [" + ptrCtx->ptrBdev->Name() + "].");
+        while (!ptrCtx->stop) {
+            FillRandomBlocks(ptrCtx->ptrGen, ptrCtx->ptrBdev, CRandomHelper::GenerateInt() & 0x3F);
+            std::this_thread::sleep_for(std::chrono::milliseconds((CRandomHelper::GenerateInt() & 0x1FF)));
+        }
+        logger.Info("- Stop writing to device [" + ptrCtx->ptrBdev->Name() + "].");
+    }
+    catch(std::exception &ex) {
+        logger.Err(ex.what());
+
+        std::lock_guard<std::mutex> guard(ptrCtx->lock);
+        ptrCtx->errorMessages.emplace_back(ex.what());
+    }
+
+};
+
+struct SCheckerContext
+{
+    std::atomic<bool> processed;
+    std::atomic<bool> complete;
+    std::mutex lock;
+    std::list<std::string> errorMessages;
+    std::shared_ptr<CBlockDevice> ptrBdev;
+    std::shared_ptr<CTestSectorGenetor> ptrGen;
+    int testSeqNumber;
+    clock_t testSeqTime;
+
+    SCheckerContext(const std::shared_ptr<CBlockDevice> &in_ptrBdev,
+                    const std::shared_ptr<CTestSectorGenetor> &in_ptrGen)
+        : processed(false)
+        , complete(false)
+        , ptrBdev(in_ptrBdev)
+        , ptrGen(in_ptrGen)
+    {
+        testSeqNumber = ptrGen->GetSequenceNumber();
+        testSeqTime = std::clock();
+    };
+};
+void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
+{
+    try {
+        logger.Info("- Start checking image device [" + ptrCtx->ptrBdev->Name() + "].");
+        CheckAll(ptrCtx->ptrGen, ptrCtx->ptrBdev, ptrCtx->testSeqNumber, ptrCtx->testSeqTime);
+        logger.Info("- Complete checking image device [" + ptrCtx->ptrBdev->Name() + "].");
+    }
+    catch(std::exception &ex) {
+        logger.Err(ex.what());
+
+        std::lock_guard<std::mutex> guard(ptrCtx->lock);
+        ptrCtx->errorMessages.emplace_back(ex.what());
+    }
+    ptrCtx->complete = true;
+};
+
+void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, const std::string &diffStorage, const int durationLimitSec)
+{
+    std::vector<std::thread> genThreads;
+    std::vector<std::shared_ptr<SGeneratorContext>> genCtxs;
+
+    logger.Info("--- Test: multithread check corruption ---");
+    {
+        std::string mess("devices:");
+        for (const std::string &origDevName : origDevNames)
+            mess += std::string(" " + origDevName);
+        logger.Info(mess);
+    }
+    logger.Info("diffStorage: " + diffStorage);
+    logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
+
+    for (const std::string &origDevName : origDevNames) {
+        genCtxs.push_back(
+            std::make_shared<SGeneratorContext>(
+                std::make_shared<CBlockDevice>(origDevName),
+                std::make_shared<CTestSectorGenetor>()
+            )
+        );
+    }
+
+    // Initiate block device content for each original device
+    logger.Info("-- Fill original device collection by test pattern ");
+    for (const std::shared_ptr<SGeneratorContext> &ptrCtx : genCtxs)
+        FillAll(ptrCtx->ptrGen, ptrCtx->ptrBdev);
+
+    // start generators for all original device
+    logger.Info("-- Start generation random content to original devices ");
+    for (const std::shared_ptr<SGeneratorContext> &ptrCtx : genCtxs)
+        genThreads.emplace_back(GeneratorThreadFunction, ptrCtx);
+
+    std::time_t startTime = std::time(nullptr);
+    int elapsed;
+    bool isErrorFound = false;
+    while (((elapsed = (std::time(nullptr) - startTime)) < durationLimitSec) && !isErrorFound) {
+        logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
+
+        logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
+        auto ptrSession = CreateBlksnapSession(origDevNames, diffStorage);
+
+        // Start check threads
+        std::vector<std::shared_ptr<SCheckerContext>> checkerCtxs;
+        std::vector<std::thread> checkThreads;
+        for (const std::string &origDevName : origDevNames) {
+            std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+            logger.Info("Found image block device [" + imageDevName + "]");
+
+            std::shared_ptr<SCheckerContext> ptrCtx = std::make_shared<SCheckerContext>(
+                std::make_shared<CBlockDevice>(imageDevName),
+                std::make_shared<CTestSectorGenetor>()
+            );
+
+            checkerCtxs.push_back(ptrCtx);
+            checkThreads.emplace_back(CheckerThreadFunction, ptrCtx);
+        }
+
+        // Waiting for all check threads completed
+        logger.Info("-- Waiting for all check threads completed");
+        int completeCounter = checkerCtxs.size();
+        while (completeCounter) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+            logger.Info("-- Still waiting ...");
+            for (const std::shared_ptr<SCheckerContext> &ptrCtx : checkerCtxs) {
+                if (ptrCtx->complete && !ptrCtx->processed) {
+                    if (ptrCtx->errorMessages.size() == 0)
+                        logger.Info("- Successfully checking complete for device [" + ptrCtx->ptrBdev->Name() + "].");
+                    else {
+                        isErrorFound = true;
+                        std::stringstream ss;
+
+                        ss << "- Checking for device [" << ptrCtx->ptrBdev->Name() << "] failed." << std::endl;
+                        while (ptrCtx->errorMessages.size()) {
+                            ss << ptrCtx->errorMessages.front() << std::endl;
+                            ptrCtx->errorMessages.pop_front();
+                        }
+                        logger.Err(ss);
+                    }
+                    ptrCtx->processed = true;
+                    completeCounter--;
+                }
+            }
+        }
+
+        for (auto &checkThread : checkThreads)
+            checkThread.join();
+
+        logger.Info("-- Check errors");
+
+        // Check errors from BlksnapSession
+        std::string errorMessage;
+        while (ptrSession->GetError(errorMessage)) {
+            isErrorFound = true;
+            logger.Err(errorMessage);
+        }
+
+        // Check errors from generator threads
+        for (const std::shared_ptr<SGeneratorContext> &ptrCtx : genCtxs) {
+            std::lock_guard<std::mutex> guard(ptrCtx->lock);
+
+            while (ptrCtx->errorMessages.size()) {
+                isErrorFound = true;
+
+                logger.Err(ptrCtx->errorMessages.front());
+                ptrCtx->errorMessages.pop_front();
+            }
+        }
+
+        // clear resources
+        checkThreads.clear();
+        checkerCtxs.clear();
+        ptrSession.reset();
+    }
+
+    // stop generators
+    logger.Info("-- Stop generation random content to original devices");
+    for (const std::shared_ptr<SGeneratorContext> &ptrCtx : genCtxs)
+        ptrCtx->stop = true;
+
+    for (auto &genThread : genThreads)
+        genThread.join();
+
+    if (isErrorFound)
+        throw std::runtime_error("--- Failed: multithread check corruption ---");
+
+    logger.Info("--- Success: multithread check corruption ---");
 }
 
 void Main(int argc, char *argv[])
@@ -386,8 +582,10 @@ void Main(int argc, char *argv[])
 
     desc.add_options()
         ("help,h", "Show usage information.")
-        ("device,d", po::value<std::string>(), "Device name.")
+        ("log,l", po::value<std::string>(), "Detailed log of all transactions.")
+        ("device,d", po::value<std::vector<std::string>>()->multitoken(), "Device name. It's multitoken for multithread test mod.")
         ("diff_storage,s", po::value<std::string>(), "Directory name for allocating diff storage files.")
+        ("multithread", "Testing mode in which writings to the original devices and their checks are performed in parallel.")
         ("duration,u", po::value<int>(), "The test duration limit in minutes.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
@@ -400,9 +598,14 @@ void Main(int argc, char *argv[])
         return;
     }
 
+    if (vm.count("log")){
+        std::string filename = vm["log"].as<std::string>();
+        logger.Open(filename);
+    }
+
     if (!vm.count("device"))
         throw std::invalid_argument("Argument 'device' is missed.");
-    std::string origDevName = vm["device"].as<std::string>();
+    std::vector<std::string> origDevNames = vm["device"].as<std::vector<std::string>>();
 
     if (!vm.count("diff_storage"))
         throw std::invalid_argument("Argument 'diff_storage' is missed.");
@@ -412,20 +615,30 @@ void Main(int argc, char *argv[])
     if (vm.count("duration"))
         duration = vm["duration"].as<int>();
 
-    CheckCorruption(origDevName, diffStorage, duration*60);
+    if (!!vm.count("multithread"))
+        MultithreadCheckCorruption(origDevNames, diffStorage, duration*60);
+    else {
+        if (origDevNames.size() > 1)
+            logger.Err("In singlethread test mode used only first device.");
+
+        CheckCorruption(origDevNames[0], diffStorage, duration*60);
+    }
 }
 
 int main(int argc, char *argv[])
 {
+#if 0
+    Main(argc, argv);
+#else
     try
     {
         Main(argc, argv);
     }
     catch(std::exception& ex)
     {
-        std::cerr << ex.what() << std::endl;
+        logger.Err(ex.what());
         return 1;
     }
-
+#endif
     return 0;
 }
