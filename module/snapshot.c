@@ -241,11 +241,6 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uui
 	int ret;
 	unsigned int inx;
 
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
-	pr_debug("DEBUG! Check memory leak:\n");
-	memory_object_print();
-#endif
-
 	pr_info("Create snapshot for devices:\n");
 	for (inx = 0; inx < count; ++inx)
 		pr_info("\t%u:%u\n", dev_id_array[inx].mj, dev_id_array[inx].mn);
