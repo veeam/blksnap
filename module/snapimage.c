@@ -411,3 +411,8 @@ void snapimage_done(void)
 
 	idr_destroy(&_minor_idr);
 }
+
+int snapimage_major(void)
+{
+	return _major;
+}

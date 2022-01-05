@@ -219,9 +219,16 @@ int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 			   karg.count * sizeof(struct blk_snap_block_range))) {
 		pr_err("Unable to mark dirty blocks: invalid user buffer\n");
 		ret = -ENODATA;
-	} else
-		ret = tracker_mark_dirty_blocks(MKDEV(karg.dev_id.mj, karg.dev_id.mn),
-						dirty_blocks_array, karg.count);
+	} else {
+		if (karg.dev_id.mj == snapimage_major())
+			ret = snapshot_mark_dirty_blocks(
+				MKDEV(karg.dev_id.mj, karg.dev_id.mn),
+				dirty_blocks_array, karg.count);
+		else
+			ret = tracker_mark_dirty_blocks(
+				MKDEV(karg.dev_id.mj, karg.dev_id.mn),
+				dirty_blocks_array, karg.count);
+	}
 
 	kfree(dirty_blocks_array);
 #ifdef CONFIG_DEBUG_MEMORY_LEAK

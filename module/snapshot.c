@@ -10,6 +10,7 @@
 #include "diff_storage.h"
 #include "diff_area.h"
 #include "snapimage.h"
+#include "cbt_map.h"
 
 #ifdef CONFIG_DEBUGLOG
 #undef pr_debug
@@ -620,6 +621,46 @@ out:
 #endif
 	}
 	snapshot_put(snapshot);
+
+	return ret;
+}
+int snapshot_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_ranges,
+			      unsigned int count)
+{
+	int ret = 0;
+	int inx = 0;
+	struct snapshot *s;
+	struct cbt_map *cbt_map = NULL;
+
+	pr_debug("Marking [%d] dirty blocks for device [%u:%u]\n",
+		count, MAJOR(dev_id), MINOR(dev_id));
+
+	down_read(&snapshots_lock);
+	if (list_empty(&snapshots))
+		goto out;
+
+	list_for_each_entry(s, &snapshots, link) {
+		for (inx = 0; inx < s->count; inx++) {
+			if (s->snapimage_array[inx]->image_dev_id == dev_id) {
+				cbt_map = s->snapimage_array[inx]->cbt_map;
+				break;
+			}
+		}
+
+		inx++;
+	}
+	if (!cbt_map) {
+		pr_err("Cannot find snapshot image device [%u:%u]\n",
+			MAJOR(dev_id), MINOR(dev_id));
+		ret = -ENODEV;
+		goto out;
+	}
+
+	ret = cbt_map_mark_dirty_blocks(cbt_map, block_ranges, count);
+	if (ret)
+		pr_err("Failed to set CBT table. errno=%d\n", abs(ret));
+out:
+	up_read(&snapshots_lock);
 
 	return ret;
 }

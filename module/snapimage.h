@@ -45,6 +45,7 @@ struct snapimage {
 
 int snapimage_init(void);
 void snapimage_done(void);
+int snapimage_major(void);
 
 void snapimage_free(struct snapimage *snapimage);
 struct snapimage *snapimage_create(struct diff_area *diff_area, struct cbt_map *cbt_map);

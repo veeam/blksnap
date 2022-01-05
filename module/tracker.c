@@ -561,7 +561,6 @@ int tracker_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_r
 			      unsigned int count)
 {
 	int ret = 0;
-	size_t inx;
 	struct tracker *tracker;
 	struct block_device *bdev;
 
@@ -583,15 +582,9 @@ int tracker_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_r
 		goto put_bdev;
 	}
 
-	for (inx = 0; inx < count; inx++) {
-		ret = cbt_map_set_both(tracker->cbt_map,
-				       (sector_t)block_ranges[inx].sector_offset,
-				       (sector_t)block_ranges[inx].sector_count);
-		if (ret) {
-			pr_err("Failed to set CBT table. errno=%d\n", abs(ret));
-			break;
-		}
-	}
+	ret = cbt_map_mark_dirty_blocks(tracker->cbt_map, block_ranges, count);
+	if (ret)
+		pr_err("Failed to set CBT table. errno=%d\n", abs(ret));
 
 	tracker_put(tracker);
 put_bdev:

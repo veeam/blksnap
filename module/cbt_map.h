@@ -8,6 +8,8 @@
 
 #include "big_buffer.h"
 
+struct blk_snap_block_range;
+
 /**
  * struct cbt_map - The table of changes fo block device.
  *
@@ -64,3 +66,7 @@ size_t cbt_map_blk_size(struct cbt_map *cbt_map)
 {
 	return 1 << cbt_map->blk_size_shift;
 };
+
+int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
+			      struct blk_snap_block_range *block_ranges,
+			      unsigned int count);

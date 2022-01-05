@@ -65,3 +65,6 @@ int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array);
 int snapshot_collect_images(uuid_t *id,
 			    struct blk_snap_image_info __user *image_info_array,
 			    unsigned int *pcount);
+int snapshot_mark_dirty_blocks(dev_t dev_id,
+                               struct blk_snap_block_range *block_ranges,
+                               unsigned int count);

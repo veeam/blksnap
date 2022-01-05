@@ -4,6 +4,7 @@
 #ifdef CONFIG_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
+#include "blk_snap.h"
 #include "cbt_map.h"
 #include "params.h"
 
@@ -276,4 +277,23 @@ size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buff,
 	}
 
 	return readed;
+}
+
+
+int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
+			      struct blk_snap_block_range *block_ranges,
+			      unsigned int count)
+{
+	int inx;
+	int ret = 0;
+
+	for (inx = 0; inx < count; inx++) {
+		ret = cbt_map_set_both(cbt_map,
+				       (sector_t)block_ranges[inx].sector_offset,
+				       (sector_t)block_ranges[inx].sector_count);
+		if (ret)
+			break;
+	}
+
+	return ret;
 }
