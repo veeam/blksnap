@@ -426,6 +426,7 @@ struct SCheckerContext
     {
         testSeqNumber = ptrGen->GetSequenceNumber();
         testSeqTime = std::clock();
+        ptrGen->IncSequence();
     };
 };
 void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
@@ -446,6 +447,7 @@ void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
 
 void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, const std::string &diffStorage, const int durationLimitSec)
 {
+    std::map<std::string, std::shared_ptr<CTestSectorGenetor>> genMap;
     std::vector<std::thread> genThreads;
     std::vector<std::shared_ptr<SGeneratorContext>> genCtxs;
 
@@ -459,17 +461,19 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
     logger.Info("diffStorage: " + diffStorage);
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
-    for (const std::string &origDevName : origDevNames) {
+    for (const std::string &origDevName : origDevNames)
+        genMap[origDevName] = std::make_shared<CTestSectorGenetor>();
+
+    for (const std::string &origDevName : origDevNames)
         genCtxs.push_back(
             std::make_shared<SGeneratorContext>(
                 std::make_shared<CBlockDevice>(origDevName),
-                std::make_shared<CTestSectorGenetor>()
+                genMap[origDevName]
             )
         );
-    }
 
     // Initiate block device content for each original device
-    logger.Info("-- Fill original device collection by test pattern ");
+    logger.Info("-- Fill original device collection by test pattern");
     for (const std::shared_ptr<SGeneratorContext> &ptrCtx : genCtxs)
         FillAll(ptrCtx->ptrGen, ptrCtx->ptrBdev);
 
@@ -487,20 +491,24 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
         auto ptrSession = CreateBlksnapSession(origDevNames, diffStorage);
 
-        // Start check threads
+        // Create checker contexts
         std::vector<std::shared_ptr<SCheckerContext>> checkerCtxs;
-        std::vector<std::thread> checkThreads;
         for (const std::string &origDevName : origDevNames) {
-            std::string imageDevName = ptrSession->GetImageDevice(origDevName);
-            logger.Info("Found image block device [" + imageDevName + "]");
-
-            std::shared_ptr<SCheckerContext> ptrCtx = std::make_shared<SCheckerContext>(
-                std::make_shared<CBlockDevice>(imageDevName),
-                std::make_shared<CTestSectorGenetor>()
-            );
+            std::shared_ptr<SCheckerContext> ptrCtx =
+                std::make_shared<SCheckerContext>(
+                    std::make_shared<CBlockDevice>(ptrSession->GetImageDevice(origDevName)),
+                    genMap[origDevName]
+                );
 
             checkerCtxs.push_back(ptrCtx);
+        }
+
+        // Start checker threads
+        std::vector<std::thread> checkThreads;
+        for (const std::shared_ptr<SCheckerContext> &ptrCtx : checkerCtxs)
+        {
             checkThreads.emplace_back(CheckerThreadFunction, ptrCtx);
+            logger.Info("Checker thread is started for a block device [" + ptrCtx->ptrBdev->Name() + "]");
         }
 
         // Waiting for all check threads completed
