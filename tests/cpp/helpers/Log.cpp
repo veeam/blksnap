@@ -44,7 +44,7 @@ void CLog::Err(const char* message)
 
     std::cerr << message << std::endl;
     if (m_isOpen)
-        m_out << std::clock() << std::this_thread::get_id() << " ERR " << " " << message << std::endl;
+        m_out << std::clock() << " " << std::this_thread::get_id() << " ERR " << message << std::endl;
 };
 
 void CLog::Err(const std::string &message)
@@ -53,7 +53,7 @@ void CLog::Err(const std::string &message)
 
     std::cerr << message << std::endl;
     if (m_isOpen)
-        m_out << std::clock() << std::this_thread::get_id() << " ERR " << " " << message << std::endl;
+        m_out << std::clock() << " " << std::this_thread::get_id() << " ERR " << message << std::endl;
 };
 
 void CLog::Err(const  std::stringstream &ss)
@@ -62,7 +62,7 @@ void CLog::Err(const  std::stringstream &ss)
 
     std::cerr << ss.str() << std::endl;
     if (m_isOpen)
-        m_out << std::clock() << std::this_thread::get_id() << " ERR " << " " << ss.str() << std::endl;
+        m_out << std::clock() << " " << std::this_thread::get_id() << " ERR " << ss.str() << std::endl;
 };
 
 void CLog::Detail(const char* message)
