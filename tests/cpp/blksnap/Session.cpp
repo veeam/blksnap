@@ -3,7 +3,6 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
-//#include <cstring>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,12 +17,14 @@
 #include <linux/fiemap.h>
 
 #include "Blksnap.h"
-#include "BlksnapSession.h"
+#include "Session.h"
 
 #include <boost/filesystem.hpp>
 namespace fs = boost::filesystem;
 
-struct SBlksnapInfo
+using namespace blksnap;
+
+struct SSessionInfo
 {
     struct blk_snap_dev_t original;
     struct blk_snap_dev_t image;
@@ -31,7 +32,7 @@ struct SBlksnapInfo
     std::string imageName;
 };
 
-struct SBlksnapState
+struct SState
 {
     std::atomic<bool> stop;
     std::string diffStorage;
@@ -41,28 +42,32 @@ struct SBlksnapState
     std::vector<std::string> diffStorageFiles;
 };
 
-class CBlksnapSession : public IBlksnapSession
+class CSession : public ISession
 {
 public:
-public:
-    CBlksnapSession(const std::vector<std::string>& devices, const std::string &diffStorage);
-    ~CBlksnapSession() override;
+    CSession(const std::vector<std::string>& devices, const std::string &diffStorage);
+    ~CSession() override;
 
     std::string GetImageDevice(const std::string& original) override;
+    std::string GetOriginalDevice(const std::string& image) override;
     bool GetError(std::string &errorMessage) override;
+    std::shared_ptr<SCbtInfo> GetCbtInfo(const std::string& device, bool isOriginal = true) override;
+
 private:
     uuid_t m_id;
-    std::vector<SBlksnapInfo> m_devices;
+    std::vector<SSessionInfo> m_devices;
 
     std::shared_ptr<CBlksnap> m_ptrBlksnap;
-    std::shared_ptr<SBlksnapState> m_ptrState;
+    std::shared_ptr<SState> m_ptrState;
     std::shared_ptr<std::thread> m_ptrThread;
+
+    std::vector<struct blk_snap_cbt_info> m_cbtInfos;
 };
 
-std::shared_ptr<IBlksnapSession>
-CreateBlksnapSession(const std::vector<std::string>& devices, const std::string &diffStorage)
+std::shared_ptr<ISession> ISession::Create(
+    const std::vector<std::string>& devices, const std::string &diffStorage)
 {
-    return std::make_shared<CBlksnapSession>(devices, diffStorage);
+    return std::make_shared<CSession>(devices, diffStorage);
 }
 
 namespace {
@@ -180,7 +185,7 @@ void FallocateStorage(const std::string &filename, const off_t filesize)
 }
 }//
 
-void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SBlksnapState> ptrState)
+void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SState> ptrState)
 {
     struct SBlksnapEvent ev;
     int diffStorageNumber = 1;
@@ -221,7 +226,7 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SBlksna
                     FiemapStorage(filename, dev_id, ranges);
 
                     ptrBlksnap->AppendDiffStorage(ptrState->id, dev_id, ranges);
-                    std::cout << "Append " << ranges.size() << "ranges" << std::endl;
+                    //std::cout << "Append " << ranges.size() << "ranges" << std::endl;
                 }
                 break;
             case blk_snap_event_code_corrupted:
@@ -242,12 +247,12 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SBlksna
     }
 }
 
-CBlksnapSession::CBlksnapSession(const std::vector<std::string>& devices, const std::string &diffStorage)
+CSession::CSession(const std::vector<std::string>& devices, const std::string &diffStorage)
 {
     m_ptrBlksnap = std::make_shared<CBlksnap>();
 
     for (const auto& name : devices) {
-        SBlksnapInfo info;
+        SSessionInfo info;
 
         info.originalName = name;
         info.original = deviceByName(name);
@@ -256,23 +261,23 @@ CBlksnapSession::CBlksnapSession(const std::vector<std::string>& devices, const 
         m_devices.push_back(info);
     }
 
-    /**
+    /*
      * Create snapshot
      */
     std::vector<struct blk_snap_dev_t> blk_snap_devs;
-    for (const SBlksnapInfo &info : m_devices)
+    for (const SSessionInfo &info : m_devices)
         blk_snap_devs.push_back(info.original);
     m_ptrBlksnap->Create(blk_snap_devs, m_id);
 
-    /**
+    /*
      * Prepare state structure for thread
      */
-    m_ptrState = std::make_shared<SBlksnapState>();
+    m_ptrState = std::make_shared<SState>();
     m_ptrState->stop = false;
     m_ptrState->diffStorage = diffStorage;
     uuid_copy(m_ptrState->id, m_id);
 
-    /**
+    /*
      * Append first portion for diff storage
      */
     struct SBlksnapEvent ev;
@@ -307,13 +312,13 @@ CBlksnapSession::CBlksnapSession(const std::vector<std::string>& devices, const 
         }
     }
 
-    /**
+    /*
      * Take snapshot
      */
     m_ptrBlksnap->Take(m_id);
 
 
-    /**
+    /*
      * Collect images
      */
     std::vector<struct blk_snap_image_info> images;
@@ -330,15 +335,20 @@ CBlksnapSession::CBlksnapSession(const std::vector<std::string>& devices, const 
         }
     }
 
-    /**
+    /*
      * Start stretch snapshot thread
      */
     m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrBlksnap, m_ptrState);
+
+    /*
+     * Collect trackers
+     */
+    m_ptrBlksnap->CollectTrackers(m_cbtInfos);
 }
 
-CBlksnapSession::~CBlksnapSession()
+CSession::~CSession()
 {
-    std::cout << "Destroy blksnap session" << std::endl;
+    //std::cout << "Destroy blksnap session" << std::endl;
     /**
      * Stop thread
      */
@@ -376,20 +386,33 @@ CBlksnapSession::~CBlksnapSession()
     }
 }
 
-std::string CBlksnapSession::GetImageDevice(const std::string& original)
+std::string CSession::GetImageDevice(const std::string& original)
 {
-    struct blk_snap_dev_t orig_dev_id = deviceByName(original);
+    struct blk_snap_dev_t devId = deviceByName(original);
 
     for (size_t inx=0; inx < m_devices.size(); inx++) {
-        if ((m_devices[inx].original.mj == orig_dev_id.mj) &&
-            (m_devices[inx].original.mn == orig_dev_id.mn))
+        if ((m_devices[inx].original.mj == devId.mj) &&
+            (m_devices[inx].original.mn == devId.mn))
             return m_devices[inx].imageName;
     }
 
-    throw std::runtime_error("Failed to get image device for '"+original+"'.");
+    throw std::runtime_error("Failed to get image device for ["+original+"].");
 }
 
-bool CBlksnapSession::GetError(std::string &errorMessage)
+std::string CSession::GetOriginalDevice(const std::string& image)
+{
+    struct blk_snap_dev_t devId = deviceByName(image);
+
+    for (size_t inx=0; inx < m_devices.size(); inx++) {
+        if ((m_devices[inx].image.mj == devId.mj) &&
+            (m_devices[inx].image.mn == devId.mn))
+            return m_devices[inx].originalName;
+    }
+
+    throw std::runtime_error("Failed to get image device for ["+original+"].");
+}
+
+bool CSession::GetError(std::string &errorMessage)
 {
     std::lock_guard<std::mutex> guard(m_ptrState->lock);
     if (!m_ptrState->errorMessage.size())
@@ -399,3 +422,5 @@ bool CBlksnapSession::GetError(std::string &errorMessage)
     m_ptrState->errorMessage.pop_front();
     return true;
 }
+
+
