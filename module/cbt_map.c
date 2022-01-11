@@ -73,7 +73,7 @@ int cbt_map_allocate(struct cbt_map *cbt_map)
 
 	cbt_map->snap_number_previous = 0;
 	cbt_map->snap_number_active = 1;
-	generate_random_uuid(cbt_map->generationId.b);
+	generate_random_uuid(cbt_map->generation_id.b);
 	cbt_map->is_corrupted = false;
 
 	cbt_map->state_changed_sectors = 0;
@@ -167,7 +167,7 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 
 		big_buffer_memset(cbt_map->write_map, 0);
 
-		generate_random_uuid(cbt_map->generationId.b);
+		generate_random_uuid(cbt_map->generation_id.b);
 
 		pr_debug("CBT reset\n");
 	}

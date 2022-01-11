@@ -28,7 +28,7 @@ struct cbt_map {
 
 	unsigned long snap_number_active;
 	unsigned long snap_number_previous;
-	uuid_t generationId;
+	uuid_t generation_id;
 
 	bool is_corrupted;
 

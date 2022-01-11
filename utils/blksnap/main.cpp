@@ -312,7 +312,7 @@ public:
         for (int inx=0; inx<param.count; inx++) {
             struct blk_snap_cbt_info *it = &cbtInfoVector[inx];
 
-            uuid_unparse(it->generationId, generationIdStr);
+            uuid_unparse(it->generation_id, generationIdStr);
             std::cout << "," << std::endl;
             std::cout << "device=" << it->dev_id.mj << ":" << it->dev_id.mn << std::endl;
             std::cout << "blk_size=" << it->blk_size << std::endl;
