@@ -3,7 +3,9 @@ project(blksnap)
 
 set(SOURCE_FILES
     Blksnap.cpp
-    BlksnapSession.cpp
+    Cbt.cpp
+    Service.spp
+    Session.cpp
 )
 add_library(${PROJECT_NAME} ${SOURCE_FILES})
 add_library(Blksnap::Lib ALIAS ${PROJECT_NAME})
