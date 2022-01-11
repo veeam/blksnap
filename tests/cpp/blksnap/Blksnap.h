@@ -1,3 +1,9 @@
+/*
+ * The low-level abstraction over ioctl for the blksnap kernel module.
+ * Allows to interact with the module with minimal overhead and maximum
+ * flexibility. Uses structures that are directly passed to the kernel module.
+ */
+
 #include <vector>
 #include <string>
 #include <uuid/uuid.h>
@@ -9,6 +15,8 @@
 #ifndef SECTOR_SIZE
 #define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
+
+namespace blksnap {
 
 struct SBlksnapEventLowFreeSpace
 {
@@ -37,6 +45,11 @@ public:
     CBlksnap();
     ~CBlksnap();
 
+    void Version(struct blk_snap_version &version);
+    void CollectTrackers(std::vector<struct blk_snap_cbt_info> &cbtInfoVector);
+    void ReadCbtMap(struct blk_snap_dev_t dev_id,
+                    unsigned int offset, unsigned int length, uint8_t *buff);
+
     void Create(const std::vector<struct blk_snap_dev_t> &devices, uuid_t &id);
     void Destroy(const uuid_t &id);
     void Collect(const uuid_t &id, std::vector<struct blk_snap_image_info> &images);
@@ -48,3 +61,5 @@ private:
     int m_fd;
 
 };
+
+}
