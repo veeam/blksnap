@@ -59,8 +59,6 @@ private:
     std::shared_ptr<CBlksnap> m_ptrBlksnap;
     std::shared_ptr<SState> m_ptrState;
     std::shared_ptr<std::thread> m_ptrThread;
-
-    std::vector<struct blk_snap_cbt_info> m_cbtInfos;
 };
 
 std::shared_ptr<ISession> ISession::Create(
@@ -316,7 +314,6 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string &d
      */
     m_ptrBlksnap->Take(m_id);
 
-
     /*
      * Collect images
      */
@@ -338,11 +335,6 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string &d
      * Start stretch snapshot thread
      */
     m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrBlksnap, m_ptrState);
-
-    /*
-     * Collect trackers
-     */
-    m_ptrBlksnap->CollectTrackers(m_cbtInfos);
 }
 
 CSession::~CSession()

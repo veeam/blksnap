@@ -379,7 +379,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     std::shared_ptr<blksnap::SCbtInfo> ptrPreviousCbtInfo;
 
     logger.Info("--- Test: check corruption ---");
-    logger.Info("version:" + blksnap::Version());
+    logger.Info("version: " + blksnap::Version());
     logger.Info("device: " + origDevName);
     logger.Info("diffStorage: " + diffStorage);
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
@@ -402,12 +402,20 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
 
         { //get CBT information
+            char generationIdStr[64];
             auto ptrCbt = blksnap::ICbt::Create();
             auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
 
-            if (!ptrPreviousCbtInfo)
-                if (uuid_compare(ptrPreviousCbtInfo->generationId, ptrCbtInfo->generationId))
-                    logger.Info("-- New CBT generation has been created.");
+
+            if (ptrPreviousCbtInfo) {
+                if (uuid_compare(ptrPreviousCbtInfo->generationId, ptrCbtInfo->generationId)) {
+                    uuid_unparse(ptrCbtInfo->generationId, generationIdStr);
+                    logger.Info("- New CBT generation ["+ std::string(generationIdStr) +"] has been created.");
+                }
+            } else {
+                uuid_unparse(ptrCbtInfo->generationId, generationIdStr);
+                logger.Info("- Start with CBT generation ["+ std::string(generationIdStr) +"]");
+            }
 
             ptrPreviousCbtInfo = ptrCbtInfo;
         }
@@ -592,7 +600,7 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
     std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>> previousCbtInfoMap;
 
     logger.Info("--- Test: multithread check corruption ---");
-    logger.Info("version:" + blksnap::Version());
+    logger.Info("version: " + blksnap::Version());
     {
         std::string mess("devices:");
         for (const std::string &origDevName : origDevNames)
@@ -633,15 +641,23 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
         auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage);
 
         {//get CBT information
+            char generationIdStr[64];
             auto ptrCbt = blksnap::ICbt::Create();
 
             previousCbtInfoMap.clear();
             for (const std::string &origDevName : origDevNames) {
                 auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
 
-                if (!(previousCbtInfoMap.find(origDevName) == previousCbtInfoMap.end()))
-                    if (uuid_compare(previousCbtInfoMap.at(origDevName)->generationId, ptrCbtInfo->generationId))
-                        logger.Info("-- New CBT generation has been created for device [" + origDevName + "]");
+                if (!(previousCbtInfoMap.find(origDevName) == previousCbtInfoMap.end())) {
+                    if (uuid_compare(previousCbtInfoMap.at(origDevName)->generationId, ptrCbtInfo->generationId)) {
+                        uuid_unparse(ptrCbtInfo->generationId, generationIdStr);
+                        logger.Info("- New CBT generation "+ std::string(generationIdStr) +" has been created for device [" + origDevName + "]");
+                    }
+                } else {
+                    uuid_unparse(ptrCbtInfo->generationId, generationIdStr);
+                    logger.Info("- Start with CBT generation "+ std::string(generationIdStr) +" for device [" + origDevName + "]");
+
+                }
 
                 previousCbtInfoMap[origDevName] = ptrCbtInfo;
             }
@@ -658,6 +674,24 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
             checkerCtxs.push_back(ptrCtx);
         }
 
+#if 1
+        if (elapsed > 30) {
+        /* To check the verification algorithm, we explicitly write data to the snapshot image.*/
+        logger.Info("DEBUG! write some sectors to snapshot images");
+        for (const std::shared_ptr<SCheckerContext> &ptrCtx : checkerCtxs) {
+            AlignedBuffer<char> buf(SECTOR_SIZE);
+            strncpy(buf.Data(), "To check the verification algorithm, we explicitly write data to the snapshot image.", buf.Size());
+
+
+                std::lock_guard<std::mutex> guard(ptrCtx->lock);
+                ptrCtx->ptrBdev->Write(buf.Data(), buf.Size(), 0);
+                ptrCtx->ptrBdev->Write(buf.Data(), buf.Size(), (ptrCtx->ptrBdev->Size()/2) & ~(SECTOR_SIZE - 1));
+                ptrCtx->ptrBdev->Write(buf.Data(), buf.Size(), ptrCtx->ptrBdev->Size()-SECTOR_SIZE);
+            }
+            logger.Info("DEBUG! writing complete");
+        }
+#endif
+
         // Start checker threads
         std::vector<std::thread> checkThreads;
         for (const std::shared_ptr<SCheckerContext> &ptrCtx : checkerCtxs)
@@ -665,6 +699,7 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
             checkThreads.emplace_back(CheckerThreadFunction, ptrCtx);
             logger.Info("Checker thread is started for a block device [" + ptrCtx->ptrBdev->Name() + "]");
         }
+
 
         // Waiting for all check threads completed
         logger.Info("-- Waiting for all check threads completed");
