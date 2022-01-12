@@ -24,8 +24,13 @@ enum blk_snap_ioctl {
 };
 
 enum blk_snap_compat_flags {
+        /*
+         * Reserved for new features
+         */
 	BLK_SNAP_COMPAT_FLAG_LIMIT=64
 };
+
+#define BLK_SNAP_MOD_NAME_LIMIT 32
 
 /**
  * struct blk_snap_version - Result for &IOCTL_BLK_SNAP_VERSION control.
@@ -40,7 +45,8 @@ enum blk_snap_compat_flags {
  * @compatibility_flags:
  *	[TBD] Reserved for future use.
  * @mod_name:
- *	Name of the module.
+ *	Name of modification of the module blksnap (fork name, for example).
+ *      It's should be empty string for upstream module.
  */
 struct blk_snap_version {
 	__u16 major;
@@ -48,7 +54,7 @@ struct blk_snap_version {
 	__u16 revision;
 	__u16 build;
 	__u64 compatibility_flags;
-	__u8 mod_name[32];
+	__u8 mod_name[BLK_SNAP_MOD_NAME_LIMIT];
 };
 /**
  * IOCTL_BLK_SNAP_VERSION - Get version and compatibility flags.
