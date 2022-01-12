@@ -169,16 +169,17 @@ public:
      * The function ShowFails() does not contain locks, since it should be
      * called when only one thread has access to used data.
      */
-    void ShowFails()
+    const std::vector<SRange> & GetFails()
     {
         std::stringstream ss;
-
         ss << m_failCount << " corrupted sectors" << std::endl;
         ss << m_failedRanges.size() << " corrupted ranges" << std::endl;
         ss << "Ranges of corrupted sectors:" << std::endl;
         for (const SRange &range : m_failedRanges)
             ss << range.sector << ":" << range.count << std::endl;
         logger.Err(ss);
+
+        return m_failedRanges;
     };
 
 private:
@@ -243,8 +244,7 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
  */
 void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
               const std::shared_ptr<CBlockDevice>& ptrBdev,
-              const int seqNumber, const clock_t seqTime,
-              std::vector<SRange> &corruptedRanges)
+              const int seqNumber, const clock_t seqTime)
 {
     AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024*1024);
     off_t sizeBdev = ptrBdev->Size();
@@ -259,9 +259,6 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
 
         sector += (portionSize >> SECTOR_SHIFT);
     }
-
-    if (ptrGen->Fails() > 0)
-        ptrGen->GetFails(corruptedRanges);
 }
 
 void FillBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
@@ -324,13 +321,13 @@ static inline size_t sectorToBlock(sector_t sector, unsigned int blockSize)
     return static_cast<size_t>((sector + blockSize - 1) / blockSize);
 }
 
-bool IsChangedRegion(const std::shared_ptr<SCbtInfo> &ptrCbtInfoPrevious,
-                     const std::shared_ptr<SCbtInfo> &ptrCbtInfoCurrent,
-                     const std::shared_ptr<SCbtData> &ptrCbtMap,
+bool IsChangedRegion(const std::shared_ptr<blksnap::SCbtInfo> &ptrCbtInfoPrevious,
+                     const std::shared_ptr<blksnap::SCbtInfo> &ptrCbtInfoCurrent,
+                     const std::shared_ptr<blksnap::SCbtData> &ptrCbtMap,
                      const SRange &range)
 {
     if (uuid_compare(ptrCbtInfoPrevious->generationId, ptrCbtInfoCurrent->generationId)) {
-        Log("Next generation found");
+        logger.Info("Next generation found");
         return true;
     }
 
@@ -340,20 +337,21 @@ bool IsChangedRegion(const std::shared_ptr<SCbtInfo> &ptrCbtInfoPrevious,
     if (ptrCbtInfoPrevious->blockSize != ptrCbtInfoCurrent->blockSize)
         throw std::runtime_error("The CBT block size cannot be changed in one generation.");
 
+    unsigned int blockSize = ptrCbtInfoCurrent->blockSize;
+    size_t from = sectorToBlock(range.sector, blockSize);
+    size_t to = sectorToBlock(range.sector + range.count - 1, blockSize);
     bool changed = false;
-    size_t from = sectorToBlock(range.sector);
-    size_t to = sectorToBlock(range.sector + range.count - 1);
     for (size_t inx = from; inx <= to; inx++) {
         if (ptrCbtMap->vec[inx] > ptrCbtInfoPrevious->snapNumber) {
             changed = true;
-            Log("The block "+std::to_string(inx)+" has been changed");
+            logger.Info("The block "+std::to_string(inx)+" has been changed");
         }
     }
 
     return changed;
 }
 
-void CheckCbtCorrupt(const std::shared_ptr<SCbtInfo> &ptrPreviousCbtInfo,
+void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo> &ptrPreviousCbtInfo,
                      const std::vector<SCorruptInfo> &corrupts)
 {
     if (corrupts.empty())
@@ -362,8 +360,8 @@ void CheckCbtCorrupt(const std::shared_ptr<SCbtInfo> &ptrPreviousCbtInfo,
 
     auto ptrCbt = blksnap::ICbt::Create();
 
-    std::shared_ptr<SCbtInfo> ptrCurrentCbtInfo = ptrCbt->GetCbtInfo(original);
-    std::shared_ptr<SCbtData> ptrCurrentCbtData = ptrCbt->GetCbtData(ptrCbtInfo);
+    std::shared_ptr<blksnap::SCbtInfo> ptrCurrentCbtInfo = ptrCbt->GetCbtInfo(original);
+    std::shared_ptr<blksnap::SCbtData> ptrCurrentCbtData = ptrCbt->GetCbtData(ptrCurrentCbtInfo);
 
     for (const SCorruptInfo &corruptInfo : corrupts) {
         for (const SRange & range : corruptInfo.ranges) {
@@ -378,7 +376,7 @@ void CheckCbtCorrupt(const std::shared_ptr<SCbtInfo> &ptrPreviousCbtInfo,
 void CheckCorruption(const std::string &origDevName, const std::string &diffStorage, const int durationLimitSec)
 {
     std::vector<SCorruptInfo> corrupts;
-    std::shared_ptr<SCbtInfo> ptrPreviousCbtInfo;
+    std::shared_ptr<blksnap::SCbtInfo> ptrPreviousCbtInfo;
 
     logger.Info("--- Test: check corruption ---");
     logger.Info("version:" + blksnap::Version());
@@ -402,9 +400,16 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         logger.Info("-- Elapsed time: "+std::to_string(elapsed)+" seconds");
         logger.Info("-- Create snapshot");
         auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
-        {
+
+        { //get CBT information
             auto ptrCbt = blksnap::ICbt::Create();
-            ptrPreviousCbtInfo = ptrCbt->GetCbtInfo(origDevName);
+            auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
+
+            if (!ptrPreviousCbtInfo)
+                if (uuid_compare(ptrPreviousCbtInfo->generationId, ptrCbtInfo->generationId))
+                    logger.Info("-- New CBT generation has been created.");
+
+            ptrPreviousCbtInfo = ptrCbtInfo;
         }
 
         int testSeqNumber = ptrGen->GetSequenceNumber();
@@ -416,14 +421,11 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
         logger.Info("- Check image content before writing to original device");
-        {
-            std::vector<SRange> corruptRanges;
-            CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime, corruptRanges);
-            if (!corruptRanges.empty()) {
-                isErrorFound = true;
-                corrupts.emplace_back(origDevName, corruptRanges);
-                break;
-            }
+
+        CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
+        if (ptrGen->Fails() > 0) {
+            isErrorFound = true;
+            corrupts.emplace_back(origDevName, ptrGen->GetFails());
         }
 
         FillBlocks(ptrGen, ptrOrininal, 0, 4096);//
@@ -439,15 +441,13 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
             FillBlocks(ptrGen, ptrOrininal, 0, 4096); //
 
             logger.Info("- Check image corruption");
-            {
-                std::vector<SRange> corruptRanges;
-                CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime, corruptRanges);
-                if (!corruptRanges.empty()) {
-                    isErrorFound = true;
-                    corrupts.emplace_back(origDevName, corruptRanges);
-                    break;
-                }
+
+            CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
+            if (ptrGen->Fails() > 0) {
+                isErrorFound = true;
+                corrupts.emplace_back(origDevName, ptrGen->GetFails());
             }
+
         } while ((std::time(nullptr) - startFillRandom) < 30);
 
 
@@ -463,7 +463,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     if (!corrupts.empty()) {
         // Create snapshot and check corrupted ranges and cbt table content.
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
-        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
 
         CheckCbtCorrupt(ptrPreviousCbtInfo, corrupts);
 
@@ -517,7 +517,6 @@ struct SCheckerContext
     std::atomic<bool> processed;
     std::atomic<bool> complete;
     std::mutex lock;
-    std::vector<SRange> corruptedRanges;
     std::list<std::string> errorMessages;
     std::shared_ptr<CBlockDevice> ptrBdev;
     std::shared_ptr<CTestSectorGenetor> ptrGen;
@@ -541,12 +540,11 @@ void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
 {
     try {
         logger.Info("- Start checking image device [" + ptrCtx->ptrBdev->Name() + "].");
-        CheckAll(ptrCtx->ptrGen, ptrCtx->ptrBdev, ptrCtx->testSeqNumber, ptrCtx->testSeqTime, ptrCtx->corruptedRanges);
+        CheckAll(ptrCtx->ptrGen, ptrCtx->ptrBdev, ptrCtx->testSeqNumber, ptrCtx->testSeqTime);
         logger.Info("- Complete checking image device [" + ptrCtx->ptrBdev->Name() + "].");
 
-        if (!ptrCtx->corruptedRanges.empty()) {
-            throw std::runtime_error(std::to_string(ptrCtx->corruptedRanges.size()) + " corrupted sectors were found");
-        }
+        if (ptrCtx->ptrGen->Fails())
+            throw std::runtime_error(std::to_string(ptrCtx->ptrGen->Fails()) + " corrupted sectors were found");
     }
     catch(std::exception &ex) {
         logger.Err(ex.what());
@@ -557,13 +555,13 @@ void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
     ptrCtx->complete = true;
 };
 
-void CheckCbtCorrupt(const std::map<std::string, std::shared_ptr<SCbtInfo>> &previousCbtInfoMap,
+void CheckCbtCorrupt(const std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>> &previousCbtInfoMap,
                      const std::vector<SCorruptInfo> &corrupts)
 {
     auto ptrCbt = blksnap::ICbt::Create();
 
-    std::map<std::string, std::shared_ptr<SCbtInfo>> currentCbtInfoMap;
-    std::map<std::string, std::shared_ptr<SCbtData>> currentCbtDataMap;
+    std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>> currentCbtInfoMap;
+    std::map<std::string, std::shared_ptr<blksnap::SCbtData>> currentCbtDataMap;
     for (const SCorruptInfo &corruptInfo : corrupts) {
         if (currentCbtInfoMap.count(corruptInfo.original) == 0) {
             auto ptrCbtInfo = ptrCbt->GetCbtInfo(corruptInfo.original);
@@ -574,10 +572,12 @@ void CheckCbtCorrupt(const std::map<std::string, std::shared_ptr<SCbtInfo>> &pre
     }
 
     for (const SCorruptInfo &corruptInfo : corrupts) {
-        for (const SRange & range : corruptInfo.ranges) {
-            IsChangedRegion(previousCbtInfoMap[corruptInfo.original],
-                            currentCbtInfoMap[corruptInfo.original],
-                            currentCbtDataMap[corruptInfo.original],
+        for (const SRange &range : corruptInfo.ranges) {
+            const std::string &device = corruptInfo.original;
+
+            IsChangedRegion(previousCbtInfoMap.at(device),
+                            currentCbtInfoMap.at(device),
+                            currentCbtDataMap.at(device),
                             range);
         }
     }
@@ -589,7 +589,7 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
     std::vector<std::thread> genThreads;
     std::vector<std::shared_ptr<SGeneratorContext>> genCtxs;
     std::vector<SCorruptInfo> corrupts;
-    std::map<std::string, std::shared_ptr<SCbtInfo>> previousCbtInfoMap;
+    std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>> previousCbtInfoMap;
 
     logger.Info("--- Test: multithread check corruption ---");
     logger.Info("version:" + blksnap::Version());
@@ -632,24 +632,28 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
         auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage);
 
-        //get CBT info
-        {
+        {//get CBT information
             auto ptrCbt = blksnap::ICbt::Create();
 
             previousCbtInfoMap.clear();
             for (const std::string &origDevName : origDevNames) {
-                if (previousCbtInfoMap.count(origDevName) == 0) {
-                    previousCbtInfoMap[origDevName] = ptrCbt->GetCbtInfo(origDevName);
+                auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
+
+                if (!(previousCbtInfoMap.find(origDevName) == previousCbtInfoMap.end()))
+                    if (uuid_compare(previousCbtInfoMap.at(origDevName)->generationId, ptrCbtInfo->generationId))
+                        logger.Info("-- New CBT generation has been created for device [" + origDevName + "]");
+
+                previousCbtInfoMap[origDevName] = ptrCbtInfo;
+            }
         }
 
         // Create checker contexts
         std::vector<std::shared_ptr<SCheckerContext>> checkerCtxs;
         for (const std::string &origDevName : origDevNames) {
-            std::shared_ptr<SCheckerContext> ptrCtx =
-                std::make_shared<SCheckerContext>(
-                    std::make_shared<CBlockDevice>(ptrSession->GetImageDevice(origDevName)),
-                    genMap[origDevName]
-                );
+            auto ptrCtx = std::make_shared<SCheckerContext>(
+                std::make_shared<CBlockDevice>(ptrSession->GetImageDevice(origDevName)),
+                genMap[origDevName]
+            );
 
             checkerCtxs.push_back(ptrCtx);
         }
@@ -683,7 +687,7 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
                             ptrCtx->errorMessages.pop_front();
                         }
                         logger.Err(ss);
-                        corrupts.emplace_back(ptrSession->GetOriginalDevice(ptrCtx->ptrBdev->Name()), ptrCtx->corruptedRanges);
+                        corrupts.emplace_back(ptrSession->GetOriginalDevice(ptrCtx->ptrBdev->Name()), ptrCtx->ptrGen->GetFails());
                     }
                     ptrCtx->processed = true;
                     completeCounter--;

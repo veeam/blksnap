@@ -1,12 +1,13 @@
 #include <string>
+#include <system_error>
 #include <sys/stat.h>
 
 namespace blksnap
 {
 
 struct SDeviceId{
-    int mj;
-    int mn;
+    unsigned int mj;
+    unsigned int mn;
 
     SDeviceId()
         : mj(0)

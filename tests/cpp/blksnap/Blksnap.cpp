@@ -10,6 +10,8 @@
 
 static const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
 
+using namespace blksnap;
+
 CBlksnap::CBlksnap()
     : m_fd(0)
 {
@@ -28,7 +30,7 @@ CBlksnap::~CBlksnap()
 
 void CBlksnap::Version(struct blk_snap_version &version)
 {
-    if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_VERSION, &version))
+    if (::ioctl(m_fd, IOCTL_BLK_SNAP_VERSION, &version))
         throw std::system_error(errno, std::generic_category(), "Failed to get version.");
 }
 
@@ -36,14 +38,14 @@ void CBlksnap::CollectTrackers(std::vector<struct blk_snap_cbt_info> &cbtInfoVec
 {
     struct blk_snap_tracker_collect param = {0};
 
-    if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
+    if (::ioctl(m_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
         throw std::system_error(errno, std::generic_category(),
             "[TBD]Failed to collect block devices with change tracking.");
 
     cbtInfoVector.resize(param.count);
     param.cbt_info_array = cbtInfoVector.data();
 
-    if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
+    if (::ioctl(m_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
         throw std::system_error(errno, std::generic_category(),
             "[TBD]Failed to collect block devices with change tracking.");
 }
@@ -51,7 +53,20 @@ void CBlksnap::CollectTrackers(std::vector<struct blk_snap_cbt_info> &cbtInfoVec
 void CBlksnap::ReadCbtMap(struct blk_snap_dev_t dev_id,
                           unsigned int offset, unsigned int length, uint8_t *buff)
 {
+    struct blk_snap_tracker_read_cbt_bitmap param = {
+        .dev_id = dev_id,
+        .offset = offset,
+        .length = length,
+        .buff = buff
+    };
 
+    int ret = ::ioctl(m_fd, IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP, &param);
+    if (ret < 0)
+        throw std::system_error(errno, std::generic_category(),
+            "[TBD]Failed to read difference map from change tracking.");
+    if (ret != length)
+        throw std::runtime_error(
+            "[TBD]Cannot read required bytes of difference map from change tracking.");
 }
 
 void CBlksnap::Create(const std::vector<struct blk_snap_dev_t> &devices, uuid_t &id)

@@ -4,7 +4,7 @@ project(blksnap)
 set(SOURCE_FILES
     Blksnap.cpp
     Cbt.cpp
-    Service.spp
+    Service.cpp
     Session.cpp
 )
 add_library(${PROJECT_NAME} ${SOURCE_FILES})

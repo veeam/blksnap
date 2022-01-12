@@ -27,12 +27,13 @@ struct SCbtInfo
     ~SCbtInfo(){};
 
     SDeviceId originalDevId;
-    uint32_t blockSize;
-    uint32_t blockCount;
-    uint64_t deviceCapacity;
+    unsigned int blockSize;
+    unsigned int blockCount;
+    unsigned long long deviceCapacity;
     uuid_t generationId;
     uint8_t snapNumber;
 };
+
 struct SCbtData
 {
     SCbtData(size_t blockCount)
@@ -48,8 +49,8 @@ struct ICbt
 {
     virtual ~ICbt() {};
 
-    virtual std::shared_ptr<SCbtInfo> GetCbtInfo(const std::string &original);
-    virtual std::shared_ptr<SCbtData> GetCbtData(const std::shared_ptr<SCbtInfo> &ptrCbtInfo);
+    virtual std::shared_ptr<SCbtInfo> GetCbtInfo(const std::string &original) = 0;
+    virtual std::shared_ptr<SCbtData> GetCbtData(const std::shared_ptr<SCbtInfo> &ptrCbtInfo) = 0;
 
     static std::shared_ptr<ICbt> Create();
 };

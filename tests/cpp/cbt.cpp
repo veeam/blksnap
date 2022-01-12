@@ -1,5 +1,6 @@
 #include <iostream>
-#include "blksnap/BlksnapSession.h"
+#include "blksnap/Session.h"
+#include "blksnap/Cbt.h"
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;

@@ -51,7 +51,6 @@ public:
     std::string GetImageDevice(const std::string& original) override;
     std::string GetOriginalDevice(const std::string& image) override;
     bool GetError(std::string &errorMessage) override;
-    std::shared_ptr<SCbtInfo> GetCbtInfo(const std::string& device, bool isOriginal = true) override;
 
 private:
     uuid_t m_id;
@@ -409,7 +408,7 @@ std::string CSession::GetOriginalDevice(const std::string& image)
             return m_devices[inx].originalName;
     }
 
-    throw std::runtime_error("Failed to get image device for ["+original+"].");
+    throw std::runtime_error("Failed to get original device for ["+image+"].");
 }
 
 bool CSession::GetError(std::string &errorMessage)
