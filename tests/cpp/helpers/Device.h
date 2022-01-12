@@ -2,9 +2,6 @@
 #include <system_error>
 #include <sys/stat.h>
 
-namespace blksnap
-{
-
 struct SDeviceId{
     unsigned int mj;
     unsigned int mn;
@@ -53,8 +50,6 @@ struct SDeviceId{
         if (::stat(name.c_str(), &st))
             throw std::system_error(errno, std::generic_category(), name);
 
-        return SDeviceId(st.st_rdev, st.st_rdev);
+        return SDeviceId(major(st.st_rdev), minor(st.st_rdev));
     };
 };
-
-}

@@ -5,7 +5,6 @@
 #include <vector>
 #include <memory>
 #include <uuid/uuid.h>
-#include "DeviceId.h"
 
 namespace blksnap
 {
@@ -13,10 +12,13 @@ namespace blksnap
 struct SCbtInfo
 {
     SCbtInfo(){};
-    SCbtInfo(const SDeviceId inOriginalDevId, const uint32_t inBlockSize,
-        const uint32_t inBlockCount, const uint64_t inDeviceCapacity,
-        const  uuid_t &inGenerationId, const uint8_t inSnapNumber)
-        : originalDevId(inOriginalDevId)
+    SCbtInfo(
+        const unsigned int inOriginalMajor, const unsigned int inOriginalMinor,
+        const uint32_t inBlockSize, const uint32_t inBlockCount,
+        const uint64_t inDeviceCapacity,
+        const uuid_t &inGenerationId, const uint8_t inSnapNumber)
+        : originalMajor(inOriginalMajor)
+        , originalMinor(inOriginalMinor)
         , blockSize(inBlockSize)
         , blockCount(inBlockCount)
         , deviceCapacity(inDeviceCapacity)
@@ -26,7 +28,8 @@ struct SCbtInfo
     };
     ~SCbtInfo(){};
 
-    SDeviceId originalDevId;
+    unsigned int originalMajor;
+    unsigned int originalMinor;
     unsigned int blockSize;
     unsigned int blockCount;
     unsigned long long deviceCapacity;
