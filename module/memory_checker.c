@@ -45,15 +45,18 @@ char *memory_object_names[] = {
 static_assert(sizeof(memory_object_names) == (memory_object_count * sizeof(char *)), \
 	"The size of enum memory_object_type is not equal to size of memory_object_names array.");
 
-static
-atomic_t memory_counter[memory_object_count];
+static atomic_t memory_counter[memory_object_count];
+static atomic_t memory_counter_max[memory_object_count];
 
 void memory_object_inc(enum memory_object_type type)
 {
+	int value;
 	if (unlikely(type >= memory_object_count))
 		return;
 
-	atomic_inc(&memory_counter[type]);
+	value = atomic_inc_return(&memory_counter[type]);
+	if (value > atomic_read(&memory_counter_max[type]))
+		atomic_inc(&memory_counter_max[type]);
 }
 
 void memory_object_dec(enum memory_object_type type)
@@ -71,6 +74,10 @@ void memory_object_print(void )
 	pr_debug("Statistics for objects in memory:\n");
 	for (cnt=0; cnt<memory_object_count; cnt++)
 		pr_debug("%s: %d\n", memory_object_names[cnt], atomic_read(&memory_counter[cnt]));
+
+	pr_debug("Maximim for objects in memory:\n");
+	for (cnt=0; cnt<memory_object_count; cnt++)
+		pr_debug("%s: %d\n", memory_object_names[cnt], atomic_read(&memory_counter_max[cnt]));
 }
 
 #endif
