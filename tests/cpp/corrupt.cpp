@@ -306,7 +306,7 @@ struct SCorruptInfo
 
     SCorruptInfo()
     {};
-    SCorruptInfo(std::string inOriginal, std::vector<SRange> inRanges)
+    SCorruptInfo(std::string inOriginal, const std::vector<SRange> &inRanges)
         : original(inOriginal)
         , ranges(inRanges)
     {};
@@ -317,8 +317,8 @@ struct SCorruptInfo
  */
 static inline size_t sectorToBlock(sector_t sector, unsigned int blockSize)
 {
-    blockSize = blockSize << SECTOR_SHIFT;
-    return static_cast<size_t>((sector + blockSize - 1) / blockSize);
+    blockSize >>= SECTOR_SHIFT;
+    return static_cast<size_t>(sector / blockSize);
 }
 
 bool IsChangedRegion(const std::shared_ptr<blksnap::SCbtInfo> &ptrCbtInfoPrevious,
@@ -326,6 +326,7 @@ bool IsChangedRegion(const std::shared_ptr<blksnap::SCbtInfo> &ptrCbtInfoPreviou
                      const std::shared_ptr<blksnap::SCbtData> &ptrCbtMap,
                      const SRange &range)
 {
+    logger.Info("Is region "  + std::to_string(range.sector) + ":" + std::to_string(range.count) + " has been changed ");
     if (uuid_compare(ptrCbtInfoPrevious->generationId, ptrCbtInfoCurrent->generationId)) {
         logger.Info("Next generation found");
         return true;
@@ -341,17 +342,20 @@ bool IsChangedRegion(const std::shared_ptr<blksnap::SCbtInfo> &ptrCbtInfoPreviou
     size_t from = sectorToBlock(range.sector, blockSize);
     size_t to = sectorToBlock(range.sector + range.count - 1, blockSize);
     bool changed = false;
+    logger.Info("Blocks from "+std::to_string(from)+" to "+std::to_string(to));
     for (size_t inx = from; inx <= to; inx++) {
         if (ptrCbtMap->vec[inx] > ptrCbtInfoPrevious->snapNumber) {
             changed = true;
             logger.Info("The block "+std::to_string(inx)+" has been changed");
+        } else {
+            logger.Info("The block "+std::to_string(inx)+" has NOT been changed");
         }
     }
 
     return changed;
 }
 
-void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo> &ptrPreviousCbtInfo,
+void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo> &ptrCbtInfoPrevious,
                      const std::vector<SCorruptInfo> &corrupts)
 {
     if (corrupts.empty())
@@ -360,14 +364,17 @@ void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo> &ptrPreviousCbtInf
 
     auto ptrCbt = blksnap::ICbt::Create();
 
-    std::shared_ptr<blksnap::SCbtInfo> ptrCurrentCbtInfo = ptrCbt->GetCbtInfo(original);
-    std::shared_ptr<blksnap::SCbtData> ptrCurrentCbtData = ptrCbt->GetCbtData(ptrCurrentCbtInfo);
+    std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoCurrent = ptrCbt->GetCbtInfo(original);
+    std::shared_ptr<blksnap::SCbtData> ptrCbtDataCurrent = ptrCbt->GetCbtData(ptrCbtInfoCurrent);
+
+    logger.Info("Previous CBT snap number= " + std::to_string(ptrCbtInfoPrevious->snapNumber));
+    logger.Info("Current CBT snap number= " + std::to_string(ptrCbtInfoCurrent->snapNumber));
 
     for (const SCorruptInfo &corruptInfo : corrupts) {
         for (const SRange & range : corruptInfo.ranges) {
-            IsChangedRegion(ptrPreviousCbtInfo,
-                            ptrCurrentCbtInfo,
-                            ptrCurrentCbtData,
+            IsChangedRegion(ptrCbtInfoPrevious,
+                            ptrCbtInfoCurrent,
+                            ptrCbtDataCurrent,
                             range);
         }
     }
@@ -376,7 +383,7 @@ void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo> &ptrPreviousCbtInf
 void CheckCorruption(const std::string &origDevName, const std::string &diffStorage, const int durationLimitSec)
 {
     std::vector<SCorruptInfo> corrupts;
-    std::shared_ptr<blksnap::SCbtInfo> ptrPreviousCbtInfo;
+    std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoPrevious;
 
     logger.Info("--- Test: check corruption ---");
     logger.Info("version: " + blksnap::Version());
@@ -407,8 +414,8 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
             auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
 
 
-            if (ptrPreviousCbtInfo) {
-                if (uuid_compare(ptrPreviousCbtInfo->generationId, ptrCbtInfo->generationId)) {
+            if (ptrCbtInfoPrevious) {
+                if (uuid_compare(ptrCbtInfoPrevious->generationId, ptrCbtInfo->generationId)) {
                     uuid_unparse(ptrCbtInfo->generationId, generationIdStr);
                     logger.Info("- New CBT generation ["+ std::string(generationIdStr) +"] has been created.");
                 }
@@ -417,7 +424,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
                 logger.Info("- Start with CBT generation ["+ std::string(generationIdStr) +"]");
             }
 
-            ptrPreviousCbtInfo = ptrCbtInfo;
+            ptrCbtInfoPrevious = ptrCbtInfo;
         }
 
         int testSeqNumber = ptrGen->GetSequenceNumber();
@@ -456,7 +463,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
                 corrupts.emplace_back(origDevName, ptrGen->GetFails());
             }
 
-        } while ((std::time(nullptr) - startFillRandom) < 30);
+        } while (((std::time(nullptr) - startFillRandom) < 30) && !isErrorFound);
 
 
         std::string errorMessage;
@@ -468,12 +475,19 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         logger.Info("-- Destroy blksnap session");
         ptrSession.reset();
     }
+#if 0
+    // Allow to show state of all blocks
+    std::vector<SRange> testRanges;
+    testRanges.emplace_back(0, ptrOrininal->Size() >> SECTOR_SHIFT);
+    corrupts.emplace_back(origDevName, testRanges);
+#endif
+
     if (!corrupts.empty()) {
         // Create snapshot and check corrupted ranges and cbt table content.
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
         auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
 
-        CheckCbtCorrupt(ptrPreviousCbtInfo, corrupts);
+        CheckCbtCorrupt(ptrCbtInfoPrevious, corrupts);
 
         logger.Info("-- Destroy blksnap session");
         ptrSession.reset();
