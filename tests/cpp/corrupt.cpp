@@ -171,14 +171,6 @@ public:
      */
     const std::vector<SRange> & GetFails()
     {
-        std::stringstream ss;
-        ss << m_failCount << " corrupted sectors" << std::endl;
-        ss << m_failedRanges.size() << " corrupted ranges" << std::endl;
-        ss << "Ranges of corrupted sectors:" << std::endl;
-        for (const SRange &range : m_failedRanges)
-            ss << range.sector << ":" << range.count << std::endl;
-        logger.Err(ss);
-
         return m_failedRanges;
     };
 
@@ -249,6 +241,8 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
     AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024*1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
+
+    ::sync();
 
     for (off_t offset = 0; offset < sizeBdev; offset += portion.Size()) {
         size_t portionSize = std::min(portion.Size(), static_cast<size_t>(sizeBdev-offset));
@@ -380,6 +374,24 @@ void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo> &ptrCbtInfoPreviou
     }
 }
 
+void LogCurruptedSectors(const std::string &image, const std::vector<SRange> &ranges)
+{
+    std::stringstream ss;
+
+    ss << ranges.size() << " corrupted ranges" << std::endl;
+    ss << "Ranges of corrupted sectors:" << std::endl;
+    for (const SRange & range : ranges) {
+        blksnap::SectorState state = {0};
+
+        ss << range.sector << ":" << range.count << std::endl;
+        blksnap::GetSectorState(image, range.sector, state);
+        ss <<  "prev= " + std::to_string(state.snapNumberPrevious) + " " <<
+               "curr= " + std::to_string(state.snapNumberCurrent) +  " " <<
+               "state= " + std::to_string(state.chunkState) << std::endl;
+    }
+    logger.Err(ss);
+}
+
 void CheckCorruption(const std::string &origDevName, const std::string &diffStorage, const int durationLimitSec)
 {
     std::vector<SCorruptInfo> corrupts;
@@ -440,7 +452,10 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
         if (ptrGen->Fails() > 0) {
             isErrorFound = true;
-            corrupts.emplace_back(origDevName, ptrGen->GetFails());
+            const std::vector<SRange> &ranges = ptrGen->GetFails();
+            corrupts.emplace_back(origDevName, ranges);
+
+            LogCurruptedSectors(ptrImage->Name(), ranges);
         }
 
         FillBlocks(ptrGen, ptrOrininal, 0, 4096);//
@@ -451,7 +466,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
         do {
             logger.Info("- Fill some random blocks");
             ptrGen->IncSequence();
-            FillRandomBlocks(ptrGen, ptrOrininal, CRandomHelper::GenerateInt() & 0x3FFF/*0x3FF*/);
+            FillRandomBlocks(ptrGen, ptrOrininal, CRandomHelper::GenerateInt() & 0x3F/*0x3FF*/);
 
             FillBlocks(ptrGen, ptrOrininal, 0, 4096); //
 
@@ -460,7 +475,11 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
             CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
             if (ptrGen->Fails() > 0) {
                 isErrorFound = true;
-                corrupts.emplace_back(origDevName, ptrGen->GetFails());
+
+                const std::vector<SRange> &ranges = ptrGen->GetFails();
+                corrupts.emplace_back(origDevName, ranges);
+
+                LogCurruptedSectors(ptrImage->Name(), ranges);
             }
 
         } while (((std::time(nullptr) - startFillRandom) < 30) && !isErrorFound);
@@ -565,8 +584,11 @@ void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
         CheckAll(ptrCtx->ptrGen, ptrCtx->ptrBdev, ptrCtx->testSeqNumber, ptrCtx->testSeqTime);
         logger.Info("- Complete checking image device [" + ptrCtx->ptrBdev->Name() + "].");
 
-        if (ptrCtx->ptrGen->Fails())
+        if (ptrCtx->ptrGen->Fails()) {
+            LogCurruptedSectors(ptrCtx->ptrBdev->Name(), ptrCtx->ptrGen->GetFails());
+
             throw std::runtime_error(std::to_string(ptrCtx->ptrGen->Fails()) + " corrupted sectors were found");
+        }
     }
     catch(std::exception &ex) {
         logger.Err(ex.what());

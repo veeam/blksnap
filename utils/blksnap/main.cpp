@@ -223,8 +223,8 @@ public:
     {
         m_usage = std::string("[TBD]Print " BLK_SNAP_MODULE_NAME " module version.");
         m_desc.add_options()
-            ("compatibility,c", "[TBD]Print only compatibility flag value in decimal form.")
-            ("modification,m", "[TBD]Print only module modification name.")
+//            ("compatibility,c", "[TBD]Print only compatibility flag value in decimal form.")
+//            ("modification,m", "[TBD]Print only module modification name.")
             ("json,j", "[TBD]Use json format for output.");
     };
 
@@ -234,16 +234,16 @@ public:
 
         if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_VERSION, &param))
             throw std::system_error(errno, std::generic_category(), "Failed to get version.");
-
+/*
         if (vm.count("compatibility")) {
             std::cout << param.compatibility_flags << std::endl;
             return;
         }
         if (vm.count("modification")) {
-            std::cout << param.mod_name << std::endl;
+            std::cout << param.name << std::endl;
             return;
         }
-
+*/
         std::cout << param.major << "."
                   << param.minor << "."
                   << param.revision << "."

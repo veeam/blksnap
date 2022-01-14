@@ -34,6 +34,18 @@ void CBlksnap::Version(struct blk_snap_version &version)
         throw std::system_error(errno, std::generic_category(), "Failed to get version.");
 }
 
+#ifdef BLK_SNAP_MODIFICATION
+bool CBlksnap::Modification(struct blk_snap_mod &mod)
+{
+    if (::ioctl(m_fd, IOCTL_BLK_SNAP_MOD, &mod)) {
+        if (errno == -ENOTTY)
+            return false;
+        throw std::system_error(errno, std::generic_category(), "Failed to get modification.");
+    }
+    return true;
+}
+#endif
+
 void CBlksnap::CollectTrackers(std::vector<struct blk_snap_cbt_info> &cbtInfoVector)
 {
     struct blk_snap_tracker_collect param = {0};
@@ -182,3 +194,21 @@ bool CBlksnap::WaitEvent(const uuid_t &id, unsigned int timeoutMs, SBlksnapEvent
     }
     return true;
 }
+
+#if defined(BLK_SNAP_MODIFICATION) && defined(BLK_SNAP_DEBUG_SECTOR_STATE)
+void CBlksnap::GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset,
+                              struct blk_snap_sector_state &state)
+{
+    struct blk_snap_get_sector_state param = {
+        .image_dev_id = image_dev_id,
+        .sector = static_cast<__u64>(offset >> SECTOR_SHIFT),
+        .state = {0}
+    };
+
+    if (::ioctl(m_fd, IOCTL_BLK_SNAP_GET_SECTOR_STATE, &param))
+        throw std::system_error(errno, std::generic_category(),
+            "[TBD]Failed to get sectors state.");
+
+    state = param.state;
+}
+#endif

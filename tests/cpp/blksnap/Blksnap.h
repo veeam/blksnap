@@ -7,6 +7,13 @@
 #include <vector>
 #include <string>
 #include <uuid/uuid.h>
+
+#ifndef BLK_SNAP_MODIFICATION
+/* Allow to use additional IOCTL from module modification */
+#define BLK_SNAP_MODIFICATION
+/* Allow to get any sector state. Can be used only for debug purpose */
+#define BLK_SNAP_DEBUG_SECTOR_STATE
+#endif
 #include "../../../module/blk_snap.h"
 
 #ifndef SECTOR_SHIFT
@@ -57,6 +64,15 @@ public:
                            const std::vector<struct blk_snap_block_range> &ranges);
     void Take(const uuid_t &id);
     bool WaitEvent(const uuid_t &id, unsigned int timeoutMs, SBlksnapEvent &ev);
+
+#ifdef BLK_SNAP_MODIFICATION
+    /* Additional functional */
+    bool Modification(struct blk_snap_mod &mod);
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+    void GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset,
+                        struct blk_snap_sector_state &state);
+#endif
+#endif
 private:
     int m_fd;
 
