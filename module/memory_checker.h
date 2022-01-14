@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 
 enum memory_object_type {
 	/*alloc_page*/

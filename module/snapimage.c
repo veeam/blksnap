@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "blk_snap.h"
@@ -12,7 +12,7 @@
 #include "chunk.h"
 #include "cbt_map.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
@@ -238,7 +238,7 @@ void snapimage_free(struct snapimage *snapimage)
 
 	free_minor(MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
 #endif
 }
@@ -261,7 +261,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage);
 #endif
 	ret = new_minor(&minor, snapimage);
@@ -382,7 +382,7 @@ fail_free_minor:
 	free_minor(minor);
 fail_free_image:
 	kfree(snapimage);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
 #endif
 	return ERR_PTR(ret);
@@ -416,3 +416,19 @@ int snapimage_major(void)
 {
 	return _major;
 }
+
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
+                              struct blk_snap_sector_state *state)
+{
+	int ret;
+
+	ret = diff_area_get_sector_state(snapimage->diff_area, sector, &state->chunk_state);
+	if (ret)
+		return ret;
+
+	return cbt_map_get_sector_state(snapimage->cbt_map, sector,
+					&state->snap_number_prev,
+					&state->snap_number_curr);
+}
+#endif

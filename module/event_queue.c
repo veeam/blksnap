@@ -2,12 +2,12 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-event_queue: " fmt
 #include <linux/slab.h>
 #include <linux/sched.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "event_queue.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
@@ -40,7 +40,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 	event = kzalloc(sizeof(struct event) + data_size, flags);
 	if (!event)
 		return -ENOMEM;
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_event);
 #endif
 	event->time = ktime_get();
@@ -69,7 +69,7 @@ int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const 
 	data = kzalloc(data_size, flags);
 	if (!data)
 		return -ENOMEM;
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_data);
 #endif
 	va_start(args, fmt);
@@ -78,7 +78,7 @@ int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const 
 
 	ret = event_gen(event_queue, flags, code, data, data_size);
 	kfree(data);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_data);
 #endif
 	return ret;

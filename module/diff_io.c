@@ -2,13 +2,13 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-io: " fmt
 #include <linux/genhd.h>
 #include <linux/slab.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "diff_io.h"
 #include "diff_buffer.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
@@ -70,7 +70,7 @@ struct diff_io *diff_io_new(bool is_write, bool is_nowait)
 	diff_io = kzalloc(sizeof(struct diff_io), gfp_mask);
 	if (unlikely(!diff_io))
 		return NULL;
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_io);
 #endif
 	diff_io->error = 0;

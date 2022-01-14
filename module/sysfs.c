@@ -3,14 +3,14 @@
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "sysfs.h"
 #include "ctrl.h"
 #include "blk_snap.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)

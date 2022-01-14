@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
@@ -12,7 +12,7 @@
 #include "cbt_map.h"
 #include "diff_area.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
@@ -48,7 +48,7 @@ void tracker_free(struct kref *kref)
 	diff_area_put(tracker->diff_area);
 	cbt_map_put(tracker->cbt_map);
 	kfree(tracker);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_tracker);
 #endif
 }
@@ -114,7 +114,7 @@ bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 
 	current_flag = memalloc_noio_save();
 	err = diff_area_copy(tracker->diff_area, sector, count,
-			     (bool)(bio->bi_opf & REQ_NOWAIT));
+			     !!(bio->bi_opf & REQ_NOWAIT));
 	memalloc_noio_restore(current_flag);
 	if (likely(!err))
 		return true;
@@ -225,7 +225,7 @@ struct tracker *tracker_new(struct block_device* bdev)
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
 	if (tracker == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker);
 #endif
 	kref_init(&tracker->kref);
@@ -325,7 +325,7 @@ void tracker_done(void)
 
 		tracker_remove(tr_dev->dev_id);
 		kfree(tr_dev);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
 #endif
 	}
@@ -356,7 +356,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		tracker = ERR_PTR(-ENOMEM);
 		goto put_bdev;
 	}
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracked_device);
 #endif
 	INIT_LIST_HEAD(&tr_dev->link);
@@ -367,7 +367,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		pr_err("Failed to create tracker. errno=%d\n",
 			abs((int)PTR_ERR(tracker)));
 		kfree(tr_dev);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
 #endif
 	} else {
@@ -432,7 +432,7 @@ int tracker_remove(dev_t dev_id)
 
 		if (tr_dev) {
 			kfree(tr_dev);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 			memory_object_dec(memory_object_tracked_device);
 #endif
 		}

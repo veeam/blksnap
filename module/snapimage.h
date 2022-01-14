@@ -49,3 +49,8 @@ int snapimage_major(void);
 
 void snapimage_free(struct snapimage *snapimage);
 struct snapimage *snapimage_create(struct diff_area *diff_area, struct cbt_map *cbt_map);
+
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
+                              struct blk_snap_sector_state *state);
+#endif

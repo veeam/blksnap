@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
 #include "diff_buffer.h"
 #include "diff_area.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 static atomic_t diff_buffer_allocated_counter;
 
 static
@@ -44,17 +44,17 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 		page = diff_buffer->pages[inx];
 		if (page) {
 			__free_page(page);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 			memory_object_dec(memory_object_page);
 #endif
 		}
 	}
 
 	kfree(diff_buffer);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_buffer);
 #endif
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 //	pr_debug("Free buffer #%d \n", diff_buffer->number);
 	atomic_dec(&diff_buffer_allocated_counter);
 #endif
@@ -78,10 +78,10 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 			      gfp_mask);
 	if (!diff_buffer)
 		return NULL;
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_buffer);
 #endif
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	diff_buffer->number = atomic_inc_return(&diff_buffer_allocated_counter);
 //	pr_debug("Allocate buffer #%d \n", diff_buffer->number);
 #endif
@@ -93,7 +93,7 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		page = alloc_page(gfp_mask);
 		if (!page)
 			goto fail;
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_inc(memory_object_page);
 #endif
 		diff_buffer->pages[inx] = page;
@@ -121,7 +121,7 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask
 
 	/* Return free buffer if it was found in a pool */
 	if (diff_buffer) {
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 //		pr_debug("Took buffer from pool");
 		atomic_inc(&diff_buffer_take_cnt);
 #endif
@@ -137,7 +137,7 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask
 	if (unlikely(!diff_buffer))
 		return ERR_PTR(-ENOMEM);
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	atomic_inc(&diff_buffer_take_cnt);
 #endif
 	return diff_buffer;
@@ -147,10 +147,10 @@ void diff_buffer_release(struct diff_area *diff_area, struct diff_buffer *diff_b
 {
 //	if (unlikely(!diff_buffer))
 //		return;
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	atomic_dec(&diff_buffer_take_cnt);
 #endif
-//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 //	pr_debug("Release buffer");
 //#endif
 	if (atomic_read(&diff_area->free_diff_buffers_count) > free_diff_buffer_pool_size) {
@@ -167,7 +167,7 @@ void diff_buffer_cleanup(struct diff_area *diff_area)
 {
 	struct diff_buffer *diff_buffer = NULL;
 
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	pr_debug("Cleanup %d buffers\n", diff_buffer_allocated_counter_get());
 #endif
 	do {
@@ -182,7 +182,7 @@ void diff_buffer_cleanup(struct diff_area *diff_area)
 		if (diff_buffer)
 			diff_buffer_free(diff_buffer);
 	} while(diff_buffer);
-#ifdef CONFIG_DEBUG_DIFF_BUFFER
+#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	if (diff_buffer_allocated_counter_get())
 		pr_debug("Some buffers %d still available\n",
 			diff_buffer_allocated_counter_get());

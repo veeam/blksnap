@@ -15,7 +15,6 @@ $(KERNEL_MODULE_NAME)-y += snapimage.o
 $(KERNEL_MODULE_NAME)-y += snapshot.o
 $(KERNEL_MODULE_NAME)-y += sysfs.o
 $(KERNEL_MODULE_NAME)-y += tracker.o
-$(KERNEL_MODULE_NAME)-y += memory_checker.o
 
 # for upstream, we don't need any addition makefiles,
 # but for a standalone module the configuration is necessary

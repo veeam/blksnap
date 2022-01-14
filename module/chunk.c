@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include <linux/dm-io.h>
 #include <linux/sched/mm.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
@@ -13,7 +13,7 @@
 #include "diff_area.h"
 #include "diff_storage.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
@@ -93,7 +93,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	// Initiate the cache clearing process.
 	if (need_to_cleanup) {
-//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 //		pr_debug("Need to cleanup cache: caching_chunks_count=%d, chunk_maximum_in_cache=%d\n",
 //			atomic_read(&diff_area->caching_chunks_count),
 //			chunk_maximum_in_cache);
@@ -111,7 +111,7 @@ void chunk_notify_load(void *ctx)
 	diff_io_free(chunk->diff_io);
 	chunk->diff_io = NULL;
 
-#ifdef CONFIG_DEBUG_CHUNK_IO
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("DEBUG! loaded chunk #%ld \n", chunk->number);
 	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_ADDRESS, 16, 1,
 		page_address(chunk->diff_buffer->pages[0]), 64, true);
@@ -200,7 +200,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_chunk);
 #endif
 	INIT_LIST_HEAD(&chunk->cache_link);
@@ -216,7 +216,7 @@ void chunk_free(struct chunk *chunk)
 {
 	if (unlikely(!chunk))
 		return;
-//#ifdef CONFIG_DEBUG_DIFF_BUFFER
+//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 //	if (mutex_is_locked(&chunk->lock))
 //		pr_debug("Chunk %ld locked", chunk->number);
 //#endif
@@ -230,7 +230,7 @@ void chunk_free(struct chunk *chunk)
 	mutex_unlock(&chunk->lock);
 
 	kfree(chunk);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_chunk);
 #endif
 }
@@ -246,7 +246,7 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	struct diff_io *diff_io;
 	struct diff_region *region = chunk->diff_region;
 
-#ifdef CONFIG_DEBUG_CHUNK_IO
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,
 		region->bdev->bd_device.kobj.name, region->sector, region->count);
 	pr_debug("DEBUG! stored chunk #%ld \n", chunk->number);
@@ -290,7 +290,7 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 		.count = chunk->sector_count,
 	};
 
-#ifdef CONFIG_DEBUG_CHUNK_IO
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,
 		region.bdev->bd_device.kobj.name, region.sector, region.count);
 #endif
@@ -329,7 +329,7 @@ int chunk_load_orig(struct chunk *chunk)
 		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
-#ifdef CONFIG_DEBUG_CHUNK_IO
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("%s", __FUNCTION__);
 	pr_debug("sector=%llu\n", region.sector);
 	pr_debug("count=%llu\n", region.count);
@@ -356,7 +356,7 @@ int chunk_load_diff(struct chunk *chunk)
 	struct diff_io *diff_io;
 	struct diff_region *region = chunk->diff_region;
 
-#ifdef CONFIG_DEBUG_CHUNK_IO
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,
 		region->bdev->bd_device.kobj.name, region->sector, region->count);
 #endif
@@ -369,7 +369,7 @@ int chunk_load_diff(struct chunk *chunk)
 		ret = diff_io->error;
 
 	diff_io_free(diff_io);
-#ifdef CONFIG_DEBUG_CHUNK_IO
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("DEBUG! loaded chunk #%ld from diff area\n", chunk->number);
 	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_ADDRESS, 16, 1,
 		page_address(chunk->diff_buffer->pages[0]), 64, true);

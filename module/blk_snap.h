@@ -7,12 +7,25 @@
 #define BLK_SNAP_IMAGE_NAME "blksnap-image"
 #define BLK_SNAP 'V'
 
+#ifdef BLK_SNAP_MODIFICATION
+#define IOCTL_MOD 32
+#endif
+
 enum blk_snap_ioctl {
+	/*
+	 * Service controls
+	 */
 	blk_snap_ioctl_version,
+	/*
+	 * contols for tracking
+	 */
 	blk_snap_ioctl_tracker_remove,
 	blk_snap_ioctl_tracker_collect,
 	blk_snap_ioctl_tracker_read_cbt_map,
 	blk_snap_ioctl_tracker_mark_dirty_blocks,
+	/*
+	 * Snapshot contols
+	 */
 	blk_snap_ioctl_snapshot_create,
 	blk_snap_ioctl_snapshot_destroy,
 	blk_snap_ioctl_snapshot_append_storage,
@@ -20,17 +33,18 @@ enum blk_snap_ioctl {
 	blk_snap_ioctl_snapshot_collect,
 	blk_snap_ioctl_snapshot_collect_images,
 	blk_snap_ioctl_snapshot_wait_event,
-	blk_snap_ioctl_end
+	blk_snap_ioctl_end,
+	/*
+	 * Additional controls for any standalone modification
+	 */
+#ifdef BLK_SNAP_MODIFICATION
+	blk_snap_ioctl_mod = IOCTL_MOD,
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+	blk_snap_ioctl_get_sector_state,
+#endif
+	blk_snap_ioctl_end_mod
+#endif
 };
-
-enum blk_snap_compat_flags {
-        /*
-         * Reserved for new features
-         */
-	BLK_SNAP_COMPAT_FLAG_LIMIT=64
-};
-
-#define BLK_SNAP_MOD_NAME_LIMIT 32
 
 /**
  * struct blk_snap_version - Result for &IOCTL_BLK_SNAP_VERSION control.
@@ -42,38 +56,71 @@ enum blk_snap_compat_flags {
  *	Revision number.
  * @build:
  *	Build number.
- * @compatibility_flags:
- *	[TBD] Reserved for future use.
- * @mod_name:
- *	Name of modification of the module blksnap (fork name, for example).
- *      It's should be empty string for upstream module.
  */
 struct blk_snap_version {
 	__u16 major;
 	__u16 minor;
 	__u16 revision;
 	__u16 build;
-	__u64 compatibility_flags;
-	__u8 mod_name[BLK_SNAP_MOD_NAME_LIMIT];
 };
 /**
  * IOCTL_BLK_SNAP_VERSION - Get version and compatibility flags.
  *
  * Linking the product behavior to the version code does not seem to me a very
- * good idea. However, such an ioctl is good for checking that the module has
- * loaded and is responding to requests.
- *
- * But compatibility flags allows to safely extend the functionality of the
- * module. When the blk_snap kernel module receives new ioctl it will be
- * enough to add a bit.
- *
- * The name of the modification can be used by the authors of forks and branches
- * of the original module. The module in upstream is considered original and
- * therefore contains an empty string here.
+ * good idea. Version is only for logs.
  */
 #define IOCTL_BLK_SNAP_VERSION							\
 	_IOW(BLK_SNAP, blk_snap_ioctl_version,					\
 		struct blk_snap_version)
+
+#ifdef BLK_SNAP_MODIFICATION
+
+enum blk_snap_compat_flags {
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+	blk_snap_compat_flag_debug_sector_state,
+#endif
+	/*
+	 * Reserved for new features
+	 */
+	blk_snap_compat_flags_end
+};
+static_assert(blk_snap_compat_flags_end <= 64,					\
+	      "There are too many compatibility flags.");
+
+#define BLK_SNAP_MOD_NAME_LIMIT 32
+
+/**
+ * struct blk_snap_modification - Result for &IOCTL_BLK_SNAP_VERSION control.
+ *
+ * @compatibility_flags:
+ *	[TBD] Reserved for new modification specific features.
+ * @name:
+ *	Name of modification of the module blksnap (fork name, for example).
+ *      It's should be empty string for upstream module.
+ */
+struct blk_snap_mod {
+	__u64 compatibility_flags;
+	__u8 name[BLK_SNAP_MOD_NAME_LIMIT];
+};
+
+/**
+ * IOCTL_BLK_SNAP_MOD - Get modification name and compatibility flags.
+ *
+ * Linking the product behavior to the version code does not seem to me a very
+ * good idea. However, such an ioctl is good for checking that the module has
+ * loaded and is responding to requests.
+ *
+ * The compatibility flags allows to safely extend the functionality of the
+ * module. When the blk_snap kernel module receives new ioctl it will be
+ * enough to add a bit.
+ *
+ * The name of the modification can be used by the authors of forks and branches
+ * of the original module. The module in upstream have not any modifications.
+ */
+#define IOCTL_BLK_SNAP_MOD							\
+	_IOW(BLK_SNAP, blk_snap_ioctl_mod,					\
+		struct blk_snap_mod)
+#endif
 
 /*
  * The main functionality of the module is change block tracking (CBT).
@@ -471,4 +518,28 @@ struct blk_snap_event_corrupted {
 	__s32 err_code;
 };
 
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
 
+/**
+ *
+ */
+struct blk_snap_sector_state {
+	__u8	snap_number_prev;
+	__u8	snap_number_curr;
+	__u32	chunk_state;
+};
+
+struct blk_snap_get_sector_state {
+	struct blk_snap_dev_t image_dev_id;
+	__u64 sector;
+	struct blk_snap_sector_state state;
+};
+
+/**
+ *
+ */
+#define IOCTL_BLK_SNAP_GET_SECTOR_STATE						\
+	_IOW(BLK_SNAP, blk_snap_ioctl_get_sector_state,				\
+		struct blk_snap_get_sector_state)
+
+#endif

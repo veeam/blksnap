@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #define pr_fmt(fmt) KBUILD_MODNAME "-memory_checker: " fmt
 #include <linux/atomic.h>
 #include <linux/module.h>
 #include "memory_checker.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)

@@ -43,7 +43,7 @@ void event_free(struct event *event)
 {
         if (event) {
                 kfree(event);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_event);
 #endif
         }

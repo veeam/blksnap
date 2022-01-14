@@ -2,5 +2,6 @@
 # Additions for standalone bdevfilter module
 
 EXTRA_CFLAGS += "-DHAVE_LP_FILTER "
+
 bdevfilter-y += lp_filter.o
 obj-m	 += bdevfilter.o

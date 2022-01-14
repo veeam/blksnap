@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapshot: " fmt
 #include <linux/slab.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "blk_snap.h"
@@ -12,7 +12,7 @@
 #include "snapimage.h"
 #include "cbt_map.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
@@ -96,20 +96,20 @@ void snapshot_free(struct kref *kref)
 
 	if (snapshot->snapimage_array) {
 		kfree(snapshot->snapimage_array);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_snapimage_array);
 #endif
 	}
 	if (snapshot->tracker_array) {
 		kfree(snapshot->tracker_array);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracker_array);
 #endif
 	}
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	if (snapshot->superblock_array) {
 		kfree(snapshot->superblock_array);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_superblock_array);
 #endif
 	}
@@ -117,7 +117,7 @@ void snapshot_free(struct kref *kref)
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapshot);
 #endif
 }
@@ -145,7 +145,7 @@ struct snapshot *snapshot_new(unsigned int count)
 		ret= -ENOMEM;
 		goto fail;
 	}
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapshot);
 #endif
 	snapshot->tracker_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
@@ -153,7 +153,7 @@ struct snapshot *snapshot_new(unsigned int count)
 		ret = -ENOMEM;
 		goto fail_free_snapshot;
 	}
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker_array);
 #endif
 	snapshot->snapimage_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
@@ -161,7 +161,7 @@ struct snapshot *snapshot_new(unsigned int count)
 		ret = -ENOMEM;
 		goto fail_free_trackers;
 	}
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage_array);
 #endif
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -170,7 +170,7 @@ struct snapshot *snapshot_new(unsigned int count)
 		ret = -ENOMEM;
 		goto fail_free_snapimage;
 	}
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_superblock_array);
 #endif
 #endif
@@ -191,28 +191,28 @@ fail_free_snapimage:
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	if (snapshot->superblock_array) {
 		kfree(snapshot->superblock_array);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_superblock_array);
 #endif
 	}
 #endif
 	if (snapshot->snapimage_array) {
 		kfree(snapshot->snapimage_array);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_snapimage_array);
 #endif
 	}
 fail_free_trackers:
 	if (snapshot->tracker_array) {
 		kfree(snapshot->tracker_array);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracker_array);
 #endif
 	}
 fail_free_snapshot:
 	if (snapshot) {
 		kfree(snapshot);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_snapshot);
 #endif
 	}
@@ -330,7 +330,7 @@ int snapshot_destroy(uuid_t *id)
 	}
 
 	snapshot_put(snapshot);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	pr_debug("DEBUG! Check memory leak:\n");
 	memory_object_print();
 #endif
@@ -585,7 +585,7 @@ int snapshot_collect_images(uuid_t *id, struct blk_snap_image_info __user *user_
 		ret = -ENOMEM;
 		goto out;
 	}
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_image_info);
 #endif
 	for (inx=0; inx<snapshot->count; inx++) {
@@ -616,7 +616,7 @@ out:
 	*pcount = snapshot->count;
 	if (image_info_array) {
 		kfree(image_info_array);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_blk_snap_image_info);
 #endif
 	}
@@ -624,7 +624,8 @@ out:
 
 	return ret;
 }
-int snapshot_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_ranges,
+
+int snapshot_mark_dirty_blocks(dev_t image_dev_id, struct blk_snap_block_range *block_ranges,
 			      unsigned int count)
 {
 	int ret = 0;
@@ -633,7 +634,7 @@ int snapshot_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_
 	struct cbt_map *cbt_map = NULL;
 
 	pr_debug("Marking [%d] dirty blocks for device [%u:%u]\n",
-		count, MAJOR(dev_id), MINOR(dev_id));
+		count, MAJOR(image_dev_id), MINOR(image_dev_id));
 
 	down_read(&snapshots_lock);
 	if (list_empty(&snapshots))
@@ -641,7 +642,7 @@ int snapshot_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_
 
 	list_for_each_entry(s, &snapshots, link) {
 		for (inx = 0; inx < s->count; inx++) {
-			if (s->snapimage_array[inx]->image_dev_id == dev_id) {
+			if (s->snapimage_array[inx]->image_dev_id == image_dev_id) {
 				cbt_map = s->snapimage_array[inx]->cbt_map;
 				break;
 			}
@@ -651,7 +652,7 @@ int snapshot_mark_dirty_blocks(dev_t dev_id, struct blk_snap_block_range *block_
 	}
 	if (!cbt_map) {
 		pr_err("Cannot find snapshot image device [%u:%u]\n",
-			MAJOR(dev_id), MINOR(dev_id));
+			MAJOR(image_dev_id), MINOR(image_dev_id));
 		ret = -ENODEV;
 		goto out;
 	}
@@ -664,3 +665,43 @@ out:
 
 	return ret;
 }
+
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
+			     struct blk_snap_sector_state *state)
+{
+	int ret = 0;
+	int inx = 0;
+	struct snapshot *s;
+	struct snapimage *image = NULL;
+
+	down_read(&snapshots_lock);
+	if (list_empty(&snapshots))
+		goto out;
+
+	list_for_each_entry(s, &snapshots, link) {
+		for (inx = 0; inx < s->count; inx++) {
+			if (s->snapimage_array[inx]->image_dev_id == image_dev_id) {
+				image = s->snapimage_array[inx];
+				break;
+			}
+		}
+
+		inx++;
+	}
+	if (!image) {
+		pr_err("Cannot find snapshot image device [%u:%u]\n",
+			MAJOR(image_dev_id), MINOR(image_dev_id));
+		ret = -ENODEV;
+		goto out;
+	}
+
+	ret = snapimage_get_chunk_state(image, sector, state);
+	if (ret)
+		pr_err("Failed to get chunk state. errno=%d\n", abs(ret));
+out:
+	up_read(&snapshots_lock);
+
+	return ret;
+}
+#endif

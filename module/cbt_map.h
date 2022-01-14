@@ -70,3 +70,8 @@ size_t cbt_map_blk_size(struct cbt_map *cbt_map)
 int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 			      struct blk_snap_block_range *block_ranges,
 			      unsigned int count);
+
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
+			     u8 *snap_number_prev, u8 *snap_number_curr);
+#endif

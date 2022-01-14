@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-cbt_map: " fmt
 #include <linux/slab.h>
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "blk_snap.h"
 #include "cbt_map.h"
 #include "params.h"
 
-#ifdef CONFIG_DEBUGLOG
+#ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) \
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
@@ -116,7 +116,7 @@ void cbt_map_destroy(struct cbt_map *cbt_map)
 
 	cbt_map_deallocate(cbt_map);
 	kfree(cbt_map);
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_cbt_map);
 #endif
 }
@@ -130,7 +130,7 @@ struct cbt_map *cbt_map_create(struct block_device* bdev)
 	cbt_map = kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
 	if (cbt_map == NULL)
 		return NULL;
-#ifdef CONFIG_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_cbt_map);
 #endif
 	cbt_map->device_capacity = bdev_nr_sectors(bdev);
@@ -297,3 +297,44 @@ int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 
 	return ret;
 }
+
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+static inline
+int _cbt_map_get(struct big_buffer *map, size_t cbt_block, u8 *snap_number)
+{
+	int ret = 0;
+
+	ret = big_buffer_byte_get(map, cbt_block, snap_number);
+	if (unlikely(ret))
+		pr_err("CBT table out of range\n");
+
+	return ret;
+}
+
+int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
+			     u8 *snap_number_prev, u8 *snap_number_curr)
+{
+	int ret;
+	size_t cbt_block = (size_t)(sector >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
+
+	if (unlikely(cbt_block >= cbt_map->blk_count)) {
+		pr_err("Block index is too large.\n");
+		pr_err("Block #%zu was demanded, map size %zu blocks.\n",
+		       cbt_block, cbt_map->blk_count);
+		return -EINVAL;
+	}
+
+	spin_lock(&cbt_map->locker);
+	if (unlikely(cbt_map->is_corrupted)) {
+		ret = -EINVAL;
+		goto out;
+	}
+	ret = _cbt_map_get(cbt_map->write_map, cbt_block, snap_number_curr);
+	if (!ret)
+		ret = _cbt_map_get(cbt_map->read_map, cbt_block, snap_number_prev);
+out:
+	spin_unlock(&cbt_map->locker);
+
+	return ret;
+}
+#endif
