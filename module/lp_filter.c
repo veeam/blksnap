@@ -261,25 +261,40 @@ static
 blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
 	(blk_qc_t (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
 				     CALL_INSTRUCTION_LENGTH);
-
-static
-blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
 static
 void (*submit_bio_noacct_notrace)(struct bio *) =
 	(void (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
 				     CALL_INSTRUCTION_LENGTH);
-
-static
-void notrace submit_bio_noacct_handler(struct bio *bio)
 #else
 #error "Your kernel is too old for this module."
 #endif
+
+#ifdef BDEV_FILTER_SYNC
+#pragma message "Have BDEV_FILTER_SYNC"
+void notrace bdev_filter_submit_bio_noacct(struct bio *bio)
+{
+	submit_bio_noacct_notrace(bio);
+}
+EXPORT_SYMBOL(bdev_filter_submit_bio_noacct);
+#endif
+
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+static
+blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
+#else
+static
+void notrace submit_bio_noacct_handler(struct bio *bio)
+#endif
 {
 	if (!current->bio_list) {
+		bool pass;
+
+#ifdef BDEV_FILTER_SYNC
+		pass = bdev_filters_apply(bio);
+#else
 		struct bio_list bio_list_on_stack[2];
 		struct bio *new_bio;
-		bool pass;
 
 		bio_list_init(&bio_list_on_stack[0]);
 		current->bio_list = bio_list_on_stack;
@@ -298,7 +313,7 @@ void notrace submit_bio_noacct_handler(struct bio *bio)
 			 */
 			submit_bio_noacct_notrace(new_bio);
 		}
-
+#endif
 		if (!pass) {
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 			return BLK_QC_T_NONE;
