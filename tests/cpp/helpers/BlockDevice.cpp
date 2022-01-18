@@ -6,11 +6,13 @@
 #include <system_error>
 #include "BlockDevice.h"
 
-CBlockDevice::CBlockDevice(const std::string &name)
+CBlockDevice::CBlockDevice(const std::string &name, const bool isSync)
     : m_name(name)
     , m_fd(0)
 {
-    m_fd = ::open(m_name.c_str(), O_RDWR | O_DIRECT);
+    unsigned int flags = isSync ? O_SYNC | O_DSYNC : 0;
+
+    m_fd = ::open(m_name.c_str(), O_RDWR | O_DIRECT | flags);
     if (m_fd < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to open file '" + m_name + "'.");

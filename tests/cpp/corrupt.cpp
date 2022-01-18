@@ -32,12 +32,23 @@ typedef unsigned long long sector_t;
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
 
+const char* testHeadMagic = "testhead";
+
 struct STestHeader
 {
+    char head[8];
     int crc;
     int seqNumber;
     clock_t seqTime;
     sector_t sector;
+
+    static void Set(STestHeader *header, int inSeqNumber, sector_t inSector)
+    {
+        header->seqNumber = inSeqNumber;
+        header->sector = inSector;
+        header->seqTime = std::clock();
+        memcpy(header->head, testHeadMagic, 8);
+    };
 };
 
 struct STestSector
@@ -88,20 +99,44 @@ public:
     {
         return m_seqNumber;
     };
+#if 0
+    void GenerateBuffer(void* buffer, size_t size, STestHeader *header)
+    {
+        snprintf(static_cast<char*>(buffer), size, "chunk=%llu sector=%llu seqTime=%llu seqNumber=%d",
+            header->sector >> 9, header->sector, header->seqTime, header->seqNumber);
+    };
 
+    void LogBuffer(char* buf, size_t size)
+    {
+        /*std::stringstream ss;
+        int inx = 0;
+
+        ss << std::hex;
+        do {
+            ss << buf[inx];
+
+            inx++;
+            if (!(inx % 32))
+                ss << std::endl;
+        } while (inx < size);*/
+
+        logger.Info(std::string(buf, size));
+    };
+#endif
     void Generate(unsigned char *buffer, size_t size, sector_t sector)
     {
         for (size_t offset = 0; offset < size; offset += SECTOR_SIZE) {
             STestSector *current = (STestSector *)(buffer + offset);
 
-            CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
-
             STestHeader *header = &current->header;
-            header->seqNumber = m_seqNumber;
-            header->seqTime = std::clock();
-            header->sector = sector;
-            if (m_isCrc32Checking)
-                header->crc = crc32(0, buffer + offset + sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
+            STestHeader::Set(header, m_seqNumber, sector);
+
+            CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
+            //GenerateBuffer(current->body, sizeof(current->body), header);
+
+            if (m_isCrc32Checking) {
+                header->crc = crc32(0, buffer + offset + offsetof(STestHeader, seqNumber), SECTOR_SIZE - offsetof(STestHeader, seqNumber));
+            }
             else
                 header->crc = 'CC32';
 
@@ -116,7 +151,7 @@ public:
             STestHeader *header = &current->header;
             int crc;
             if (m_isCrc32Checking)
-                crc = crc32(0, buffer+sizeof(header->crc), SECTOR_SIZE-sizeof(header->crc));
+                crc = crc32(0, buffer + offsetof(STestHeader, seqNumber), SECTOR_SIZE - offsetof(STestHeader, seqNumber));
             else
                 crc = 'CC32';
 
@@ -153,6 +188,7 @@ public:
                 }
 
                 SetFailedSector(sector, failMessage);
+                //LogBuffer(current->body, 96);
             }
 
 
@@ -242,6 +278,8 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
+    logger.Info("Check on image ["+ptrBdev->Name()+"]");
+
     ::sync();
 
     for (off_t offset = 0; offset < sizeBdev; offset += portion.Size()) {
@@ -279,9 +317,16 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor> &ptrGen,
     for (int cnt = 0; cnt < count; cnt++)
     {
         size_t size = static_cast<size_t>((CRandomHelper::GenerateInt() & 0x1F) + 1) << SECTOR_SHIFT;
-        off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << SECTOR_SHIFT;
+#if 0
+        //ordered by default chunk size
+        off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << (SECTOR_SHIFT + 9);
+        if (offset > (sizeBdev - size))
+            offset = (offset % (sizeBdev - size)) & ~((1 << 9) - 1);
+#else
+        off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << SECTOR_SHIFT ;
         if (offset > (sizeBdev - size))
             offset = offset % (sizeBdev - size);
+#endif
 
         ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
         FillBlocks(ptrGen, ptrBdev, offset, size);
@@ -384,7 +429,7 @@ void LogCurruptedSectors(const std::string &image, const std::vector<SRange> &ra
         blksnap::SectorState state = {0};
 
         ss << range.sector << ":" << range.count << std::endl;
-        blksnap::GetSectorState(image, range.sector, state);
+        blksnap::GetSectorState(image, range.sector << SECTOR_SHIFT, state);
         ss <<  "prev= " + std::to_string(state.snapNumberPrevious) + " " <<
                "curr= " + std::to_string(state.snapNumberCurrent) +  " " <<
                "state= " + std::to_string(state.chunkState) << std::endl;
@@ -404,7 +449,7 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
-    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName);
+    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, true);
 
     logger.Info("-- Fill original device collection by test pattern");
     FillAll(ptrGen, ptrOrininal);
@@ -458,17 +503,21 @@ void CheckCorruption(const std::string &origDevName, const std::string &diffStor
             LogCurruptedSectors(ptrImage->Name(), ranges);
         }
 
-        FillBlocks(ptrGen, ptrOrininal, 0, 4096);//
-        FillBlocks(ptrGen, ptrOrininal, 4096, 4096);//
-        FillBlocks(ptrGen, ptrOrininal, 8192, 4096);//
+        //Write first sector, like superblock
+        FillBlocks(ptrGen, ptrOrininal, 0, 4096);
+        //second chunk
+        FillBlocks(ptrGen, ptrOrininal, 1ULL << (SECTOR_SHIFT + 9), 4096);
+        //next chunk
+        FillBlocks(ptrGen, ptrOrininal, 2ULL << (SECTOR_SHIFT + 9), 4096);
 
         std::time_t startFillRandom = std::time(nullptr);
         do {
             logger.Info("- Fill some random blocks");
             ptrGen->IncSequence();
-            FillRandomBlocks(ptrGen, ptrOrininal, CRandomHelper::GenerateInt() & 0x3F/*0x3FF*/);
+            FillRandomBlocks(ptrGen, ptrOrininal, CRandomHelper::GenerateInt() & 0x3FF);
 
-            FillBlocks(ptrGen, ptrOrininal, 0, 4096); //
+            //Rewrite first sector again
+            FillBlocks(ptrGen, ptrOrininal, 0, 4096);
 
             logger.Info("- Check image corruption");
 
@@ -652,7 +701,7 @@ void MultithreadCheckCorruption(const std::vector<std::string> &origDevNames, co
     for (const std::string &origDevName : origDevNames)
         genCtxs.push_back(
             std::make_shared<SGeneratorContext>(
-                std::make_shared<CBlockDevice>(origDevName),
+                std::make_shared<CBlockDevice>(origDevName, true),
                 genMap[origDevName]
             )
         );

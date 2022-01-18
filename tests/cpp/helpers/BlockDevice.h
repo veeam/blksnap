@@ -4,7 +4,7 @@
 class CBlockDevice
 {
 public:
-    CBlockDevice(const std::string &name);
+    CBlockDevice(const std::string &name, const bool isSync = false);
     ~CBlockDevice();
 
     void Read(void *buf, size_t count, off_t offset);
