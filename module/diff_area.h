@@ -121,7 +121,7 @@ sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
 	return (sector_t)(1ULL << (diff_area->chunk_shift - SECTOR_SHIFT));
 };
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
-		   bool is_nowait);
+		   const bool is_nowait);
 
 /**
  * struct diff_area_image_ctx - The context for processing an io request to
@@ -163,4 +163,5 @@ void diff_area_throttling_io(struct diff_area *diff_area);
  *
  */
 int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector, unsigned int *chunk_state);
+int diff_area_get_sector_image(struct diff_area *diff_area, sector_t pos, void *buf);
 #endif

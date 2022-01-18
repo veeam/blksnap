@@ -19,6 +19,10 @@
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+DEFINE_MUTEX(logging_lock);
+#endif
+
 void chunk_store_failed(struct chunk *chunk, int error)
 {
 	struct diff_area *diff_area = chunk->diff_area;
@@ -112,9 +116,11 @@ void chunk_notify_load(void *ctx)
 	chunk->diff_io = NULL;
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	mutex_lock(&logging_lock);
 	pr_debug("DEBUG! loaded chunk #%ld \n", chunk->number);
-	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_ADDRESS, 16, 1,
-		page_address(chunk->diff_buffer->pages[0]), 64, true);
+	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
+		page_address(chunk->diff_buffer->pages[0]), 96, true);
+	mutex_unlock(&logging_lock);
 #endif
 	might_sleep();
 	WARN_ON(!mutex_is_locked(&chunk->lock));
@@ -247,11 +253,12 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	struct diff_region *region = chunk->diff_region;
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
-	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,
-		region->bdev->bd_device.kobj.name, region->sector, region->count);
-	pr_debug("DEBUG! stored chunk #%ld \n", chunk->number);
-	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_ADDRESS, 16, 1,
-		page_address(chunk->diff_buffer->pages[0]), 64, true);
+	mutex_lock(&logging_lock);
+	pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+		chunk->number, region->sector, region->count);
+	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
+		page_address(chunk->diff_buffer->pages[0]), 96, true);
+	mutex_unlock(&logging_lock);
 #endif
 	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, is_nowait);
 	if (unlikely(!diff_io)) {
@@ -266,7 +273,7 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait);
+	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait, false);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
@@ -277,10 +284,10 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 }
 
 /**
- * chunk_asunc_load_orig() - Starts asynchronous loading of a chunk from
+ * chunk_async_load_orig() - Starts asynchronous loading of a chunk from
  * 	the origian block device.
  */
-int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
+int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 {
 	int ret;
 	struct diff_io *diff_io;
@@ -291,8 +298,8 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 	};
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
-	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,
-		region.bdev->bd_device.kobj.name, region.sector, region.count);
+	pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+		chunk->number, region.sector, region.count);
 #endif
 	diff_io = diff_io_new_async_read(chunk_notify_load, chunk, is_nowait);
 	if (unlikely(!diff_io)) {
@@ -307,7 +314,7 @@ int chunk_asunc_load_orig(struct chunk *chunk, bool is_nowait)
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
+	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait, false);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
@@ -330,15 +337,14 @@ int chunk_load_orig(struct chunk *chunk)
 		.count = chunk->sector_count,
 	};
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
-	pr_debug("%s", __FUNCTION__);
-	pr_debug("sector=%llu\n", region.sector);
-	pr_debug("count=%llu\n", region.count);
+	//pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+	//	chunk->number, region.sector, region.count);
 #endif
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	ret = diff_io_do(diff_io, &region, chunk->diff_buffer, false);
+	ret = diff_io_do(diff_io, &region, chunk->diff_buffer, false, true);
 	if (!ret)
 		ret = diff_io->error;
 
@@ -357,22 +363,24 @@ int chunk_load_diff(struct chunk *chunk)
 	struct diff_region *region = chunk->diff_region;
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
-	pr_debug("%s %s sector=%llu count=%llu", __FUNCTION__,
-		region->bdev->bd_device.kobj.name, region->sector, region->count);
+	pr_debug("%s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+		chunk->number, region->sector, region->count);
 #endif
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	ret = diff_io_do(diff_io, region, chunk->diff_buffer, false);
+	ret = diff_io_do(diff_io, region, chunk->diff_buffer, false, false);
 	if (!ret)
 		ret = diff_io->error;
 
 	diff_io_free(diff_io);
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	mutex_lock(&logging_lock);
 	pr_debug("DEBUG! loaded chunk #%ld from diff area\n", chunk->number);
-	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_ADDRESS, 16, 1,
-		page_address(chunk->diff_buffer->pages[0]), 64, true);
+	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
+		page_address(chunk->diff_buffer->pages[0]), 96, true);
+	mutex_unlock(&logging_lock);
 #endif
 	return ret;
 }

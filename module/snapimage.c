@@ -427,8 +427,24 @@ int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
 	if (ret)
 		return ret;
 
-	return cbt_map_get_sector_state(snapimage->cbt_map, sector,
+	ret = cbt_map_get_sector_state(snapimage->cbt_map, sector,
 					&state->snap_number_prev,
 					&state->snap_number_curr);
+	if (ret)
+		return ret;
+//#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	{
+		char buf[SECTOR_SIZE];
+
+		ret = diff_area_get_sector_image(snapimage->diff_area, sector, buf/*&state->buf*/);
+		if (ret)
+			return ret;
+
+		pr_info("sector #%llu", sector);
+		print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
+			buf, 96, true);
+	}
+//#endif
+	return 0;
 }
 #endif

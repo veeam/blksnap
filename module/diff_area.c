@@ -293,7 +293,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
  *
  */
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
-		   bool is_nowait)
+		   const bool is_nowait)
 {
 	int ret = 0;
 	sector_t offset;
@@ -358,10 +358,37 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			}
 			WARN_ON(chunk->diff_buffer);
 			chunk->diff_buffer = diff_buffer;
+#ifdef BDEV_FILTER_SYNC
+			/*
+			 * Synchronous mode ensures that the read is done
+			 * before the data is overwritten.
+			 */
+			if (is_nowait) {
+				ret = chunk_async_load_orig(chunk, is_nowait);
+				if (unlikely(ret))
+					goto fail_unlock_chunk;
 
-			ret = chunk_asunc_load_orig(chunk, is_nowait);
+				ret = -EAGAIN;
+				goto fail_unlock_chunk;
+			}
+			ret = chunk_load_orig(chunk);
 			if (unlikely(ret))
 				goto fail_unlock_chunk;
+
+			chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
+
+			ret = chunk_schedule_storing(chunk, false);
+			if (unlikely(ret))
+				goto fail_unlock_chunk;
+#else
+			/*
+			 * Asynchronous mode does not guarantee that the order
+			 * of reading and writing is preserved.
+			 */
+			ret = chunk_async_load_orig(chunk, is_nowait);
+			if (unlikely(ret))
+				goto fail_unlock_chunk;
+#endif
 		}
 	}
 
@@ -460,14 +487,10 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 		WARN_ON(chunk->diff_buffer);
 		chunk->diff_buffer = diff_buffer;
 
-		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
-			//pr_debug("DEBUG! load diff chunk #%ld\n", chunk->number);
+		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
 			ret = chunk_load_diff(chunk);
-		}
-		else {
-			//pr_err("load orig chunk #%ld\n", chunk->number);
+		else
 			ret = chunk_load_orig(chunk);
-		}
 
 		if (unlikely(ret))
 			goto fail_unlock_chunk;
@@ -616,4 +639,23 @@ int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector, uns
 
 	return 0;
 }
+
+int diff_area_get_sector_image(struct diff_area *diff_area, sector_t pos, void *buf)
+{
+	struct chunk *chunk;
+	struct diff_area_image_ctx io_ctx;
+	struct diff_buffer_iter diff_buffer_iter;
+
+	diff_area_image_ctx_init(&io_ctx, diff_area, false);
+	chunk = diff_area_image_context_get_chunk(&io_ctx, pos);
+	if (IS_ERR(chunk))
+		return PTR_ERR(chunk);
+
+	diff_buffer_iter_get(chunk->diff_buffer, pos - chunk_sector(chunk), &diff_buffer_iter);
+	memcpy(buf, page_address(diff_buffer_iter.page) + diff_buffer_iter.offset, SECTOR_SIZE);
+
+	diff_area_image_ctx_done(&io_ctx);
+	return 0;
+}
+
 #endif

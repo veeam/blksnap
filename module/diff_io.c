@@ -5,6 +5,9 @@
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
+#ifdef BDEV_FILTER_SYNC
+#include "lp_filter.h"
+#endif
 #include "diff_io.h"
 #include "diff_buffer.h"
 
@@ -124,13 +127,15 @@ unsigned short calc_page_count(sector_t sectors)
 
 #ifdef HAVE_BIO_MAX_PAGES
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
-		struct diff_buffer *diff_buffer, bool is_nowait)
+		struct diff_buffer *diff_buffer,
+		const bool is_nowait, const bool is_flush)
 {
 	int ret = 0;
 	struct bio *bio;
 	struct bio_list bio_list_head = BIO_EMPTY_LIST;
 	struct page **current_page_ptr;
 	sector_t processed = 0;
+	unsigned int op_flags = is_flush ? REQ_SYNC | REQ_FUA | REQ_PREFLUSH : 0;
 
 	if (unlikely(!check_page_aligned(diff_region->sector))) {
 		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
@@ -183,9 +188,9 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		bio_set_dev(bio, diff_region->bdev);
 		bio->bi_iter.bi_sector = diff_region->sector + processed;
 		if (diff_io->is_write)
-			bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
+			bio_set_op_attrs(bio, REQ_OP_WRITE, op_flags);
 		else
-			bio_set_op_attrs(bio, REQ_OP_READ, 0);
+			bio_set_op_attrs(bio, REQ_OP_READ, op_flags);
 
 		while (offset < portion) {
 			sector_t bvec_len_sect;
@@ -211,8 +216,13 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		processed += offset;
 	}
 
-	while ((bio = bio_list_pop(&bio_list_head)))
-		submit_bio(bio);
+	while ((bio = bio_list_pop(&bio_list_head))) {
+#ifdef BDEV_FILTER_SYNC
+		bdev_filter_submit_bio_noacct(bio);
+#else
+		submit_bio_noacct(bio);
+#endif
+	}
 
 	if (diff_io->is_sync_io)
 		wait_for_completion_io(&diff_io->notify.sync.completion);
@@ -226,12 +236,14 @@ fail:
 }
 #else
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
-		struct diff_buffer *diff_buffer, bool is_nowait)
+		struct diff_buffer *diff_buffer,
+		const bool is_nowait, const bool is_flush)
 {
 	struct page **current_page_ptr;
 	struct bio *bio;
 	unsigned short nr_iovecs;
 	sector_t processed = 0;
+	unsigned int op_flags = is_flush ? REQ_SYNC | REQ_FUA | REQ_PREFLUSH : 0;
 
 	if (unlikely(!check_page_aligned(diff_region->sector))) {
 		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
@@ -267,9 +279,9 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	bio_set_dev(bio, diff_region->bdev);
 	bio->bi_iter.bi_sector = diff_region->sector;
 	if (diff_io->is_write)
-		bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
+		bio_set_op_attrs(bio, REQ_OP_WRITE, op_flags);
 	else
-		bio_set_op_attrs(bio, REQ_OP_READ, 0);
+		bio_set_op_attrs(bio, REQ_OP_READ, op_flags);
 
 	current_page_ptr = diff_buffer->pages;
 	while (processed < diff_region->count) {
@@ -287,8 +299,11 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		current_page_ptr++;
 		processed += bvec_len_sect;
 	}
-
-	submit_bio(bio);
+#ifdef BDEV_FILTER_SYNC
+	bdev_filter_submit_bio_noacct(bio);
+#else
+	submit_bio_noacct(bio);
+#endif
 	if (diff_io->is_sync_io)
 		wait_for_completion_io(&diff_io->notify.sync.completion);
 
