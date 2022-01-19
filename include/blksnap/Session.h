@@ -1,3 +1,5 @@
+/*  */
+#pragma once
 /*
  * The hi-level abstraction for the blksnap kernel module.
  * Allows to create snapshot session.

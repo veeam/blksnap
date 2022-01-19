@@ -1,3 +1,5 @@
+/*  */
+#pragma once
 /*
  * The low-level abstraction over ioctl for the blksnap kernel module.
  * Allows to interact with the module with minimal overhead and maximum
@@ -14,7 +16,7 @@
 /* Allow to get any sector state. Can be used only for debug purpose */
 #define BLK_SNAP_DEBUG_SECTOR_STATE
 #endif
-#include "../../../module/blk_snap.h"
+#include "blk_snap.h"
 
 #ifndef SECTOR_SHIFT
 #define SECTOR_SHIFT 9

@@ -16,8 +16,8 @@
 #include <linux/fs.h>
 #include <linux/fiemap.h>
 
-#include "Blksnap.h"
-#include "Session.h"
+#include <blksnap/Blksnap.h>
+#include <blksnap/Session.h>
 
 #include <boost/filesystem.hpp>
 namespace fs = boost::filesystem;

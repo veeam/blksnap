@@ -2,8 +2,8 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 #include <system_error>
-#include "Cbt.h"
-#include "Blksnap.h"
+#include <blksnap/Cbt.h>
+#include <blksnap/Blksnap.h>
 
 using namespace blksnap;
 

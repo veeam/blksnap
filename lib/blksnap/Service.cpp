@@ -3,8 +3,8 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 #include <sys/stat.h>
-#include "Service.h"
-#include "Blksnap.h"
+#include <blksnap/Service.h>
+#include <blksnap/Blksnap.h>
 
 namespace {
 

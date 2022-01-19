@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <system_error>
-#include "Blksnap.h"
+#include <blksnap/Blksnap.h>
 
 static const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
 
