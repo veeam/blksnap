@@ -56,7 +56,9 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 
 	if (chunk->diff_region) {
 		mutex_unlock(&chunk->lock);
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 		pr_debug("DEBUG! chunk #%ld already have diff region", chunk->number);
+#endif
 		return 0;
 	}
 
