@@ -59,7 +59,7 @@ struct chunk {
 	sector_t sector_count;
 	atomic_t state;
 
-	struct mutex lock;
+	struct semaphore lock;
 
 	struct diff_buffer *diff_buffer;
 	struct diff_region *diff_region;

@@ -104,7 +104,7 @@ fail:
 	return NULL;
 }
 
-struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask)
+struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, const bool is_nowait)
 {
 	struct diff_buffer *diff_buffer = NULL;
 	sector_t chunk_sectors;
@@ -133,9 +133,14 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask
 	page_count = round_up(chunk_sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
 	buffer_size = chunk_sectors << SECTOR_SHIFT;
 
-	diff_buffer = diff_buffer_new(page_count, buffer_size, gfp_mask);
-	if (unlikely(!diff_buffer))
-		return ERR_PTR(-ENOMEM);
+	diff_buffer = diff_buffer_new(page_count, buffer_size,
+				      is_nowait ? (GFP_NOIO | GFP_NOWAIT) : GFP_NOIO);
+	if (unlikely(!diff_buffer)) {
+		if (is_nowait)
+			return ERR_PTR(-EAGAIN);
+		else
+			return ERR_PTR(-ENOMEM);
+	}
 
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	atomic_inc(&diff_buffer_take_cnt);
@@ -145,8 +150,6 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask
 
 void diff_buffer_release(struct diff_area *diff_area, struct diff_buffer *diff_buffer)
 {
-//	if (unlikely(!diff_buffer))
-//		return;
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	atomic_dec(&diff_buffer_take_cnt);
 #endif

@@ -144,7 +144,7 @@ struct chunk *chunk_get_from_cache_and_write_lock(struct diff_area *diff_area)
 #endif
 	spin_lock(&diff_area->cache_list_lock);
 	list_for_each_entry(iter, &diff_area->caching_chunks, cache_link) {
-		if (mutex_trylock(&iter->lock)) {
+		if (!down_trylock(&iter->lock)) {
 			chunk = iter;
 			break;
 		}
@@ -171,9 +171,8 @@ struct chunk *chunk_get_from_cache_and_write_lock(struct diff_area *diff_area)
 }
 
 static
-void diff_area_caching_chunks_work(struct work_struct *work)
+void diff_area_cleanup_caching_chunks(struct diff_area *diff_area)
 {
-	struct diff_area *diff_area = container_of(work, struct diff_area, caching_chunks_work);
 	struct chunk *chunk;
 
 	while (too_many_chunks_in_cache(diff_area)) {
@@ -191,16 +190,23 @@ void diff_area_caching_chunks_work(struct work_struct *work)
 //			atomic_read(&diff_area->caching_chunks_count),
 //			chunk_maximum_in_cache);
 //#endif
-		WARN_ON(!mutex_is_locked(&chunk->lock));
 		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 			chunk_state_unset(chunk, CHUNK_ST_BUFFER_READY);
 			diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 			chunk->diff_buffer = NULL;
-		} else {
+		} else
 			WARN_ON(chunk->diff_buffer);
-		}
-		mutex_unlock(&chunk->lock);
+		up(&chunk->lock);
 	}
+}
+
+static
+void diff_area_caching_chunks_work(struct work_struct *work)
+{
+	struct diff_area *diff_area = container_of(
+		work, struct diff_area, caching_chunks_work);
+
+	diff_area_cleanup_caching_chunks(diff_area);
 }
 
 struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
@@ -311,10 +317,13 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 		WARN_ON(chunk_number(diff_area, offset) != chunk->number);
 		if (is_nowait) {
-			if (!mutex_trylock(&chunk->lock))
+			if (down_trylock(&chunk->lock))
 				return -EAGAIN;
-		} else
-			mutex_lock(&chunk->lock);
+		} else {
+			ret = down_killable(&chunk->lock);
+			if (unlikely(ret))
+				return ret;
+		}
 
 		if (chunk_state_check(chunk, CHUNK_ST_FAILED | CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY)) {
 			/*
@@ -323,8 +332,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			 * - overwritten in the image of a snapshot,
 			 * - already store in diff storage.
 			 */
-			WARN_ON(!mutex_is_locked(&chunk->lock));
-			mutex_unlock(&chunk->lock);
+			up(&chunk->lock);
 			continue;
 		}
 
@@ -343,18 +351,10 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			if (unlikely(ret))
 				goto fail_unlock_chunk;
 		} else {
-			if (is_nowait) {
-				diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO | GFP_NOWAIT);
-				if (IS_ERR(diff_buffer)) {
-					ret = -EAGAIN;
-					goto fail_unlock_chunk;
-				}
-			} else {
-				diff_buffer = diff_buffer_take(chunk->diff_area, GFP_NOIO);
-				if (IS_ERR(diff_buffer)) {
-					ret = PTR_ERR(diff_buffer);
-					goto fail_unlock_chunk;
-				}
+			diff_buffer = diff_buffer_take(chunk->diff_area, is_nowait);
+			if (IS_ERR(diff_buffer)) {
+				ret = PTR_ERR(diff_buffer);
+				goto fail_unlock_chunk;
 			}
 			WARN_ON(chunk->diff_buffer);
 			chunk->diff_buffer = diff_buffer;
@@ -395,7 +395,6 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 	return ret;
 fail_unlock_chunk:
 	WARN_ON(!chunk);
-	WARN_ON(!mutex_is_locked(&chunk->lock));
 	chunk_store_failed(chunk, ret);
 	return ret;
 }
@@ -412,8 +411,7 @@ void diff_area_image_put_chunk(struct chunk* chunk, bool is_write)
 		ret = chunk_schedule_storing(chunk, false);
 		if (ret)
 			chunk_store_failed(chunk, ret);
-	}
-	else {
+	} else {
 //#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 //		pr_debug("chunk #%ld should be in cache\n", chunk->number);
 //#endif
@@ -457,7 +455,9 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	if (unlikely(!chunk))
 		return ERR_PTR(-EINVAL);
 
-	mutex_lock(&chunk->lock);
+	ret = down_killable(&chunk->lock);
+	if (ret)
+		return ERR_PTR(ret);
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk #%ld corrupted\n", chunk->number);
@@ -479,7 +479,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 		struct diff_buffer *diff_buffer;
 
-		diff_buffer = diff_buffer_take(diff_area, GFP_NOIO);
+		diff_buffer = diff_buffer_take(diff_area, false);
 		if (IS_ERR(diff_buffer)) {
 			ret = PTR_ERR(diff_buffer);
 			goto fail_unlock_chunk;
@@ -523,8 +523,7 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 
 fail_unlock_chunk:
 	pr_err("Failed to load chunk #%ld\n", chunk->number);
-	WARN_ON(!mutex_is_locked(&chunk->lock));
-	mutex_unlock(&chunk->lock);
+	up(&chunk->lock);
 	return ERR_PTR(ret);
 }
 
@@ -633,9 +632,9 @@ int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector, uns
 		return -EINVAL;
 
 	WARN_ON(chunk_number(diff_area, offset) != chunk->number);
-	mutex_lock(&chunk->lock);
+	down(&chunk->lock);
 	*chunk_state = atomic_read(&chunk->state);
-	mutex_unlock(&chunk->lock);
+	up(&chunk->lock);
 
 	return 0;
 }

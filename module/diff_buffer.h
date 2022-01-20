@@ -70,7 +70,7 @@ bool diff_buffer_iter_get(struct diff_buffer *diff_buffer, sector_t ofs, struct 
         return true;
 };
 
-struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, gfp_t gfp_mask);
+struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, const bool is_nowait);
 void diff_buffer_release(struct diff_area *diff_area, struct diff_buffer *diff_buffer);
 void diff_buffer_cleanup(struct diff_area *diff_area);
 
