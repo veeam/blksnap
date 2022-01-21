@@ -1,6 +1,6 @@
 Name:           blksnap
 Version:        #PACKAGE_VERSION#
-Release:        1.sles
+Release:        sle
 BuildArch:      noarch
 Summary:        Veeam Agent for Linux (kernel module)
 Packager:       Veeam Software Group GmbH
