@@ -126,6 +126,13 @@ void snapimage_queue_work(struct kthread_work *work)
 	diff_area_throttling_io(snapimage->diff_area);
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area, op_is_write(req_op(rq)));
 	rq_for_each_segment(bvec, rq, iter) {
+#if 1
+#pragma message ("Writing was suppressed for debugging")
+		if (op_is_write(req_op(rq))) {
+			pr_debug("DEBUG! %s writing was suppressed for %llu sector", __FUNCTION__, pos);
+			break;
+		}
+#endif
 		status = diff_area_image_io(&io_ctx, &bvec, &pos);
 		if (unlikely(status != BLK_STS_OK))
 			break;
