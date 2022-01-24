@@ -90,6 +90,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
 void chunk_free(struct chunk *chunk);
 
 int chunk_schedule_storing(struct chunk *chunk, bool is_nowait);
+void chunk_diff_buffer_release(struct chunk *chunk);
 void chunk_store_failed(struct chunk *chunk, int error);
 
 void chunk_schedule_caching(struct chunk *chunk);

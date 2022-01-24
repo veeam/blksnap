@@ -65,7 +65,7 @@ EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT=2097152"
 # from the snapshot image. As the number of chunks in the cache
 # increases, memory consumption also increases.
 # The minimum recommended value is four.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=64"
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=32"
 
 # A buffer can be allocated for each chunk. After use, this buffer is not
 # released immediately, but is sent to the pool of free buffers.
@@ -84,5 +84,7 @@ EXTRA_CFLAGS += "-DBLK_SNAP_DEBUGLOG"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_STORAGE_LISTS"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_BUFFER"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_CHUNK_IO"
+EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_IMAGE_WRITE"
 EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_MEMORY_LEAK"
 EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_SECTOR_STATE"
+#EXTRA_CFLAGS += "-DBLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"

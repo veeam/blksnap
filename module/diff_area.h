@@ -46,18 +46,18 @@ struct chunk;
  *	this list.
  * @storage_list_lock:
  * 	Spin lock for the @storing_chunks list.
- * cache_list_lock:
- *      Spin lock for the @caching_chunks list.
+ * caches_lock:
+ *      Spin lock for the @read_cache_queue list.
  * @storing_chunks_work:
  *	The workqueue work item. This worker saves the chunks to the diff
  * 	storage.
- * @caching_chunks:
+ * @read_cache_queue:
  *	After copying the sectors from the original block device to diff
  *	storage, the sectors are still located in memory. When the snapshot
  *	data is read or written, they also remain in memory for some time.
- * @caching_chunks_count:
+ * @read_cache_count:
  *	The number of chunks in the cache.
- * @caching_chunks_work:
+ * @cache_release_work:
  *	The workqueue work item which controls the cache size.
  * @corrupt_flag:
  *	The flag is set if an error occurred in the operation of the data
@@ -80,13 +80,15 @@ struct diff_area {
 	unsigned long long chunk_shift;
 	unsigned long chunk_count;
 	struct xarray chunk_map;
-
+#ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	bool in_memory;
-
-	spinlock_t cache_list_lock;
-	struct list_head caching_chunks;
-	atomic_t caching_chunks_count;
-	struct work_struct caching_chunks_work;
+#endif
+	spinlock_t caches_lock;
+	struct list_head read_cache_queue;
+	atomic_t read_cache_count;
+        struct list_head write_cache_queue;
+        atomic_t write_cache_count;
+	struct work_struct cache_release_work;
 
         spinlock_t free_diff_buffers_lock;
         struct list_head free_diff_buffers;
