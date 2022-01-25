@@ -14,9 +14,8 @@ struct diff_io;
 #define CHUNK_ST_DIRTY          (1 << 1) /* The data on the original device and the snapshot image differ in this chunk */
 #define CHUNK_ST_BUFFER_READY   (1 << 2) /* The data of the chunk is ready to be read from the RAM buffer */
 #define CHUNK_ST_STORE_READY    (1 << 3) /* The data of the chunk was wrote to the difference storage */
-#define CHUNK_ST_IN_CACHE       (1 << 4) /* The chunk in the cache in the queue for release. */
-#define CHUNK_ST_LOADING        (1 << 5)
-#define CHUNK_ST_STORING        (1 << 6)
+#define CHUNK_ST_LOADING        (1 << 4)
+#define CHUNK_ST_STORING        (1 << 5)
 
 /**
  * struct chunk - Elementary IO block.

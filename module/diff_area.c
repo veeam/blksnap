@@ -152,11 +152,8 @@ struct chunk *get_chunk_from_cache_and_write_lock(spinlock_t *caches_lock,
 #endif
 	}
 	if (likely(chunk)) {
-		WARN_ON(chunk_state_check(chunk, CHUNK_ST_IN_CACHE));
-
 		atomic_dec(cache_count);
-		list_del(&chunk->cache_link);
-		chunk_state_unset(chunk, CHUNK_ST_IN_CACHE);
+		list_del_init(&chunk->cache_link);
 	}
 	spin_unlock(caches_lock);
 
@@ -170,24 +167,37 @@ struct chunk *get_chunk_from_cache_and_write_lock(spinlock_t *caches_lock,
 static
 struct chunk *diff_area_get_chunk_from_cache_and_write_lock(struct diff_area *diff_area)
 {
-	struct chunk *chunk = NULL;
-
 	if (atomic_read(&diff_area->read_cache_count) > chunk_maximum_in_cache) {
-		chunk = get_chunk_from_cache_and_write_lock(
+		struct chunk *chunk = get_chunk_from_cache_and_write_lock(
 			&diff_area->caches_lock,
 			&diff_area->read_cache_queue,
 			&diff_area->read_cache_count);
-		if (chunk)
+		if (chunk) {
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+			if (chunk_state_check(chunk, CHUNK_ST_DIRTY))
+				pr_err("get and lock dirty chunk #%ld from read cache\n", chunk->number);
+#endif
 			return chunk;
+		}
 	}
 
 	if (atomic_read(&diff_area->write_cache_count) > chunk_maximum_in_cache) {
-		chunk = get_chunk_from_cache_and_write_lock(
+		struct chunk *chunk = get_chunk_from_cache_and_write_lock(
 			&diff_area->caches_lock,
 			&diff_area->write_cache_queue,
 			&diff_area->write_cache_count);
+		if (chunk) {
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+			if (chunk_state_check(chunk, CHUNK_ST_DIRTY))
+				pr_debug("get and lock dirty chunk #%ld from write cache\n", chunk->number);
+			else
+				pr_err("get and lock pure chunk #%ld from write cache\n", chunk->number);
+#endif
+			return chunk;
+		}
 	}
-	return chunk;
+
+	return NULL;
 }
 
 static
@@ -202,22 +212,30 @@ void diff_area_cache_release(struct diff_area *diff_area)
 //			atomic_read(&diff_area->read_cache_count),
 //			chunk_maximum_in_cache);
 //#endif
-		if (unlikely(!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY))) {
-			WARN_ON(chunk->diff_buffer);
+#if 1
+		if (WARN(!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY),
+			"Cannot release empty buffer for chunk #%ld", chunk->number)) {
 			up(&chunk->lock);
 			continue;
 		}
-
+#endif
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
 			int ret;
 
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
-			pr_debug("chunk #%ld should be stored\n", chunk->number);
+			pr_debug("Storing chunk #%ld\n", chunk->number);
 #endif
 			ret = chunk_schedule_storing(chunk, false);
-			if (!ret)
+			if (ret) {
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+				pr_debug("Failed to store chunk #%ld\n", chunk->number);
+#endif
 				chunk_store_failed(chunk, ret);
+			}
 		} else {
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+			pr_debug("Release buffer for chunk #%ld\n", chunk->number);
+#endif
 			chunk_diff_buffer_release(chunk);
 			up(&chunk->lock);
 		}
@@ -329,6 +347,24 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	return diff_area;
 }
 
+static
+void diff_area_take_chunk_from_cache(struct diff_area *diff_area, struct chunk* chunk)
+{
+	spin_lock(&diff_area->caches_lock);
+	if (!list_is_first(&chunk->cache_link, &chunk->cache_link)) {
+		list_del_init(&chunk->cache_link);
+
+		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+			pr_debug("Take chunk #%lu from write cache", chunk->number);
+#endif
+			atomic_dec(&diff_area->write_cache_count);
+		} else
+			atomic_dec(&diff_area->read_cache_count);
+	}
+	spin_unlock(&diff_area->caches_lock);
+}
+
 /**
  * diff_area_copy() - Implements the copy-on-write mechanism.
  *
@@ -379,6 +415,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 
 		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
+			diff_area_take_chunk_from_cache(diff_area, chunk);
 			/**
 			 * The chunk has already been read, but now we need
 			 * to store it to diff_storage.
@@ -392,7 +429,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 				ret = PTR_ERR(diff_buffer);
 				goto fail_unlock_chunk;
 			}
-			WARN_ON(chunk->diff_buffer);
+			WARN(chunk->diff_buffer, "Chunks buffer has been lost");
 			chunk->diff_buffer = diff_buffer;
 #ifdef BDEV_FILTER_SYNC
 			/*
@@ -461,14 +498,37 @@ void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
 }
 
 static
+int diff_area_load_chunk_from_storage(struct diff_area *diff_area, struct chunk* chunk)
+{
+	struct diff_buffer *diff_buffer;
+
+	diff_buffer = diff_buffer_take(diff_area, false);
+	if (IS_ERR(diff_buffer))
+		return PTR_ERR(diff_buffer);
+
+	WARN_ON(chunk->diff_buffer);
+	chunk->diff_buffer = diff_buffer;
+
+	if (chunk_state_check(chunk, CHUNK_ST_STORE_READY)) {
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+		pr_debug("Read chunk #%lu from diff storage", chunk->number);
+#endif
+		return chunk_load_diff(chunk);
+	}
+
+	return chunk_load_orig(chunk);
+}
+
+static
 struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 						sector_t sector)
 {
 	int ret;
-	struct chunk* chunk = io_ctx->chunk;
+	struct chunk* chunk;
 	struct diff_area *diff_area = io_ctx->diff_area;
 	unsigned long new_chunk_number = chunk_number(diff_area, sector);
 
+	chunk = io_ctx->chunk;
 	if (chunk) {
 		if (chunk->number == new_chunk_number)
 			return chunk;
@@ -510,43 +570,14 @@ struct chunk* diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_c
 	 * from diff storage.
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
-		struct diff_buffer *diff_buffer;
-
-		diff_buffer = diff_buffer_take(diff_area, false);
-		if (IS_ERR(diff_buffer)) {
-			ret = PTR_ERR(diff_buffer);
-			goto fail_unlock_chunk;
-		}
-		WARN_ON(chunk->diff_buffer);
-		chunk->diff_buffer = diff_buffer;
-
-		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
-			ret = chunk_load_diff(chunk);
-		else
-			ret = chunk_load_orig(chunk);
-
+		ret = diff_area_load_chunk_from_storage(diff_area, chunk);
 		if (unlikely(ret))
 			goto fail_unlock_chunk;
 
 		/* Set the flag that the buffer contains the required data. */
 		chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
-	} else {
-//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-//		if (chunk_state_check(chunk, CHUNK_ST_STORE_READY))
-//			pr_debug("DEBUG! load diff chunk #%ld buffer_number=%d from cache\n",
-//				chunk->number, chunk->diff_buffer->number);
-//#endif
-		spin_lock(&diff_area->caches_lock);
-		if (chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
-			chunk_state_unset(chunk, CHUNK_ST_IN_CACHE);
-			list_del(&chunk->cache_link);
-			if (chunk_state_check(chunk, CHUNK_ST_DIRTY))
-				atomic_dec(&diff_area->write_cache_count);
-			else
-				atomic_dec(&diff_area->read_cache_count);
-		}
-		spin_unlock(&diff_area->caches_lock);
-	}
+	} else
+		diff_area_take_chunk_from_cache(diff_area, chunk);
 
 	io_ctx->chunk = chunk;
 	return chunk;

@@ -57,6 +57,14 @@ int __init blk_snap_init(void)
 	int result;
 
 	pr_info("Loading\n");
+	pr_debug("Version: %s\n", VERSION_STR);
+	pr_debug("tracking_block_minimum_shift: %d\n", tracking_block_minimum_shift);
+	pr_debug("tracking_block_maximum_count: %d\n", tracking_block_maximum_count);
+	pr_debug("chunk_minimum_shift: %d\n", chunk_minimum_shift);
+	pr_debug("chunk_maximum_count: %d\n", chunk_maximum_count);
+	pr_debug("chunk_maximum_in_cache: %d\n", chunk_maximum_in_cache);
+	pr_debug("free_diff_buffer_pool_size: %d\n", free_diff_buffer_pool_size);
+	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
 
 	result = diff_io_init();
 	if (result)

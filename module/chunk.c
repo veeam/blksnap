@@ -52,6 +52,9 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 	struct diff_area *diff_area = chunk->diff_area;
 
 	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
+	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
+		"The chunk already in the cache"))
+		return -EINVAL;
 
 #ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	if (diff_area->in_memory) {
@@ -86,35 +89,38 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	//pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->caches_lock);
-	if (!chunk_state_check(chunk, CHUNK_ST_IN_CACHE)) {
-		chunk_state_set(chunk, CHUNK_ST_IN_CACHE);
+	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
+		"The chunk already in the cache")) {
+		spin_unlock(&diff_area->caches_lock);
 
-		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
-			list_add_tail(&chunk->cache_link, &diff_area->write_cache_queue);
-			in_cache_count = atomic_inc_return(&diff_area->write_cache_count);
+		chunk_store_failed(chunk, 0);
+		return;
+	}
+
+	if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
+		list_add_tail(&chunk->cache_link, &diff_area->write_cache_queue);
+		in_cache_count = atomic_inc_return(&diff_area->write_cache_count);
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
-			pr_debug("chunk #%ld should be stored\n", chunk->number);
+		pr_debug("chunk #%ld should be stored. already in cache %d\n", chunk->number, in_cache_count);
 #endif
-		} else {
-			list_add_tail(&chunk->cache_link, &diff_area->read_cache_queue);
-			in_cache_count = atomic_inc_return(&diff_area->read_cache_count);
-		}
-
-	} else
-		list_move_tail(&chunk->cache_link, &diff_area->read_cache_queue);
+	} else {
+		list_add_tail(&chunk->cache_link, &diff_area->read_cache_queue);
+		in_cache_count = atomic_inc_return(&diff_area->read_cache_count);
+	}
 	spin_unlock(&diff_area->caches_lock);
 
 	up(&chunk->lock);
 
 	// Initiate the cache clearing process.
-	if (in_cache_count > chunk_maximum_in_cache) {
-//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-//		pr_debug("Need to cleanup cache: read_cache_count=%d, chunk_maximum_in_cache=%d\n",
-//			atomic_read(&diff_area->read_cache_count),
-//			chunk_maximum_in_cache);
-//#endif
-		queue_work(system_wq, &diff_area->cache_release_work);
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+	if (atomic_read(&diff_area->write_cache_count) > chunk_maximum_in_cache) {
+
+		pr_debug("Need to cleanup write cache: in_cache_count=%d, chunk_maximum_in_cache=%d\n",
+			atomic_read(&diff_area->write_cache_count), chunk_maximum_in_cache);
 	}
+#endif
+	if (in_cache_count > chunk_maximum_in_cache)
+		queue_work(system_wq, &diff_area->cache_release_work);
 }
 
 static
@@ -195,6 +201,10 @@ void chunk_notify_store(void *ctx)
 
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
 			chunk_state_unset(chunk, CHUNK_ST_DIRTY);
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+			pr_debug("chunk #%ld has been stored\n", chunk->number);
+			pr_debug("Release buffer for chunk #%ld\n", chunk->number);
+#endif
 			chunk_diff_buffer_release(chunk);
 		} else {
 			unsigned int current_flag;
@@ -259,6 +269,9 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	struct diff_io *diff_io;
 	struct diff_region *region = chunk->diff_region;
 
+	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link), "The chunk already in the cache"))
+		return -EINVAL;
+
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	mutex_lock(&logging_lock);
 	pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
@@ -285,6 +298,9 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
 		chunk->diff_io = NULL;
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+		pr_debug("Failed to write diff for chunk #%ld\n", chunk->number);
+#endif
 	}
 
 	return ret;
