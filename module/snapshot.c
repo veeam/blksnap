@@ -62,6 +62,7 @@ void snapshot_release(struct snapshot *snapshot)
 #endif
 	}
 
+#ifdef BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	/* lock filters */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - lock filters\n", __FUNCTION__);
@@ -73,7 +74,7 @@ void snapshot_release(struct snapshot *snapshot)
 			continue;
 		bdev_filter_write_lock(tracker->diff_area->orig_bdev);
 	}
-
+#endif
 	/* Set tracker as available for new snapshots */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - Set tracker as available for new snapshots", __FUNCTION__);
@@ -81,6 +82,7 @@ void snapshot_release(struct snapshot *snapshot)
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
 
+#ifdef BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	/* unlock filters */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - unlock filter\n", __FUNCTION__);
@@ -92,7 +94,7 @@ void snapshot_release(struct snapshot *snapshot)
 			continue;
 		bdev_filter_write_unlock(tracker->diff_area->orig_bdev);
 	}
-
+#endif
 	/* thaw fs on each original block device */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - thaw fs on each original block device", __FUNCTION__);
@@ -480,6 +482,7 @@ int snapshot_take(uuid_t *id)
 #endif
 	}
 
+#ifdef BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	/* lock filters */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - lock filters\n", __FUNCTION__);
@@ -491,6 +494,7 @@ int snapshot_take(uuid_t *id)
 			continue;
 		bdev_filter_write_lock(tracker->diff_area->orig_bdev);
 	}
+#endif
 
 	/* take snapshot - switch CBT tables and enable COW logic for each tracker */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -521,6 +525,7 @@ int snapshot_take(uuid_t *id)
 	} else
 		snapshot->is_taken = true;
 
+#ifdef BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	/* unlock filters */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - unlock filter\n", __FUNCTION__);
@@ -532,7 +537,7 @@ int snapshot_take(uuid_t *id)
 			continue;
 		bdev_filter_write_unlock(tracker->diff_area->orig_bdev);
 	}
-
+#endif
 	/* thaw file systems on original block devices */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - thaw file systems on original block devices\n", __FUNCTION__);
