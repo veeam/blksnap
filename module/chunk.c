@@ -119,7 +119,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 			atomic_read(&diff_area->write_cache_count), chunk_maximum_in_cache);
 	}
 #endif
-	if (in_cache_count > chunk_maximum_in_cache)
+	if ((in_cache_count > chunk_maximum_in_cache) && !diff_area_is_corrupted(diff_area))
 		queue_work(system_wq, &diff_area->cache_release_work);
 }
 

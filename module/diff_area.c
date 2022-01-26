@@ -103,6 +103,8 @@ void diff_area_free(struct kref *kref)
 		}
 	}
 
+	atomic_set(&diff_area->corrupt_flag, 1);
+
 	//flush_work(&diff_area->storing_chunks_work);
 	flush_work(&diff_area->cache_release_work);
 	//flush_work(&diff_area->corrupt_work);
@@ -205,7 +207,7 @@ void diff_area_cache_release(struct diff_area *diff_area)
 {
 	struct chunk *chunk;
 
-	while ((chunk = diff_area_get_chunk_from_cache_and_write_lock(diff_area))) {
+	while (!diff_area_is_corrupted(diff_area) && (chunk = diff_area_get_chunk_from_cache_and_write_lock(diff_area))) {
 //#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 //		pr_debug("Free buffer for chunk #%ld\n", chunk->number);
 //		pr_debug("read_cache_count=%d. chunk_maximum_in_cache=%d\n",
