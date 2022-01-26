@@ -6,6 +6,7 @@ cmake*
 /lib/blksnap/bin/
 /utils/blksnap/bin/
 /tests/cpp/bin/
+/tests/veeam/
 *.o
 *.a
 *.so
