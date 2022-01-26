@@ -344,11 +344,39 @@ struct klp_func funcs[] = {
 	{0}
 };
 
+#ifdef BDEV_FILTER_LOCKAPI
+static
+void post_patch(struct klp_object *obj)
+{
+	pr_warn("Filter is ready for using\n");
+	percpu_up_read(&bd_filters_lock);
+}
+
+static
+void pre_unpatch(struct klp_object *obj)
+{
+	pr_warn("Filter will be turned off now\n");
+}
+
+static
+struct klp_callbacks callbacks
+{
+	.pre_patch = NULL,
+	.post_patch = post_patch,
+	.pre_unpatch = pre_unpatch,
+	.post_unpatch = NULL,
+	.post_unpatch_enabled = false,
+};
+#endif
+
 static
 struct klp_object objs[] = {
 	{
 		/* name being NULL means vmlinux */
 		.funcs = funcs,
+#ifdef BDEV_FILTER_LOCKAPI
+		.callbacks = callbacks,
+#endif
 	},
 	{0}
 };
@@ -361,6 +389,9 @@ struct klp_patch patch = {
 
 int bdev_filter_init(void)
 {
+#ifdef BDEV_FILTER_LOCKAPI
+	percpu_down_read(&bd_filters_lock);
+#endif
 	return klp_enable_patch(&patch);
 }
 
