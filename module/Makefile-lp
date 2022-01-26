@@ -3,6 +3,7 @@
 
 EXTRA_CFLAGS += "-DHAVE_LP_FILTER"
 EXTRA_CFLAGS += "-DBDEV_FILTER_SYNC"
+# EXTRA_CFLAGS += "-DBDEV_FILTER_LOCKAPI"
 
 bdevfilter-y += lp_filter.o
 obj-m	 += bdevfilter.o
