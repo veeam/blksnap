@@ -39,6 +39,10 @@ target_link_libraries(${TEST_CORRUPT} PRIVATE Boost::filesystem )
 target_link_libraries(${TEST_CORRUPT} PRIVATE ${LIBUUID_LIBRARY})
 target_link_libraries(${TEST_CORRUPT} PRIVATE ${LIBZ_LIBRARY})
 target_include_directories(${TEST_CORRUPT} PRIVATE ./)
+set_target_properties(${TEST_CORRUPT}
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
+)
 
 set(CBT_SRC
     cbt.cpp
@@ -52,3 +56,7 @@ target_link_libraries(${TEST_CBT} PRIVATE Boost::filesystem )
 target_link_libraries(${TEST_CBT} PRIVATE ${LIBUUID_LIBRARY})
 target_link_libraries(${TEST_CBT} PRIVATE ${LIBZ_LIBRARY})
 target_include_directories(${TEST_CBT} PRIVATE ./)
+set_target_properties(${TEST_CBT}
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
+)
