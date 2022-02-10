@@ -1,3 +1,21 @@
+/* [TBD]
+ * Copyright (C) 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
+ *
+ * This file is part of blksnap-tests
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #include "FileHelper.h"
 
 #include <boost/algorithm/hex.hpp>
@@ -38,7 +56,7 @@ std::string FileHelper::CalcHash(boost::filesystem::path file)
 
         std::string hex;
         boost::algorithm::hex(sha_hash, sha_hash + SHA256_DIGEST_LENGTH, back_inserter(hex));
-    
+
         ::close(fd);
         return hex;
     }
@@ -62,7 +80,7 @@ void FileHelper::Create(boost::filesystem::path file, size_t size)
 
         if ( ::fallocate64(fd, 0, 0, size) )
             throw std::system_error(errno, std::generic_category(), "Failed to allocate file space");
-    
+
         ::close(fd);
     }
     catch ( std::exception& ex )
@@ -88,22 +106,22 @@ void FileHelper::FillRandom(boost::filesystem::path file)
         fdRandom = ::open("/dev/urandom", O_RDONLY);
         if ( fdRandom == -1 )
             throw std::system_error(errno, std::generic_category(), "Failed to open file: /dev/urandom");
-    
+
         boost::uintmax_t file_size = boost::filesystem::file_size(file);
         boost::uintmax_t filled = 0;
         char BUFFER[4096];
-    
+
         while (file_size > filled)
         {
             if (::read(fdRandom, BUFFER, BUFFER_SIZE) != BUFFER_SIZE)
                 throw std::system_error(errno, std::generic_category(), "Failed to read random data");
-    
+
             if (::write(fd, BUFFER, BUFFER_SIZE) != BUFFER_SIZE)
                 throw std::system_error(errno, std::generic_category(), "Failed to write random data");
-                
+
             filled +=BUFFER_SIZE;
         }
-    
+
         ::close(fd);
         ::close(fdRandom);
     }

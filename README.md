@@ -1,9 +1,9 @@
 # blk_snap
 
-* include/ - libs public headers
-* lib/ - lib blk_snap sources
-* utils/ - utils for working with snapshot
-* module/ - kernel module sources
+* include/ - libraries public headers
+* lib/ - libraries sources
+* utils/ - source files of utils for working with blksnap
+* module/ - blksnap kernel module sources
 
 ## About kernel module
 This kernel module implements snapshot and changed block tracking functionality.
@@ -12,26 +12,12 @@ This kernel module implements snapshot and changed block tracking functionality.
 ``` bash
 sudo apt install gcc g++ cmake uuid-dev libboost-all-dev libssl-dev linux-headers-generic
 ```
-## Install Catch2
-Download and unpack Catch2
-```bash
-cd ~/Downloads
-wget https://github.com/catchorg/Catch2/archive/v2.13.2.tar.gz
-tar -xf ./v2.13.2.tar.gz
-```
-make
-```bash
-cd Catch2-2.13.2
-mkdir build
-cd build
-cmake ..
-make -j `nproc`
+
 ```
 Install
 ```bash
 sudo make install
 ```
-
 
 ## How to build
 Return to blk_snap directory and execute
