@@ -3,4 +3,4 @@ Upstream-Name: blksnap-dev
 
 Files: debian/*
 Copyright: 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
-License: Apache-2.0 [TBD]
+License: GNU LGPL [TBD]

@@ -2,5 +2,5 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: blksnap
 
 Files: debian/*
-Copyright: 2021 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
+Copyright: 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
 License: GPL-2
