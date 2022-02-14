@@ -1,11 +1,17 @@
 #!/bin/bash -e
 NAME=blksnap-tools
-VERSION="$1"
+
 if [ -n "$1" ]
 then
 	VERSION="$1"
 else
 	VERSION="1.0.0.0"
+fi
+if [ -n "$2" ]
+then
+	ARCH="$2"
+else
+	ARCH="amd64"
 fi
 
 CURR_DIR=$(pwd)
@@ -29,9 +35,10 @@ cmake ../
 make
 cd ${ROOT_DIR}
 
-# copy library
+# copy binaries
 mkdir -p ${BUILD_DIR}/${TARGET_DIR}
 cp ${SOURCE_DIR}/blksnap ${BUILD_DIR}/${TARGET_DIR}/
+chmod +x ${BUILD_DIR}/${TARGET_DIR}/*
 INSTALL_FILES+=(${TARGET_DIR}/*)
 
 # prepare other package files
@@ -54,7 +61,7 @@ Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
 Build-Depends: debhelper (>= 9.0.0),
 
 Package: ${NAME}
-Architecture: all
+Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
 Depends: ${misc:Depends}
 Homepage: https://github.org/veeam/blksnap/
