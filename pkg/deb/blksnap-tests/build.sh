@@ -14,12 +14,9 @@ else
 	ARCH="amd64"
 fi
 
-
 CURR_DIR=$(pwd)
 cd "../../../"
 ROOT_DIR=$(pwd)
-
-. pkg/build_functions.sh
 
 BUILD_DIR="build/pkg"
 rm -rf ${BUILD_DIR}
@@ -27,6 +24,14 @@ mkdir -p ${BUILD_DIR}
 
 SOURCE_DIR="tests"
 TARGET_DIR="opt/blksnap/tests"
+
+# build
+rm -rf ${SOURCE_DIR}/cpp/bin/*
+mkdir -p ${SOURCE_DIR}/cpp/bin/*
+cd ${SOURCE_DIR}/cpp/bin
+cmake ../
+make
+cd ${ROOT_DIR}
 
 # copy binaries and scripts
 mkdir -p ${BUILD_DIR}/${TARGET_DIR}

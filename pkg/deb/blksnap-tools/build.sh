@@ -18,8 +18,6 @@ CURR_DIR=$(pwd)
 cd "../../../"
 ROOT_DIR=$(pwd)
 
-. pkg/build_functions.sh
-
 BUILD_DIR="build/pkg"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR}
