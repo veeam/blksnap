@@ -4,7 +4,7 @@
 cmake*
 /build/
 /lib/blksnap/bin/
-/utils/blksnap/bin/
+/tools/blksnap/bin/
 /tests/cpp/bin/
 /tests/test_*
 /tests/veeam/
