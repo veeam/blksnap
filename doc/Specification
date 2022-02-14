@@ -1,0 +1,23 @@
+This project should implement the task of creating snapshots of block
+device for an OS based on the Linux kernel for backup purposes.
+On the kernel side, the blk-snap kernel module should be used.
+
+This project should implement:
+1. a library in C for managing the blk-snap kernel module;
+2. a console program for managing snapshots and other features of the
+   blk-snap module;
+3. regression tests for checking the main execution branches of the
+   console application, the library and the kernel module;
+4. scripts for building packages for deb and rpm;
+5. documentation.
+
+The blk-snap kernel module should provide the following features:
+1. Allows to create snapshots of any block devices of the Linux kernel;
+2. Create snapshots simultaneously for several block devices;
+3. Track changes on the block devices during the time between the creation
+   of snapshots and provide the user level with a map of these changes;
+4. Ensure data integrity for the block device even in case of critical
+   errors in the operation of the library and the blk-snap kernel module;
+5. Allows to use any disk space to store snapshot changes and allows to
+   dynamically expand it while holding snapshots of block devices.
+   
