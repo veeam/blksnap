@@ -67,7 +67,7 @@ Build-Depends: debhelper (>= 9.0.0), bash,
 Package: ${NAME}
 Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
-Depends: blksnap-tools (= ${VERSION}), libc, libpthread, libm, linux-vdso, bash, ${misc:Depends}
+Depends: blksnap-tools (= ${VERSION}), bash, ${misc:Depends}
 Homepage: https://github.org/veeam/blksnap/
 Description: [TBD] The tests for checking the blksnap kernel module.
 EOF

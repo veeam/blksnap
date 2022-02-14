@@ -17,7 +17,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-BLKSNAP="$(cd ../../; pwd)/tools/blksnap/bin/blksnap"
+if [ -f "/usr/bin/blksnap" ]
+then
+	BLKSNAP=blksnap
+else
+	BLKSNAP="$(cd ../../; pwd)/tools/blksnap/bin/blksnap"
+fi
+
 ID=""
 
 blksnap_version()
