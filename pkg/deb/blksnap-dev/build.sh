@@ -44,7 +44,7 @@ cd ${BUILD_DIR}
 
 for FILE in ${INSTALL_FILES[@]}
 do
-	echo "${FILE} ${FILE}" >> debian/install
+	echo "${FILE} "$(dirname ${FILE}) >> debian/install
 done
 
 find ./ -type f -exec sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' {} +
