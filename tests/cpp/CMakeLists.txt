@@ -36,11 +36,6 @@ if (NOT OPENSSL_LIBRARIES)
     message(FATAL_ERROR "openssl not found. please install libssl-dev package.")
 endif ()
 
-find_library(LIBZ_LIBRARY libz.a REQUIRED)
-if (NOT LIBZ_LIBRARY)
-    message(FATAL_ERROR "libz not found. please install libz-dev package.")
-endif ()
-
 include_directories(${CMAKE_SOURCE_DIR}/../../include)
 set(BLKSNAP_LIBRARY "${CMAKE_SOURCE_DIR}/../../lib/libblksnap.a")
 add_subdirectory(helpers)
@@ -55,7 +50,6 @@ target_link_libraries(${TEST_CORRUPT} PRIVATE ${BLKSNAP_LIBRARY})
 target_link_libraries(${TEST_CORRUPT} PRIVATE Boost::program_options)
 target_link_libraries(${TEST_CORRUPT} PRIVATE Boost::filesystem )
 target_link_libraries(${TEST_CORRUPT} PRIVATE ${LIBUUID_LIBRARY})
-target_link_libraries(${TEST_CORRUPT} PRIVATE ${LIBZ_LIBRARY})
 target_include_directories(${TEST_CORRUPT} PRIVATE ./)
 set_target_properties(${TEST_CORRUPT}
     PROPERTIES

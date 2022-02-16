@@ -23,7 +23,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <zlib.h>
 
 #include "helpers/Log.h"
 #include "helpers/RandomHelper.h"
@@ -37,6 +36,9 @@
 namespace po = boost::program_options;
 #include <boost/filesystem.hpp>
 namespace fs = boost::filesystem;
+#if 1
+#include <boost/crc.hpp>
+#endif
 
 #ifndef SECTOR_SHIFT
 #define SECTOR_SHIFT 9
@@ -98,7 +100,6 @@ public:
         : m_seqNumber(0)
         , m_failCount(0)
         , m_logLineCount(0)
-        , m_isCrc32Checking(true)
     {
 
     };
@@ -151,12 +152,13 @@ public:
             CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
             //GenerateBuffer(current->body, sizeof(current->body), header);
 
-            if (m_isCrc32Checking) {
-                header->crc = crc32(0, buffer + offset + offsetof(STestHeader, seqNumber), SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-            }
-            else
-                header->crc = 'CC32';
-
+#ifdef BOOST_CRC_HPP
+            boost::crc_32_type calc;
+            calc.process_bytes(buffer + offset + offsetof(STestHeader, seqNumber), SECTOR_SIZE - offsetof(STestHeader, seqNumber));
+            header->crc = calc.checksum();
+#else
+            header->crc = 'CC32';
+#endif
             sector++;
         }
     };
@@ -167,10 +169,14 @@ public:
             struct STestSector *current = (STestSector *)buffer;
             STestHeader *header = &current->header;
             int crc;
-            if (m_isCrc32Checking)
-                crc = crc32(0, buffer + offsetof(STestHeader, seqNumber), SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-            else
-                crc = 'CC32';
+
+#ifdef BOOST_CRC_HPP
+            boost::crc_32_type calc;
+            calc.process_bytes(buffer + offsetof(STestHeader, seqNumber), SECTOR_SIZE - offsetof(STestHeader, seqNumber));
+            crc = calc.checksum();
+#else
+            crc = 'CC32';
+#endif
 
             bool isCorrupted = (crc != header->crc);
             bool isIncorrect = (sector != header->sector);
