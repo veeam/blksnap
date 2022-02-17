@@ -4,7 +4,7 @@
 #include <linux/list.h>
 #include <linux/blk_types.h>
 
-#define BDEV_FILTER_NAME_MAX_LENGTH 32
+#define BDEV_FILTER_NAME_MAX_LENGTH 31
 
 struct bdev_filter_operations {
 	bool (*submit_bio_cb)(struct bio *bio, void *ctx);

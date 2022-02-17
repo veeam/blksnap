@@ -19,7 +19,7 @@
 struct bdev_filter {
 	struct list_head link;
 	dev_t dev_id;
-	char name[BDEV_FILTER_NAME_MAX_LENGTH];
+	char name[BDEV_FILTER_NAME_MAX_LENGTH + 1];
 #if defined(HAVE_BI_BDISK)
 	struct gendisk *disk;
 	u8 partno;
