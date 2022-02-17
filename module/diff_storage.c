@@ -16,15 +16,13 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 /**
  * struct storage_bdev - Information about opened block device.
  */
-struct storage_bdev
-{
+struct storage_bdev {
 	struct list_head link;
 	dev_t dev_id;
 	struct block_device *bdev;
@@ -34,8 +32,7 @@ struct storage_bdev
  * struct storage_block - A storage unit reserved for storing differences.
  *
  */
-struct storage_block
-{
+struct storage_block {
 	struct list_head link;
 	struct block_device *bdev;
 	sector_t sector;
@@ -43,20 +40,18 @@ struct storage_block
 	sector_t used;
 };
 
-
-static inline
-void diff_storage_event_low(struct diff_storage *diff_storage)
+static inline void diff_storage_event_low(struct diff_storage *diff_storage)
 {
 	struct blk_snap_event_low_free_space data = {
 		.requested_nr_sect = diff_storage_minimum,
 	};
 
 	diff_storage->requested += data.requested_nr_sect;
-	pr_debug("Diff storage low free space. Portion: %llu sectors, requested: %llu\n",
+	pr_debug(
+		"Diff storage low free space. Portion: %llu sectors, requested: %llu\n",
 		data.requested_nr_sect, diff_storage->requested);
 	event_gen(&diff_storage->event_queue, GFP_NOIO,
-		blk_snap_event_code_low_free_space,
-		&data, sizeof(data));
+		  blk_snap_event_code_low_free_space, &data, sizeof(data));
 }
 
 struct diff_storage *diff_storage_new(void)
@@ -81,22 +76,22 @@ struct diff_storage *diff_storage_new(void)
 	return diff_storage;
 }
 
-static inline
-struct storage_block *first_empty_storage_block(struct diff_storage *diff_storage)
+static inline struct storage_block *
+first_empty_storage_block(struct diff_storage *diff_storage)
 {
 	return list_first_entry_or_null(&diff_storage->empty_blocks,
 					struct storage_block, link);
 };
 
-static inline
-struct storage_block *first_filled_storage_block(struct diff_storage *diff_storage)
+static inline struct storage_block *
+first_filled_storage_block(struct diff_storage *diff_storage)
 {
 	return list_first_entry_or_null(&diff_storage->filled_blocks,
 					struct storage_block, link);
 };
 
-static inline
-struct storage_bdev *first_storage_bdev(struct diff_storage *diff_storage)
+static inline struct storage_bdev *
+first_storage_bdev(struct diff_storage *diff_storage)
 {
 	return list_first_entry_or_null(&diff_storage->storage_bdevs,
 					struct storage_bdev, link);
@@ -104,7 +99,8 @@ struct storage_bdev *first_storage_bdev(struct diff_storage *diff_storage)
 
 void diff_storage_free(struct kref *kref)
 {
-	struct diff_storage *diff_storage = container_of(kref, struct diff_storage, kref);
+	struct diff_storage *diff_storage =
+		container_of(kref, struct diff_storage, kref);
 	struct storage_block *blk;
 	struct storage_bdev *storage_bdev;
 
@@ -140,13 +136,14 @@ void diff_storage_free(struct kref *kref)
 #endif
 }
 
-struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
+struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage,
+					     dev_t dev_id)
 {
 	struct block_device *bdev = NULL;
 	struct storage_bdev *storage_bdev;
 
 	spin_lock(&diff_storage->lock);
-	list_for_each_entry(storage_bdev, &diff_storage->storage_bdevs, link) {
+	list_for_each_entry (storage_bdev, &diff_storage->storage_bdevs, link) {
 		if (storage_bdev->dev_id == dev_id) {
 			bdev = storage_bdev->bdev;
 			break;
@@ -157,16 +154,16 @@ struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage, 
 	return bdev;
 }
 
-static inline
-struct block_device *diff_storage_add_storage_bdev(struct diff_storage *diff_storage,
-						   dev_t dev_id)
+static inline struct block_device *
+diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 {
 	struct block_device *bdev;
 	struct storage_bdev *storage_bdev;
 
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 	if (IS_ERR(bdev)) {
-		pr_err("Failed to open device. errno=%d\n", abs((int)PTR_ERR(bdev)));
+		pr_err("Failed to open device. errno=%d\n",
+		       abs((int)PTR_ERR(bdev)));
 		return bdev;
 	}
 
@@ -189,14 +186,13 @@ struct block_device *diff_storage_add_storage_bdev(struct diff_storage *diff_sto
 	return bdev;
 }
 
-static inline
-int diff_storage_add_range(struct diff_storage *diff_storage,
-			   struct block_device *bdev,
-			   sector_t sector, sector_t count)
+static inline int diff_storage_add_range(struct diff_storage *diff_storage,
+					 struct block_device *bdev,
+					 sector_t sector, sector_t count)
 {
 	struct storage_block *storage_block;
 	pr_debug("Add range to diff storage: [%u:%u] %llu:%llu\n",
-		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
+		 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
 
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
@@ -217,7 +213,8 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 	diff_storage->capacity += count;
 	spin_unlock(&diff_storage->lock);
 #ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	pr_debug("free storage blocks %d\n", atomic_read(&diff_storage->free_block_count));
+	pr_debug("free storage blocks %d\n",
+		 atomic_read(&diff_storage->free_block_count));
 #endif
 
 	return 0;
@@ -232,7 +229,7 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	struct block_device *bdev;
 	struct blk_snap_block_range *range;
 
-	pr_debug("Append %u blocks\n",  range_count);
+	pr_debug("Append %u blocks\n", range_count);
 
 	bdev = diff_storage_bdev_by_id(diff_storage, dev_id);
 	if (!bdev) {
@@ -242,8 +239,8 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	}
 
 	for (inx = 0; inx < range_count; inx++) {
-		range = big_buffer_get_element(ranges, inx,
-					sizeof(struct blk_snap_block_range));
+		range = big_buffer_get_element(
+			ranges, inx, sizeof(struct blk_snap_block_range));
 		if (unlikely(!range))
 			return -EINVAL;
 
@@ -268,7 +265,8 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
  * Remove the allocation. Explicitly add to the chunk.
  *
  */
-struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, sector_t count)
+struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage,
+					   sector_t count)
 {
 	int ret = 0;
 	struct diff_region *diff_region;
@@ -294,9 +292,11 @@ struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, se
 			break;
 		}
 
-		if (likely((storage_block->count - storage_block->used) >= count)) {
+		if (likely((storage_block->count - storage_block->used) >=
+			   count)) {
 			diff_region->bdev = storage_block->bdev;
-			diff_region->sector = storage_block->sector + storage_block->used;
+			diff_region->sector =
+				storage_block->sector + storage_block->used;
 			diff_region->count = count;
 
 			storage_block->used += count;
@@ -307,7 +307,8 @@ struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, se
 		//pr_debug("DEBUG! Switch to next storage block for chunk %ld", number);
 
 		list_del(&storage_block->link);
-		list_add_tail(&storage_block->link, &diff_storage->filled_blocks);
+		list_add_tail(&storage_block->link,
+			      &diff_storage->filled_blocks);
 #ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
 		atomic_dec(&diff_storage->free_block_count);
 		atomic_inc(&diff_storage->user_block_count);
@@ -319,14 +320,17 @@ struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage, se
 		 * We believe that the storage blocks are large enough
 		 * to accommodate several pieces entirely.
 		 */
-		diff_storage->filled += (storage_block->count - storage_block->used);
+		diff_storage->filled +=
+			(storage_block->count - storage_block->used);
 	} while (1);
 	sectors_left = diff_storage->requested - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
 
 #ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	pr_debug("free storage blocks %d\n", atomic_read(&diff_storage->free_block_count));
-	pr_debug("user storage blocks %d\n", atomic_read(&diff_storage->user_block_count));
+	pr_debug("free storage blocks %d\n",
+		 atomic_read(&diff_storage->free_block_count));
+	pr_debug("user storage blocks %d\n",
+		 atomic_read(&diff_storage->user_block_count));
 #endif
 
 	if (ret) {

@@ -12,10 +12,12 @@ void big_buffer_free(struct big_buffer *bbuff);
 
 size_t big_buffer_copy_to_user(char __user *dst_user_buffer, size_t offset,
 			       struct big_buffer *bbuff, size_t length);
-size_t big_buffer_copy_from_user(const char __user *src_user_buffer, size_t offset,
-				 struct big_buffer *bbuff, size_t length);
+size_t big_buffer_copy_from_user(const char __user *src_user_buffer,
+				 size_t offset, struct big_buffer *bbuff,
+				 size_t length);
 
-void *big_buffer_get_element(struct big_buffer *bbuff, size_t index, size_t sizeof_element);
+void *big_buffer_get_element(struct big_buffer *bbuff, size_t index,
+			     size_t sizeof_element);
 
 void big_buffer_memset(struct big_buffer *bbuff, int value);
 void big_buffer_memcpy(struct big_buffer *dst, struct big_buffer *src);

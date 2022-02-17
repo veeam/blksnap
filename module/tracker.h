@@ -35,8 +35,7 @@ struct tracker {
 };
 
 void tracker_free(struct kref *kref);
-static inline
-void tracker_put(struct tracker *tracker)
+static inline void tracker_put(struct tracker *tracker)
 {
 	if (likely(tracker))
 		kref_put(&tracker->kref, tracker_free);
@@ -50,7 +49,7 @@ int tracker_remove(dev_t dev_id);
 int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
 		    int *pcount);
 int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
-			     char __user *user_buff);
+			    char __user *user_buff);
 int tracker_mark_dirty_blocks(dev_t dev_id,
 			      struct blk_snap_block_range *block_ranges,
 			      unsigned int count);
@@ -59,8 +58,8 @@ int tracker_take_snapshot(struct tracker *tracker);
 void tracker_release_snapshot(struct tracker *tracker);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-static inline
-int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
+static inline int _freeze_bdev(struct block_device *bdev,
+			       struct super_block **psuperblock)
 {
 	struct super_block *superblock;
 
@@ -74,8 +73,8 @@ int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
 	if (IS_ERR_OR_NULL(superblock)) {
 		int result;
 
-		pr_err("Failed to freeze device [%u:%u]\n",
-		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
+		       MINOR(bdev->bd_dev));
 
 		if (superblock == NULL)
 			result = -ENODEV;
@@ -86,14 +85,14 @@ int _freeze_bdev(struct block_device *bdev, struct super_block **psuperblock)
 		return result;
 	}
 
-	pr_debug("Device [%u:%u] was frozen\n",
-		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
+		 MINOR(bdev->bd_dev));
 	*psuperblock = superblock;
 
 	return 0;
 }
-static inline
-void _thaw_bdev(struct block_device *bdev, struct super_block *superblock)
+static inline void _thaw_bdev(struct block_device *bdev,
+			      struct super_block *superblock)
 {
 	if (superblock == NULL)
 		return;
@@ -102,7 +101,7 @@ void _thaw_bdev(struct block_device *bdev, struct super_block *superblock)
 		pr_err("Failed to unfreeze device [%u:%u]\n",
 		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	else
-		pr_debug("Device [%u:%u] was unfrozen\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+		pr_debug("Device [%u:%u] was unfrozen\n", MAJOR(bdev->bd_dev),
+			 MINOR(bdev->bd_dev));
 }
 #endif

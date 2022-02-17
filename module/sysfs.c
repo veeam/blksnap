@@ -12,12 +12,11 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-static
-ssize_t major_show(struct class *class, struct class_attribute *attr,char *buf)
+static ssize_t major_show(struct class *class, struct class_attribute *attr,
+			  char *buf)
 {
 	sprintf(buf, "%d", get_blk_snap_major());
 	return strlen(buf);
@@ -26,11 +25,9 @@ ssize_t major_show(struct class *class, struct class_attribute *attr,char *buf)
 /* declare class_attr_major */
 CLASS_ATTR_RO(major);
 
-static
-struct class *blk_snap_class;
+static struct class *blk_snap_class;
 
-static
-struct device *blk_snap_device;
+static struct device *blk_snap_device;
 
 int sysfs_init(void)
 {
@@ -55,7 +52,8 @@ int sysfs_init(void)
 		return res;
 	}
 
-	dev = device_create(blk_snap_class, NULL, MKDEV(get_blk_snap_major(), 0), NULL,
+	dev = device_create(blk_snap_class, NULL,
+			    MKDEV(get_blk_snap_major(), 0), NULL,
 			    BLK_SNAP_MODULE_NAME);
 	if (IS_ERR(dev)) {
 		res = PTR_ERR(dev);

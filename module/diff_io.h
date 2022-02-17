@@ -17,14 +17,12 @@ struct diff_region {
 };
 
 /* for synchronous IO */
-struct diff_io_sync
-{
+struct diff_io_sync {
 	struct completion completion;
 };
 
 /* for asynchronous IO */
-struct diff_io_async
-{
+struct diff_io_async {
 	struct work_struct work;
 	void (*notify_cb)(void *ctx);
 	void *ctx;
@@ -43,11 +41,10 @@ struct diff_io {
 	} notify;
 };
 
-int diff_io_init(void );
-void diff_io_done(void );
+int diff_io_init(void);
+void diff_io_done(void);
 
-static inline
-void diff_io_free(struct diff_io *diff_io)
+static inline void diff_io_free(struct diff_io *diff_io)
 {
 	if (diff_io) {
 		kfree(diff_io);
@@ -58,30 +55,28 @@ void diff_io_free(struct diff_io *diff_io)
 }
 
 struct diff_io *diff_io_new_sync(bool is_write);
-static inline
-struct diff_io *diff_io_new_sync_read(void )
+static inline struct diff_io *diff_io_new_sync_read(void)
 {
 	return diff_io_new_sync(false);
 };
-static inline
-struct diff_io *diff_io_new_sync_write(void )
+static inline struct diff_io *diff_io_new_sync_write(void)
 {
 	return diff_io_new_sync(true);
 };
 
 struct diff_io *diff_io_new_async(bool is_write, bool is_nowait,
 				  void (*notify_cb)(void *ctx), void *ctx);
-static inline
-struct diff_io *diff_io_new_async_read(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
+static inline struct diff_io *
+diff_io_new_async_read(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
 {
 	return diff_io_new_async(false, is_nowait, notify_cb, ctx);
 };
-static inline
-struct diff_io *diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
+static inline struct diff_io *
+diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
 {
 	return diff_io_new_async(true, is_nowait, notify_cb, ctx);
 };
 
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
-		struct diff_buffer *diff_buffer,
-		const bool is_nowait, const bool is_flush);
+	       struct diff_buffer *diff_buffer, const bool is_nowait,
+	       const bool is_flush);

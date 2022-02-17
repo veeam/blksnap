@@ -7,8 +7,7 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 char *memory_object_names[] = {
@@ -42,7 +41,8 @@ char *memory_object_names[] = {
 	/*end*/
 };
 
-static_assert(sizeof(memory_object_names) == (memory_object_count * sizeof(char *)), \
+static_assert(
+	sizeof(memory_object_names) == (memory_object_count * sizeof(char *)),
 	"The size of enum memory_object_type is not equal to size of memory_object_names array.");
 
 static atomic_t memory_counter[memory_object_count];
@@ -67,17 +67,19 @@ void memory_object_dec(enum memory_object_type type)
 	atomic_dec(&memory_counter[type]);
 }
 
-void memory_object_print(void )
+void memory_object_print(void)
 {
 	int cnt;
 
 	pr_debug("Statistics for objects in memory:\n");
-	for (cnt=0; cnt<memory_object_count; cnt++)
-		pr_debug("%s: %d\n", memory_object_names[cnt], atomic_read(&memory_counter[cnt]));
+	for (cnt = 0; cnt < memory_object_count; cnt++)
+		pr_debug("%s: %d\n", memory_object_names[cnt],
+			 atomic_read(&memory_counter[cnt]));
 
 	pr_debug("Maximim for objects in memory:\n");
-	for (cnt=0; cnt<memory_object_count; cnt++)
-		pr_debug("%s: %d\n", memory_object_names[cnt], atomic_read(&memory_counter_max[cnt]));
+	for (cnt = 0; cnt < memory_object_count; cnt++)
+		pr_debug("%s: %d\n", memory_object_names[cnt],
+			 atomic_read(&memory_counter_max[cnt]));
 }
 
 #endif

@@ -9,23 +9,19 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 static atomic_t diff_buffer_allocated_counter;
 
-static
-int diff_buffer_allocated_counter_get(void )
+static int diff_buffer_allocated_counter_get(void)
 {
 	return atomic_read(&diff_buffer_allocated_counter);
 }
 
-
 static atomic_t diff_buffer_take_cnt;
-static
-int diff_buffer_take_cnt_get(void )
+static int diff_buffer_take_cnt_get(void)
 {
 	return atomic_read(&diff_buffer_take_cnt);
 }
@@ -55,7 +51,7 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 	memory_object_dec(memory_object_diff_buffer);
 #endif
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-//	pr_debug("Free buffer #%d \n", diff_buffer->number);
+	//	pr_debug("Free buffer #%d \n", diff_buffer->number);
 	atomic_dec(&diff_buffer_allocated_counter);
 #endif
 }
@@ -74,7 +70,8 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 	 * In case of overflow, it is better to get a null pointer
 	 * than a pointer to some memory area. Therefore + 1.
 	 */
-	diff_buffer = kzalloc(sizeof(struct diff_buffer) + (page_count + 1) * sizeof(struct page *),
+	diff_buffer = kzalloc(sizeof(struct diff_buffer) +
+				      (page_count + 1) * sizeof(struct page *),
 			      gfp_mask);
 	if (!diff_buffer)
 		return NULL;
@@ -104,7 +101,8 @@ fail:
 	return NULL;
 }
 
-struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, const bool is_nowait)
+struct diff_buffer *diff_buffer_take(struct diff_area *diff_area,
+				     const bool is_nowait)
 {
 	struct diff_buffer *diff_buffer = NULL;
 	sector_t chunk_sectors;
@@ -112,7 +110,8 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, const bool is_
 	size_t buffer_size;
 
 	spin_lock(&diff_area->free_diff_buffers_lock);
-	diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
+	diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers,
+					       struct diff_buffer, link);
 	if (diff_buffer) {
 		list_del(&diff_buffer->link);
 		atomic_dec(&diff_area->free_diff_buffers_count);
@@ -122,7 +121,7 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, const bool is_
 	/* Return free buffer if it was found in a pool */
 	if (diff_buffer) {
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-//		pr_debug("Took buffer from pool");
+		//		pr_debug("Took buffer from pool");
 		atomic_inc(&diff_buffer_take_cnt);
 #endif
 		return diff_buffer;
@@ -133,8 +132,9 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, const bool is_
 	page_count = round_up(chunk_sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
 	buffer_size = chunk_sectors << SECTOR_SHIFT;
 
-	diff_buffer = diff_buffer_new(page_count, buffer_size,
-				      is_nowait ? (GFP_NOIO | GFP_NOWAIT) : GFP_NOIO);
+	diff_buffer =
+		diff_buffer_new(page_count, buffer_size,
+				is_nowait ? (GFP_NOIO | GFP_NOWAIT) : GFP_NOIO);
 	if (unlikely(!diff_buffer)) {
 		if (is_nowait)
 			return ERR_PTR(-EAGAIN);
@@ -148,15 +148,17 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, const bool is_
 	return diff_buffer;
 }
 
-void diff_buffer_release(struct diff_area *diff_area, struct diff_buffer *diff_buffer)
+void diff_buffer_release(struct diff_area *diff_area,
+			 struct diff_buffer *diff_buffer)
 {
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	atomic_dec(&diff_buffer_take_cnt);
 #endif
-//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-//	pr_debug("Release buffer");
-//#endif
-	if (atomic_read(&diff_area->free_diff_buffers_count) > free_diff_buffer_pool_size) {
+	//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
+	//	pr_debug("Release buffer");
+	//#endif
+	if (atomic_read(&diff_area->free_diff_buffers_count) >
+	    free_diff_buffer_pool_size) {
 		diff_buffer_free(diff_buffer);
 		return;
 	}
@@ -175,7 +177,9 @@ void diff_buffer_cleanup(struct diff_area *diff_area)
 #endif
 	do {
 		spin_lock(&diff_area->free_diff_buffers_lock);
-		diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers, struct diff_buffer, link);
+		diff_buffer =
+			list_first_entry_or_null(&diff_area->free_diff_buffers,
+						 struct diff_buffer, link);
 		if (diff_buffer) {
 			list_del(&diff_buffer->link);
 			atomic_dec(&diff_area->free_diff_buffers_count);
@@ -184,15 +188,12 @@ void diff_buffer_cleanup(struct diff_area *diff_area)
 
 		if (diff_buffer)
 			diff_buffer_free(diff_buffer);
-	} while(diff_buffer);
+	} while (diff_buffer);
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	if (diff_buffer_allocated_counter_get())
 		pr_debug("Some buffers %d still available\n",
-			diff_buffer_allocated_counter_get());
+			 diff_buffer_allocated_counter_get());
 	pr_debug("%d diff buffers is not released\n",
-		diff_buffer_take_cnt_get());
+		 diff_buffer_take_cnt_get());
 #endif
 }
-
-
-

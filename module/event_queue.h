@@ -26,7 +26,6 @@ struct event_queue {
 	struct wait_queue_head wq_head;
 };
 
-
 void event_queue_init(struct event_queue *event_queue);
 void event_queue_done(struct event_queue *event_queue);
 
@@ -36,15 +35,15 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code,
 		  const char *fmt, ...);
 */
-struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_ms);
+struct event *event_wait(struct event_queue *event_queue,
+			 unsigned long timeout_ms);
 
-static inline
-void event_free(struct event *event)
+static inline void event_free(struct event *event)
 {
-        if (event) {
-                kfree(event);
+	if (event) {
+		kfree(event);
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_event);
 #endif
-        }
+	}
 };

@@ -39,8 +39,7 @@ struct diff_region;
  * 	owner can notify his snapshot about events like snapshot overflow,
  * 	low free space and snapshot terminated.
  */
-struct diff_storage
-{
+struct diff_storage {
 	struct kref kref;
 	spinlock_t lock;
 
@@ -62,17 +61,14 @@ struct diff_storage
 #endif
 };
 
-
 struct diff_storage *diff_storage_new(void);
 void diff_storage_free(struct kref *kref);
 
-static inline
-void diff_storage_get(struct diff_storage *diff_storage)
+static inline void diff_storage_get(struct diff_storage *diff_storage)
 {
 	kref_get(&diff_storage->kref);
 };
-static inline
-void diff_storage_put(struct diff_storage *diff_storage)
+static inline void diff_storage_put(struct diff_storage *diff_storage)
 {
 	if (likely(diff_storage))
 		kref_put(&diff_storage->kref, diff_storage_free);
@@ -84,13 +80,12 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage,
 					   sector_t count);
 
-static inline
-void diff_storage_free_store(struct diff_region *region)
+static inline void diff_storage_free_store(struct diff_region *region)
 {
-        if (region) {
-                kfree(region);
+	if (region) {
+		kfree(region);
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
-                memory_object_dec(memory_object_diff_region);
+		memory_object_dec(memory_object_diff_region);
 #endif
-        }
+	}
 }

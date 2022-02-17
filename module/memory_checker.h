@@ -36,6 +36,6 @@ enum memory_object_type {
 
 void memory_object_inc(enum memory_object_type type);
 void memory_object_dec(enum memory_object_type type);
-void memory_object_print(void );
+void memory_object_print(void);
 
 #endif

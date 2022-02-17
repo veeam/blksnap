@@ -14,8 +14,7 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 #define SNAPIMAGE_MAX_DEVICES 2048
@@ -24,16 +23,14 @@ static unsigned int _major = 0;
 static DEFINE_IDR(_minor_idr);
 static DEFINE_SPINLOCK(_minor_lock);
 
-static
-void free_minor(int minor)
+static void free_minor(int minor)
 {
 	spin_lock(&_minor_lock);
 	idr_remove(&_minor_idr, minor);
 	spin_unlock(&_minor_lock);
 }
 
-static
-int new_minor(int *minor, void *ptr)
+static int new_minor(int *minor, void *ptr)
 {
 	int ret;
 
@@ -75,29 +72,27 @@ out:
 }
 */
 
-static inline
-void snapimage_unprepare_worker(struct snapimage *snapimage)
+static inline void snapimage_unprepare_worker(struct snapimage *snapimage)
 {
 	kthread_flush_worker(&snapimage->worker);
 	kthread_stop(snapimage->worker_task);
 }
 
-static
-int snapimage_kthread_worker_fn(void *worker_ptr)
+static int snapimage_kthread_worker_fn(void *worker_ptr)
 {
 	current->flags |= PF_LOCAL_THROTTLE | PF_MEMALLOC_NOIO;
 	return kthread_worker_fn(worker_ptr);
 }
 
-static inline
-int snapimage_prepare_worker(struct snapimage *snapimage)
+static inline int snapimage_prepare_worker(struct snapimage *snapimage)
 {
 	struct task_struct *task;
 
 	kthread_init_worker(&snapimage->worker);
 
 	task = kthread_run(snapimage_kthread_worker_fn, &snapimage->worker,
-			   BLK_SNAP_IMAGE_NAME "%d", MINOR(snapimage->image_dev_id));
+			   BLK_SNAP_IMAGE_NAME "%d",
+			   MINOR(snapimage->image_dev_id));
 	if (IS_ERR(task))
 		return -ENOMEM;
 
@@ -111,10 +106,10 @@ struct snapimage_cmd {
 	struct kthread_work work;
 };
 
-static
-void snapimage_queue_work(struct kthread_work *work)
+static void snapimage_queue_work(struct kthread_work *work)
 {
-	struct snapimage_cmd *cmd = container_of(work, struct snapimage_cmd, work);
+	struct snapimage_cmd *cmd =
+		container_of(work, struct snapimage_cmd, work);
 	struct request *rq = blk_mq_rq_from_pdu(cmd);
 	struct snapimage *snapimage = rq->q->queuedata;
 	blk_status_t status = BLK_STS_OK;
@@ -124,10 +119,11 @@ void snapimage_queue_work(struct kthread_work *work)
 	sector_t pos = blk_rq_pos(rq);
 
 	diff_area_throttling_io(snapimage->diff_area);
-	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area, op_is_write(req_op(rq)));
-	rq_for_each_segment(bvec, rq, iter) {
+	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
+				 op_is_write(req_op(rq)));
+	rq_for_each_segment (bvec, rq, iter) {
 #if 0
-#pragma message ("Writing was suppressed for debugging")
+#pragma message("Writing was suppressed for debugging")
 		if (op_is_write(req_op(rq))) {
 			pr_debug("DEBUG! %s writing was suppressed for %llu sector", __FUNCTION__, pos);
 			break;
@@ -142,9 +138,9 @@ void snapimage_queue_work(struct kthread_work *work)
 	blk_mq_end_request(rq, status);
 }
 
-static
-int snapimage_init_request(struct blk_mq_tag_set *set, struct request *rq,
-			   unsigned int hctx_idx, unsigned int numa_node)
+static int snapimage_init_request(struct blk_mq_tag_set *set,
+				  struct request *rq, unsigned int hctx_idx,
+				  unsigned int numa_node)
 {
 	struct snapimage_cmd *cmd = blk_mq_rq_to_pdu(rq);
 
@@ -152,9 +148,8 @@ int snapimage_init_request(struct blk_mq_tag_set *set, struct request *rq,
 	return 0;
 }
 
-static
-blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
-		const struct blk_mq_queue_data *bd)
+static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
+				       const struct blk_mq_queue_data *bd)
 {
 	int ret;
 	struct request *rq = bd->rq;
@@ -186,22 +181,19 @@ blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 	return BLK_STS_OK;
 }
 
-static const
-struct blk_mq_ops mq_ops = {
+static const struct blk_mq_ops mq_ops = {
 	.queue_rq = snapimage_queue_rq,
 	.init_request = snapimage_init_request,
 };
 
-const
-struct block_device_operations bd_ops = {
+const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
 	//.open = snapimage_open,
 	//.ioctl = snapimage_ioctl,
 	//.release = snapimage_close,
 };
 
-static inline
-int snapimage_alloc_tag_set(struct snapimage *snapimage)
+static inline int snapimage_alloc_tag_set(struct snapimage *snapimage)
 {
 	struct blk_mq_tag_set *set = &snapimage->tag_set;
 
@@ -274,7 +266,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	ret = new_minor(&minor, snapimage);
 	if (ret) {
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
-			abs(ret));
+		       abs(ret));
 		goto fail_free_image;
 	}
 
@@ -327,7 +319,8 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
 
-	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d", BLK_SNAP_IMAGE_NAME, minor) < 0) {
+	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d",
+		     BLK_SNAP_IMAGE_NAME, minor) < 0) {
 		pr_err("Unable to set disk name for snapshot image device: invalid minor %u\n",
 		       minor);
 		ret = -EINVAL;
@@ -352,7 +345,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	set_capacity(disk, snapimage->capacity);
 	pr_debug("Snapshot image device capacity %lld bytes\n",
-		(u64)(snapimage->capacity << SECTOR_SHIFT));
+		 (u64)(snapimage->capacity << SECTOR_SHIFT));
 
 	diff_area_get(diff_area);
 	snapimage->diff_area = diff_area;
@@ -402,11 +395,12 @@ int snapimage_init(void)
 	mj = register_blkdev(mj, BLK_SNAP_IMAGE_NAME);
 	if (mj < 0) {
 		pr_err("Failed to register snapshot image block device. errno=%d\n",
-			abs(mj));
+		       abs(mj));
 		return mj;
 	}
 	_major = mj;
-	pr_info("Snapshot image block device major %d was registered\n", _major);
+	pr_info("Snapshot image block device major %d was registered\n",
+		_major);
 
 	return 0;
 }
@@ -426,32 +420,34 @@ int snapimage_major(void)
 
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
 int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
-                              struct blk_snap_sector_state *state)
+			      struct blk_snap_sector_state *state)
 {
 	int ret;
 
-	ret = diff_area_get_sector_state(snapimage->diff_area, sector, &state->chunk_state);
+	ret = diff_area_get_sector_state(snapimage->diff_area, sector,
+					 &state->chunk_state);
 	if (ret)
 		return ret;
 
 	ret = cbt_map_get_sector_state(snapimage->cbt_map, sector,
-					&state->snap_number_prev,
-					&state->snap_number_curr);
+				       &state->snap_number_prev,
+				       &state->snap_number_curr);
 	if (ret)
 		return ret;
-//#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	//#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	{
 		char buf[SECTOR_SIZE];
 
-		ret = diff_area_get_sector_image(snapimage->diff_area, sector, buf/*&state->buf*/);
+		ret = diff_area_get_sector_image(snapimage->diff_area, sector,
+						 buf /*&state->buf*/);
 		if (ret)
 			return ret;
 
 		pr_info("sector #%llu", sector);
-		print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
-			buf, 96, true);
+		print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET,
+			       32, 1, buf, 96, true);
 	}
-//#endif
+	//#endif
 	return 0;
 }
 #endif

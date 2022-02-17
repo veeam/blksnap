@@ -36,33 +36,30 @@ struct cbt_map {
 	sector_t state_dirty_sectors;
 };
 
-struct cbt_map *cbt_map_create(struct block_device* bdev);
+struct cbt_map *cbt_map_create(struct block_device *bdev);
 int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity);
 
 void cbt_map_destroy_cb(struct kref *kref);
-static inline
-void cbt_map_get(struct cbt_map *cbt_map)
+static inline void cbt_map_get(struct cbt_map *cbt_map)
 {
 	kref_get(&cbt_map->kref);
 };
-static inline
-void cbt_map_put(struct cbt_map *cbt_map)
+static inline void cbt_map_put(struct cbt_map *cbt_map)
 {
 	if (likely(cbt_map))
 		kref_put(&cbt_map->kref, cbt_map_destroy_cb);
 };
 
 void cbt_map_switch(struct cbt_map *cbt_map);
-int cbt_map_set(struct cbt_map *cbt_map,
-		sector_t sector_start, sector_t sector_cnt);
-int cbt_map_set_both(struct cbt_map *cbt_map,
-		     sector_t sector_start, sector_t sector_cnt);
+int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
+		sector_t sector_cnt);
+int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start,
+		     sector_t sector_cnt);
 
 size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buffer,
 			    size_t offset, size_t size);
 
-static inline
-size_t cbt_map_blk_size(struct cbt_map *cbt_map)
+static inline size_t cbt_map_blk_size(struct cbt_map *cbt_map)
 {
 	return 1 << cbt_map->blk_size_shift;
 };

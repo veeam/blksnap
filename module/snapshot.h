@@ -55,10 +55,12 @@ struct snapshot {
 
 void snapshot_done(void);
 
-int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count, uuid_t *id);
+int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
+		    uuid_t *id);
 int snapshot_destroy(uuid_t *id);
 int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
-			    struct big_buffer *ranges, unsigned int range_count);
+			    struct big_buffer *ranges,
+			    unsigned int range_count);
 int snapshot_take(uuid_t *id);
 struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms);
 int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array);
@@ -66,10 +68,10 @@ int snapshot_collect_images(uuid_t *id,
 			    struct blk_snap_image_info __user *image_info_array,
 			    unsigned int *pcount);
 int snapshot_mark_dirty_blocks(dev_t image_dev_id,
-                               struct blk_snap_block_range *block_ranges,
-                               unsigned int count);
+			       struct blk_snap_block_range *block_ranges,
+			       unsigned int count);
 
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
 int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
-                             struct blk_snap_sector_state *state);
+			     struct blk_snap_sector_state *state);
 #endif

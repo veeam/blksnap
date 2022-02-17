@@ -44,7 +44,8 @@ DEFINE_PERCPU_RWSEM(bd_filters_lock);
  * To do this, using the memalloc_noio_save() function can be useful.
  *
  */
-void bdev_filter_write_lock(struct block_device *__attribute__((__unused__))bdev)
+void bdev_filter_write_lock(struct block_device *__attribute__((__unused__))
+			    bdev)
 {
 	percpu_down_write(&bd_filters_lock);
 };
@@ -57,23 +58,24 @@ EXPORT_SYMBOL(bdev_filter_write_lock);
  *
  * The submit_bio_noacct() function can be continued.
  */
-void bdev_filter_write_unlock(struct block_device *__attribute__((__unused__))bdev)
+void bdev_filter_write_unlock(struct block_device *__attribute__((__unused__))
+			      bdev)
 {
 	percpu_up_write(&bd_filters_lock);
 };
 EXPORT_SYMBOL(bdev_filter_write_unlock);
 
-static inline
-struct bdev_filter *filter_find(dev_t dev_id, const char *name)
+static inline struct bdev_filter *filter_find(dev_t dev_id, const char *name)
 {
 	struct bdev_filter *flt;
 
 	if (list_empty(&bd_filters))
 		return NULL;
 
-	list_for_each_entry(flt, &bd_filters, link) {
+	list_for_each_entry (flt, &bd_filters, link) {
 		if ((dev_id == flt->dev_id) &&
-		    (strncmp(name, flt->name, BDEV_FILTER_NAME_MAX_LENGTH) == 0)) {
+		    (strncmp(name, flt->name, BDEV_FILTER_NAME_MAX_LENGTH) ==
+		     0)) {
 			return flt;
 		}
 	}
@@ -81,15 +83,15 @@ struct bdev_filter *filter_find(dev_t dev_id, const char *name)
 }
 
 #if defined(HAVE_BI_BDISK)
-static inline
-struct bdev_filter *filter_find_by_disk(struct gendisk *disk, int partno)
+static inline struct bdev_filter *filter_find_by_disk(struct gendisk *disk,
+						      int partno)
 {
 	struct bdev_filter *flt;
 
 	if (list_empty(&bd_filters))
 		return NULL;
 
-	list_for_each_entry(flt, &bd_filters, link) {
+	list_for_each_entry (flt, &bd_filters, link) {
 		if ((disk == flt->disk) && (partno == flt->partno))
 			return flt;
 	}
@@ -112,7 +114,7 @@ struct bdev_filter *filter_find_by_disk(struct gendisk *disk, int partno)
  * The bdev_filter_del() function allows to delete the filter from the block device.
  */
 int bdev_filter_add(struct block_device *bdev, const char *name,
-	       const struct bdev_filter_operations *fops, void *ctx)
+		    const struct bdev_filter_operations *fops, void *ctx)
 {
 	struct bdev_filter *flt;
 
@@ -178,7 +180,8 @@ EXPORT_SYMBOL(bdev_filter_del);
  * The lock ensures that the filter will not be removed from the list until
  * the lock is removed.
  */
-void bdev_filter_read_lock(struct block_device *__attribute__((__unused__))bdev)
+void bdev_filter_read_lock(struct block_device *__attribute__((__unused__))
+			   bdev)
 {
 	percpu_down_read(&bd_filters_lock);
 }
@@ -189,7 +192,8 @@ EXPORT_SYMBOL(bdev_filter_read_lock);
  * @bdev:
  *	Pointer to &struct block_device.
  */
-void bdev_filter_read_unlock(struct block_device *__attribute__((__unused__))bdev)
+void bdev_filter_read_unlock(struct block_device *__attribute__((__unused__))
+			     bdev)
 {
 	percpu_up_read(&bd_filters_lock);
 }
@@ -205,7 +209,7 @@ EXPORT_SYMBOL(bdev_filter_read_unlock);
  *
  * Necessary to lock list of filters by calling bdev_filter_read_lock().
  */
-void* bdev_filter_get_ctx(struct block_device *bdev, const char *name)
+void *bdev_filter_get_ctx(struct block_device *bdev, const char *name)
 {
 	struct bdev_filter *flt;
 
@@ -217,8 +221,7 @@ void* bdev_filter_get_ctx(struct block_device *bdev, const char *name)
 }
 EXPORT_SYMBOL(bdev_filter_get_ctx);
 
-static inline
-bool bdev_filters_apply(struct bio *bio)
+static inline bool bdev_filters_apply(struct bio *bio)
 {
 	struct bdev_filter *flt;
 	bool pass = true;
@@ -231,13 +234,13 @@ bool bdev_filters_apply(struct bio *bio)
 	} else
 		percpu_down_read(&bd_filters_lock);
 
-
 	if (!list_empty(&bd_filters)) {
-		list_for_each_entry(flt, &bd_filters, link) {
+		list_for_each_entry (flt, &bd_filters, link) {
 #if defined(HAVE_BI_BDISK)
-			if ((bio->bi_disk == flt->disk) && (bio->bi_partno == flt->partno))
+			if ((bio->bi_disk == flt->disk) &&
+			    (bio->bi_partno == flt->partno))
 #else
-			if ((bio->bi_bdev->bd_dev == flt->dev_id) )
+			if ((bio->bi_bdev->bd_dev == flt->dev_id))
 #endif
 				pass = flt->fops->submit_bio_cb(bio, flt->ctx);
 			if (!pass)
@@ -251,21 +254,19 @@ bool bdev_filters_apply(struct bio *bio)
 }
 
 #ifdef CONFIG_X86
-#define CALL_INSTRUCTION_LENGTH	5
+#define CALL_INSTRUCTION_LENGTH 5
 #else
 #pragma error "Current CPU is not supported yet"
 #endif
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-static
-blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
-	(blk_qc_t (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
-				     CALL_INSTRUCTION_LENGTH);
+static blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
+	(blk_qc_t(*)(struct bio *))((unsigned long)(submit_bio_noacct) +
+				    CALL_INSTRUCTION_LENGTH);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-static
-void (*submit_bio_noacct_notrace)(struct bio *) =
+static void (*submit_bio_noacct_notrace)(struct bio *) =
 	(void (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
-				     CALL_INSTRUCTION_LENGTH);
+				 CALL_INSTRUCTION_LENGTH);
 #else
 #error "Your kernel is too old for this module."
 #endif
@@ -280,11 +281,9 @@ EXPORT_SYMBOL(bdev_filter_submit_bio_noacct);
 #endif
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-static
-blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
+static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 #else
-static
-void notrace submit_bio_noacct_handler(struct bio *bio)
+static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
 	if (!current->bio_list) {
@@ -334,33 +333,27 @@ void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 }
 
-
-static
-struct klp_func funcs[] = {
+static struct klp_func funcs[] = {
 	{
 		.old_name = "submit_bio_noacct",
 		.new_func = submit_bio_noacct_handler,
 	},
-	{0}
+	{ 0 }
 };
 
 #ifdef BDEV_FILTER_LOCKAPI
-static
-void post_patch(struct klp_object *obj)
+static void post_patch(struct klp_object *obj)
 {
 	pr_warn("Filter is ready for using\n");
 	percpu_up_read(&bd_filters_lock);
 }
 
-static
-void pre_unpatch(struct klp_object *obj)
+static void pre_unpatch(struct klp_object *obj)
 {
 	pr_warn("Filter will be turned off now\n");
 }
 
-static
-struct klp_callbacks callbacks
-{
+static struct klp_callbacks callbacks {
 	.pre_patch = NULL,
 	.post_patch = post_patch,
 	.pre_unpatch = pre_unpatch,
@@ -369,8 +362,7 @@ struct klp_callbacks callbacks
 };
 #endif
 
-static
-struct klp_object objs[] = {
+static struct klp_object objs[] = {
 	{
 		/* name being NULL means vmlinux */
 		.funcs = funcs,
@@ -378,11 +370,10 @@ struct klp_object objs[] = {
 		.callbacks = callbacks,
 #endif
 	},
-	{0}
+	{ 0 }
 };
 
-static
-struct klp_patch patch = {
+static struct klp_patch patch = {
 	.mod = THIS_MODULE,
 	.objs = objs,
 };
@@ -401,7 +392,7 @@ int bdev_filter_init(void)
  *
  * echo 0 > /sys/kernel/livepatch/bdev_filter/enabled
  */
-void bdev_filter_done(void )
+void bdev_filter_done(void)
 {
 	percpu_free_rwsem(&bd_filters_lock);
 }

@@ -15,8 +15,7 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
@@ -53,7 +52,7 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 
 	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
-		"The chunk already in the cache"))
+		 "The chunk already in the cache"))
 		return -EINVAL;
 
 #ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
@@ -66,11 +65,11 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 		struct diff_region *diff_region;
 
 		diff_region = diff_storage_new_store(
-				diff_area->diff_storage,
-				diff_area_chunk_sectors(diff_area));
+			diff_area->diff_storage,
+			diff_area_chunk_sectors(diff_area));
 		if (unlikely(IS_ERR(diff_region))) {
-
-			pr_debug("Cannot get store for chunk #%ld\n", chunk->number);
+			pr_debug("Cannot get store for chunk #%ld\n",
+				 chunk->number);
 			return PTR_ERR(diff_region);
 		}
 
@@ -90,7 +89,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	//pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->caches_lock);
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
-		"The chunk already in the cache")) {
+		 "The chunk already in the cache")) {
 		spin_unlock(&diff_area->caches_lock);
 
 		chunk_store_failed(chunk, 0);
@@ -98,14 +97,18 @@ void chunk_schedule_caching(struct chunk *chunk)
 	}
 
 	if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
-		list_add_tail(&chunk->cache_link, &diff_area->write_cache_queue);
-		in_cache_count = atomic_inc_return(&diff_area->write_cache_count);
+		list_add_tail(&chunk->cache_link,
+			      &diff_area->write_cache_queue);
+		in_cache_count =
+			atomic_inc_return(&diff_area->write_cache_count);
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
-		pr_debug("chunk #%ld should be stored. already in cache %d\n", chunk->number, in_cache_count);
+		pr_debug("chunk #%ld should be stored. already in cache %d\n",
+			 chunk->number, in_cache_count);
 #endif
 	} else {
 		list_add_tail(&chunk->cache_link, &diff_area->read_cache_queue);
-		in_cache_count = atomic_inc_return(&diff_area->read_cache_count);
+		in_cache_count =
+			atomic_inc_return(&diff_area->read_cache_count);
 	}
 	spin_unlock(&diff_area->caches_lock);
 
@@ -113,18 +116,20 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	// Initiate the cache clearing process.
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
-	if (atomic_read(&diff_area->write_cache_count) > chunk_maximum_in_cache) {
-
-		pr_debug("Need to cleanup write cache: in_cache_count=%d, chunk_maximum_in_cache=%d\n",
-			atomic_read(&diff_area->write_cache_count), chunk_maximum_in_cache);
+	if (atomic_read(&diff_area->write_cache_count) >
+	    chunk_maximum_in_cache) {
+		pr_debug(
+			"Need to cleanup write cache: in_cache_count=%d, chunk_maximum_in_cache=%d\n",
+			atomic_read(&diff_area->write_cache_count),
+			chunk_maximum_in_cache);
 	}
 #endif
-	if ((in_cache_count > chunk_maximum_in_cache) && !diff_area_is_corrupted(diff_area))
+	if ((in_cache_count > chunk_maximum_in_cache) &&
+	    !diff_area_is_corrupted(diff_area))
 		queue_work(system_wq, &diff_area->cache_release_work);
 }
 
-static
-void chunk_notify_load(void *ctx)
+static void chunk_notify_load(void *ctx)
 {
 	struct chunk *chunk = ctx;
 	int error = chunk->diff_io->error;
@@ -136,7 +141,7 @@ void chunk_notify_load(void *ctx)
 	mutex_lock(&logging_lock);
 	pr_debug("DEBUG! loaded chunk #%ld \n", chunk->number);
 	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
-		page_address(chunk->diff_buffer->pages[0]), 96, true);
+		       page_address(chunk->diff_buffer->pages[0]), 96, true);
 	mutex_unlock(&logging_lock);
 #endif
 	might_sleep();
@@ -167,15 +172,15 @@ void chunk_notify_load(void *ctx)
 		goto out;
 	}
 
-	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__, atomic_read(&chunk->state));
+	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__,
+	       atomic_read(&chunk->state));
 	up(&chunk->lock);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
 	return;
 }
 
-static
-void chunk_notify_store(void *ctx)
+static void chunk_notify_store(void *ctx)
 {
 	struct chunk *chunk = ctx;
 	int error = chunk->diff_io->error;
@@ -203,7 +208,8 @@ void chunk_notify_store(void *ctx)
 			chunk_state_unset(chunk, CHUNK_ST_DIRTY);
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
 			pr_debug("chunk #%ld has been stored\n", chunk->number);
-			pr_debug("Release buffer for chunk #%ld\n", chunk->number);
+			pr_debug("Release buffer for chunk #%ld\n",
+				 chunk->number);
 #endif
 			chunk_diff_buffer_release(chunk);
 		} else {
@@ -215,7 +221,8 @@ void chunk_notify_store(void *ctx)
 			goto out;
 		}
 	} else
-		pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__, atomic_read(&chunk->state));
+		pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__,
+		       atomic_read(&chunk->state));
 	up(&chunk->lock);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
@@ -269,15 +276,16 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	struct diff_io *diff_io;
 	struct diff_region *region = chunk->diff_region;
 
-	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link), "The chunk already in the cache"))
+	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
+		 "The chunk already in the cache"))
 		return -EINVAL;
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	mutex_lock(&logging_lock);
 	pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
-		chunk->number, region->sector, region->count);
+		 chunk->number, region->sector, region->count);
 	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
-		page_address(chunk->diff_buffer->pages[0]), 96, true);
+		       page_address(chunk->diff_buffer->pages[0]), 96, true);
 	mutex_unlock(&logging_lock);
 #endif
 	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, is_nowait);
@@ -293,13 +301,15 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait, false);
+	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait,
+			 false);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
 		chunk->diff_io = NULL;
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
-		pr_debug("Failed to write diff for chunk #%ld\n", chunk->number);
+		pr_debug("Failed to write diff for chunk #%ld\n",
+			 chunk->number);
 #endif
 	}
 
@@ -316,13 +326,14 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 	struct diff_io *diff_io;
 	struct diff_region region = {
 		.bdev = chunk->diff_area->orig_bdev,
-		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
+		.sector = (sector_t)(chunk->number) *
+			  diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
-		chunk->number, region.sector, region.count);
+		 chunk->number, region.sector, region.count);
 #endif
 	diff_io = diff_io_new_async_read(chunk_notify_load, chunk, is_nowait);
 	if (unlikely(!diff_io)) {
@@ -337,7 +348,8 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait, false);
+	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait,
+			 false);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
@@ -356,7 +368,8 @@ int chunk_load_orig(struct chunk *chunk)
 	struct diff_io *diff_io;
 	struct diff_region region = {
 		.bdev = chunk->diff_area->orig_bdev,
-		.sector = (sector_t)(chunk->number) * diff_area_chunk_sectors(chunk->diff_area),
+		.sector = (sector_t)(chunk->number) *
+			  diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
@@ -387,7 +400,7 @@ int chunk_load_diff(struct chunk *chunk)
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	pr_debug("%s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
-		chunk->number, region->sector, region->count);
+		 chunk->number, region->sector, region->count);
 #endif
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
@@ -402,7 +415,7 @@ int chunk_load_diff(struct chunk *chunk)
 	mutex_lock(&logging_lock);
 	pr_debug("DEBUG! loaded chunk #%ld from diff area\n", chunk->number);
 	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
-		page_address(chunk->diff_buffer->pages[0]), 96, true);
+		       page_address(chunk->diff_buffer->pages[0]), 96, true);
 	mutex_unlock(&logging_lock);
 #endif
 	return ret;

@@ -12,7 +12,6 @@
 struct diff_storage;
 struct chunk;
 
-
 /**
  * struct diff_area - Discribes the difference area for one original device.
  * @kref:
@@ -86,39 +85,36 @@ struct diff_area {
 	spinlock_t caches_lock;
 	struct list_head read_cache_queue;
 	atomic_t read_cache_count;
-        struct list_head write_cache_queue;
-        atomic_t write_cache_count;
+	struct list_head write_cache_queue;
+	atomic_t write_cache_count;
 	struct work_struct cache_release_work;
 
-        spinlock_t free_diff_buffers_lock;
-        struct list_head free_diff_buffers;
-        atomic_t free_diff_buffers_count;
+	spinlock_t free_diff_buffers_lock;
+	struct list_head free_diff_buffers;
+	atomic_t free_diff_buffers_count;
 
 	atomic_t corrupt_flag;
 	atomic_t pending_io_count;
 };
 
-struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage);
+struct diff_area *diff_area_new(dev_t dev_id,
+				struct diff_storage *diff_storage);
 void diff_area_free(struct kref *kref);
-static inline
-void diff_area_get(struct diff_area *diff_area)
+static inline void diff_area_get(struct diff_area *diff_area)
 {
 	kref_get(&diff_area->kref);
 };
-static inline
-void diff_area_put(struct diff_area *diff_area)
+static inline void diff_area_put(struct diff_area *diff_area)
 {
 	if (likely(diff_area))
 		kref_put(&diff_area->kref, diff_area_free);
 };
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code);
-static inline
-bool diff_area_is_corrupted(struct diff_area *diff_area)
+static inline bool diff_area_is_corrupted(struct diff_area *diff_area)
 {
 	return !!atomic_read(&diff_area->corrupt_flag);
 };
-static inline
-sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
+static inline sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
 {
 	return (sector_t)(1ULL << (diff_area->chunk_shift - SECTOR_SHIFT));
 };
@@ -139,13 +135,12 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 struct diff_area_image_ctx {
 	struct diff_area *diff_area;
 	bool is_write;
-	struct chunk* chunk;
+	struct chunk *chunk;
 };
 
-static inline
-void diff_area_image_ctx_init(struct diff_area_image_ctx *io_ctx,
-			      struct diff_area *diff_area,
-			      bool is_write)
+static inline void diff_area_image_ctx_init(struct diff_area_image_ctx *io_ctx,
+					    struct diff_area *diff_area,
+					    bool is_write)
 {
 	io_ctx->diff_area = diff_area;
 	io_ctx->is_write = is_write;
@@ -164,6 +159,8 @@ void diff_area_throttling_io(struct diff_area *diff_area);
 /**
  *
  */
-int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector, unsigned int *chunk_state);
-int diff_area_get_sector_image(struct diff_area *diff_area, sector_t pos, void *buf);
+int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector,
+			       unsigned int *chunk_state);
+int diff_area_get_sector_image(struct diff_area *diff_area, sector_t pos,
+			       void *buf);
 #endif

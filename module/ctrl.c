@@ -19,27 +19,24 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-static
-int blk_snap_major;
+static int blk_snap_major;
 
 //static int ctrl_open(struct inode *inode, struct file *fl);
 //static int ctrl_release(struct inode *inode, struct file *fl);
-static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
+				unsigned long arg);
 
-static const
-struct file_operations ctrl_fops = {
+static const struct file_operations ctrl_fops = {
 	.owner = THIS_MODULE,
 	//.open = ctrl_open,
 	//.release = ctrl_release,
 	.unlocked_ioctl = ctrl_unlocked_ioctl,
 };
 
-static const
-struct blk_snap_version version = {
+static const struct blk_snap_version version = {
 	.major = VERSION_MAJOR,
 	.minor = VERSION_MINOR,
 	.revision = VERSION_REVISION,
@@ -47,8 +44,7 @@ struct blk_snap_version version = {
 };
 
 #ifdef BLK_SNAP_MODIFICATION
-static const
-struct blk_snap_mod modification = {
+static const struct blk_snap_mod modification = {
 	.compatibility_flags = (1ULL << blk_snap_compat_flags_end) - 1,
 	.name = MOD_NAME,
 };
@@ -65,7 +61,8 @@ int ctrl_init(void)
 
 	ret = register_chrdev(0, BLK_SNAP_MODULE_NAME, &ctrl_fops);
 	if (ret < 0) {
-		pr_err("Failed to register a character device. errno=%d\n", abs(blk_snap_major));
+		pr_err("Failed to register a character device. errno=%d\n",
+		       abs(blk_snap_major));
 		return ret;
 	}
 
@@ -97,8 +94,7 @@ int ctrl_release(struct inode *inode, struct file *fl)
 	return 0;
 }
 */
-static
-int ioctl_version(unsigned long arg)
+static int ioctl_version(unsigned long arg)
 {
 	if (copy_to_user((void *)arg, &version, sizeof(version))) {
 		pr_err("Unable to get version: invalid user buffer\n");
@@ -108,8 +104,7 @@ int ioctl_version(unsigned long arg)
 	return 0;
 }
 
-static
-int ioctl_tracker_remove(unsigned long arg)
+static int ioctl_tracker_remove(unsigned long arg)
 {
 	struct blk_snap_tracker_remove karg;
 
@@ -120,8 +115,7 @@ int ioctl_tracker_remove(unsigned long arg)
 	return tracker_remove(MKDEV(karg.dev_id.mj, karg.dev_id.mn));
 }
 
-static
-int ioctl_tracker_collect(unsigned long arg)
+static int ioctl_tracker_collect(unsigned long arg)
 {
 	int res;
 	struct blk_snap_tracker_collect karg;
@@ -141,7 +135,8 @@ int ioctl_tracker_collect(unsigned long arg)
 		 */
 		res = tracker_collect(0, NULL, &karg.count);
 		if (res) {
-			pr_err("Failed to execute tracker_collect. errno=%d\n", abs(res));
+			pr_err("Failed to execute tracker_collect. errno=%d\n",
+			       abs(res));
 			return res;
 		}
 		if (copy_to_user((void *)arg, (void *)&karg, sizeof(karg))) {
@@ -151,7 +146,8 @@ int ioctl_tracker_collect(unsigned long arg)
 		return 0;
 	}
 
-	cbt_info = kcalloc(karg.count, sizeof(struct blk_snap_cbt_info), GFP_KERNEL);
+	cbt_info = kcalloc(karg.count, sizeof(struct blk_snap_cbt_info),
+			   GFP_KERNEL);
 	if (cbt_info == NULL)
 		return -ENOMEM;
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
@@ -159,11 +155,13 @@ int ioctl_tracker_collect(unsigned long arg)
 #endif
 	res = tracker_collect(karg.count, cbt_info, &karg.count);
 	if (res) {
-		pr_err("Failed to execute tracker_collect. errno=%d\n", abs(res));
+		pr_err("Failed to execute tracker_collect. errno=%d\n",
+		       abs(res));
 		goto fail;
 	}
 
-	if (copy_to_user(karg.cbt_info_array, cbt_info, karg.count * sizeof(struct blk_snap_cbt_info))) {
+	if (copy_to_user(karg.cbt_info_array, cbt_info,
+			 karg.count * sizeof(struct blk_snap_cbt_info))) {
 		pr_err("Unable to collect tracking devices: invalid user buffer for CBT info\n");
 		res = -ENODATA;
 		goto fail;
@@ -182,8 +180,7 @@ fail:
 	return res;
 }
 
-static
-int ioctl_tracker_read_cbt_map(unsigned long arg)
+static int ioctl_tracker_read_cbt_map(unsigned long arg)
 {
 	struct blk_snap_tracker_read_cbt_bitmap karg;
 
@@ -194,11 +191,10 @@ int ioctl_tracker_read_cbt_map(unsigned long arg)
 
 	return tracker_read_cbt_bitmap(MKDEV(karg.dev_id.mj, karg.dev_id.mn),
 				       karg.offset, karg.length,
-				       (char __user*)karg.buff);
+				       (char __user *)karg.buff);
 }
 
-static
-int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
+static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 {
 	int ret = 0;
 	struct blk_snap_tracker_mark_dirty_blocks karg;
@@ -209,7 +205,8 @@ int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 		return -ENODATA;
 	}
 
-	dirty_blocks_array = kcalloc(karg.count, sizeof(struct blk_snap_block_range), GFP_KERNEL);
+	dirty_blocks_array = kcalloc(
+		karg.count, sizeof(struct blk_snap_block_range), GFP_KERNEL);
 	if (!dirty_blocks_array) {
 		pr_err("Unable to mark dirty %d blocks\n", karg.count);
 		return -ENOMEM;
@@ -239,8 +236,7 @@ int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 	return ret;
 }
 
-static
-int ioctl_snapshot_create(unsigned long arg)
+static int ioctl_snapshot_create(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_create karg;
@@ -251,9 +247,11 @@ int ioctl_snapshot_create(unsigned long arg)
 		return -ENODATA;
 	}
 
-	dev_id_array = kcalloc(karg.count, sizeof(struct blk_snap_dev_t), GFP_KERNEL);
+	dev_id_array =
+		kcalloc(karg.count, sizeof(struct blk_snap_dev_t), GFP_KERNEL);
 	if (dev_id_array == NULL) {
-		pr_err("Unable to create snapshot: too many devices %d\n", karg.count);
+		pr_err("Unable to create snapshot: too many devices %d\n",
+		       karg.count);
 		return -ENOMEM;
 	}
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
@@ -282,8 +280,7 @@ out:
 	return ret;
 }
 
-static
-int ioctl_snapshot_destroy(unsigned long arg)
+static int ioctl_snapshot_destroy(unsigned long arg)
 {
 	struct blk_snap_snapshot_destroy karg;
 
@@ -295,8 +292,7 @@ int ioctl_snapshot_destroy(unsigned long arg)
 	return snapshot_destroy(&karg.id);
 }
 
-static
-int ioctl_snapshot_append_storage(unsigned long arg)
+static int ioctl_snapshot_append_storage(unsigned long arg)
 {
 	int res = 0;
 	struct blk_snap_snapshot_append_storage karg;
@@ -327,21 +323,22 @@ int ioctl_snapshot_append_storage(unsigned long arg)
 		return -ENOMEM;
 	}
 
-	if (big_buffer_copy_from_user((void *)karg.ranges, 0, ranges, ranges_buffer_size) !=
-		ranges_buffer_size) {
+	if (big_buffer_copy_from_user((void *)karg.ranges, 0, ranges,
+				      ranges_buffer_size) !=
+	    ranges_buffer_size) {
 		pr_err("Unable to add file to snapstore: invalid user buffer for parameters\n");
 		big_buffer_free(ranges);
 		return -ENODATA;
 	}
 
-	res = snapshot_append_storage(&karg.id, karg.dev_id, ranges, (size_t)karg.count);
+	res = snapshot_append_storage(&karg.id, karg.dev_id, ranges,
+				      (size_t)karg.count);
 	big_buffer_free(ranges);
 
 	return res;
 }
 
-static
-int ioctl_snapshot_take(unsigned long arg)
+static int ioctl_snapshot_take(unsigned long arg)
 {
 	struct blk_snap_snapshot_take karg;
 
@@ -353,8 +350,7 @@ int ioctl_snapshot_take(unsigned long arg)
 	return snapshot_take(&karg.id);
 }
 
-static
-int ioctl_snapshot_wait_event(unsigned long arg)
+static int ioctl_snapshot_wait_event(unsigned long arg)
 {
 	int ret = 0;
 	struct blk_snap_snapshot_event *karg;
@@ -367,7 +363,8 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_snapshot_event);
 #endif
-	if (copy_from_user(karg, (void *)arg, sizeof(struct blk_snap_snapshot_event))) {
+	if (copy_from_user(karg, (void *)arg,
+			   sizeof(struct blk_snap_snapshot_event))) {
 		pr_err("Unable failed to get snapstore error code: invalid user buffer\n");
 		ret = -EINVAL;
 		goto out;
@@ -379,8 +376,8 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 		goto out;
 	}
 
-	pr_debug("Received event=%lld code=%d data_size=%d\n",
-		event->time, event->code, event->data_size);
+	pr_debug("Received event=%lld code=%d data_size=%d\n", event->time,
+		 event->code, event->data_size);
 	karg->code = event->code;
 	karg->time_label = event->time;
 
@@ -390,10 +387,11 @@ int ioctl_snapshot_wait_event(unsigned long arg)
 		/* If we can't copy all the data, we copy only part of it. */
 	}
 	memcpy(karg->data, event->data, event->data_size);
-	       //min_t(size_t, event->data_size, sizeof(karg->data)));
+	//min_t(size_t, event->data_size, sizeof(karg->data)));
 	event_free(event);
 
-	if (copy_to_user((void *)arg, karg, sizeof(struct blk_snap_snapshot_event))) {
+	if (copy_to_user((void *)arg, karg,
+			 sizeof(struct blk_snap_snapshot_event))) {
 		pr_err("Unable to get snapstore error code: invalid user buffer\n");
 		ret = -EINVAL;
 	}
@@ -405,8 +403,7 @@ out:
 	return ret;
 }
 
-static
-int ioctl_snapshot_collect(unsigned long arg)
+static int ioctl_snapshot_collect(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_collect karg;
@@ -426,8 +423,7 @@ int ioctl_snapshot_collect(unsigned long arg)
 	return ret;
 }
 
-static
-int ioctl_snapshot_collect_images(unsigned long arg)
+static int ioctl_snapshot_collect_images(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_collect_images karg;
@@ -437,7 +433,8 @@ int ioctl_snapshot_collect_images(unsigned long arg)
 		return -ENODATA;
 	}
 
-	ret = snapshot_collect_images(&karg.id, karg.image_info_array, &karg.count);
+	ret = snapshot_collect_images(&karg.id, karg.image_info_array,
+				      &karg.count);
 
 	if (copy_to_user((void *)arg, &karg, sizeof(karg))) {
 		pr_err("Unable to collect snapshot images: invalid user buffer\n");
@@ -447,8 +444,7 @@ int ioctl_snapshot_collect_images(unsigned long arg)
 	return ret;
 }
 
-static
-int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
+static int (*const blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_version,
 	ioctl_tracker_remove,
 	ioctl_tracker_collect,
@@ -463,7 +459,8 @@ int (* const blk_snap_ioctl_table[])(unsigned long arg) = {
 	ioctl_snapshot_wait_event,
 };
 
-static_assert(sizeof(blk_snap_ioctl_table) == (blk_snap_ioctl_end * sizeof(void *)), \
+static_assert(
+	sizeof(blk_snap_ioctl_table) == (blk_snap_ioctl_end * sizeof(void *)),
 	"The size of table blk_snap_ioctl_table does not match the enum blk_snap_ioctl.");
 
 #ifdef BLK_SNAP_MODIFICATION
@@ -479,8 +476,7 @@ int ioctl_mod(unsigned long arg)
 }
 
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-static
-int ioctl_get_sector_state(unsigned long arg)
+static int ioctl_get_sector_state(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_get_sector_state karg;
@@ -491,7 +487,7 @@ int ioctl_get_sector_state(unsigned long arg)
 		return -ENODATA;
 	}
 
- 	dev_id = MKDEV(karg.image_dev_id.mj, karg.image_dev_id.mn);
+	dev_id = MKDEV(karg.image_dev_id.mj, karg.image_dev_id.mn);
 	ret = snapshot_get_chunk_state(dev_id, karg.sector, &karg.state);
 	if (unlikely(ret)) {
 		pr_err("Failed to get sector state: cannot get chunk state\n");
@@ -507,26 +503,28 @@ int ioctl_get_sector_state(unsigned long arg)
 }
 #endif
 
-static
-int (* const blk_snap_ioctl_table_mod[])(unsigned long arg) = {
+static int (*const blk_snap_ioctl_table_mod[])(unsigned long arg) = {
 	ioctl_mod,
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
 	ioctl_get_sector_state,
 #endif
 };
-static_assert(sizeof(blk_snap_ioctl_table_mod) == ((blk_snap_ioctl_end_mod - IOCTL_MOD) * sizeof(void *)), \
+static_assert(
+	sizeof(blk_snap_ioctl_table_mod) ==
+		((blk_snap_ioctl_end_mod - IOCTL_MOD) * sizeof(void *)),
 	"The size of table blk_snap_ioctl_table_mod does not match the enum blk_snap_ioctl.");
 #endif
 
-static
-long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
+				unsigned long arg)
 {
 	int nr = _IOC_NR(cmd);
 
 	if (nr > (sizeof(blk_snap_ioctl_table) / sizeof(void *))) {
 #ifdef BLK_SNAP_MODIFICATION
 		if ((nr >= IOCTL_MOD) &&
-		    (nr < (IOCTL_MOD + (sizeof(blk_snap_ioctl_table_mod) / sizeof(void *))))) {
+		    (nr < (IOCTL_MOD + (sizeof(blk_snap_ioctl_table_mod) /
+					sizeof(void *))))) {
 			nr -= IOCTL_MOD;
 			if (blk_snap_ioctl_table_mod[nr])
 				return blk_snap_ioctl_table_mod[nr](arg);

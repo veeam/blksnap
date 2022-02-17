@@ -10,28 +10,25 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 #ifndef HAVE_BDEV_NR_SECTORS
-static inline
-sector_t bdev_nr_sectors(struct block_device *bdev)
+static inline sector_t bdev_nr_sectors(struct block_device *bdev)
 {
 	return i_size_read(bdev->bd_inode) >> 9;
 };
 #endif
 
-static inline
-unsigned long long count_by_shift(sector_t capacity, unsigned long long shift)
+static inline unsigned long long count_by_shift(sector_t capacity,
+						unsigned long long shift)
 {
 	sector_t blk_size = 1ull << (shift - SECTOR_SHIFT);
 
 	return round_up(capacity, blk_size) / blk_size;
 }
 
-static
-void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
+static void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 {
 	unsigned long long shift;
 	unsigned long long count;
@@ -52,8 +49,7 @@ void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 	cbt_map->blk_count = count;
 }
 
-static
-int cbt_map_allocate(struct cbt_map *cbt_map)
+static int cbt_map_allocate(struct cbt_map *cbt_map)
 {
 	pr_debug("Allocate CBT map of %zu blocks\n", cbt_map->blk_count);
 
@@ -82,8 +78,7 @@ int cbt_map_allocate(struct cbt_map *cbt_map)
 	return 0;
 }
 
-static
-void cbt_map_deallocate(struct cbt_map *cbt_map)
+static void cbt_map_deallocate(struct cbt_map *cbt_map)
 {
 	cbt_map->is_corrupted = false;
 
@@ -109,8 +104,7 @@ int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity)
 	return cbt_map_allocate(cbt_map);
 }
 
-static inline
-void cbt_map_destroy(struct cbt_map *cbt_map)
+static inline void cbt_map_destroy(struct cbt_map *cbt_map)
 {
 	pr_debug("CBT map destroy\n");
 
@@ -121,7 +115,7 @@ void cbt_map_destroy(struct cbt_map *cbt_map)
 #endif
 }
 
-struct cbt_map *cbt_map_create(struct block_device* bdev)
+struct cbt_map *cbt_map_create(struct block_device *bdev)
 {
 	struct cbt_map *cbt_map = NULL;
 
@@ -174,19 +168,21 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 	spin_unlock(&cbt_map->locker);
 }
 
-static inline
-int _cbt_map_set(struct cbt_map *cbt_map,
-		 sector_t sector_start, sector_t sector_cnt,
-		 u8 snap_number, struct big_buffer *map)
+static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
+			       sector_t sector_cnt, u8 snap_number,
+			       struct big_buffer *map)
 {
 	int res = 0;
 	u8 num;
 	size_t cbt_block;
-	size_t cbt_block_first = (size_t)(sector_start >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
-	size_t cbt_block_last = (size_t)((sector_start + sector_cnt - 1) >>
-					 (cbt_map->blk_size_shift - SECTOR_SHIFT)); //inclusive
+	size_t cbt_block_first = (size_t)(
+		sector_start >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
+	size_t cbt_block_last =
+		(size_t)((sector_start + sector_cnt - 1) >>
+			 (cbt_map->blk_size_shift - SECTOR_SHIFT)); //inclusive
 
-	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last; ++cbt_block) {
+	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last;
+	     ++cbt_block) {
 		if (unlikely(cbt_block >= cbt_map->blk_count)) {
 			pr_err("Block index is too large.\n");
 			pr_err("Block #%zu was demanded, map size %zu blocks.\n",
@@ -212,8 +208,8 @@ int _cbt_map_set(struct cbt_map *cbt_map,
 	return res;
 }
 
-int cbt_map_set(struct cbt_map *cbt_map,
-		sector_t sector_start, sector_t sector_cnt)
+int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
+		sector_t sector_cnt)
 {
 	int res;
 
@@ -233,8 +229,8 @@ int cbt_map_set(struct cbt_map *cbt_map,
 	return res;
 }
 
-int cbt_map_set_both(struct cbt_map *cbt_map,
-		     sector_t sector_start, sector_t sector_cnt)
+int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start,
+		     sector_t sector_cnt)
 {
 	int res;
 
@@ -247,7 +243,8 @@ int cbt_map_set_both(struct cbt_map *cbt_map,
 			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
 	if (!res)
 		res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
-				   (u8)cbt_map->snap_number_previous, cbt_map->read_map);
+				   (u8)cbt_map->snap_number_previous,
+				   cbt_map->read_map);
 	cbt_map->state_dirty_sectors += sector_cnt;
 	spin_unlock(&cbt_map->locker);
 
@@ -266,19 +263,20 @@ size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buff,
 		return -EFAULT;
 	}
 
-	left_size = real_size -
-		    big_buffer_copy_to_user(user_buff, offset, cbt_map->read_map, real_size);
+	left_size = real_size - big_buffer_copy_to_user(user_buff, offset,
+							cbt_map->read_map,
+							real_size);
 
 	if (left_size == 0)
 		readed = real_size;
 	else {
-		pr_err("Not all CBT data was read. Left [%zu] bytes\n", left_size);
+		pr_err("Not all CBT data was read. Left [%zu] bytes\n",
+		       left_size);
 		readed = real_size - left_size;
 	}
 
 	return readed;
 }
-
 
 int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 			      struct blk_snap_block_range *block_ranges,
@@ -288,9 +286,9 @@ int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 	int ret = 0;
 
 	for (inx = 0; inx < count; inx++) {
-		ret = cbt_map_set_both(cbt_map,
-				       (sector_t)block_ranges[inx].sector_offset,
-				       (sector_t)block_ranges[inx].sector_count);
+		ret = cbt_map_set_both(
+			cbt_map, (sector_t)block_ranges[inx].sector_offset,
+			(sector_t)block_ranges[inx].sector_count);
 		if (ret)
 			break;
 	}
@@ -299,8 +297,8 @@ int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 }
 
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-static inline
-int _cbt_map_get(struct big_buffer *map, size_t cbt_block, u8 *snap_number)
+static inline int _cbt_map_get(struct big_buffer *map, size_t cbt_block,
+			       u8 *snap_number)
 {
 	int ret = 0;
 
@@ -315,7 +313,8 @@ int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
 			     u8 *snap_number_prev, u8 *snap_number_curr)
 {
 	int ret;
-	size_t cbt_block = (size_t)(sector >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
+	size_t cbt_block =
+		(size_t)(sector >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
 
 	if (unlikely(cbt_block >= cbt_map->blk_count)) {
 		pr_err("Block index is too large.\n");
@@ -331,7 +330,8 @@ int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
 	}
 	ret = _cbt_map_get(cbt_map->write_map, cbt_block, snap_number_curr);
 	if (!ret)
-		ret = _cbt_map_get(cbt_map->read_map, cbt_block, snap_number_prev);
+		ret = _cbt_map_get(cbt_map->read_map, cbt_block,
+				   snap_number_prev);
 out:
 	spin_unlock(&cbt_map->locker);
 

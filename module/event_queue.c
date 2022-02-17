@@ -9,8 +9,7 @@
 
 #ifdef BLK_SNAP_DEBUGLOG
 #undef pr_debug
-#define pr_debug(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
 void event_queue_init(struct event_queue *event_queue)
@@ -26,14 +25,16 @@ void event_queue_done(struct event_queue *event_queue)
 
 	spin_lock(&event_queue->lock);
 	while (!list_empty(&event_queue->list)) {
-		event = list_first_entry(&event_queue->list, struct event, link);
+		event = list_first_entry(&event_queue->list, struct event,
+					 link);
 		list_del(&event->link);
 		event_free(event);
 	}
 	spin_unlock(&event_queue->lock);
 }
 
-int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void *data, int data_size)
+int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
+	      const void *data, int data_size)
 {
 	struct event *event;
 
@@ -49,7 +50,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code, const void
 	memcpy(event->data, data, data_size);
 
 	pr_debug("Generate event: time=%lld code=%d data_size=%d\n",
-		event->time, event->code, event->data_size);
+		 event->time, event->code, event->data_size);
 
 	spin_lock(&event_queue->lock);
 	list_add_tail(&event->link, &event_queue->list);
@@ -84,22 +85,26 @@ int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const 
 	return ret;
 }
 */
-struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_ms)
+struct event *event_wait(struct event_queue *event_queue,
+			 unsigned long timeout_ms)
 {
 	int ret;
 
 	ret = wait_event_interruptible_timeout(event_queue->wq_head,
-		!list_empty(&event_queue->list), timeout_ms);
+					       !list_empty(&event_queue->list),
+					       timeout_ms);
 
 	if (ret > 0) {
 		struct event *event;
 
 		spin_lock(&event_queue->lock);
-		event = list_first_entry(&event_queue->list, struct event, link);
+		event = list_first_entry(&event_queue->list, struct event,
+					 link);
 		list_del(&event->link);
 		spin_unlock(&event_queue->lock);
 
-		pr_debug("Event received: time=%lld code=%d\n", event->time, event->code);
+		pr_debug("Event received: time=%lld code=%d\n", event->time,
+			 event->code);
 		return event;
 	}
 	if (ret == 0) {
@@ -114,4 +119,3 @@ struct event *event_wait(struct event_queue *event_queue, unsigned long timeout_
 	pr_err("Failed to wait event. errno=%d\n", abs(ret));
 	return ERR_PTR(ret);
 }
-

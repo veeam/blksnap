@@ -21,7 +21,7 @@ void bdev_filter_read_lock(struct block_device *bdev);
 void bdev_filter_read_unlock(struct block_device *bdev);
 
 int bdev_filter_add(struct block_device *bdev, const char *name,
-			const struct bdev_filter_operations *fops, void *ctx);
+		    const struct bdev_filter_operations *fops, void *ctx);
 int bdev_filter_del(struct block_device *bdev, const char *name);
 
 void *bdev_filter_get_ctx(struct block_device *bdev, const char *name);
