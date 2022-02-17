@@ -17,24 +17,27 @@ struct diff_io;
 #define CHUNK_ST_BUFFER_READY (1 << 2)
 /* The data of the chunk was wrote to the difference storage */
 #define CHUNK_ST_STORE_READY (1 << 3)
-/* */
+/* In the process of reading data from the original block device.*/
 #define CHUNK_ST_LOADING (1 << 4)
-/* */
+/* In the process of saving data to the difference storage.*/
 #define CHUNK_ST_STORING (1 << 5)
 
 /**
- * struct chunk - Elementary IO block.
- * @link:
- * 	?
+ * struct chunk - Elementary copy block.
+ *
+ * @cache_link:
+ *	If the data of the chunk has been changed or has just been read,
+ *      then the chunk gets into a temporary buffer.
  * @diff_area:
- * 	?
+ *      The struct diff_area describes the storage of changes specifically
+ *      for a specific device.
  * @number:
  * 	Sequential number of chunk.
  * @sector_count:
  * 	Numbers of sectors in current chunk this is especially true for the
  * 	last piece.
  * @state:
- * 	?
+ *	Defines the state of the chunk. May contain CHUNK_ST_* bits.
  * @lock:
  * 	Syncs access to the chunks fields: state, diff_buffer and diff_region.
  * 	The semaphore is blocked for writing if there is no actual data
@@ -52,6 +55,9 @@ struct diff_io;
  * @diff_region:
  * 	Pointer to &struct diff_region. Describes a copy of the chunk data
  * 	on the difference storage.
+ * diff_io:
+ *	The struct diff_io provides I/O operations for a chunk.
+ *
  * This structure describes the block of data that the module operates with
  * when executing the COW algorithm and when performing IO to snapshot images.
  */
