@@ -46,7 +46,7 @@ std::string Uuid::ToStr() const
 {
     char str[UUID_STR_LEN];
     uuid_unparse(m_uuid, str);
-    return str;
+    return std::string(str);
 }
 
 void Uuid::Set(uuid_t other)
