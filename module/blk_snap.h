@@ -34,10 +34,10 @@ enum blk_snap_ioctl {
 	blk_snap_ioctl_snapshot_collect_images,
 	blk_snap_ioctl_snapshot_wait_event,
 	blk_snap_ioctl_end,
-	/*
-	 * Additional controls for any standalone modification
-	 */
 #ifdef BLK_SNAP_MODIFICATION
+        /*
+         * Additional controls for any standalone modification
+         */
 	blk_snap_ioctl_mod = IOCTL_MOD,
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
 	blk_snap_ioctl_get_sector_state,
@@ -55,7 +55,7 @@ enum blk_snap_ioctl {
  * @revision:
  *	Revision number.
  * @build:
- *	Build number.
+ *	Build number. Should be zero.
  */
 struct blk_snap_version {
 	__u16 major;
