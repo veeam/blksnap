@@ -820,9 +820,10 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
             for (const std::shared_ptr<SCheckerContext>& ptrCtx : checkerCtxs)
             {
                 AlignedBuffer<char> buf(SECTOR_SIZE);
+                memset(buf.Data(), 0, buf.Size());
                 strncpy(buf.Data(),
                         "To check the verification algorithm, we explicitly write data to the snapshot image.",
-                        buf.Size());
+                        buf.Size()-1);
 
                 std::lock_guard<std::mutex> guard(ptrCtx->lock);
                 ptrCtx->ptrBdev->Write(buf.Data(), buf.Size(), 0);
