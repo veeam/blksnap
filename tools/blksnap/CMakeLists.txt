@@ -30,6 +30,8 @@ if (NOT LIBUUID_LIBRARY)
     message(FATAL_ERROR "libuuid not found. please install uuid-dev package.")
 endif ()
 
+include_directories(${CMAKE_SOURCE_DIR}/../../include)
+
 set(SOURCE_FILES main.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})

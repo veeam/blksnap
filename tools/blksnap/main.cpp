@@ -35,8 +35,7 @@
 #include <unistd.h>
 #include <uuid/uuid.h>
 #include <vector>
-
-#include "../../include/blk_snap.h"
+#include <blksnap/blk_snap.h>
 
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
