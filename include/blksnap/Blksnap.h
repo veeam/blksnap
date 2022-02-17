@@ -20,78 +20,76 @@
  * flexibility. Uses structures that are directly passed to the kernel module.
  */
 
-#include <vector>
 #include <string>
 #include <uuid/uuid.h>
+#include <vector>
 
 #ifndef BLK_SNAP_MODIFICATION
 /* Allow to use additional IOCTL from module modification */
-#define BLK_SNAP_MODIFICATION
+#    define BLK_SNAP_MODIFICATION
 /* Allow to get any sector state. Can be used only for debug purpose */
-#define BLK_SNAP_DEBUG_SECTOR_STATE
+#    define BLK_SNAP_DEBUG_SECTOR_STATE
 #endif
 #include "blk_snap.h"
 
 #ifndef SECTOR_SHIFT
-#define SECTOR_SHIFT 9
+#    define SECTOR_SHIFT 9
 #endif
 #ifndef SECTOR_SIZE
-#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+#    define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
 
-namespace blksnap {
-
-struct SBlksnapEventLowFreeSpace
+namespace blksnap
 {
-    unsigned long long requestedSectors;
-};
-
-struct SBlksnapEventCorrupted
-{
-    struct blk_snap_dev_t origDevId;
-    int errorCode;
-};
-
-struct SBlksnapEvent
-{
-    unsigned int code;
-    long long time;
-    union {
-        SBlksnapEventLowFreeSpace lowFreeSpace;
-        SBlksnapEventCorrupted corrupted;
+    struct SBlksnapEventLowFreeSpace
+    {
+        unsigned long long requestedSectors;
     };
-};
 
-class CBlksnap
-{
-public:
-    CBlksnap();
-    ~CBlksnap();
+    struct SBlksnapEventCorrupted
+    {
+        struct blk_snap_dev_t origDevId;
+        int errorCode;
+    };
 
-    void Version(struct blk_snap_version &version);
-    void CollectTrackers(std::vector<struct blk_snap_cbt_info> &cbtInfoVector);
-    void ReadCbtMap(struct blk_snap_dev_t dev_id,
-                    unsigned int offset, unsigned int length, uint8_t *buff);
+    struct SBlksnapEvent
+    {
+        unsigned int code;
+        long long time;
+        union
+        {
+            SBlksnapEventLowFreeSpace lowFreeSpace;
+            SBlksnapEventCorrupted corrupted;
+        };
+    };
 
-    void Create(const std::vector<struct blk_snap_dev_t> &devices, uuid_t &id);
-    void Destroy(const uuid_t &id);
-    void Collect(const uuid_t &id, std::vector<struct blk_snap_image_info> &images);
-    void AppendDiffStorage(const uuid_t &id, const struct blk_snap_dev_t &dev_id,
-                           const std::vector<struct blk_snap_block_range> &ranges);
-    void Take(const uuid_t &id);
-    bool WaitEvent(const uuid_t &id, unsigned int timeoutMs, SBlksnapEvent &ev);
+    class CBlksnap
+    {
+    public:
+        CBlksnap();
+        ~CBlksnap();
+
+        void Version(struct blk_snap_version& version);
+        void CollectTrackers(std::vector<struct blk_snap_cbt_info>& cbtInfoVector);
+        void ReadCbtMap(struct blk_snap_dev_t dev_id, unsigned int offset, unsigned int length, uint8_t* buff);
+
+        void Create(const std::vector<struct blk_snap_dev_t>& devices, uuid_t& id);
+        void Destroy(const uuid_t& id);
+        void Collect(const uuid_t& id, std::vector<struct blk_snap_image_info>& images);
+        void AppendDiffStorage(const uuid_t& id, const struct blk_snap_dev_t& dev_id,
+                               const std::vector<struct blk_snap_block_range>& ranges);
+        void Take(const uuid_t& id);
+        bool WaitEvent(const uuid_t& id, unsigned int timeoutMs, SBlksnapEvent& ev);
 
 #ifdef BLK_SNAP_MODIFICATION
-    /* Additional functional */
-    bool Modification(struct blk_snap_mod &mod);
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-    void GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset,
-                        struct blk_snap_sector_state &state);
+        /* Additional functional */
+        bool Modification(struct blk_snap_mod& mod);
+#    ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+        void GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset, struct blk_snap_sector_state& state);
+#    endif
 #endif
-#endif
-private:
-    int m_fd;
-
-};
+    private:
+        int m_fd;
+    };
 
 }

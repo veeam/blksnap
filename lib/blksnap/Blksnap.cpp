@@ -15,16 +15,16 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
-#include <errno.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <system_error>
+ */
 #include <blksnap/Blksnap.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <system_error>
+#include <unistd.h>
 
 static const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
 
@@ -46,16 +46,17 @@ CBlksnap::~CBlksnap()
         ::close(m_fd);
 }
 
-void CBlksnap::Version(struct blk_snap_version &version)
+void CBlksnap::Version(struct blk_snap_version& version)
 {
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_VERSION, &version))
         throw std::system_error(errno, std::generic_category(), "Failed to get version.");
 }
 
 #ifdef BLK_SNAP_MODIFICATION
-bool CBlksnap::Modification(struct blk_snap_mod &mod)
+bool CBlksnap::Modification(struct blk_snap_mod& mod)
 {
-    if (::ioctl(m_fd, IOCTL_BLK_SNAP_MOD, &mod)) {
+    if (::ioctl(m_fd, IOCTL_BLK_SNAP_MOD, &mod))
+    {
         if (errno == -ENOTTY)
             return false;
         throw std::system_error(errno, std::generic_category(), "Failed to get modification.");
@@ -64,42 +65,36 @@ bool CBlksnap::Modification(struct blk_snap_mod &mod)
 }
 #endif
 
-void CBlksnap::CollectTrackers(std::vector<struct blk_snap_cbt_info> &cbtInfoVector)
+void CBlksnap::CollectTrackers(std::vector<struct blk_snap_cbt_info>& cbtInfoVector)
 {
     struct blk_snap_tracker_collect param = {0};
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
         throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to collect block devices with change tracking.");
+                                "[TBD]Failed to collect block devices with change tracking.");
 
     cbtInfoVector.resize(param.count);
     param.cbt_info_array = cbtInfoVector.data();
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
         throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to collect block devices with change tracking.");
+                                "[TBD]Failed to collect block devices with change tracking.");
 }
 
-void CBlksnap::ReadCbtMap(struct blk_snap_dev_t dev_id,
-                          unsigned int offset, unsigned int length, uint8_t *buff)
+void CBlksnap::ReadCbtMap(struct blk_snap_dev_t dev_id, unsigned int offset, unsigned int length, uint8_t* buff)
 {
-    struct blk_snap_tracker_read_cbt_bitmap param = {
-        .dev_id = dev_id,
-        .offset = offset,
-        .length = length,
-        .buff = buff
-    };
+    struct blk_snap_tracker_read_cbt_bitmap param
+      = {.dev_id = dev_id, .offset = offset, .length = length, .buff = buff};
 
     int ret = ::ioctl(m_fd, IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP, &param);
     if (ret < 0)
         throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to read difference map from change tracking.");
+                                "[TBD]Failed to read difference map from change tracking.");
     if (ret != length)
-        throw std::runtime_error(
-            "[TBD]Cannot read required bytes of difference map from change tracking.");
+        throw std::runtime_error("[TBD]Cannot read required bytes of difference map from change tracking.");
 }
 
-void CBlksnap::Create(const std::vector<struct blk_snap_dev_t> &devices, uuid_t &id)
+void CBlksnap::Create(const std::vector<struct blk_snap_dev_t>& devices, uuid_t& id)
 {
     struct blk_snap_snapshot_create param = {0};
 
@@ -108,24 +103,22 @@ void CBlksnap::Create(const std::vector<struct blk_snap_dev_t> &devices, uuid_t 
     param.dev_id_array = localDevices.data();
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_CREATE, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to create snapshot object.");
+        throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create snapshot object.");
 
     uuid_copy(id, param.id);
 }
 
-void CBlksnap::Destroy(const uuid_t &id)
+void CBlksnap::Destroy(const uuid_t& id)
 {
     struct blk_snap_snapshot_destroy param = {0};
 
     uuid_copy(param.id, id);
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to destroy snapshot.");
+        throw std::system_error(errno, std::generic_category(), "[TBD]Failed to destroy snapshot.");
 }
 
-void CBlksnap::Collect(const uuid_t &id, std::vector<blk_snap_image_info> &images)
+void CBlksnap::Collect(const uuid_t& id, std::vector<blk_snap_image_info>& images)
 {
     struct blk_snap_snapshot_collect_images param = {0};
 
@@ -133,7 +126,7 @@ void CBlksnap::Collect(const uuid_t &id, std::vector<blk_snap_image_info> &image
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
         throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to get device collection for snapshot images.");
+                                "[TBD]Failed to get device collection for snapshot images.");
 
     if (param.count == 0)
         return;
@@ -143,12 +136,11 @@ void CBlksnap::Collect(const uuid_t &id, std::vector<blk_snap_image_info> &image
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
         throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to get device collection for snapshot images.");
-
+                                "[TBD]Failed to get device collection for snapshot images.");
 }
 
-void CBlksnap::AppendDiffStorage(const uuid_t &id, const struct blk_snap_dev_t &dev_id,
-                                 const std::vector<struct blk_snap_block_range> &ranges)
+void CBlksnap::AppendDiffStorage(const uuid_t& id, const struct blk_snap_dev_t& dev_id,
+                                 const std::vector<struct blk_snap_block_range>& ranges)
 {
     struct blk_snap_snapshot_append_storage param = {0};
 
@@ -159,73 +151,65 @@ void CBlksnap::AppendDiffStorage(const uuid_t &id, const struct blk_snap_dev_t &
     param.ranges = localRanges.data();
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to append storage for snapshot.");
+        throw std::system_error(errno, std::generic_category(), "[TBD]Failed to append storage for snapshot.");
 }
 
-void CBlksnap::Take(const uuid_t &id)
+void CBlksnap::Take(const uuid_t& id)
 {
     struct blk_snap_snapshot_take param;
 
     uuid_copy(param.id, id);
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to take snapshot.");
+        throw std::system_error(errno, std::generic_category(), "[TBD]Failed to take snapshot.");
 }
 
-bool CBlksnap::WaitEvent(const uuid_t &id, unsigned int timeoutMs, SBlksnapEvent &ev)
+bool CBlksnap::WaitEvent(const uuid_t& id, unsigned int timeoutMs, SBlksnapEvent& ev)
 {
     struct blk_snap_snapshot_event param;
 
     uuid_copy(param.id, id);
     param.timeout_ms = timeoutMs;
 
-    if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param)) {
+    if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param))
+    {
         if ((errno == ENOENT) || (errno == EINTR))
             return false;
         else
-            throw std::system_error(errno, std::generic_category(),
-                "[TBD]Failed to get event from snapshot.");
+            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get event from snapshot.");
     }
     ev.code = param.code;
     ev.time = param.time_label;
 
-    switch (param.code) {
-        case blk_snap_event_code_low_free_space:
-        {
-            struct blk_snap_event_low_free_space *lowFreeSpace =
-                (struct blk_snap_event_low_free_space*)(param.data);
+    switch (param.code)
+    {
+    case blk_snap_event_code_low_free_space:
+    {
+        struct blk_snap_event_low_free_space* lowFreeSpace = (struct blk_snap_event_low_free_space*)(param.data);
 
-            ev.lowFreeSpace.requestedSectors = lowFreeSpace->requested_nr_sect;
-            break;
-        }
-        case blk_snap_event_code_corrupted:
-        {
-            struct blk_snap_event_corrupted *corrupted =
-                (struct blk_snap_event_corrupted*)(param.data);
+        ev.lowFreeSpace.requestedSectors = lowFreeSpace->requested_nr_sect;
+        break;
+    }
+    case blk_snap_event_code_corrupted:
+    {
+        struct blk_snap_event_corrupted* corrupted = (struct blk_snap_event_corrupted*)(param.data);
 
-            ev.corrupted.origDevId = corrupted->orig_dev_id;
-            ev.corrupted.errorCode = corrupted->err_code;
-            break;
-        }
+        ev.corrupted.origDevId = corrupted->orig_dev_id;
+        ev.corrupted.errorCode = corrupted->err_code;
+        break;
+    }
     }
     return true;
 }
 
 #if defined(BLK_SNAP_MODIFICATION) && defined(BLK_SNAP_DEBUG_SECTOR_STATE)
-void CBlksnap::GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset,
-                              struct blk_snap_sector_state &state)
+void CBlksnap::GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset, struct blk_snap_sector_state& state)
 {
-    struct blk_snap_get_sector_state param = {
-        .image_dev_id = image_dev_id,
-        .sector = static_cast<__u64>(offset >> SECTOR_SHIFT),
-        .state = {0}
-    };
+    struct blk_snap_get_sector_state param
+      = {.image_dev_id = image_dev_id, .sector = static_cast<__u64>(offset >> SECTOR_SHIFT), .state = {0}};
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_GET_SECTOR_STATE, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "[TBD]Failed to get sectors state.");
+        throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get sectors state.");
 
     state = param.state;
 }
