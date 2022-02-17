@@ -41,6 +41,4 @@ private:
 private:
     boost::filesystem::path m_image;
     boost::filesystem::path m_loopDevice;
-
 };
-

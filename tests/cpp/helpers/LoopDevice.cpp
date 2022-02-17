@@ -18,8 +18,8 @@
  */
 #include "LoopDevice.h"
 
-#include <boost/process.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/process.hpp>
 #include <iostream>
 
 #include "Uuid.h"
@@ -41,18 +41,18 @@ LoopDevice::Ptr LoopDevice::Create(boost::filesystem::path directory, size_t siz
     try
     {
         fd = open(image.c_str(), O_CREAT | O_EXCL | O_RDWR, S_IRWXU);
-        if ( fd == -1 )
+        if (fd == -1)
             throw std::system_error(errno, std::generic_category(), "Failed to create loop image file");
 
-        if ( ::fallocate64(fd, 0, 0, size) )
+        if (::fallocate64(fd, 0, 0, size))
             throw std::system_error(errno, std::generic_category(), "Failed to allocate loop image file");
 
         ::close(fd);
         return LoopDevice::Ptr(new LoopDevice(image, LoopSetup(image)));
     }
-    catch ( std::exception& ex )
+    catch (std::exception& ex)
     {
-        if ( fd != -1 )
+        if (fd != -1)
             ::close(fd);
 
         boost::filesystem::remove(image);
@@ -71,7 +71,7 @@ void LoopDevice::LoopDetach(boost::filesystem::path path)
     std::string loopPath((std::istreambuf_iterator<char>(out)), std::istreambuf_iterator<char>());
     std::string error((std::istreambuf_iterator<char>(err)), std::istreambuf_iterator<char>());
 
-    if ( res != 0 )
+    if (res != 0)
         throw std::runtime_error(std::string("Failed to detach loop device: ") + error);
 }
 
@@ -86,7 +86,7 @@ boost::filesystem::path LoopDevice::LoopSetup(boost::filesystem::path path)
     std::string loopPath((std::istreambuf_iterator<char>(out)), std::istreambuf_iterator<char>());
     std::string error((std::istreambuf_iterator<char>(err)), std::istreambuf_iterator<char>());
 
-    if ( res != 0 )
+    if (res != 0)
         throw std::runtime_error(std::string("Failed to setup loop device: \n") + error);
 
     boost::trim(loopPath);
@@ -104,7 +104,7 @@ void LoopDevice::Mkfs(const std::string fsType)
     std::string loopPath((std::istreambuf_iterator<char>(out)), std::istreambuf_iterator<char>());
     std::string error((std::istreambuf_iterator<char>(err)), std::istreambuf_iterator<char>());
 
-    if ( res != 0 )
+    if (res != 0)
         throw std::runtime_error(std::string("Failed to mkfs in loop device: \n") + error);
 }
 
@@ -115,7 +115,7 @@ LoopDevice::~LoopDevice()
         LoopDetach(m_loopDevice);
         boost::filesystem::remove(m_image);
     }
-    catch ( std::exception& ex )
+    catch (std::exception& ex)
     {
         std::cerr << ex.what() << std::endl;
     }

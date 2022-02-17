@@ -16,15 +16,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <linux/fs.h>
-
-#include <system_error>
 #include "BlockDevice.h"
 
-CBlockDevice::CBlockDevice(const std::string &name, const bool isSync)
+#include <fcntl.h>
+#include <linux/fs.h>
+#include <sys/ioctl.h>
+#include <system_error>
+#include <unistd.h>
+
+CBlockDevice::CBlockDevice(const std::string& name, const bool isSync)
     : m_name(name)
     , m_fd(0)
 {
@@ -32,19 +32,19 @@ CBlockDevice::CBlockDevice(const std::string &name, const bool isSync)
 
     m_fd = ::open(m_name.c_str(), O_RDWR | O_DIRECT | flags);
     if (m_fd < 0)
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to open file '" + m_name + "'.");
+        throw std::system_error(errno, std::generic_category(), "Failed to open file '" + m_name + "'.");
 };
 
 CBlockDevice::~CBlockDevice()
 {
-    if (m_fd) {
+    if (m_fd)
+    {
         ::close(m_fd);
         m_fd = 0;
     }
 };
 
-void CBlockDevice::Read(void *buf, size_t count, off_t offset)
+void CBlockDevice::Read(void* buf, size_t count, off_t offset)
 {
     ssize_t ret = ::pread(m_fd, buf, count, offset);
     if (ret < 0)
@@ -53,7 +53,7 @@ void CBlockDevice::Read(void *buf, size_t count, off_t offset)
         throw std::runtime_error("Reading outside the boundaries of a block device");
 };
 
-void CBlockDevice::Write(const void *buf, size_t count, off_t offset)
+void CBlockDevice::Write(const void* buf, size_t count, off_t offset)
 {
     ssize_t ret = ::pwrite(m_fd, buf, count, offset);
     if (ret < 0)
@@ -67,8 +67,7 @@ off_t CBlockDevice::Size()
     off_t sz;
 
     if (::ioctl(m_fd, BLKGETSIZE64, &sz) == -1)
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to get block device size");
+        throw std::system_error(errno, std::generic_category(), "Failed to get block device size");
 
     return sz;
 };

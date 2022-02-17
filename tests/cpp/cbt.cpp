@@ -16,34 +16,33 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <iostream>
-#include <blksnap/Session.h>
 #include <blksnap/Cbt.h>
-
+#include <blksnap/Session.h>
 #include <boost/program_options.hpp>
+#include <iostream>
+
 namespace po = boost::program_options;
 
 #ifndef SECTOR_SHIFT
-#define SECTOR_SHIFT 9
+#    define SECTOR_SHIFT 9
 #endif
 #ifndef SECTOR_SIZE
-#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+#    define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
 typedef unsigned long long sector_t;
 
-
-void Main(int argc, char *argv[])
+void Main(int argc, char* argv[])
 {
     std::runtime_error("It's not implemented yet.");
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     try
     {
         Main(argc, argv);
     }
-    catch(std::exception& ex)
+    catch (std::exception& ex)
     {
         std::cerr << ex.what() << std::endl;
         return 1;

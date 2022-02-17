@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "Uuid.h"
+
 #include <iostream>
 #include <sstream>
 
@@ -34,7 +35,6 @@ Uuid::Uuid(const Uuid& other) noexcept
 {
     uuid_copy(m_uuid, other.m_uuid);
 }
-
 
 Uuid& Uuid::operator=(const Uuid& other) noexcept
 {
@@ -78,7 +78,6 @@ Uuid Uuid::GenerateRandom()
 
 Uuid Uuid::Parse(const std::string& str)
 {
-
     uuid_t uuid;
     if (uuid_parse(str.c_str(), uuid) != 0)
     {

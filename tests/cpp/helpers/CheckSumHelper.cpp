@@ -16,9 +16,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "SHA256Calc.h"
-
 #include <stdexcept>
+
+#include "SHA256Calc.h"
 
 SHA256Calc::SHA256Calc()
 {
@@ -27,8 +27,7 @@ SHA256Calc::SHA256Calc()
 }
 
 SHA256Calc::~SHA256Calc()
-{
-}
+{}
 
 void SHA256Calc::Final(unsigned char* sha_hash)
 {

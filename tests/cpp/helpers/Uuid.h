@@ -18,13 +18,12 @@
  */
 #pragma once
 
-#include <uuid/uuid.h>
-
 #include <string>
+#include <uuid/uuid.h>
 
 class Uuid
 {
-  public:
+public:
     Uuid() noexcept;
     explicit Uuid(uuid_t uuid) noexcept;
     Uuid(const Uuid& other) noexcept;
@@ -47,7 +46,7 @@ class Uuid
     static Uuid Parse(const std::string& str);
     static Uuid FromBuffer(const unsigned char* buf);
 
-  private:
+private:
     uuid_t m_uuid;
 };
 
@@ -55,4 +54,3 @@ static inline std::ostream& operator<<(std::ostream& os, const Uuid& uuid)
 {
     return os << uuid.ToStr();
 }
-

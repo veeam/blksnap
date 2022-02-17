@@ -17,11 +17,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "Log.h"
+
+#include <atomic>
 #include <ctime>
 #include <thread>
-#include <atomic>
 
-void CLog::Open(const std::string &filename)
+void CLog::Open(const std::string& filename)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
@@ -38,7 +39,7 @@ void CLog::Info(const char* message)
         m_out << std::clock() << " " << std::this_thread::get_id() << " " << message << std::endl;
 };
 
-void CLog::Info(const std::string &message)
+void CLog::Info(const std::string& message)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
@@ -47,7 +48,7 @@ void CLog::Info(const std::string &message)
         m_out << std::clock() << " " << std::this_thread::get_id() << " " << message << std::endl;
 };
 
-void CLog::Info(const std::stringstream &ss)
+void CLog::Info(const std::stringstream& ss)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
@@ -65,7 +66,7 @@ void CLog::Err(const char* message)
         m_out << std::clock() << " " << std::this_thread::get_id() << " ERR " << message << std::endl;
 };
 
-void CLog::Err(const std::string &message)
+void CLog::Err(const std::string& message)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
@@ -74,7 +75,7 @@ void CLog::Err(const std::string &message)
         m_out << std::clock() << " " << std::this_thread::get_id() << " ERR " << message << std::endl;
 };
 
-void CLog::Err(const  std::stringstream &ss)
+void CLog::Err(const std::stringstream& ss)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
@@ -91,7 +92,7 @@ void CLog::Detail(const char* message)
         m_out << std::clock() << " " << std::this_thread::get_id() << " " << message << std::endl;
 };
 
-void CLog::Detail(const std::string &message)
+void CLog::Detail(const std::string& message)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
@@ -99,12 +100,12 @@ void CLog::Detail(const std::string &message)
         m_out << std::clock() << " " << std::this_thread::get_id() << " " << message << std::endl;
 };
 
-void CLog::Detail(const std::stringstream &ss)
+void CLog::Detail(const std::stringstream& ss)
 {
     std::lock_guard<std::mutex> guard(m_lock);
 
     if (m_isOpen)
-        m_out << std::clock() << " " << std::this_thread::get_id() << " " <<    ss.str() << std::endl;
+        m_out << std::clock() << " " << std::this_thread::get_id() << " " << ss.str() << std::endl;
 };
 
 CLog logger;

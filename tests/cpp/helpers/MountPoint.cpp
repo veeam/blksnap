@@ -34,7 +34,7 @@ MountPoint::~MountPoint()
     {
         UnMount();
     }
-    catch ( std::exception& ex )
+    catch (std::exception& ex)
     {
         std::cerr << "Failed to unmount " << m_device << ". Mount point " << m_mountPoint << std::endl;
         std::cerr << ex.what() << std::endl;
@@ -65,7 +65,7 @@ void MountPoint::Mount()
     std::string loopPath((std::istreambuf_iterator<char>(out)), std::istreambuf_iterator<char>());
     std::string error((std::istreambuf_iterator<char>(err)), std::istreambuf_iterator<char>());
 
-    if ( res != 0 )
+    if (res != 0)
         throw std::runtime_error(std::string("Failed to mount device: ") + error);
 }
 
@@ -80,6 +80,6 @@ void MountPoint::UnMount()
     std::string loopPath((std::istreambuf_iterator<char>(out)), std::istreambuf_iterator<char>());
     std::string error((std::istreambuf_iterator<char>(err)), std::istreambuf_iterator<char>());
 
-    if ( res != 0 )
+    if (res != 0)
         throw std::runtime_error(std::string("Failed to umount device: ") + error);
 }

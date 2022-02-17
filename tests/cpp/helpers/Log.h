@@ -16,34 +16,33 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <string>
-#include <sstream>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <mutex>
+#include <sstream>
+#include <string>
 
 class CLog
 {
 public:
     CLog()
-        : m_isOpen(false)
-    {};
-    ~CLog()
-    {};
+        : m_isOpen(false){};
+    ~CLog(){};
 
-    void Open(const std::string &filename);
+    void Open(const std::string& filename);
 
     void Info(const char* message);
-    void Info(const std::string &message);
-    void Info(const std::stringstream &ss);
+    void Info(const std::string& message);
+    void Info(const std::stringstream& ss);
 
     void Err(const char* message);
-    void Err(const std::string &message);
-    void Err(const std::stringstream &ss);
+    void Err(const std::string& message);
+    void Err(const std::stringstream& ss);
 
     void Detail(const char* message);
-    void Detail(const std::string &message);
-    void Detail(const std::stringstream &ss);
+    void Detail(const std::string& message);
+    void Detail(const std::stringstream& ss);
+
 private:
     std::mutex m_lock;
     bool m_isOpen;

@@ -31,20 +31,20 @@ std::string FileHelper::CalcHash(boost::filesystem::path file)
     try
     {
         fd = ::open(file.c_str(), O_RDONLY);
-        if ( fd == -1 )
+        if (fd == -1)
             throw std::system_error(errno, std::generic_category(),
                                     std::string("Failed to open file: ") + file.string());
 
         SHA256Calc sha;
         char BUFFER[BUFFER_SIZE];
         int read = 0;
-        while ( true )
+        while (true)
         {
             read = ::read(fd, BUFFER, BUFFER_SIZE);
-            if ( read == 0 )
+            if (read == 0)
                 break;
 
-            if ( read == -1 )
+            if (read == -1)
                 throw std::system_error(errno, std::generic_category(),
                                         std::string("Failed to read data from file: ") + file.string());
 
@@ -60,9 +60,9 @@ std::string FileHelper::CalcHash(boost::filesystem::path file)
         ::close(fd);
         return hex;
     }
-    catch ( std::exception& ex )
+    catch (std::exception& ex)
     {
-        if ( fd != -1 )
+        if (fd != -1)
             ::close(fd);
 
         throw;
@@ -75,17 +75,17 @@ void FileHelper::Create(boost::filesystem::path file, size_t size)
     try
     {
         fd = open(file.c_str(), O_CREAT | O_EXCL | O_RDWR, S_IRWXU);
-        if ( fd == -1 )
+        if (fd == -1)
             throw std::system_error(errno, std::generic_category(), "Failed to create file");
 
-        if ( ::fallocate64(fd, 0, 0, size) )
+        if (::fallocate64(fd, 0, 0, size))
             throw std::system_error(errno, std::generic_category(), "Failed to allocate file space");
 
         ::close(fd);
     }
-    catch ( std::exception& ex )
+    catch (std::exception& ex)
     {
-        if ( fd != -1 )
+        if (fd != -1)
             ::close(fd);
 
         throw;
@@ -99,12 +99,12 @@ void FileHelper::FillRandom(boost::filesystem::path file)
     try
     {
         fd = ::open(file.c_str(), O_RDWR);
-        if ( fd == -1 )
+        if (fd == -1)
             throw std::system_error(errno, std::generic_category(),
                                     std::string("Failed to open file: ") + file.string());
 
         fdRandom = ::open("/dev/urandom", O_RDONLY);
-        if ( fdRandom == -1 )
+        if (fdRandom == -1)
             throw std::system_error(errno, std::generic_category(), "Failed to open file: /dev/urandom");
 
         boost::uintmax_t file_size = boost::filesystem::file_size(file);
@@ -119,18 +119,18 @@ void FileHelper::FillRandom(boost::filesystem::path file)
             if (::write(fd, BUFFER, BUFFER_SIZE) != BUFFER_SIZE)
                 throw std::system_error(errno, std::generic_category(), "Failed to write random data");
 
-            filled +=BUFFER_SIZE;
+            filled += BUFFER_SIZE;
         }
 
         ::close(fd);
         ::close(fdRandom);
     }
-    catch ( std::exception& ex )
+    catch (std::exception& ex)
     {
-        if ( fd != -1 )
+        if (fd != -1)
             ::close(fd);
 
-        if ( fdRandom != -1 )
+        if (fdRandom != -1)
             ::close(fd);
 
         throw;

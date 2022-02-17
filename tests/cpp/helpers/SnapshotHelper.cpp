@@ -41,9 +41,10 @@ int SnapshotHelper::GetSnapshotDevice(BlkSnapCtx::Ptr ptrCtx, boost::filesystem:
             throw std::system_error(errno, std::generic_category(), "Failed to collect snapshot images");
     }
 
-    for (size_t i = 0; i < snapSize ; i++)
+    for (size_t i = 0; i < snapSize; i++)
     {
-        if ((images_info[i].original_dev_id.minor == minor(dev)) && (images_info[i].original_dev_id.major == major(dev)))
+        if ((images_info[i].original_dev_id.minor == minor(dev))
+            && (images_info[i].original_dev_id.major == major(dev)))
             return images_info[i].snapshot_dev_id.minor;
     }
 

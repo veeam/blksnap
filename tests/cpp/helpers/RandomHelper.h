@@ -16,9 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <sys/types.h>
+
 class CRandomHelper
 {
 public:
-	static void GenerateBuffer(void* buffer, size_t size);
-	static int  GenerateInt();
+    static void GenerateBuffer(void* buffer, size_t size);
+    static int GenerateInt();
 };
