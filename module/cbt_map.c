@@ -72,9 +72,6 @@ static int cbt_map_allocate(struct cbt_map *cbt_map)
 	generate_random_uuid(cbt_map->generation_id.b);
 	cbt_map->is_corrupted = false;
 
-	cbt_map->state_changed_sectors = 0;
-	cbt_map->state_dirty_sectors = 0;
-
 	return 0;
 }
 
@@ -220,10 +217,9 @@ int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
 	}
 	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
-	if (res)
+	if (unlikely(res))
 		cbt_map->is_corrupted = true;
-	else
-		cbt_map->state_changed_sectors += sector_cnt;
+
 	spin_unlock(&cbt_map->locker);
 
 	return res;
@@ -245,7 +241,6 @@ int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start,
 		res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 				   (u8)cbt_map->snap_number_previous,
 				   cbt_map->read_map);
-	cbt_map->state_dirty_sectors += sector_cnt;
 	spin_unlock(&cbt_map->locker);
 
 	return res;
