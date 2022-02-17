@@ -49,7 +49,6 @@ namespace
 std::string blksnap::Version()
 {
     struct blk_snap_version version;
-    struct blk_snap_mod mod;
 
     CBlksnap blksnap;
     blksnap.Version(version);
@@ -58,6 +57,8 @@ std::string blksnap::Version()
     ss << version.major << "." << version.minor << "." << version.revision << "." << version.build;
 
 #ifdef BLK_SNAP_MODIFICATION
+    struct blk_snap_mod mod;
+
     if (blksnap.Modification(mod))
     {
         if (mod.compatibility_flags)
