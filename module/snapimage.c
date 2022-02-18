@@ -329,11 +329,14 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	pr_info("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
-	//disk->flags |= GENHD_FL_SUPPRESS_PARTITION_INFO;
-	//disk->flags |= GENHD_FL_EXT_DEVT;
-	disk->flags |= GENHD_FL_NO_PART_SCAN;
 	//disk->flags |= GENHD_FL_HIDDEN;
 	//disk->flags |= GENHD_FL_REMOVABLE;
+#ifdef GENHD_FL_NO_PART_SCAN
+	disk->flags |= GENHD_FL_NO_PART_SCAN;
+#else
+	disk->flags |= GENHD_FL_NO_PART;
+#endif
+
 
 	disk->major = _major;
 	disk->first_minor = minor;
