@@ -9,18 +9,40 @@ struct diff_area;
 struct diff_region;
 struct diff_io;
 
-/* An error occurred while processing the chunks data */
-#define CHUNK_ST_FAILED (1 << 0)
-/* The data on the original device and the snapshot image differ in this chunk */
-#define CHUNK_ST_DIRTY (1 << 1)
-/* The data of the chunk is ready to be read from the RAM buffer */
-#define CHUNK_ST_BUFFER_READY (1 << 2)
-/* The data of the chunk was wrote to the difference storage */
-#define CHUNK_ST_STORE_READY (1 << 3)
-/* In the process of reading data from the original block device.*/
-#define CHUNK_ST_LOADING (1 << 4)
-/* In the process of saving data to the difference storage.*/
-#define CHUNK_ST_STORING (1 << 5)
+/**
+ * enum chunk_st - Possible states for a chunk.
+ *
+ * @CHUNK_ST_FAILED:
+ *	An error occurred while processing the chunks data.
+ * @CHUNK_ST_DIRTY:
+ *	The data on the original device and the snapshot image differ
+ *	in this chunk.
+ * @CHUNK_ST_BUFFER_READY:
+ *	The data of the chunk is ready to be read from the RAM buffer.
+ * @CHUNK_ST_STORE_READY:
+ *	The data of the chunk was wrote to the difference storage.
+ * @CHUNK_ST_LOADING:
+ *	In the process of reading data from the original block device.
+ * @CHUNK_ST_STORING:
+ *	In the process of saving data to the difference storage.
+ *
+ * Chunks live circle.
+ * COW on write to original:
+ *	0 -> LOADING -> BUFFER_READY -> BUFFER_READY | STORING ->
+ *	BUFFER_READY | STORE_READY -> STORE_READY
+ * Write to snapshot image:
+ * 	[TBD] It would be necessary to double-check the diagram
+ *	0 -> LOADING -> BUFFER_READY | DIRTY -> DIRTY | STORING ->
+ *	BUFFER_READY | STORE_READY -> STORE_READY
+ */
+enum chunk_st {
+	CHUNK_ST_FAILED = (1 << 0),
+	CHUNK_ST_DIRTY = (1 << 1),
+	CHUNK_ST_BUFFER_READY = (1 << 2),
+	CHUNK_ST_STORE_READY = (1 << 3),
+	CHUNK_ST_LOADING = (1 << 4),
+	CHUNK_ST_STORING = (1 << 5),
+};
 
 /**
  * struct chunk - Elementary copy block.
@@ -66,8 +88,8 @@ struct chunk {
 	struct diff_area *diff_area;
 
 	unsigned long number;
-	sector_t sector_count;
 	atomic_t state;
+	sector_t sector_count;
 
 	struct semaphore lock;
 
