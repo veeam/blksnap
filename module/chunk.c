@@ -38,7 +38,7 @@ void chunk_store_failed(struct chunk *chunk, int error)
 
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	chunk_diff_buffer_release(chunk);
-	diff_storage_free_store(chunk->diff_region);
+	diff_storage_free_region(chunk->diff_region);
 	chunk->diff_region = NULL;
 
 	up(&chunk->lock);
@@ -64,7 +64,7 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 	if (!chunk->diff_region) {
 		struct diff_region *diff_region;
 
-		diff_region = diff_storage_new_store(
+		diff_region = diff_storage_new_region(
 			diff_area->diff_storage,
 			diff_area_chunk_sectors(diff_area));
 		if (unlikely(IS_ERR(diff_region))) {
@@ -255,7 +255,7 @@ void chunk_free(struct chunk *chunk)
 
 	down(&chunk->lock);
 	chunk_diff_buffer_release(chunk);
-	diff_storage_free_store(chunk->diff_region);
+	diff_storage_free_region(chunk->diff_region);
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	up(&chunk->lock);
 

@@ -77,10 +77,10 @@ static inline void diff_storage_put(struct diff_storage *diff_storage)
 int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 			      struct big_buffer *ranges,
 			      unsigned int range_count);
-struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage,
-					   sector_t count);
+struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
+					    sector_t count);
 
-static inline void diff_storage_free_store(struct diff_region *region)
+static inline void diff_storage_free_region(struct diff_region *region)
 {
 	if (region) {
 		kfree(region);

@@ -258,14 +258,7 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	return 0;
 }
 
-/**
- *
- * !!! TODO redesign needed !!!
- * It is too expensive to allocate such a small portion of data separately.
- * Remove the allocation. Explicitly add to the chunk.
- *
- */
-struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage,
+struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 					   sector_t count)
 {
 	int ret = 0;
@@ -335,7 +328,7 @@ struct diff_region *diff_storage_new_store(struct diff_storage *diff_storage,
 
 	if (ret) {
 		pr_err("Cannot get empty storage block\n");
-		diff_storage_free_store(diff_region);
+		diff_storage_free_region(diff_region);
 		return ERR_PTR(ret);
 	}
 
