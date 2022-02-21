@@ -70,7 +70,7 @@ read -n 1
 
 blksnap_snapshot_take
 
-generate_bulk_MB ${MOUNTPOINT_1} "after" 100
+generate_block_MB ${MOUNTPOINT_1} "after" 100
 check_files ${MOUNTPOINT_1}
 
 echo "Check snapshot before overflow."
@@ -85,7 +85,7 @@ check_files ${IMAGE_1}
 echo "Try to make snapshot overflow."
 echo "press..."
 read -n 1
-generate_bulk_MB ${MOUNTPOINT_1} "overflow" 300
+generate_block_MB ${MOUNTPOINT_1} "overflow" 300
 
 echo "Umount images"
 echo "press..."

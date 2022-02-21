@@ -73,7 +73,7 @@ generate_files()
 	echo "generate complete"
 }
 
-generate_bulk_MB()
+generate_block_MB()
 {
 	local TARGET_DIR=$1
 	local PREFIX=$2

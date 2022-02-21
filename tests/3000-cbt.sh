@@ -66,7 +66,7 @@ blksnap_snapshot_take
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt0.map
 echo "CBT map size: "
 stat -c%s "${TESTDIR}/cbt0.map"
-generate_bulk_MB ${MOUNTPOINT_1} "full" 10
+generate_block_MB ${MOUNTPOINT_1} "full" 10
 check_files ${MOUNTPOINT_1}
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt0_.map
 
@@ -80,7 +80,7 @@ blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt1.map
-generate_bulk_MB ${MOUNTPOINT_1} "inc-first" 10
+generate_block_MB ${MOUNTPOINT_1} "inc-first" 10
 check_files ${MOUNTPOINT_1}
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt1_.map
 
@@ -94,7 +94,7 @@ blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt2.map
-generate_bulk_MB ${MOUNTPOINT_1} "inc-second" 10
+generate_block_MB ${MOUNTPOINT_1} "inc-second" 10
 check_files ${MOUNTPOINT_1}
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt2_.map
 
