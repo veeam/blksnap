@@ -21,7 +21,7 @@ if [ -f "/usr/bin/blksnap" ]
 then
 	BLKSNAP=blksnap
 else
-	BLKSNAP="$(cd ../../; pwd)/tools/blksnap/bin/blksnap"
+	BLKSNAP="$(cd ../; pwd)/tools/blksnap/bin/blksnap"
 fi
 
 ID=""
