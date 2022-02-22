@@ -22,7 +22,7 @@
 class CBlockDevice
 {
 public:
-    CBlockDevice(const std::string& name, const bool isSync = false);
+    CBlockDevice(const std::string& name, const bool isSync = false, const off_t size = 0);
     ~CBlockDevice();
 
     void Read(void* buf, size_t count, off_t offset);
@@ -33,5 +33,6 @@ public:
 
 private:
     std::string m_name;
+    off_t m_size;
     int m_fd;
 };
