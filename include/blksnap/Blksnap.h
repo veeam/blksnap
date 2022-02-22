@@ -30,14 +30,8 @@
 /* Allow to get any sector state. Can be used only for debug purpose */
 #    define BLK_SNAP_DEBUG_SECTOR_STATE
 #endif
+#include "Sector.h"
 #include "blk_snap.h"
-
-#ifndef SECTOR_SHIFT
-#    define SECTOR_SHIFT 9
-#endif
-#ifndef SECTOR_SIZE
-#    define SECTOR_SIZE (1 << SECTOR_SHIFT)
-#endif
 
 namespace blksnap
 {

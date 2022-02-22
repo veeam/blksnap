@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "Sector.h"
 
 namespace blksnap
 {
@@ -35,6 +36,8 @@ namespace blksnap
         // TODO: add limits
         static std::shared_ptr<ISession> Create(const std::vector<std::string>& devices,
                                                 const std::string& diffStorage);
+        static std::shared_ptr<ISession> Create(const std::vector<std::string>& devices,
+                                                const SStorageRanges& diffStorageRanges);
     };
 
 }

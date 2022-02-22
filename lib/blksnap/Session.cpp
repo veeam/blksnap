@@ -48,6 +48,17 @@ struct SSessionInfo
     std::string imageName;
 };
 
+struct SRangeVectorPos
+{
+    size_t rangeInx;
+    sector_t rangeOfs;
+
+    SRangeVectorPos()
+        : rangeInx(0)
+        , rangeOfs(0)
+    {};
+};
+
 struct SState
 {
     std::atomic<bool> stop;
@@ -56,12 +67,17 @@ struct SState
     std::mutex lock;
     std::list<std::string> errorMessage;
     std::vector<std::string> diffStorageFiles;
+
+    std::vector<SRange> diffStorageRanges;
+    int diffDeviceMajor;
+    int diffDeviceMinor;
+    SRangeVectorPos diffStoragePosition;
 };
 
 class CSession : public ISession
 {
 public:
-    CSession(const std::vector<std::string>& devices, const std::string& diffStorage);
+    CSession(const std::vector<std::string>& devices, const std::string& diffStorage, const SStorageRanges& diffStorageRanges);
     ~CSession() override;
 
     std::string GetImageDevice(const std::string& original) override;
@@ -79,7 +95,16 @@ private:
 
 std::shared_ptr<ISession> ISession::Create(const std::vector<std::string>& devices, const std::string& diffStorage)
 {
-    return std::make_shared<CSession>(devices, diffStorage);
+    SStorageRanges diffStorageRanges;
+
+    return std::make_shared<CSession>(devices, diffStorage, diffStorageRanges);
+}
+
+std::shared_ptr<ISession> ISession::Create(const std::vector<std::string>& devices, const SStorageRanges& diffStorageRanges)
+{
+    std::string diffStorage;
+
+    return std::make_shared<CSession>(devices, diffStorage, diffStorageRanges);
 }
 
 namespace
@@ -195,9 +220,56 @@ namespace
         }
         ::close(fd);
     }
+
+    static void DeviceNumberByName(const std::string& deviceName, int& mj, int& mn)
+    {
+        struct stat64 st;
+
+        if (::stat64(deviceName.c_str(), &st))
+            throw std::system_error(errno, std::generic_category(), "Failed to get file size.");
+
+        mj = major(st.st_rdev);
+        mn = minor(st.st_rdev);
+    }
+
+    static void AllocateDiffStorage(std::shared_ptr<SState> ptrState, sector_t requestedSectors,
+                                    struct blk_snap_dev_t& dev_id, std::vector<struct blk_snap_block_range>& ranges)
+    {
+        dev_id.mj = ptrState->diffDeviceMajor;
+        dev_id.mn = ptrState->diffDeviceMinor;
+
+        while (requestedSectors)
+        {
+            const SRange& rg = ptrState->diffStorageRanges[ptrState->diffStoragePosition.rangeInx];
+
+            sector_t ofs = rg.sector + ptrState->diffStoragePosition.rangeOfs;
+            sector_t sz = std::min(rg.count - ptrState->diffStoragePosition.rangeOfs, requestedSectors);
+
+            if (sz == 0)
+            {
+                ptrState->diffStoragePosition.rangeOfs = 0;
+                if (ptrState->diffStorageRanges.size() == ++ptrState->diffStoragePosition.rangeInx)
+                    break;
+
+                continue;
+            }
+
+            {
+                struct blk_snap_block_range rg = {
+                    .sector_offset = ofs,
+                    .sector_count = sz
+                };
+
+                ranges.push_back(rg);
+            }
+
+            ptrState->diffStoragePosition.rangeOfs += sz;
+            requestedSectors -= sz;
+        }
+    }
 } //
 
-void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SState> ptrState)
+static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SState> ptrState)
 {
     struct SBlksnapEvent ev;
     int diffStorageNumber = 1;
@@ -226,24 +298,29 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SState>
             {
             case blk_snap_event_code_low_free_space:
             {
-                fs::path filepath(ptrState->diffStorage);
-                filepath += std::string("diff_storage#" + std::to_string(diffStorageNumber++));
-                if (fs::exists(filepath))
-                    fs::remove(filepath);
-                std::string filename = filepath.string();
-
-                {
-                    std::lock_guard<std::mutex> guard(ptrState->lock);
-                    ptrState->diffStorageFiles.push_back(filename);
-                }
-                FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-
                 struct blk_snap_dev_t dev_id;
                 std::vector<struct blk_snap_block_range> ranges;
-                FiemapStorage(filename, dev_id, ranges);
+
+                if (!ptrState->diffStorage.empty())
+                {
+                    fs::path filepath(ptrState->diffStorage);
+                    filepath += std::string("diff_storage#" + std::to_string(diffStorageNumber++));
+                    if (fs::exists(filepath))
+                        fs::remove(filepath);
+                    std::string filename = filepath.string();
+
+                    {
+                        std::lock_guard<std::mutex> guard(ptrState->lock);
+                        ptrState->diffStorageFiles.push_back(filename);
+                    }
+                    FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
+                    FiemapStorage(filename, dev_id, ranges);
+                }
+                else
+                    AllocateDiffStorage(ptrState, ev.lowFreeSpace.requestedSectors, dev_id, ranges);
 
                 ptrBlksnap->AppendDiffStorage(ptrState->id, dev_id, ranges);
-                // std::cout << "Append " << ranges.size() << "ranges" << std::endl;
+                std::cout << "Append " << ranges.size() << "ranges" << std::endl;
             }
             break;
             case blk_snap_event_code_corrupted:
@@ -265,7 +342,7 @@ void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SState>
     }
 }
 
-CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorage)
+CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorage, const SStorageRanges& diffStorageRanges)
 {
     m_ptrBlksnap = std::make_shared<CBlksnap>();
 
@@ -293,7 +370,12 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
      */
     m_ptrState = std::make_shared<SState>();
     m_ptrState->stop = false;
-    m_ptrState->diffStorage = diffStorage;
+    if (!diffStorage.empty())
+        m_ptrState->diffStorage = diffStorage;
+    if (!diffStorageRanges.ranges.empty())
+        m_ptrState->diffStorageRanges = diffStorageRanges.ranges;
+    if (!diffStorageRanges.device.empty())
+        DeviceNumberByName(diffStorageRanges.device, m_ptrState->diffDeviceMajor, m_ptrState->diffDeviceMinor);
     uuid_copy(m_ptrState->id, m_id);
 
     /*
@@ -306,18 +388,23 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
         {
         case blk_snap_event_code_low_free_space:
         {
-            fs::path filepath(m_ptrState->diffStorage);
-            filepath += std::string("diff_storage#" + std::to_string(0));
-            if (fs::exists(filepath))
-                fs::remove(filepath);
-            std::string filename = filepath.string();
-
-            m_ptrState->diffStorageFiles.push_back(filename);
-            FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-
             struct blk_snap_dev_t dev_id;
             std::vector<struct blk_snap_block_range> ranges;
-            FiemapStorage(filename, dev_id, ranges);
+
+            if (!m_ptrState->diffStorage.empty())
+            {
+                fs::path filepath(m_ptrState->diffStorage);
+                filepath += std::string("diff_storage#" + std::to_string(0));
+                if (fs::exists(filepath))
+                    fs::remove(filepath);
+                std::string filename = filepath.string();
+
+                m_ptrState->diffStorageFiles.push_back(filename);
+                FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
+                FiemapStorage(filename, dev_id, ranges);
+            }
+            else
+                AllocateDiffStorage(m_ptrState, ev.lowFreeSpace.requestedSectors, dev_id, ranges);
 
             m_ptrBlksnap->AppendDiffStorage(m_id, dev_id, ranges);
         }
