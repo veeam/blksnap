@@ -41,6 +41,7 @@ set(BLKSNAP_LIBRARY "${CMAKE_SOURCE_DIR}/../../lib/libblksnap.a")
 add_subdirectory(helpers)
 
 set(CORRUPT_SRC
+    TestSector.cpp
     corrupt.cpp
 )
 set(TEST_CORRUPT test_corrupt)
@@ -69,6 +70,24 @@ target_link_libraries(${TEST_CBT} PRIVATE ${LIBUUID_LIBRARY})
 target_link_libraries(${TEST_CBT} PRIVATE ${LIBZ_LIBRARY})
 target_include_directories(${TEST_CBT} PRIVATE ./)
 set_target_properties(${TEST_CBT}
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
+)
+
+set(DIFF_STORAGE_SRC
+    TestSector.cpp
+    diff_storage.cpp
+)
+set(TEST_DIFF_STORAGE test_diff_storage)
+add_executable(${TEST_DIFF_STORAGE} ${DIFF_STORAGE_SRC})
+target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Helpers::Lib)
+target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${BLKSNAP_LIBRARY})
+target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Boost::program_options)
+target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Boost::filesystem )
+target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${LIBUUID_LIBRARY})
+target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${LIBZ_LIBRARY})
+target_include_directories(${TEST_DIFF_STORAGE} PRIVATE ./)
+set_target_properties(${TEST_DIFF_STORAGE}
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
 )

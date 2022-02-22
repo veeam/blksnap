@@ -22,14 +22,7 @@
 #include <iostream>
 
 namespace po = boost::program_options;
-
-#ifndef SECTOR_SHIFT
-#    define SECTOR_SHIFT 9
-#endif
-#ifndef SECTOR_SIZE
-#    define SECTOR_SIZE (1 << SECTOR_SHIFT)
-#endif
-typedef unsigned long long sector_t;
+using blksnap::sector_t;
 
 void Main(int argc, char* argv[])
 {

@@ -16,12 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <atomic>
+
 #include <blksnap/Cbt.h>
 #include <blksnap/Service.h>
 #include <blksnap/Session.h>
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-#include <ctime>
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,252 +33,12 @@
 #include "helpers/BlockDevice.h"
 #include "helpers/Log.h"
 #include "helpers/RandomHelper.h"
+#include "TestSector.h"
+
 namespace po = boost::program_options;
-#include <boost/filesystem.hpp>
 namespace fs = boost::filesystem;
-#if 1
-#    include <boost/crc.hpp>
-#endif
-
-#ifndef SECTOR_SHIFT
-#    define SECTOR_SHIFT 9
-#endif
-#ifndef SECTOR_SIZE
-#    define SECTOR_SIZE (1 << SECTOR_SHIFT)
-#endif
-typedef unsigned long long sector_t;
-
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-
-const char* testHeadMagic = "testhead";
-
-struct STestHeader
-{
-    char head[8];
-    int crc;
-    int seqNumber;
-    clock_t seqTime;
-    sector_t sector;
-
-    static void Set(STestHeader* header, int inSeqNumber, sector_t inSector)
-    {
-        header->seqNumber = inSeqNumber;
-        header->sector = inSector;
-        header->seqTime = std::clock();
-        memcpy(header->head, testHeadMagic, 8);
-    };
-};
-
-struct STestSector
-{
-    STestHeader header;
-    char body[SECTOR_SIZE - sizeof(STestHeader)];
-};
-
-struct SRange
-{
-    sector_t sector;
-    sector_t count;
-
-    SRange(sector_t inSector, sector_t inCount)
-        : sector(inSector)
-        , count(inCount){};
-};
-
-enum EFailType
-{
-    eFailCorruptedSector,
-    eFailIncorrectSector,
-};
-
-class CTestSectorGenetor
-{
-public:
-    CTestSectorGenetor()
-        : m_seqNumber(0)
-        , m_failCount(0)
-        , m_logLineCount(0){
-
-          };
-    ~CTestSectorGenetor(){
-
-    };
-
-    void IncSequence()
-    {
-        m_seqNumber++;
-    };
-
-    int GetSequenceNumber()
-    {
-        return m_seqNumber;
-    };
-#if 0
-    void GenerateBuffer(void* buffer, size_t size, STestHeader *header)
-    {
-        snprintf(static_cast<char*>(buffer), size, "chunk=%llu sector=%llu seqTime=%llu seqNumber=%d",
-            header->sector >> 9, header->sector, header->seqTime, header->seqNumber);
-    };
-
-    void LogBuffer(char* buf, size_t size)
-    {
-        /*std::stringstream ss;
-        int inx = 0;
-
-        ss << std::hex;
-        do {
-            ss << buf[inx];
-
-            inx++;
-            if (!(inx % 32))
-                ss << std::endl;
-        } while (inx < size);*/
-
-        logger.Info(std::string(buf, size));
-    };
-#endif
-    void Generate(unsigned char* buffer, size_t size, sector_t sector)
-    {
-        for (size_t offset = 0; offset < size; offset += SECTOR_SIZE)
-        {
-            STestSector* current = (STestSector*)(buffer + offset);
-
-            STestHeader* header = &current->header;
-            STestHeader::Set(header, m_seqNumber, sector);
-
-            CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
-            // GenerateBuffer(current->body, sizeof(current->body), header);
-
-#ifdef BOOST_CRC_HPP
-            boost::crc_32_type calc;
-            calc.process_bytes(buffer + offset + offsetof(STestHeader, seqNumber),
-                               SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-            header->crc = calc.checksum();
-#else
-            header->crc = 'CC32';
-#endif
-            sector++;
-        }
-    };
-
-    void Check(unsigned char* buffer, size_t size, sector_t sector, const int seqNumber, const clock_t seqTime)
-    {
-        for (size_t offset = 0; offset < size; offset += SECTOR_SIZE)
-        {
-            struct STestSector* current = (STestSector*)buffer;
-            STestHeader* header = &current->header;
-            int crc;
-
-#ifdef BOOST_CRC_HPP
-            boost::crc_32_type calc;
-            calc.process_bytes(buffer + offsetof(STestHeader, seqNumber),
-                               SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-            crc = calc.checksum();
-#else
-            crc = 'CC32';
-#endif
-
-            bool isCorrupted = (crc != header->crc);
-            bool isIncorrect = (sector != header->sector);
-            bool isInvalidSeqNumber = (header->seqNumber > seqNumber);
-            bool isInvalidSeqTime = (header->seqTime > seqTime);
-
-            if (isCorrupted || isIncorrect || isInvalidSeqNumber || isInvalidSeqTime)
-            {
-                std::string failMessage;
-
-                if (m_logLineCount == 30)
-                    failMessage = "Too many sectors failed\n";
-                else if (m_logLineCount < 30)
-                {
-                    if (isCorrupted)
-                    {
-                        failMessage += std::string("Corrupted sector\n");
-                        failMessage += std::string("sector " + std::to_string(sector) + "\n");
-                        failMessage
-                          += std::string("crc " + std::to_string(header->crc) + " != " + std::to_string(crc) + "\n");
-                    }
-                    if (isIncorrect)
-                    {
-                        failMessage += std::string("Incorrect sector\n");
-                        failMessage += std::string("sector " + std::to_string(header->sector)
-                                                   + " != " + std::to_string(sector) + "\n");
-                    }
-                    if (isInvalidSeqNumber)
-                    {
-                        failMessage += std::string("Invalid sequence number\n");
-                        failMessage += std::string("sector " + std::to_string(header->sector) + "\n");
-                        failMessage += std::string("seqNumber " + std::to_string(header->seqNumber) + " > "
-                                                   + std::to_string(seqNumber) + "\n");
-                    }
-                    if (isInvalidSeqTime)
-                    {
-                        failMessage += std::string("Invalid sequence time\n");
-                        failMessage += std::string("sector " + std::to_string(header->sector) + "\n");
-                        failMessage += std::string("seqTime " + std::to_string(header->seqTime) + " > "
-                                                   + std::to_string(seqTime) + "\n");
-                    }
-                }
-
-                SetFailedSector(sector, failMessage);
-                // LogBuffer(current->body, 96);
-            }
-
-            sector++;
-            buffer += SECTOR_SIZE;
-        }
-    };
-
-    int Fails()
-    {
-        return m_failCount;
-    };
-    /**
-     * The function ShowFails() does not contain locks, since it should be
-     * called when only one thread has access to used data.
-     */
-    const std::vector<SRange>& GetFails()
-    {
-        return m_failedRanges;
-    };
-
-private:
-    std::atomic<int> m_seqNumber;
-    int m_failCount;
-    int m_logLineCount;
-    std::vector<SRange> m_failedRanges;
-    bool m_isCrc32Checking;
-
-private:
-    void LogSector(sector_t sector, const std::string& failMessage)
-    {
-        if (failMessage.empty())
-            return;
-
-        m_logLineCount++;
-        logger.Err(failMessage);
-    }
-
-    void SetFailedSector(sector_t sector, const std::string& failMessage)
-    {
-        m_failCount++;
-
-        if (!m_failedRanges.empty())
-        {
-            SRange& lastRange = m_failedRanges[m_failedRanges.size() - 1];
-            if ((lastRange.sector + lastRange.count) == sector)
-            {
-                lastRange.count++;
-                // LogSector(sector, failMessage);
-                return;
-            }
-        }
-
-        m_failedRanges.emplace_back(sector, 1);
-        LogSector(sector, failMessage);
-    };
-};
+using blksnap::sector_t;
+using blksnap::SRange;
 
 /**
  * Fill the contents of the block device with special test data.
@@ -942,14 +703,16 @@ void Main(int argc, char* argv[])
     po::options_description desc;
     std::string usage = std::string("Checking the correctness of the COW algorithm of the blksnap module.");
 
-    desc.add_options()("help,h", "Show usage information.")("log,l", po::value<std::string>(),
-                                                            "Detailed log of all transactions.")(
-      "device,d", po::value<std::vector<std::string>>()->multitoken(),
-      "Device name. It's multitoken for multithread test mod.")("diff_storage,s", po::value<std::string>(),
-                                                                "Directory name for allocating diff storage files.")(
-      "multithread",
-      "Testing mode in which writings to the original devices and their checks are performed in parallel.")(
-      "duration,u", po::value<int>(), "The test duration limit in minutes.");
+    desc.add_options()
+        ("help,h", "Show usage information.")
+        ("log,l", po::value<std::string>(),"Detailed log of all transactions.")
+        ("device,d", po::value<std::vector<std::string>>()->multitoken(),
+            "Device name. It's multitoken for multithread test mod.")
+        ("diff_storage,s", po::value<std::string>(),
+            "Directory name for allocating diff storage files.")
+        ("multithread",
+            "Testing mode in which writings to the original devices and their checks are performed in parallel.")
+        ("duration,u", po::value<int>(), "The test duration limit in minutes.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
