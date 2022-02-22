@@ -277,6 +277,7 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 	spin_lock(&diff_storage->lock);
 	do {
 		struct storage_block *storage_block;
+		sector_t available;
 
 		storage_block = first_empty_storage_block(diff_storage);
 		if (unlikely(!storage_block)) {
@@ -285,8 +286,8 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 			break;
 		}
 
-		if (likely((storage_block->count - storage_block->used) >=
-			   count)) {
+		available = storage_block->count - storage_block->used;
+		if (likely(available >= count)) {
 			diff_region->bdev = storage_block->bdev;
 			diff_region->sector =
 				storage_block->sector + storage_block->used;
@@ -313,8 +314,7 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 		 * We believe that the storage blocks are large enough
 		 * to accommodate several pieces entirely.
 		 */
-		diff_storage->filled +=
-			(storage_block->count - storage_block->used);
+		diff_storage->filled += available;
 	} while (1);
 	sectors_left = diff_storage->requested - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
