@@ -70,7 +70,9 @@ IMAGE=${MP_DIR}/image0
 mkdir -p ${IMAGE}
 
 echo "Mount image"
-mount -o nouuid /dev/blksnap-image0 ${IMAGE}
+mount /dev/blksnap-image0 ${IMAGE}
+# for XFS filesystem nouuid option needed
+#mount -o nouuid /dev/blksnap-image0 ${IMAGE}
 
 check_files ${IMAGE}/${RELATIVE_TEST_DIR}
 
