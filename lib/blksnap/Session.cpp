@@ -235,6 +235,9 @@ namespace
     static void AllocateDiffStorage(std::shared_ptr<SState> ptrState, sector_t requestedSectors,
                                     struct blk_snap_dev_t& dev_id, std::vector<struct blk_snap_block_range>& ranges)
     {
+        if (ptrState->diffStorageRanges.size() <= ptrState->diffStoragePosition.rangeInx)
+            throw std::runtime_error("Failed to allocate diff storage. Not enough free ranges");
+
         dev_id.mj = ptrState->diffDeviceMajor;
         dev_id.mn = ptrState->diffDeviceMinor;
 
@@ -266,6 +269,21 @@ namespace
             ptrState->diffStoragePosition.rangeOfs += sz;
             requestedSectors -= sz;
         }
+    }
+    static void LogAppendedRanges(std::vector<struct blk_snap_block_range>& ranges)
+    {
+        sector_t totalSectors = 0;
+
+        std::cout << "" << std::endl;
+        std::cout << "Append " << ranges.size() << " ranges: " << std::endl;
+        for (const struct blk_snap_block_range& rg : ranges)
+        {
+            totalSectors += rg.sector_count;
+            std::cout << std::to_string(rg.sector_offset) << ":"<< std::to_string(rg.sector_count) << std::endl;
+
+        }
+        std::cout << "Total sectors append: " << totalSectors << std::endl;
+
     }
 } //
 
@@ -319,8 +337,8 @@ static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<
                 else
                     AllocateDiffStorage(ptrState, ev.lowFreeSpace.requestedSectors, dev_id, ranges);
 
+                LogAppendedRanges(ranges);
                 ptrBlksnap->AppendDiffStorage(ptrState->id, dev_id, ranges);
-                std::cout << "Append " << ranges.size() << "ranges" << std::endl;
             }
             break;
             case blk_snap_event_code_corrupted:
@@ -406,6 +424,7 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
             else
                 AllocateDiffStorage(m_ptrState, ev.lowFreeSpace.requestedSectors, dev_id, ranges);
 
+            LogAppendedRanges(ranges);
             m_ptrBlksnap->AppendDiffStorage(m_id, dev_id, ranges);
         }
         break;
@@ -419,6 +438,12 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
             throw std::runtime_error("Invalid blksnap event code received.");
         }
     }
+
+    /*
+     * Start stretch snapshot thread
+     */
+    m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrBlksnap, m_ptrState);
+    ::usleep(0);
 
     /*
      * Take snapshot
@@ -444,11 +469,6 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
             }
         }
     }
-
-    /*
-     * Start stretch snapshot thread
-     */
-    m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrBlksnap, m_ptrState);
 }
 
 CSession::~CSession()
