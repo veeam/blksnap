@@ -70,7 +70,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
 
     for (int inx=0; inx<granularity; inx++)
     {
-        sector_t sector = static_cast<sector_t>(std::rand() * scaling)  & ~3ull;
+        sector_t sector = static_cast<sector_t>(std::rand() * scaling)  & ~7ull;
 
         if ((sector == 0) || (sector > deviceSize))
             continue;
@@ -89,7 +89,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
         if (clipSize <= 16)
             continue;
 
-        int diffStoreRangeSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 2)))  & ~3ull;
+        int diffStoreRangeSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 2))) & ~7ull;
 
         availableRanges.emplace_back(prevOffset, clipSize - diffStoreRangeSize);
         diffStorageRanges.emplace_back(currentOffset - diffStoreRangeSize, diffStoreRangeSize);
@@ -113,7 +113,7 @@ static void FillRange(const std::shared_ptr<CTestSectorGenetor> ptrGen,
 
         ptrGen->Generate(portion.Data(), portionSize, offset >> SECTOR_SHIFT);
 
-        //logger.Info("Writing. offset=" + std::to_string(offset) + " size=" + std::to_string(count));
+        //logger.Info("Writing. offset=" + std::to_string(offset) + " size=" + std::to_string(portionSize));
         ptrBdev->Write(portion.Data(), portionSize, offset);
     }
 }
@@ -126,14 +126,6 @@ static void FillArea(const std::shared_ptr<CTestSectorGenetor> ptrGen,
         FillRange(ptrGen, ptrBdev, rg);
 }
 
-static void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen,
-                    const std::shared_ptr<CBlockDevice>& ptrBdev)
-{
-    std::vector<SRange> area;
-    area.emplace_back(0, ptrBdev->Size() >> SECTOR_SHIFT);
-    FillArea(ptrGen, ptrBdev, area);
-}
-
 static void CheckRange(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                        const std::shared_ptr<CBlockDevice>& ptrBdev,
                        const SRange& rg,
@@ -144,13 +136,20 @@ static void CheckRange(const std::shared_ptr<CTestSectorGenetor> ptrGen,
     off_t from = rg.sector * SECTOR_SIZE;
     off_t to = (rg.sector + rg.count) * SECTOR_SIZE;
 
-    for (off_t offset = from; offset < to; offset += portion.Size())
+    try
     {
-        size_t portionSize = std::min(portion.Size(), static_cast<size_t>(to - offset));
+        for (off_t offset = from; offset < to; offset += portion.Size())
+        {
+            size_t portionSize = std::min(portion.Size(), static_cast<size_t>(to - offset));
 
-        ptrBdev->Read(portion.Data(), portionSize, offset);
+            ptrBdev->Read(portion.Data(), portionSize, offset);
 
-        ptrGen->Check(portion.Data(), portionSize, offset >> SECTOR_SHIFT, seqNumber, seqTime);
+            ptrGen->Check(portion.Data(), portionSize, offset >> SECTOR_SHIFT, seqNumber, seqTime);
+        }
+    }
+    catch(std::exception& ex)
+    {
+        throw std::runtime_error("Check range failed: \"" + std::string(ex.what()) + "\"");
     }
 }
 
@@ -163,9 +162,38 @@ static void CheckArea(const std::shared_ptr<CTestSectorGenetor> ptrGen,
         CheckRange(ptrGen, ptrBdev, rg, seqNumber, seqTime);
 }
 
-static bool BinarySearch(const std::vector<SRange>& area, const sector_t sector, SRange& rg)
+static bool FindRange(const std::vector<SRange>& area, const sector_t sector, SRange& rg)
 {
-    return true;
+    size_t leftLimit = 0;
+    size_t rightLimit = area.size() - 1;
+    size_t inx;
+
+    while (leftLimit <= rightLimit)
+    {
+        inx = leftLimit + (rightLimit - leftLimit) / 2 ;
+
+        if (sector < area[inx].sector)
+        {
+            if (rightLimit == inx)
+                rightLimit--;
+            else
+                rightLimit = inx;
+            continue;
+        }
+        if (sector > (area[inx].sector + area[inx].count))
+        {
+            if (leftLimit == inx)
+                leftLimit++;
+            else
+                leftLimit = inx;
+            continue;
+        }
+
+        rg = area[inx];
+        return true;
+    }
+
+    return false;
 }
 
 static bool NormalizeRange(const std::vector<SRange>& availableRanges, SRange& rg)
@@ -174,9 +202,11 @@ static bool NormalizeRange(const std::vector<SRange>& availableRanges, SRange& r
     sector_t to = rg.sector + rg.count - 1;
     SRange availableRange;
 
-    if (!BinarySearch(availableRanges, from, availableRange))
-        if (!BinarySearch(availableRanges, to, availableRange))
-            return false;
+    if (!FindRange(availableRanges, from, availableRange) && !FindRange(availableRanges, to, availableRange))
+    {
+        //logger.Info("Rande " + std::to_string(rg.sector) + ":" + std::to_string(rg.count) + " does not fall into the allowed area");
+        return false;
+    }
 
     if (from < availableRange.sector)
         from = availableRange.sector;
@@ -197,12 +227,15 @@ static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
     double offsetScaling = static_cast<double>(deviceSize) / (RAND_MAX + 1ul);
     int blockSizeScaling = static_cast<unsigned int>((RAND_MAX + 1ul) / (blockSizeLimit - 8));
 
-    for (int inx=0; inx<granularity; inx++)
+    logger.Info("Write block list generating with granularity=" + std::to_string(granularity) +
+                " and blockSizeLimit=" + std::to_string(blockSizeLimit));
+
+    while (writeRanges.size() < granularity)
     {
         SRange rg;
         /* generate range block size from 8 up to 256 sectors */
-        rg.sector = static_cast<sector_t>(std::rand() * offsetScaling)  & ~3ull;
-        rg.count = (8 + std::rand() / blockSizeScaling) & ~3ul;
+        rg.sector = static_cast<sector_t>(std::rand() * offsetScaling)  & ~7ull;
+        rg.count = (8 + std::rand() / blockSizeScaling) & ~7ul;
 
         if (!NormalizeRange(availableRanges, rg))
             continue;
@@ -221,7 +254,10 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
-    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, false, 1024*1024*1024ull);
+    //auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, false, 1024*1024*1024ull);
+    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, true, 1024*1024*1024ull);
+
+    logger.Info("Device size: " + std::to_string(ptrOrininal->Size() >> SECTOR_SHIFT) + " sectors");
 
     std::vector<std::string> devices;
     devices.push_back(origDevName);
@@ -230,8 +266,37 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
     int elapsed;
     bool isErrorFound = false;
 
-    FillAll(ptrGen, ptrOrininal);
+    {
+        logger.Info("Fill all device by test pattern");
+        std::vector<SRange> area;
+        area.emplace_back(0, ptrOrininal->Size() >> SECTOR_SHIFT);
+        FillArea(ptrGen, ptrOrininal, area);
 
+        int testSeqNumber = ptrGen->GetSequenceNumber();
+        clock_t testSeqTime = std::clock();
+        logger.Info("test sequence time " + std::to_string(testSeqTime));
+
+        logger.Info("Check all device using test pattern");
+        CheckArea(ptrGen, ptrOrininal, area, testSeqNumber, testSeqTime);
+        if (ptrGen->Fails() > 0)
+        {
+            isErrorFound = true;
+
+            const std::vector<SRange>& ranges = ptrGen->GetFails();
+            for (const SRange& rg : ranges)
+            {
+                logger.Info("FAIL: " + std::to_string(rg.sector) + ":" + std::to_string(rg.count));
+            }
+        }
+
+        /*{
+            AlignedBuffer<char> buf(512);
+
+            logger.Info("Original first sector:");
+            ptrOrininal->Read(buf.Data(), buf.Size(), 0 << SECTOR_SHIFT);
+            logger.Err(buf.Data(), 128);
+        }*/
+    }
     while (((elapsed = (std::time(nullptr) - startTime)) < durationLimitSec) && !isErrorFound)
     {
         logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
@@ -240,16 +305,14 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         blksnap::SStorageRanges diffStorageRanges;
         diffStorageRanges.device = ptrOrininal->Name();
 
-        logger.Info("Device size: " + std::to_string(ptrOrininal->Size() >> SECTOR_SHIFT) + " sectors");
-
         GenerateRangeMap(availableRanges, diffStorageRanges.ranges, 20, ptrOrininal->Size() >> SECTOR_SHIFT);
 
-        //logger.Info("availableRanges:");
-        //for (const SRange& rg : availableRanges)
-        //    logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
-        //logger.Info("diffStorageRanges:");
-        //for (const SRange& rg : diffStorageRanges.ranges)
-        //    logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
+        logger.Info("availableRanges:");
+        for (const SRange& rg : availableRanges)
+            logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
+        logger.Info("diffStorageRanges:");
+        for (const SRange& rg : diffStorageRanges.ranges)
+            logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
 
 
         logger.Info("-- Create snapshot");
@@ -264,14 +327,21 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         logger.Info("Found image block device [" + imageDevName + "]");
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
-        logger.Info("Write block list generating.");
+        /*{
+            AlignedBuffer<char> buf(512);
+
+            logger.Info("Images first sector:");
+            ptrImage->Read(buf.Data(), buf.Size(), 0 << SECTOR_SHIFT);
+            logger.Info(buf.Data(), 128);
+        }*/
+
         std::vector<SRange> writeRanges;
-        GenerateRandomRanges(ptrOrininal, availableRanges, writeRanges, 10, 128);
+        GenerateRandomRanges(ptrOrininal, availableRanges, writeRanges, 300, 512);
         {
             int totalCount = 0;
             for (const SRange& rg : writeRanges)
             {
-                logger.Info(std::to_string(rg.sector) + ":" + std::to_string(rg.count));
+                //logger.Info(std::to_string(rg.sector) + ":" + std::to_string(rg.count));
                 totalCount += rg.count;
             }
 
@@ -288,13 +358,20 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
 
             const std::vector<SRange>& ranges = ptrGen->GetFails();
             for (const SRange& rg : ranges)
+            {
                 logger.Info("FAIL: " + std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
+
+                AlignedBuffer<char> buf(512);
+                ptrOrininal->Read(buf.Data(), buf.Size(), rg.sector << SECTOR_SHIFT);
+                logger.Err(buf.Data(), 128);
+            }
         }
         else
+        {
             logger.Info("No corrupt to the snapshot image was detected.");
-        /**/
-        isErrorFound = true;
-        /**/
+
+            FillArea(ptrGen, ptrOrininal, diffStorageRanges.ranges);
+        }
 
         logger.Info("-- Destroy blksnap session");
         ptrSession.reset();
