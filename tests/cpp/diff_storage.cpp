@@ -89,7 +89,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
         if (clipSize <= 16)
             continue;
 
-        int diffStoreRangeSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 2))) & ~7ull;
+        int diffStoreRangeSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 1))) & ~7ull;
 
         availableRanges.emplace_back(prevOffset, clipSize - diffStoreRangeSize);
         diffStorageRanges.emplace_back(currentOffset - diffStoreRangeSize, diffStoreRangeSize);
@@ -244,6 +244,19 @@ static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
     }
 }
 
+static void LogRanges(const std::string& header, const std::vector<SRange>& ranges)
+{
+    sector_t totalSectors = 0;
+
+    logger.Info(header);
+    for (const SRange& rg : ranges)
+    {
+        logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
+        totalSectors += rg.count;
+    }
+    logger.Info("Total sectors: " + std::to_string(totalSectors));
+}
+
 static void CheckDiffStorage(const std::string& origDevName, const int durationLimitSec)
 {
     std::vector<SRange> diffStorage;
@@ -255,7 +268,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
     //auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, false, 1024*1024*1024ull);
-    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, true, 1024*1024*1024ull);
+    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, true/*, 1024*1024*1024ull*/);
 
     logger.Info("Device size: " + std::to_string(ptrOrininal->Size() >> SECTOR_SHIFT) + " sectors");
 
@@ -306,14 +319,8 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         diffStorageRanges.device = ptrOrininal->Name();
 
         GenerateRangeMap(availableRanges, diffStorageRanges.ranges, 20, ptrOrininal->Size() >> SECTOR_SHIFT);
-
-        logger.Info("availableRanges:");
-        for (const SRange& rg : availableRanges)
-            logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
-        logger.Info("diffStorageRanges:");
-        for (const SRange& rg : diffStorageRanges.ranges)
-            logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
-
+        LogRanges("availableRanges:", availableRanges);
+        LogRanges("diffStorageRanges:", diffStorageRanges.ranges);
 
         logger.Info("-- Create snapshot");
 
@@ -336,7 +343,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         }*/
 
         std::vector<SRange> writeRanges;
-        GenerateRandomRanges(ptrOrininal, availableRanges, writeRanges, 300, 512);
+        GenerateRandomRanges(ptrOrininal, availableRanges, writeRanges, 100, 512);
         {
             int totalCount = 0;
             for (const SRange& rg : writeRanges)
