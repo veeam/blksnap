@@ -27,8 +27,8 @@ struct STestHeader
     char head[8];
     int crc;
     int seqNumber;
-    clock_t seqTime;
     blksnap::sector_t sector;
+    clock_t seqTime;
 
     static void Set(STestHeader* header, int inSeqNumber, blksnap::sector_t inSector);
 };

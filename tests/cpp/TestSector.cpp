@@ -121,7 +121,7 @@ void CTestSectorGenetor::Check(unsigned char* buffer, size_t size, sector_t sect
             }
 
             SetFailedSector(sector, failMessage);
-            // LogBuffer(current->body, 96);
+            //logger.Err(buffer, 128);
         }
 
         sector++;
