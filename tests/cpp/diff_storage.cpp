@@ -62,7 +62,7 @@ void Generate(const int seqNumber, unsigned char* buffer, size_t size, sector_t 
     }
 };
 */
-void GenerateBlockMap(std::vector<SRange>& availableBlocks, std::vector<SRange>& diffStorageBlocks,
+void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>& diffStorageRanges,
     const int granularity, const sector_t deviceSize)
 {
     std::vector<sector_t> clip;
@@ -89,10 +89,10 @@ void GenerateBlockMap(std::vector<SRange>& availableBlocks, std::vector<SRange>&
         if (clipSize <= 16)
             continue;
 
-        int diffStoreBlockSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 2)))  & ~3ull;
+        int diffStoreRangeSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 2)))  & ~3ull;
 
-        availableBlocks.emplace_back(prevOffset, clipSize - diffStoreBlockSize);
-        diffStorageBlocks.emplace_back(currentOffset - diffStoreBlockSize, diffStoreBlockSize);
+        availableRanges.emplace_back(prevOffset, clipSize - diffStoreRangeSize);
+        diffStorageRanges.emplace_back(currentOffset - diffStoreRangeSize, diffStoreRangeSize);
 
         prevOffset = currentOffset;
     }
@@ -168,29 +168,29 @@ static bool BinarySearch(const std::vector<SRange>& area, const sector_t sector,
     return true;
 }
 
-static bool NormalizeBlock(const std::vector<SRange>& availableBlocks, SRange& rg)
+static bool NormalizeRange(const std::vector<SRange>& availableRanges, SRange& rg)
 {
     sector_t from = rg.sector;
     sector_t to = rg.sector + rg.count - 1;
-    SRange availableBlock;
+    SRange availableRange;
 
-    if (!BinarySearch(availableBlocks, from, availableBlock))
-        if (!BinarySearch(availableBlocks, to, availableBlock))
+    if (!BinarySearch(availableRanges, from, availableRange))
+        if (!BinarySearch(availableRanges, to, availableRange))
             return false;
 
-    if (from < availableBlock.sector)
-        from = availableBlock.sector;
-    if (to > (availableBlock.sector + availableBlock.count - 1))
-        to = availableBlock.sector + availableBlock.count - 1;
+    if (from < availableRange.sector)
+        from = availableRange.sector;
+    if (to > (availableRange.sector + availableRange.count - 1))
+        to = availableRange.sector + availableRange.count - 1;
 
     rg.sector = from;
     rg.count = to - from + 1;
     return true;
 }
 
-static void GenerateRandomBlocks(std::shared_ptr<CBlockDevice> ptrOrininal,
-                                 const std::vector<SRange>& availableBlocks,
-                                 std::vector<SRange>& writeBlocks,
+static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
+                                 const std::vector<SRange>& availableRanges,
+                                 std::vector<SRange>& writeRanges,
                                  const int granularity, const int blockSizeLimit)
 {
     sector_t deviceSize = ptrOrininal->Size() >> SECTOR_SHIFT;
@@ -204,10 +204,10 @@ static void GenerateRandomBlocks(std::shared_ptr<CBlockDevice> ptrOrininal,
         rg.sector = static_cast<sector_t>(std::rand() * offsetScaling)  & ~3ull;
         rg.count = (8 + std::rand() / blockSizeScaling) & ~3ul;
 
-        if (!NormalizeBlock(availableBlocks, rg))
+        if (!NormalizeRange(availableRanges, rg))
             continue;
 
-        writeBlocks.push_back(rg);
+        writeRanges.push_back(rg);
     }
 }
 
@@ -236,25 +236,25 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
     {
         logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
 
-        std::vector<SRange> availableBlocks;
-        blksnap::SStorageRanges diffStorageBlocks;
-        diffStorageBlocks.device = ptrOrininal->Name();
+        std::vector<SRange> availableRanges;
+        blksnap::SStorageRanges diffStorageRanges;
+        diffStorageRanges.device = ptrOrininal->Name();
 
-        logger.Info("Block device size: " + std::to_string(ptrOrininal->Size() >> SECTOR_SHIFT) + " sectors");
+        logger.Info("Device size: " + std::to_string(ptrOrininal->Size() >> SECTOR_SHIFT) + " sectors");
 
-        GenerateBlockMap(availableBlocks, diffStorageBlocks.ranges, 20, ptrOrininal->Size() >> SECTOR_SHIFT);
+        GenerateRangeMap(availableRanges, diffStorageRanges.ranges, 20, ptrOrininal->Size() >> SECTOR_SHIFT);
 
-        //logger.Info("availableBlocks:");
-        //for (const SRange& rg : availableBlocks)
+        //logger.Info("availableRanges:");
+        //for (const SRange& rg : availableRanges)
         //    logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
-        //logger.Info("diffStorageBlocks:");
-        //for (const SRange& rg : diffStorageBlocks.ranges)
+        //logger.Info("diffStorageRanges:");
+        //for (const SRange& rg : diffStorageRanges.ranges)
         //    logger.Info(std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
 
 
         logger.Info("-- Create snapshot");
 
-        auto ptrSession = blksnap::ISession::Create(devices, diffStorageBlocks);
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorageRanges);
 
         int testSeqNumber = ptrGen->GetSequenceNumber();
         clock_t testSeqTime = std::clock();
@@ -265,23 +265,23 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
         logger.Info("Write block list generating.");
-        std::vector<SRange> writeBlocks;
-        GenerateRandomBlocks(ptrOrininal, availableBlocks, writeBlocks, 10, 128);
+        std::vector<SRange> writeRanges;
+        GenerateRandomRanges(ptrOrininal, availableRanges, writeRanges, 10, 128);
         {
             int totalCount = 0;
-            for (const SRange& rg : writeBlocks)
+            for (const SRange& rg : writeRanges)
             {
                 logger.Info(std::to_string(rg.sector) + ":" + std::to_string(rg.count));
                 totalCount += rg.count;
             }
 
-            logger.Info("Generated " + std::to_string(writeBlocks.size()) + " write blocks with " + std::to_string(totalCount) + " sectors.");
+            logger.Info("Generated " + std::to_string(writeRanges.size()) + " write blocks with " + std::to_string(totalCount) + " sectors.");
         }
 
-        FillArea(ptrGen, ptrOrininal, writeBlocks);
+        FillArea(ptrGen, ptrOrininal, writeRanges);
         logger.Info("Test data has been written.");
 
-        CheckArea(ptrGen, ptrImage, availableBlocks, testSeqNumber, testSeqTime);
+        CheckArea(ptrGen, ptrImage, availableRanges, testSeqNumber, testSeqTime);
         if (ptrGen->Fails() > 0)
         {
             isErrorFound = true;
