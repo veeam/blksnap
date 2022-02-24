@@ -350,16 +350,18 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
             }
         }
         else
-        {
             logger.Info("No corrupt to the snapshot image was detected.");
-
-            FillArea(ptrGen, ptrOrininal, diffStorageRanges.ranges);
-        }
 
         logger.Info("-- Destroy blksnap session");
         ptrSession.reset();
 
-        ptrGen->IncSequence();
+        if (!isErrorFound)
+        {
+            logger.Info("Cleanup diff storage ranges");
+            FillArea(ptrGen, ptrOrininal, diffStorageRanges.ranges);
+
+            ptrGen->IncSequence();
+        }
     }
     if (isErrorFound)
         throw std::runtime_error("--- Failed: singlethread diff storage ---");
