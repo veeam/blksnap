@@ -87,9 +87,8 @@ static bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	 */
 
 #ifdef BDEV_FILTER_SYNC
-	if (WARN_ONCE(
-		    (bio->bi_end_io == diff_io_endio),
-		    "We should not intercept our own requests in the synchronous mode of the filter."))
+	if (WARN_ONCE((bio->bi_end_io == diff_io_endio),
+		      "We should not intercept our own requests in the synchronous mode of the filter."))
 #else
 	if (bio->bi_end_io == diff_io_endio)
 #endif
