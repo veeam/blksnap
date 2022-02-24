@@ -37,31 +37,7 @@ namespace po = boost::program_options;
 using blksnap::sector_t;
 using blksnap::SRange;
 
-/*
-void Generate(const int seqNumber, unsigned char* buffer, size_t size, sector_t sector)
-{
-    for (size_t offset = 0; offset < size; offset += SECTOR_SIZE)
-    {
-        STestSector* current = (STestSector*)(buffer + offset);
 
-        STestHeader* header = &current->header;
-        STestHeader::Set(header, seqNumber, sector);
-
-        CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
-        // GenerateBuffer(current->body, sizeof(current->body), header);
-
-#ifdef BOOST_CRC_HPP
-        boost::crc_32_type calc;
-        calc.process_bytes(buffer + offset + offsetof(STestHeader, seqNumber),
-                           SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-        header->crc = calc.checksum();
-#else
-        header->crc = 'CC32';
-#endif
-        sector++;
-    }
-};
-*/
 void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>& diffStorageRanges,
     const int granularity, const sector_t deviceSize)
 {
