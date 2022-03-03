@@ -42,7 +42,7 @@ static inline void event_free(struct event *event)
 {
 	if (event) {
 		kfree(event);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_event);
 #endif
 	}

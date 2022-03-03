@@ -2,16 +2,13 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-io: " fmt
 #include <linux/genhd.h>
 #include <linux/slab.h>
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
-#ifdef BDEV_FILTER_SYNC
-#include "lp_filter.h"
 #endif
 #include "diff_io.h"
 #include "diff_buffer.h"
 
-#ifdef BLK_SNAP_DEBUGLOG
+#ifdef CONFIG_BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
@@ -48,19 +45,11 @@ void diff_io_endio(struct bio *bio)
 	cant_sleep();
 	if (bio->bi_status != BLK_STS_OK)
 		diff_io->error = -EIO;
-#ifdef HAVE_BIO_MAX_PAGES
-	if (atomic_dec_and_test(&diff_io->bio_count)) {
-		if (diff_io->is_sync_io)
-			complete(&diff_io->notify.sync.completion);
-		else
-			queue_work(system_wq, &diff_io->notify.async.work);
-	}
-#else
+
 	if (diff_io->is_sync_io)
 		complete(&diff_io->notify.sync.completion);
 	else
 		queue_work(system_wq, &diff_io->notify.async.work);
-#endif
 	bio_put(bio);
 }
 
@@ -72,14 +61,12 @@ static inline struct diff_io *diff_io_new(bool is_write, bool is_nowait)
 	diff_io = kzalloc(sizeof(struct diff_io), gfp_mask);
 	if (unlikely(!diff_io))
 		return NULL;
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_io);
 #endif
 	diff_io->error = 0;
 	diff_io->is_write = is_write;
-#ifdef HAVE_BIO_MAX_PAGES
-	atomic_set(&diff_io->bio_count, 0);
-#endif
+
 	return diff_io;
 }
 
@@ -122,122 +109,7 @@ static inline unsigned short calc_page_count(sector_t sectors)
 	return round_up(sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
 }
 
-#ifdef HAVE_BIO_MAX_PAGES
-int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
-	       struct diff_buffer *diff_buffer, const bool is_nowait,
-	       const bool is_flush)
-{
-	int ret = 0;
-	struct bio *bio;
-	struct bio_list bio_list_head = BIO_EMPTY_LIST;
-	struct page **current_page_ptr;
-	sector_t processed = 0;
-	unsigned int op_flags =
-		is_flush ? REQ_SYNC | REQ_FUA | REQ_PREFLUSH : 0;
 
-	if (unlikely(!check_page_aligned(diff_region->sector))) {
-		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
-		return -EINVAL;
-	}
-
-	if (unlikely(calc_page_count(diff_region->count) >
-		     diff_buffer->page_count)) {
-		pr_err("The difference storage block is larger than the buffer size\n");
-		return -EINVAL;
-	}
-
-	current_page_ptr = diff_buffer->pages;
-	while (processed < diff_region->count) {
-		sector_t offset = 0;
-		sector_t portion;
-		unsigned short nr_iovecs;
-
-		portion = diff_region->count - processed;
-		nr_iovecs = calc_page_count(portion);
-
-		if (nr_iovecs > BIO_MAX_PAGES) {
-			nr_iovecs = BIO_MAX_PAGES;
-			portion = BIO_MAX_PAGES * SECTORS_IN_PAGE;
-		}
-
-		if (is_nowait) {
-			bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, nr_iovecs,
-					       &diff_io_bioset);
-			if (unlikely(!bio)) {
-				ret = -EAGAIN;
-				goto fail;
-			}
-		} else {
-			bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs,
-					       &diff_io_bioset);
-			if (unlikely(!bio)) {
-				ret = -ENOMEM;
-				goto fail;
-			}
-		}
-
-#ifdef HAVE_LP_FILTER
-		/*
-		 * do nothing because the bi_end_io field is checked for
-		 * the standalone module.
-		 */
-#else
-		bio_set_flag(bio, BIO_FILTERED);
-#endif
-		bio->bi_end_io = diff_io_endio;
-		bio->bi_private = diff_io;
-		bio_set_dev(bio, diff_region->bdev);
-		bio->bi_iter.bi_sector = diff_region->sector + processed;
-		if (diff_io->is_write)
-			bio_set_op_attrs(bio, REQ_OP_WRITE, op_flags);
-		else
-			bio_set_op_attrs(bio, REQ_OP_READ, op_flags);
-
-		while (offset < portion) {
-			sector_t bvec_len_sect;
-			unsigned int bvec_len;
-
-			bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE,
-					      portion - offset);
-			bvec_len =
-				(unsigned int)(bvec_len_sect << SECTOR_SHIFT);
-
-			if (unlikely(bio_full(bio, bvec_len))) {
-				ret = -EFAULT;
-				goto fail;
-			}
-			/* All pages offset aligned to PAGE_SIZE */
-			__bio_add_page(bio, *current_page_ptr, bvec_len, 0);
-
-			current_page_ptr++;
-			offset += bvec_len_sect;
-		}
-
-		bio_list_add(&bio_list_head, bio);
-		atomic_inc(&diff_io->bio_count);
-
-		processed += offset;
-	}
-
-	while ((bio = bio_list_pop(&bio_list_head))) {
-#ifdef BDEV_FILTER_SYNC
-		bdev_filter_submit_bio_noacct(bio);
-#else
-		submit_bio_noacct(bio);
-#endif
-	}
-
-	if (diff_io->is_sync_io)
-		wait_for_completion_io(&diff_io->notify.sync.completion);
-
-	return 0;
-fail:
-	pr_err("%s failed\n", __FUNCTION__);
-	while ((bio = bio_list_pop(&bio_list_head)))
-		bio_put(bio);
-	return ret;
-}
-#else
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	       struct diff_buffer *diff_buffer, const bool is_nowait,
 	       const bool is_flush)
@@ -271,14 +143,8 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			return -ENOMEM;
 	}
 
-#ifdef HAVE_LP_FILTER
-	/*
-	 * do nothing because the bi_end_io field is checked for
-	 * the standalone module.
-	 */
-#else
 	bio_set_flag(bio, BIO_FILTERED);
-#endif
+
 	bio->bi_end_io = diff_io_endio;
 	bio->bi_private = diff_io;
 	bio_set_dev(bio, diff_region->bdev);
@@ -305,14 +171,11 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		current_page_ptr++;
 		processed += bvec_len_sect;
 	}
-#ifdef BDEV_FILTER_SYNC
-	bdev_filter_submit_bio_noacct(bio);
-#else
+
 	submit_bio_noacct(bio);
-#endif
+
 	if (diff_io->is_sync_io)
 		wait_for_completion_io(&diff_io->notify.sync.completion);
 
 	return 0;
 }
-#endif

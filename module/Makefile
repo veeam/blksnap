@@ -15,5 +15,6 @@ $(KERNEL_MODULE_NAME)-y += snapimage.o
 $(KERNEL_MODULE_NAME)-y += snapshot.o
 $(KERNEL_MODULE_NAME)-y += sysfs.o
 $(KERNEL_MODULE_NAME)-y += tracker.o
+$(KERNEL_MODULE_NAME)-y += memory_checker.o
 
 obj-m	 += $(KERNEL_MODULE_NAME).o

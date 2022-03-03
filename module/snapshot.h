@@ -48,9 +48,6 @@ struct snapshot {
 	int count;
 	struct tracker **tracker_array;
 	struct snapimage **snapimage_array;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	struct super_block **superblock_array;
-#endif
 };
 
 void snapshot_done(void);
@@ -70,8 +67,3 @@ int snapshot_collect_images(uuid_t *id,
 int snapshot_mark_dirty_blocks(dev_t image_dev_id,
 			       struct blk_snap_block_range *block_ranges,
 			       unsigned int count);
-
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
-			     struct blk_snap_sector_state *state);
-#endif

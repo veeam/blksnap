@@ -3,18 +3,14 @@
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
-#ifdef HAVE_LP_FILTER
-#include "blk_snap.h"
-#else
 #include <linux/blk_snap.h>
-#endif
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "sysfs.h"
 #include "ctrl.h"
 
-#ifdef BLK_SNAP_DEBUGLOG
+#ifdef CONFIG_BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif

@@ -3,12 +3,8 @@
 #include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
-#ifdef HAVE_LP_FILTER
-#include "blk_snap.h"
-#else
 #include <linux/blk_snap.h>
-#endif
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "snapimage.h"
@@ -16,7 +12,7 @@
 #include "chunk.h"
 #include "cbt_map.h"
 
-#ifdef BLK_SNAP_DEBUGLOG
+#ifdef CONFIG_BLK_SNAP_DEBUGLOG
 #undef pr_debug
 #define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
@@ -126,13 +122,6 @@ static void snapimage_queue_work(struct kthread_work *work)
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
 				 op_is_write(req_op(rq)));
 	rq_for_each_segment (bvec, rq, iter) {
-#if 0
-#pragma message("Writing was suppressed for debugging")
-		if (op_is_write(req_op(rq))) {
-			pr_debug("DEBUG! %s writing was suppressed for %llu sector", __FUNCTION__, pos);
-			break;
-		}
-#endif
 		status = diff_area_image_io(&io_ctx, &bvec, &pos);
 		if (unlikely(status != BLK_STS_OK))
 			break;
@@ -225,23 +214,16 @@ void snapimage_free(struct snapimage *snapimage)
 
 	snapimage_unprepare_worker(snapimage);
 
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
 	del_gendisk(snapimage->disk);
 	blk_cleanup_disk(snapimage->disk);
 	blk_mq_free_tag_set(&snapimage->tag_set);
-#else
-	del_gendisk(snapimage->disk);
-	blk_cleanup_queue(snapimage->queue);
-	blk_mq_free_tag_set(&snapimage->tag_set);
-	put_disk(snapimage->disk);
-#endif
 
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
 
 	free_minor(MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
 #endif
 }
@@ -253,9 +235,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	int minor;
 	struct snapimage *snapimage = NULL;
 	struct gendisk *disk;
-#ifndef HAVE_BLK_MQ_ALLOC_DISK
-	struct request_queue *queue;
-#endif
 
 	pr_info("Create snapshot image for device [%u:%u]\n",
 		MAJOR(diff_area->orig_bdev->bd_dev),
@@ -264,7 +243,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage);
 #endif
 	ret = new_minor(&minor, snapimage);
@@ -292,33 +271,12 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		goto fail_free_worker;
 	}
 
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
 	disk = blk_mq_alloc_disk(&snapimage->tag_set, snapimage);
 	if (IS_ERR(disk)) {
 		ret = PTR_ERR(disk);
 		pr_err("Failed to allocate disk. errno=%d\n", abs(ret));
 		goto fail_free_tagset;
 	}
-#else
-	queue = blk_mq_init_queue(&snapimage->tag_set);
-	if (IS_ERR(queue)) {
-		ret = PTR_ERR(queue);
-		pr_err("Failed to allocate queue. errno=%d\n", abs(ret));
-		goto fail_free_tagset;
-	}
-
-	disk = alloc_disk(1);
-	if (!disk) {
-		pr_err("Failed to allocate disk\n");
-		goto fail_free_queue;
-	}
-	disk->queue = queue;
-
-	snapimage->queue = queue;
-	snapimage->queue->queuedata = snapimage;
-
-	blk_queue_bounce_limit(snapimage->queue, BLK_BOUNCE_HIGH);
-#endif
 
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
@@ -359,7 +317,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	cbt_map_get(cbt_map);
 	snapimage->cbt_map = cbt_map;
 
-#ifdef HAVE_ADD_DISK_RESULT
 	ret = add_disk(disk);
 	if (ret) {
 		pr_err("Failed to add disk [%s] for snapshot image device\n",
@@ -367,20 +324,10 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		goto fail_cleanup_disk;
 	}
 
-#else
-	add_disk(disk);
-#endif
-
 	return snapimage;
 
 fail_cleanup_disk:
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
 	blk_cleanup_disk(disk);
-#else
-	del_gendisk(disk);
-fail_free_queue:
-	blk_cleanup_queue(queue);
-#endif
 fail_free_tagset:
 	blk_mq_free_tag_set(&snapimage->tag_set);
 fail_free_worker:
@@ -389,7 +336,7 @@ fail_free_minor:
 	free_minor(minor);
 fail_free_image:
 	kfree(snapimage);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
 #endif
 	return ERR_PTR(ret);
@@ -424,37 +371,3 @@ int snapimage_major(void)
 {
 	return _major;
 }
-
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
-			      struct blk_snap_sector_state *state)
-{
-	int ret;
-
-	ret = diff_area_get_sector_state(snapimage->diff_area, sector,
-					 &state->chunk_state);
-	if (ret)
-		return ret;
-
-	ret = cbt_map_get_sector_state(snapimage->cbt_map, sector,
-				       &state->snap_number_prev,
-				       &state->snap_number_curr);
-	if (ret)
-		return ret;
-	//#ifdef BLK_SNAP_DEBUG_CHUNK_IO
-	{
-		char buf[SECTOR_SIZE];
-
-		ret = diff_area_get_sector_image(snapimage->diff_area, sector,
-						 buf /*&state->buf*/);
-		if (ret)
-			return ret;
-
-		pr_info("sector #%llu", sector);
-		print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET,
-			       32, 1, buf, 96, true);
-	}
-	//#endif
-	return 0;
-}
-#endif

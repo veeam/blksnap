@@ -30,9 +30,6 @@ struct diff_io_async {
 
 struct diff_io {
 	int error;
-#ifdef HAVE_BIO_MAX_PAGES
-	atomic_t bio_count;
-#endif
 	bool is_write;
 	bool is_sync_io;
 	union {
@@ -48,7 +45,7 @@ static inline void diff_io_free(struct diff_io *diff_io)
 {
 	if (diff_io) {
 		kfree(diff_io);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_diff_io);
 #endif
 	}

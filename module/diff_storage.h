@@ -55,10 +55,6 @@ struct diff_storage {
 	atomic_t overflow_flag;
 
 	struct event_queue event_queue;
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	atomic_t free_block_count;
-	atomic_t user_block_count;
-#endif
 };
 
 struct diff_storage *diff_storage_new(void);
@@ -84,7 +80,7 @@ static inline void diff_storage_free_region(struct diff_region *region)
 {
 	if (region) {
 		kfree(region);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_diff_region);
 #endif
 	}
