@@ -57,7 +57,7 @@ bool CBlksnap::Modification(struct blk_snap_mod& mod)
 {
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_MOD, &mod))
     {
-        if (errno == -ENOTTY)
+        if (errno == ENOTTY)
             return false;
         throw std::system_error(errno, std::generic_category(), "Failed to get modification.");
     }
