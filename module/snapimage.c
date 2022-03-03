@@ -3,10 +3,14 @@
 #include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
+#ifdef HAVE_LP_FILTER
+#include "blk_snap.h"
+#else
+#include <linux/blk_snap.h>
+#endif
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
-#include "blk_snap.h"
 #include "snapimage.h"
 #include "diff_area.h"
 #include "chunk.h"

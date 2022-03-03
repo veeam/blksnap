@@ -4,10 +4,14 @@
 #include <linux/sched/mm.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#ifdef HAVE_LP_FILTER
+#include "blk_snap.h"
+#else
+#include <linux/blk_snap.h>
+#endif
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
-#include "blk_snap.h"
 #include "params.h"
 #include "chunk.h"
 #include "diff_io.h"

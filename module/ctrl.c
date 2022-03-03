@@ -5,11 +5,15 @@
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
+#ifdef HAVE_LP_FILTER
+#include "blk_snap.h"
+#else
+#include <linux/blk_snap.h>
+#endif
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "ctrl.h"
-#include "blk_snap.h"
 #include "params.h"
 #include "version.h"
 #include "snapshot.h"

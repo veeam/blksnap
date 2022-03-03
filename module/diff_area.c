@@ -2,11 +2,15 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-area: " fmt
 #include <linux/genhd.h>
 #include <linux/slab.h>
+#ifdef HAVE_LP_FILTER
+#include "blk_snap.h"
+#else
+#include <linux/blk_snap.h>
+#endif
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
-#include "blk_snap.h"
 #include "chunk.h"
 #include "diff_area.h"
 #include "diff_buffer.h"

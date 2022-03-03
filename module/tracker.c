@@ -3,11 +3,15 @@
 #include <linux/slab.h>
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
+#ifdef HAVE_LP_FILTER
+#include "blk_snap.h"
+#else
+#include <linux/blk_snap.h>
+#endif
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
-#include "blk_snap.h"
 #include "tracker.h"
 #include "cbt_map.h"
 #include "diff_area.h"
