@@ -30,9 +30,7 @@ struct diff_io_async {
 
 struct diff_io {
 	int error;
-#ifdef HAVE_BIO_MAX_PAGES
 	atomic_t bio_count;
-#endif
 	bool is_write;
 	bool is_sync_io;
 	union {
@@ -78,5 +76,4 @@ diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
 };
 
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
-	       struct diff_buffer *diff_buffer, const bool is_nowait,
-	       const bool is_flush);
+	       struct diff_buffer *diff_buffer, const bool is_nowait);

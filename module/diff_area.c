@@ -456,37 +456,10 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			}
 			WARN(chunk->diff_buffer, "Chunks buffer has been lost");
 			chunk->diff_buffer = diff_buffer;
-#ifdef BDEV_FILTER_SYNC
-			/*
-			 * Synchronous mode ensures that the read is done
-			 * before the data is overwritten.
-			 */
-			if (is_nowait) {
-				ret = chunk_async_load_orig(chunk, is_nowait);
-				if (unlikely(ret))
-					goto fail_unlock_chunk;
 
-				ret = -EAGAIN;
-				goto fail_unlock_chunk;
-			}
-			ret = chunk_load_orig(chunk);
-			if (unlikely(ret))
-				goto fail_unlock_chunk;
-
-			chunk_state_set(chunk, CHUNK_ST_BUFFER_READY);
-
-			ret = chunk_schedule_storing(chunk, false);
-			if (unlikely(ret))
-				goto fail_unlock_chunk;
-#else
-			/*
-			 * Asynchronous mode does not guarantee that the order
-			 * of reading and writing is preserved.
-			 */
 			ret = chunk_async_load_orig(chunk, is_nowait);
 			if (unlikely(ret))
 				goto fail_unlock_chunk;
-#endif
 		}
 	}
 

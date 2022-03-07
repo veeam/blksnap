@@ -21,10 +21,6 @@
 #define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-#ifdef HAVE_LP_FILTER
-#include "lp_filter.h"
-#endif
-
 LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
 

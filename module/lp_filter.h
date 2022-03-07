@@ -11,10 +11,6 @@ struct bdev_filter_operations {
 	void (*detach_cb)(void *ctx);
 };
 
-#ifdef BDEV_FILTER_SYNC
-void bdev_filter_submit_bio_noacct(struct bio *bio);
-#endif
-
 void bdev_filter_write_lock(struct block_device *bdev);
 void bdev_filter_write_unlock(struct block_device *bdev);
 void bdev_filter_read_lock(struct block_device *bdev);

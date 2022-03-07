@@ -89,14 +89,11 @@ static bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	 * But for the standalone version of the module, we can only use the
 	 * context of bio.
 	 */
-
-#ifdef BDEV_FILTER_SYNC
-	if (WARN_ONCE((bio->bi_end_io == diff_io_endio),
-		      "We should not intercept our own requests in the synchronous mode of the filter."))
-#else
 	if (bio->bi_end_io == diff_io_endio)
-#endif
 		return true;
+#else
+	if (WARN_ONCE((bio->bi_end_io == diff_io_endio),
+		      "We should not intercept our own ."))
 #endif
 	if (!op_is_write(bio_op(bio)))
 		return true;

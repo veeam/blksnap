@@ -301,8 +301,7 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait,
-			 false);
+	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
@@ -348,8 +347,7 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
 	atomic_inc(&chunk->diff_area->pending_io_count);
 
-	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait,
-			 false);
+	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
 	if (ret) {
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
@@ -380,7 +378,7 @@ int chunk_load_orig(struct chunk *chunk)
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	ret = diff_io_do(diff_io, &region, chunk->diff_buffer, false, true);
+	ret = diff_io_do(diff_io, &region, chunk->diff_buffer, false);
 	if (!ret)
 		ret = diff_io->error;
 
@@ -406,7 +404,7 @@ int chunk_load_diff(struct chunk *chunk)
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	ret = diff_io_do(diff_io, region, chunk->diff_buffer, false, false);
+	ret = diff_io_do(diff_io, region, chunk->diff_buffer, false);
 	if (!ret)
 		ret = diff_io->error;
 

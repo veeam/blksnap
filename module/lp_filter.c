@@ -271,15 +271,6 @@ static void (*submit_bio_noacct_notrace)(struct bio *) =
 #error "Your kernel is too old for this module."
 #endif
 
-#ifdef BDEV_FILTER_SYNC
-#pragma message "Have BDEV_FILTER_SYNC"
-void notrace bdev_filter_submit_bio_noacct(struct bio *bio)
-{
-	submit_bio_noacct_notrace(bio);
-}
-EXPORT_SYMBOL(bdev_filter_submit_bio_noacct);
-#endif
-
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 #else
@@ -289,9 +280,6 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 	if (!current->bio_list) {
 		bool pass;
 
-#ifdef BDEV_FILTER_SYNC
-		pass = bdev_filters_apply(bio);
-#else
 		struct bio_list bio_list_on_stack[2];
 		struct bio *new_bio;
 
@@ -312,7 +300,7 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 			 */
 			submit_bio_noacct_notrace(new_bio);
 		}
-#endif
+
 		if (!pass) {
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 			return BLK_QC_T_NONE;
