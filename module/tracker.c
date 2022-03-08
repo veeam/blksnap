@@ -54,8 +54,6 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 	return tracker;
 }
 
-void diff_io_endio(struct bio *bio);
-
 static bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
@@ -63,10 +61,6 @@ static bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	sector_t sector;
 	sector_t count;
 	unsigned int current_flag;
-
-	if (WARN_ONCE((bio->bi_end_io == diff_io_endio),
-		      "We should not intercept our own requests."))
-		return true;
 
 	if (!op_is_write(bio_op(bio)))
 		return true;
