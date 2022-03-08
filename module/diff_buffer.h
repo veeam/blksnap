@@ -58,11 +58,11 @@ static inline bool diff_buffer_iter_get(struct diff_buffer *diff_buffer,
 	iter->page = diff_buffer->pages[page_inx];
 	iter->offset = (size_t)(ofs & (SECTOR_IN_PAGE - 1)) << SECTOR_SHIFT;
 	/*
-         * The size cannot exceed the size of the page, taking into account
-         * the offset in this page.
-         * But at the same time it is unacceptable to go beyond the allocated
-         * buffer.
-         */
+	 * The size cannot exceed the size of the page, taking into account
+	 * the offset in this page.
+	 * But at the same time it is unacceptable to go beyond the allocated
+	 * buffer.
+	 */
 	iter->bytes = min_t(size_t, (PAGE_SIZE - iter->offset),
 			    (diff_buffer->size - (ofs << SECTOR_SHIFT)));
 

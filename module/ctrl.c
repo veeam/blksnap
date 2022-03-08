@@ -24,15 +24,11 @@
 
 static int blk_snap_major;
 
-//static int ctrl_open(struct inode *inode, struct file *fl);
-//static int ctrl_release(struct inode *inode, struct file *fl);
 static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg);
 
 static const struct file_operations ctrl_fops = {
 	.owner = THIS_MODULE,
-	//.open = ctrl_open,
-	//.release = ctrl_release,
 	.unlocked_ioctl = ctrl_unlocked_ioctl,
 };
 
@@ -70,23 +66,7 @@ void ctrl_done(void)
 
 	unregister_chrdev(blk_snap_major, BLK_SNAP_MODULE_NAME);
 }
-/*
-static
-int ctrl_open(struct inode *inode, struct file *fl)
-{
-	if (try_module_get(THIS_MODULE))
-		return 0;
-	return -EINVAL;
-}
 
-static
-int ctrl_release(struct inode *inode, struct file *fl)
-{
-	module_put(THIS_MODULE);
-
-	return 0;
-}
-*/
 static int ioctl_version(unsigned long arg)
 {
 	if (copy_to_user((void *)arg, &version, sizeof(version))) {
@@ -200,10 +180,9 @@ static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 
 	dirty_blocks_array = kcalloc(
 		karg.count, sizeof(struct blk_snap_block_range), GFP_KERNEL);
-	if (!dirty_blocks_array) {
-		pr_err("Unable to mark dirty %d blocks\n", karg.count);
+	if (!dirty_blocks_array)
 		return -ENOMEM;
-	}
+
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_block_range);
 #endif

@@ -143,7 +143,7 @@ struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage,
 	struct storage_bdev *storage_bdev;
 
 	spin_lock(&diff_storage->lock);
-	list_for_each_entry (storage_bdev, &diff_storage->storage_bdevs, link) {
+	list_for_each_entry(storage_bdev, &diff_storage->storage_bdevs, link) {
 		if (storage_bdev->dev_id == dev_id) {
 			bdev = storage_bdev->bdev;
 			break;
@@ -191,6 +191,7 @@ static inline int diff_storage_add_range(struct diff_storage *diff_storage,
 					 sector_t sector, sector_t count)
 {
 	struct storage_block *storage_block;
+
 	pr_debug("Add range to diff storage: [%u:%u] %llu:%llu\n",
 		 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
 

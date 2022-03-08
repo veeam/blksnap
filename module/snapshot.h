@@ -19,10 +19,10 @@ struct snapimage;
  * @link:
  *
  * @kref:
- * 	Protects the structure from being released during the processing of
- * 	a IOCTL.
+ *	Protects the structure from being released during the processing of
+ *	a IOCTL.
  * @id:
- * 	UUID of snapshot.
+ *	UUID of snapshot.
  * @is_taken:
  *	Flag that the snapshot was taken.
  * @lock:

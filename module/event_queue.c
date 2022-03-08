@@ -107,12 +107,11 @@ struct event *event_wait(struct event_queue *event_queue,
 			 event->code);
 		return event;
 	}
-	if (ret == 0) {
-		//pr_debug("%s - timeout\n", __FUNCTION__);
+	if (ret == 0)
 		return ERR_PTR(-ENOENT);
-	}
+
 	if (ret == -ERESTARTSYS) {
-		pr_debug("%s - interrupted\n", __FUNCTION__);
+		pr_debug("event waiting interrupted\n");
 		return ERR_PTR(-EINTR);
 	}
 

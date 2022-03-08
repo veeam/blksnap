@@ -31,7 +31,7 @@ struct diff_io;
  *	0 -> LOADING -> BUFFER_READY -> BUFFER_READY | STORING ->
  *	BUFFER_READY | STORE_READY -> STORE_READY
  * Write to snapshot image:
- * 	[TBD] It would be necessary to double-check the diagram
+ *	[TBD] It would be necessary to double-check the diagram
  *	0 -> LOADING -> BUFFER_READY | DIRTY -> DIRTY | STORING ->
  *	BUFFER_READY | STORE_READY -> STORE_READY
  */
@@ -54,29 +54,29 @@ enum chunk_st {
  *      The struct diff_area describes the storage of changes specifically
  *      for a specific device.
  * @number:
- * 	Sequential number of chunk.
+ *	Sequential number of chunk.
  * @sector_count:
- * 	Numbers of sectors in current chunk this is especially true for the
- * 	last piece.
+ *	Numbers of sectors in current chunk this is especially true for the
+ *	last piece.
  * @state:
  *	Defines the state of the chunk. May contain CHUNK_ST_* bits.
  * @lock:
- * 	Syncs access to the chunks fields: state, diff_buffer and diff_region.
- * 	The semaphore is blocked for writing if there is no actual data
- * 	in the buffer, since a block of data is being read from the original
- * 	device or from a diff storage.
- * 	If data is being read or written from the chunk buffer, the semaphore
- * 	must be blocked for reading.
- * 	The module does not prohibit reading and writing data to the snapshot
- * 	from different threads in parallel.
- * 	To avoid the problem with simultaneous access, it is enough to open
- * 	the snapshot image block device with the FMODE_EXCL parameter.
+ *	Syncs access to the chunks fields: state, diff_buffer and diff_region.
+ *	The semaphore is blocked for writing if there is no actual data
+ *	in the buffer, since a block of data is being read from the original
+ *	device or from a diff storage.
+ *	If data is being read or written from the chunk buffer, the semaphore
+ *	must be blocked for reading.
+ *	The module does not prohibit reading and writing data to the snapshot
+ *	from different threads in parallel.
+ *	To avoid the problem with simultaneous access, it is enough to open
+ *	the snapshot image block device with the FMODE_EXCL parameter.
  * @diff_buffer:
- * 	Pointer to &struct diff_buffer. Describes a buffer in memory for
- * 	storing chunk data.
+ *	Pointer to &struct diff_buffer. Describes a buffer in memory for
+ *	storing chunk data.
  * @diff_region:
- * 	Pointer to &struct diff_region. Describes a copy of the chunk data
- * 	on the difference storage.
+ *	Pointer to &struct diff_region. Describes a copy of the chunk data
+ *	on the difference storage.
  * diff_io:
  *	The struct diff_io provides I/O operations for a chunk.
  *

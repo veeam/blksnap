@@ -380,7 +380,7 @@ int tracker_remove(dev_t dev_id)
 		struct tracked_device *iter_tr_dev;
 
 		spin_lock(&tracked_device_lock);
-		list_for_each_entry (iter_tr_dev, &tracked_device_list, link) {
+		list_for_each_entry(iter_tr_dev, &tracked_device_list, link) {
 			if (iter_tr_dev->dev_id == dev_id) {
 				list_del(&iter_tr_dev->link);
 				tr_dev = iter_tr_dev;
@@ -389,12 +389,11 @@ int tracker_remove(dev_t dev_id)
 		}
 		spin_unlock(&tracked_device_lock);
 
-		if (tr_dev) {
-			kfree(tr_dev);
+		kfree(tr_dev);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+		if (tr_dev)
 			memory_object_dec(memory_object_tracked_device);
 #endif
-		}
 	}
 put_tracker:
 	tracker_put(tracker);
@@ -484,14 +483,14 @@ int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
 		 * Just calculate trackers list length
 		 */
 		spin_lock(&tracked_device_lock);
-		list_for_each_entry (tr_dev, &tracked_device_list, link)
+		list_for_each_entry(tr_dev, &tracked_device_list, link)
 			++count;
 		spin_unlock(&tracked_device_lock);
 		goto out;
 	}
 
 	spin_lock(&tracked_device_lock);
-	list_for_each_entry (tr_dev, &tracked_device_list, link) {
+	list_for_each_entry(tr_dev, &tracked_device_list, link) {
 		if (count >= max_count) {
 			ret = -ENOBUFS;
 			break;

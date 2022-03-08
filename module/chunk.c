@@ -63,7 +63,7 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 		diff_region = diff_storage_new_region(
 			diff_area->diff_storage,
 			diff_area_chunk_sectors(diff_area));
-		if (unlikely(IS_ERR(diff_region))) {
+		if (IS_ERR(diff_region)) {
 			pr_debug("Cannot get store for chunk #%ld\n",
 				 chunk->number);
 			return PTR_ERR(diff_region);
@@ -148,12 +148,10 @@ static void chunk_notify_load(void *ctx)
 		goto out;
 	}
 
-	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__,
-	       atomic_read(&chunk->state));
+	pr_err("invalid chunk state 0x%x\n", atomic_read(&chunk->state));
 	up(&chunk->lock);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
-	return;
 }
 
 static void chunk_notify_store(void *ctx)
@@ -192,12 +190,10 @@ static void chunk_notify_store(void *ctx)
 			goto out;
 		}
 	} else
-		pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__,
-		       atomic_read(&chunk->state));
+		pr_err("invalid chunk state 0x%x\n", atomic_read(&chunk->state));
 	up(&chunk->lock);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
-	return;
 }
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
@@ -276,7 +272,7 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 
 /**
  * chunk_async_load_orig() - Starts asynchronous loading of a chunk from
- * 	the origian block device.
+ *	the origian block device.
  */
 int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 {
@@ -313,7 +309,7 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 
 /**
  * chunk_load_orig() - Performs synchronous loading of a chunk from the
- * 	original block device.
+ *	original block device.
  */
 int chunk_load_orig(struct chunk *chunk)
 {
@@ -340,7 +336,7 @@ int chunk_load_orig(struct chunk *chunk)
 
 /**
  * chunk_load_diff() - Performs synchronous loading of a chunk from the
- * 	difference storage.
+ *	difference storage.
  */
 int chunk_load_diff(struct chunk *chunk)
 {

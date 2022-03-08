@@ -19,7 +19,7 @@
 
 #define SNAPIMAGE_MAX_DEVICES 2048
 
-static unsigned int _major = 0;
+static unsigned int _major;
 static DEFINE_IDR(_minor_idr);
 static DEFINE_SPINLOCK(_minor_lock);
 
@@ -48,29 +48,6 @@ static int new_minor(int *minor, void *ptr)
 	*minor = ret;
 	return 0;
 }
-
-/*
-struct snapimage *snapimage_get_dev(dev_t dev)
-{
-	struct snapimage *snapimage;
-	unsigned int minor = MINOR(dev);
-
-	if (MAJOR(dev) != _major || minor >= (1 << MINORBITS))
-		return NULL;
-
-	spin_lock(&_minor_lock);
-
-	snapimage = idr_find(&_minor_idr, minor);
-	if (!snapimage)
-		goto out;
-
-	//snapimage_get(snapimage);
-out:
-	spin_unlock(&_minor_lock);
-
-	return snapimage;
-}
-*/
 
 static inline void snapimage_unprepare_worker(struct snapimage *snapimage)
 {
@@ -121,7 +98,7 @@ static void snapimage_queue_work(struct kthread_work *work)
 	diff_area_throttling_io(snapimage->diff_area);
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
 				 op_is_write(req_op(rq)));
-	rq_for_each_segment (bvec, rq, iter) {
+	rq_for_each_segment(bvec, rq, iter) {
 		status = diff_area_image_io(&io_ctx, &bvec, &pos);
 		if (unlikely(status != BLK_STS_OK))
 			break;

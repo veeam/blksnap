@@ -99,14 +99,9 @@ void diff_area_free(struct kref *kref)
 	}
 
 	atomic_set(&diff_area->corrupt_flag, 1);
-
-	//flush_work(&diff_area->storing_chunks_work);
 	flush_work(&diff_area->cache_release_work);
-	//flush_work(&diff_area->corrupt_work);
-
-	xa_for_each (&diff_area->chunk_map, inx, chunk) {
+	xa_for_each(&diff_area->chunk_map, inx, chunk)
 		chunk_free(chunk);
-	}
 	xa_destroy(&diff_area->chunk_map);
 
 	if (diff_area->orig_bdev) {
@@ -132,7 +127,7 @@ get_chunk_from_cache_and_write_lock(spinlock_t *caches_lock,
 	struct chunk *chunk = NULL;
 
 	spin_lock(caches_lock);
-	list_for_each_entry (iter, cache_queue, cache_link) {
+	list_for_each_entry(iter, cache_queue, cache_link) {
 		if (!down_trylock(&iter->lock)) {
 			chunk = iter;
 			break;
@@ -527,7 +522,7 @@ static inline sector_t diff_area_chunk_start(struct diff_area *diff_area,
 
 /**
  * diff_area_image_io - Implements copying data from chunk to bio_vec when
- * 	reading or from bio_tec to chunk when writing.
+ *	reading or from bio_tec to chunk when writing.
  */
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos)

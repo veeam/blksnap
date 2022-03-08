@@ -51,6 +51,7 @@ static atomic_t memory_counter_max[memory_object_count];
 void memory_object_inc(enum memory_object_type type)
 {
 	int value;
+
 	if (unlikely(type >= memory_object_count))
 		return;
 

@@ -108,18 +108,16 @@ static void snapshot_free(struct kref *kref)
 	if (snapshot->is_taken)
 		snapshot_release(snapshot);
 
-	if (snapshot->snapimage_array) {
-		kfree(snapshot->snapimage_array);
+	kfree(snapshot->snapimage_array);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
 #endif
-	}
-	if (snapshot->tracker_array) {
-		kfree(snapshot->tracker_array);
+	kfree(snapshot->tracker_array);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
 #endif
-	}
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
@@ -181,26 +179,26 @@ static struct snapshot *snapshot_new(unsigned int count)
 	return snapshot;
 
 fail_free_snapimage:
-	if (snapshot->snapimage_array) {
-		kfree(snapshot->snapimage_array);
+	kfree(snapshot->snapimage_array);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
 #endif
-	}
+
 fail_free_trackers:
-	if (snapshot->tracker_array) {
-		kfree(snapshot->tracker_array);
+	kfree(snapshot->tracker_array);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
 #endif
-	}
+
 fail_free_snapshot:
-	if (snapshot) {
-		kfree(snapshot);
+	kfree(snapshot);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (snapshot)
 		memory_object_dec(memory_object_snapshot);
 #endif
-	}
+
 fail:
 	return ERR_PTR(ret);
 }
@@ -282,7 +280,7 @@ static struct snapshot *snapshot_get_by_id(uuid_t *id)
 	if (list_empty(&snapshots))
 		goto out;
 
-	list_for_each_entry (s, &snapshots, link) {
+	list_for_each_entry(s, &snapshots, link) {
 		if (uuid_equal(&s->id, id)) {
 			snapshot = s;
 			snapshot_get(snapshot);
@@ -304,7 +302,7 @@ int snapshot_destroy(uuid_t *id)
 	if (!list_empty(&snapshots)) {
 		struct snapshot *s = NULL;
 
-		list_for_each_entry (s, &snapshots, link) {
+		list_for_each_entry(s, &snapshots, link) {
 			if (uuid_equal(&s->id, id)) {
 				snapshot = s;
 				list_del(&snapshot->link);
@@ -547,12 +545,12 @@ int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array)
 		goto out;
 
 	if (!id_array) {
-		list_for_each_entry (s, &snapshots, link)
+		list_for_each_entry(s, &snapshots, link)
 			inx++;
 		goto out;
 	}
 
-	list_for_each_entry (s, &snapshots, link) {
+	list_for_each_entry(s, &snapshots, link) {
 		if (inx >= *pcount) {
 			ret = -ENODATA;
 			goto out;
@@ -609,7 +607,6 @@ int snapshot_collect_images(
 		kcalloc(snapshot->count, sizeof(struct blk_snap_image_info),
 			GFP_KERNEL);
 	if (!image_info_array) {
-		pr_err("Unable to collect snapshot images: not enough memory.\n");
 		ret = -ENOMEM;
 		goto out;
 	}
@@ -653,12 +650,12 @@ int snapshot_collect_images(
 	}
 out:
 	*pcount = snapshot->count;
-	if (image_info_array) {
-		kfree(image_info_array);
+
+	kfree(image_info_array);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (image_info_array)
 		memory_object_dec(memory_object_blk_snap_image_info);
 #endif
-	}
 	snapshot_put(snapshot);
 
 	return ret;
@@ -680,7 +677,7 @@ int snapshot_mark_dirty_blocks(dev_t image_dev_id,
 	if (list_empty(&snapshots))
 		goto out;
 
-	list_for_each_entry (s, &snapshots, link) {
+	list_for_each_entry(s, &snapshots, link) {
 		for (inx = 0; inx < s->count; inx++) {
 			if (s->snapimage_array[inx]->image_dev_id ==
 			    image_dev_id) {
