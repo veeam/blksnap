@@ -6,8 +6,14 @@
 
 #define BDEV_FILTER_NAME_MAX_LENGTH 31
 
+enum bdev_filter_result {
+	bdev_filter_skip = 0,
+	bdev_filter_pass,
+	bdev_filter_repeat,
+};
+
 struct bdev_filter_operations {
-	bool (*submit_bio_cb)(struct bio *bio, void *ctx);
+	enum bdev_filter_result (*submit_bio_cb)(struct bio *bio, void *ctx);
 	void (*detach_cb)(void *ctx);
 };
 

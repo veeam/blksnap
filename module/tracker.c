@@ -73,7 +73,7 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 void diff_io_endio(struct bio *bio);
 #endif
 
-static bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
+static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
 	struct tracker *tracker = ctx;
@@ -90,16 +90,16 @@ static bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	 * context of bio.
 	 */
 	if (bio->bi_end_io == diff_io_endio)
-		return true;
+		return bdev_filter_pass;
 #else
 	if (WARN_ONCE((bio->bi_end_io == diff_io_endio),
 		      "We should not intercept our own ."))
 #endif
 	if (!op_is_write(bio_op(bio)))
-		return true;
+		return bdev_filter_pass;
 
 	if (!bio->bi_iter.bi_size)
-		return true;
+		return bdev_filter_pass;
 
 	sector = bio->bi_iter.bi_sector;
 	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) /
@@ -109,28 +109,33 @@ static bool tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	err = cbt_map_set(tracker->cbt_map, sector, count);
 	memalloc_noio_restore(current_flag);
 	if (unlikely(err))
-		return true;
+		return bdev_filter_pass;
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
-		return true;
+		return bdev_filter_pass;
 
 	if (diff_area_is_corrupted(tracker->diff_area))
-		return true;
+		return bdev_filter_pass;
 
 	current_flag = memalloc_noio_save();
 	err = diff_area_copy(tracker->diff_area, sector, count,
 			     !!(bio->bi_opf & REQ_NOWAIT));
 	memalloc_noio_restore(current_flag);
-	if (likely(!err))
-		return true;
+	if (likely(!err)) {
+		if (!bio_list_empty(current->bio_list) &&
+		    (bio->bi_opf & REQ_SYNC))
+			return bdev_filter_repeat;
+		else
+			return bdev_filter_pass;
+	}
 
 	if (err == -EAGAIN) {
 		bio_wouldblock_error(bio);
-		return false;
+		return bdev_filter_skip;
 	}
 
 	pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
-	return true;
+	return bdev_filter_pass;
 }
 
 static void tracker_detach_cb(void *ctx)

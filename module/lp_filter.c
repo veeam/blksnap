@@ -221,10 +221,10 @@ void *bdev_filter_get_ctx(struct block_device *bdev, const char *name)
 }
 EXPORT_SYMBOL(bdev_filter_get_ctx);
 
-static inline bool bdev_filters_apply(struct bio *bio)
+static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio)
 {
 	struct bdev_filter *flt;
-	bool pass = true;
+	enum bdev_filter_result result = bdev_filter_pass;
 
 	if (bio->bi_opf & REQ_NOWAIT) {
 		if (!percpu_down_read_trylock(&bd_filters_lock)) {
@@ -242,15 +242,15 @@ static inline bool bdev_filters_apply(struct bio *bio)
 #else
 			if ((bio->bi_bdev->bd_dev == flt->dev_id))
 #endif
-				pass = flt->fops->submit_bio_cb(bio, flt->ctx);
-			if (!pass)
+				result = flt->fops->submit_bio_cb(bio, flt->ctx);
+			if (result != bdev_filter_pass)
 				break;
 		}
 	}
 
 	percpu_up_read(&bd_filters_lock);
 
-	return pass;
+	return result;
 }
 
 #ifdef CONFIG_X86
@@ -278,30 +278,31 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
 	if (!current->bio_list) {
-		bool pass;
-
-		struct bio_list bio_list_on_stack[2];
+		enum bdev_filter_result result;
+		struct bio_list bio_list_on_stack[2] = { };
 		struct bio *new_bio;
 
-		bio_list_init(&bio_list_on_stack[0]);
-		current->bio_list = bio_list_on_stack;
-		barrier();
+		do {
+			bio_list_init(&bio_list_on_stack[0]);
+			current->bio_list = bio_list_on_stack;
+			barrier();
 
-		pass = bdev_filters_apply(bio);
+			result = bdev_filters_apply(bio);
 
-		current->bio_list = NULL;
-		barrier();
+			current->bio_list = NULL;
+			barrier();
 
-		while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
-			/*
-			 * The result from submitting a bio from the filter
-			 * itself does not need to be processed,
-			 * even if this function has a return code.
-			 */
-			submit_bio_noacct_notrace(new_bio);
-		}
+			while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
+				/*
+				 * The result from submitting a bio from the
+				 * filter itself does not need to be processed,
+				 * even if this function has a return code.
+				 */
+				submit_bio_noacct_notrace(new_bio);
+			}
+		} while (result == bdev_filter_repeat);
 
-		if (!pass) {
+		if (result == bdev_filter_skip) {
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 			return BLK_QC_T_NONE;
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
