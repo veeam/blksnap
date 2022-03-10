@@ -48,8 +48,9 @@ enum EFailType
 class CTestSectorGenetor
 {
 public:
-    CTestSectorGenetor()
-        : m_seqNumber(0)
+    CTestSectorGenetor(const bool useCrc32)
+        : m_useCrc32(useCrc32)
+        , m_seqNumber(0)
         , m_failCount(0)
         , m_logLineCount(0) {};
     ~CTestSectorGenetor() {};
@@ -82,6 +83,7 @@ public:
     };
 
 private:
+    bool m_useCrc32;
     std::atomic<int> m_seqNumber;
     int m_failCount;
     int m_logLineCount;

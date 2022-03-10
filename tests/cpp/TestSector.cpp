@@ -49,14 +49,16 @@ void CTestSectorGenetor::Generate(unsigned char* buffer, size_t size, sector_t s
         CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
         // GenerateBuffer(current->body, sizeof(current->body), header);
 
-#ifdef BOOST_CRC_HPP
-        boost::crc_32_type calc;
-        calc.process_bytes(buffer + offset + offsetof(STestHeader, seqNumber),
-                           SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-        header->crc = calc.checksum();
-#else
-        header->crc = 'CC32';
-#endif
+        if (m_useCrc32)
+        {
+            boost::crc_32_type calc;
+            calc.process_bytes(buffer + offset + offsetof(STestHeader, seqNumber),
+                               SECTOR_SIZE - offsetof(STestHeader, seqNumber));
+            header->crc = calc.checksum();
+        }
+        else
+            header->crc = 0xDEC032CC;
+
         sector++;
     }
 }
@@ -69,14 +71,15 @@ void CTestSectorGenetor::Check(unsigned char* buffer, size_t size, sector_t sect
         STestHeader* header = &current->header;
         int crc;
 
-#ifdef BOOST_CRC_HPP
-        boost::crc_32_type calc;
-        calc.process_bytes(buffer + offsetof(STestHeader, seqNumber),
-                           SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-        crc = calc.checksum();
-#else
-        crc = 'CC32';
-#endif
+        if (m_useCrc32)
+        {
+            boost::crc_32_type calc;
+            calc.process_bytes(buffer + offsetof(STestHeader, seqNumber),
+                               SECTOR_SIZE - offsetof(STestHeader, seqNumber));
+            crc = calc.checksum();
+        }
+        else
+            crc = 0xDEC032CC;
 
         bool isCorrupted = (crc != header->crc);
         bool isIncorrect = (sector != header->sector);

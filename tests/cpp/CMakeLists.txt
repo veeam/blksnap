@@ -67,7 +67,6 @@ target_link_libraries(${TEST_CBT} PRIVATE ${BLKSNAP_LIBRARY})
 target_link_libraries(${TEST_CBT} PRIVATE Boost::program_options)
 target_link_libraries(${TEST_CBT} PRIVATE Boost::filesystem )
 target_link_libraries(${TEST_CBT} PRIVATE ${LIBUUID_LIBRARY})
-target_link_libraries(${TEST_CBT} PRIVATE ${LIBZ_LIBRARY})
 target_include_directories(${TEST_CBT} PRIVATE ./)
 set_target_properties(${TEST_CBT}
     PROPERTIES
@@ -85,9 +84,24 @@ target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${BLKSNAP_LIBRARY})
 target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Boost::program_options)
 target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Boost::filesystem )
 target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${LIBUUID_LIBRARY})
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${LIBZ_LIBRARY})
 target_include_directories(${TEST_DIFF_STORAGE} PRIVATE ./)
 set_target_properties(${TEST_DIFF_STORAGE}
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
+)
+
+set(PERFORMANCE_SRC
+    performance.cpp
+)
+set(TEST_PERFORMANCE test_performance)
+add_executable(${TEST_PERFORMANCE} ${PERFORMANCE_SRC})
+target_link_libraries(${TEST_PERFORMANCE} PRIVATE Helpers::Lib)
+target_link_libraries(${TEST_PERFORMANCE} PRIVATE ${BLKSNAP_LIBRARY})
+target_link_libraries(${TEST_PERFORMANCE} PRIVATE Boost::program_options)
+target_link_libraries(${TEST_PERFORMANCE} PRIVATE Boost::filesystem )
+target_link_libraries(${TEST_PERFORMANCE} PRIVATE ${LIBUUID_LIBRARY})
+target_include_directories(${TEST_PERFORMANCE} PRIVATE ./)
+set_target_properties(${TEST_PERFORMANCE}
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
 )
