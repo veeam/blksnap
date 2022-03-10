@@ -245,7 +245,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     logger.Info("diffStorage: " + diffStorage);
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
-    auto ptrGen = std::make_shared<CTestSectorGenetor>();
+    auto ptrGen = std::make_shared<CTestSectorGenetor>(false);
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync);
 
     logger.Info("-- Fill original device collection by test pattern");
@@ -509,7 +509,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     for (const std::string& origDevName : origDevNames)
-        genMap[origDevName] = std::make_shared<CTestSectorGenetor>();
+        genMap[origDevName] = std::make_shared<CTestSectorGenetor>(false);
 
     for (const std::string& origDevName : origDevNames)
         genCtxs.push_back(

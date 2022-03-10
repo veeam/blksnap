@@ -242,7 +242,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
     logger.Info("device: " + origDevName);
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
-    auto ptrGen = std::make_shared<CTestSectorGenetor>();
+    auto ptrGen = std::make_shared<CTestSectorGenetor>(false);
     //auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, false, 1024*1024*1024ull);
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, true/*, 1024*1024*1024ull*/);
 
