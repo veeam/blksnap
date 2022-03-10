@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <algorithm>
 #include <blksnap/Cbt.h>
 #include <blksnap/Service.h>
 #include <blksnap/Session.h>
@@ -32,7 +33,6 @@
 #include "helpers/AlignedBuffer.hpp"
 #include "helpers/BlockDevice.h"
 #include "helpers/Log.h"
-#include "helpers/RandomHelper.h"
 #include "TestSector.h"
 
 namespace po = boost::program_options;
@@ -110,14 +110,14 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor>& ptrGen, const s
     logger.Detail(std::string("write " + std::to_string(count) + " transactions"));
     for (int cnt = 0; cnt < count; cnt++)
     {
-        size_t size = static_cast<size_t>((CRandomHelper::GenerateInt() & 0x1F) + 1) << SECTOR_SHIFT;
+        size_t size = static_cast<size_t>((std::rand() & 0x1F) + 1) << SECTOR_SHIFT;
 #if 0
         //ordered by default chunk size
-        off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << (SECTOR_SHIFT + 9);
+        off_t offset = static_cast<off_t>(std::rand() + 1) << (SECTOR_SHIFT + 9);
         if (offset > (sizeBdev - size))
             offset = (offset % (sizeBdev - size)) & ~((1 << 9) - 1);
 #else
-        off_t offset = static_cast<off_t>(CRandomHelper::GenerateInt() + 1) << SECTOR_SHIFT;
+        off_t offset = static_cast<off_t>(std::rand() + 1) << SECTOR_SHIFT;
         if (offset > (sizeBdev - size))
             offset = offset % (sizeBdev - size);
 #endif
@@ -233,7 +233,8 @@ void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ra
     logger.Err(ss);
 }
 
-void CheckCorruption(const std::string& origDevName, const std::string& diffStorage, const int durationLimitSec)
+void CheckCorruption(const std::string& origDevName, const std::string& diffStorage, const int durationLimitSec,
+                     const bool isSync, const int blocksCountMax)
 {
     std::vector<SCorruptInfo> corrupts;
     std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoPrevious;
@@ -245,7 +246,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>();
-    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, true);
+    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync);
 
     logger.Info("-- Fill original device collection by test pattern");
     FillAll(ptrGen, ptrOrininal);
@@ -316,7 +317,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
         {
             logger.Info("- Fill some random blocks");
             ptrGen->IncSequence();
-            FillRandomBlocks(ptrGen, ptrOrininal, CRandomHelper::GenerateInt() & 0x3FF);
+            FillRandomBlocks(ptrGen, ptrOrininal, std::rand() / static_cast<int>((RAND_MAX + 1ull) / blocksCountMax));
 
             // Rewrite first sector again
             FillBlocks(ptrGen, ptrOrininal, 0, 4096);
@@ -393,8 +394,8 @@ void GeneratorThreadFunction(std::shared_ptr<SGeneratorContext> ptrCtx)
         logger.Info("- Start writing to device [" + ptrCtx->ptrBdev->Name() + "].");
         while (!ptrCtx->stop)
         {
-            FillRandomBlocks(ptrCtx->ptrGen, ptrCtx->ptrBdev, CRandomHelper::GenerateInt() & 0x3F);
-            std::this_thread::sleep_for(std::chrono::milliseconds((CRandomHelper::GenerateInt() & 0x1FF)));
+            FillRandomBlocks(ptrCtx->ptrGen, ptrCtx->ptrBdev, std::rand() & 0x3F);
+            std::this_thread::sleep_for(std::chrono::milliseconds(std::rand() & 0x1FF));
         }
         logger.Info("- Stop writing to device [" + ptrCtx->ptrBdev->Name() + "].");
     }
@@ -712,7 +713,10 @@ void Main(int argc, char* argv[])
             "Directory name for allocating diff storage files.")
         ("multithread",
             "Testing mode in which writings to the original devices and their checks are performed in parallel.")
-        ("duration,u", po::value<int>(), "The test duration limit in minutes.");
+        ("duration,u", po::value<int>(), "The test duration limit in minutes.")
+        ("sync", "Use O_SYNC for access to original device.")
+        ("blocks", po::value<int>(), "The maximum limit of writting blocks.")
+        ;
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
@@ -743,6 +747,15 @@ void Main(int argc, char* argv[])
     if (vm.count("duration"))
         duration = vm["duration"].as<int>();
 
+    bool isSync = false;
+    if (vm.count("sync"))
+        isSync = true;
+
+    int blocksCountMax = 0x1000;
+    if (vm.count("blocks"))
+        blocksCountMax = vm["blocks"].as<int>();
+
+    std::srand(std::time(0));
     if (!!vm.count("multithread"))
         MultithreadCheckCorruption(origDevNames, diffStorage, duration * 60);
     else
@@ -750,7 +763,8 @@ void Main(int argc, char* argv[])
         if (origDevNames.size() > 1)
             logger.Err("In singlethread test mode used only first device.");
 
-        CheckCorruption(origDevNames[0], diffStorage, duration * 60);
+        CheckCorruption(origDevNames[0], diffStorage, duration * 60,
+                        isSync, blocksCountMax);
     }
 }
 
