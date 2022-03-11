@@ -12,11 +12,6 @@
 #include "chunk.h"
 #include "cbt_map.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 #define SNAPIMAGE_MAX_DEVICES 2048
 
 static unsigned int _major;

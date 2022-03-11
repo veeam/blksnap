@@ -8,11 +8,6 @@
 #include "cbt_map.h"
 #include "params.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 static inline unsigned long long count_by_shift(sector_t capacity,
 						unsigned long long shift)
 {

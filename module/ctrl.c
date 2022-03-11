@@ -17,11 +17,6 @@
 #include "tracker.h"
 #include "big_buffer.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 static int blk_snap_major;
 
 static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,

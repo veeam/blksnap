@@ -8,11 +8,6 @@
 #include "diff_io.h"
 #include "diff_buffer.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 #define SECTORS_IN_PAGE (PAGE_SIZE / SECTOR_SIZE)
 
 struct bio_set diff_io_bioset = { 0 };

@@ -7,11 +7,6 @@
 #include "diff_buffer.h"
 #include "diff_area.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	size_t inx = 0;

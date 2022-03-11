@@ -14,11 +14,6 @@
 #include "diff_buffer.h"
 #include "diff_storage.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 /**
  * struct storage_bdev - Information about opened block device.
  */
@@ -291,8 +286,6 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 			diff_storage->filled += count;
 			break;
 		}
-
-		//pr_debug("DEBUG! Switch to next storage block for chunk %ld", number);
 
 		list_del(&storage_block->link);
 		list_add_tail(&storage_block->link,

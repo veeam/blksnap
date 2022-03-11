@@ -13,11 +13,6 @@
 #include "diff_area.h"
 #include "diff_storage.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 void chunk_diff_buffer_release(struct chunk *chunk)
 {
 	if (unlikely(!chunk->diff_buffer))

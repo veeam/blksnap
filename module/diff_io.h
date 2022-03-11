@@ -46,7 +46,8 @@ static inline void diff_io_free(struct diff_io *diff_io)
 {
 	kfree(diff_io);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	memory_object_dec(memory_object_diff_io);
+	if (diff_io)
+		memory_object_dec(memory_object_diff_io);
 #endif
 }
 

@@ -12,11 +12,6 @@
 #include "cbt_map.h"
 #include "diff_area.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 struct tracked_device {
 	struct list_head link;
 	dev_t dev_id;

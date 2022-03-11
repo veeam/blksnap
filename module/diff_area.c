@@ -13,11 +13,6 @@
 #include "diff_storage.h"
 #include "diff_io.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 static inline unsigned long chunk_number(struct diff_area *diff_area,
 					 sector_t sector)
 {
@@ -246,11 +241,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 #ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 		diff_area->in_memory = true;
 		pr_debug("Difference storage is empty.\n");
-		pr_debug(
-			"Only the memory cache will be used to store the snapshots difference.\n");
+		pr_debug("Only the memory cache will be used to store the snapshots difference.\n");
 #else
 		pr_err("Difference storage is empty.\n");
-		pr_err("In-memory diff storage is not supported");
+		pr_err("In-memory difference storage is not supported");
 		return ERR_PTR(-EFAULT);
 #endif
 	}
@@ -479,13 +473,13 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk #%ld corrupted\n", chunk->number);
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-		pr_err("new_chunk_number=%ld\n", new_chunk_number);
-		pr_err("sector=%llu\n", sector);
-		pr_err("Chunk size %llu in bytes\n",
+
+		pr_debug("new_chunk_number=%ld\n", new_chunk_number);
+		pr_debug("sector=%llu\n", sector);
+		pr_debug("Chunk size %llu in bytes\n",
 		       (1ULL << diff_area->chunk_shift));
-		pr_err("Chunk count %lu\n", diff_area->chunk_count);
-#endif
+		pr_debug("Chunk count %lu\n", diff_area->chunk_count);
+
 		ret = -EIO;
 		goto fail_unlock_chunk;
 	}

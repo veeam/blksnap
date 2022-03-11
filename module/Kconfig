@@ -79,15 +79,14 @@ config BLK_SNAP_DIFF_STORAGE_MINIMUM
 	help
 	  When reached, an event is generated about the lack of free space.
 
-config BLK_SNAP_DEBUGLOG
-	depends on BLK_SNAP
-	bool "Enable debug logging"
-	default n
-
 config BLK_SNAP_DEBUG_MEMORY_LEAK
 	depends on BLK_SNAP
 	bool "Enable memory leak detector"
 	default n
+	help
+	  Enables debugging code to monitor memory consumption by the module.
+
+	  If unsure, say N.
 
 config BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	depends on BLK_SNAP
@@ -101,3 +100,10 @@ config BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	depends on BLK_SNAP
 	bool "Allow difference storage in memory"
 	default n
+	help
+	  Enables the ability to create a repository of changes in memory.
+	  This feature can be useful for debugging. Or it can be used for
+	  mobile phones or other devices if there are guaranteed not to be
+	  a large number of writings during the snapshot hold.
+
+	  If unsure, say N.

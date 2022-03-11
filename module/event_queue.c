@@ -7,11 +7,6 @@
 #endif
 #include "event_queue.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 void event_queue_init(struct event_queue *event_queue)
 {
 	INIT_LIST_HEAD(&event_queue->list);
@@ -59,32 +54,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 	wake_up(&event_queue->wq_head);
 	return 0;
 }
-/*
-int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const char *fmt, ...)
-{
-	va_list args;
-	int ret;
-	char *data;
-	int data_size = PAGE_SIZE - sizeof(struct event);
 
-	data = kzalloc(data_size, flags);
-	if (!data)
-		return -ENOMEM;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	memory_object_inc(memory_object_data);
-#endif
-	va_start(args, fmt);
-	data_size = vsnprintf(data, data_size, fmt, args);
-	va_end(args);
-
-	ret = event_gen(event_queue, flags, code, data, data_size);
-	kfree(data);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	memory_object_dec(memory_object_data);
-#endif
-	return ret;
-}
-*/
 struct event *event_wait(struct event_queue *event_queue,
 			 unsigned long timeout_ms)
 {

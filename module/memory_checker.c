@@ -5,11 +5,6 @@
 #include <linux/module.h>
 #include "memory_checker.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 char *memory_object_names[] = {
 	/*alloc_page*/
 	"page",
@@ -72,14 +67,14 @@ void memory_object_print(void)
 {
 	int cnt;
 
-	pr_debug("Statistics for objects in memory:\n");
+	pr_info("Statistics for objects in memory:\n");
 	for (cnt = 0; cnt < memory_object_count; cnt++)
-		pr_debug("%s: %d\n", memory_object_names[cnt],
+		pr_info("%s: %d\n", memory_object_names[cnt],
 			 atomic_read(&memory_counter[cnt]));
 
-	pr_debug("Maximim for objects in memory:\n");
+	pr_info("Maximim for objects in memory:\n");
 	for (cnt = 0; cnt < memory_object_count; cnt++)
-		pr_debug("%s: %d\n", memory_object_names[cnt],
+		pr_info("%s: %d\n", memory_object_names[cnt],
 			 atomic_read(&memory_counter_max[cnt]));
 }
 

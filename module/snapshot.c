@@ -13,11 +13,6 @@
 #include "snapimage.h"
 #include "cbt_map.h"
 
-#ifdef CONFIG_BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
 
@@ -118,6 +113,7 @@ static void snapshot_free(struct kref *kref)
 	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
 #endif
+
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
@@ -198,7 +194,6 @@ fail_free_snapshot:
 	if (snapshot)
 		memory_object_dec(memory_object_snapshot);
 #endif
-
 fail:
 	return ERR_PTR(ret);
 }
@@ -320,7 +315,7 @@ int snapshot_destroy(uuid_t *id)
 
 	snapshot_put(snapshot);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	pr_debug("DEBUG! Check memory leak:\n");
+	pr_debug("blksnap memory consumption:\n");
 	memory_object_print();
 #endif
 	return 0;
@@ -607,6 +602,7 @@ int snapshot_collect_images(
 		kcalloc(snapshot->count, sizeof(struct blk_snap_image_info),
 			GFP_KERNEL);
 	if (!image_info_array) {
+		pr_err("Unable to collect snapshot images: not enough memory.\n");
 		ret = -ENOMEM;
 		goto out;
 	}
