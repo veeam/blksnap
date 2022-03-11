@@ -208,14 +208,14 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 	// Append last sync bio to bio_list
 	if (is_nowait) {
-		bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, nr_iovecs,
-					       &diff_io_bioset);
+		bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, 0,
+				       &diff_io_bioset);
 		if (unlikely(!bio)) {
 			ret = -EAGAIN;
 			goto fail;
 		}
 	} else {
-		bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &diff_io_bioset);
+		bio = bio_alloc_bioset(GFP_NOIO, 0, &diff_io_bioset);
 		if (unlikely(!bio)) {
 			ret = -ENOMEM;
 			goto fail;
