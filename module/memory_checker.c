@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #define pr_fmt(fmt) KBUILD_MODNAME "-memory_checker: " fmt
 #include <linux/atomic.h>
 #include <linux/module.h>
@@ -51,6 +51,7 @@ static atomic_t memory_counter_max[memory_object_count];
 void memory_object_inc(enum memory_object_type type)
 {
 	int value;
+
 	if (unlikely(type >= memory_object_count))
 		return;
 
@@ -71,14 +72,14 @@ void memory_object_print(void)
 {
 	int cnt;
 
-	pr_debug("Statistics for objects in memory:\n");
+	pr_info("Statistics for objects in memory:\n");
 	for (cnt = 0; cnt < memory_object_count; cnt++)
-		pr_debug("%s: %d\n", memory_object_names[cnt],
+		pr_info("%s: %d\n", memory_object_names[cnt],
 			 atomic_read(&memory_counter[cnt]));
 
-	pr_debug("Maximim for objects in memory:\n");
+	pr_info("Maximim for objects in memory:\n");
 	for (cnt = 0; cnt < memory_object_count; cnt++)
-		pr_debug("%s: %d\n", memory_object_names[cnt],
+		pr_info("%s: %d\n", memory_object_names[cnt],
 			 atomic_read(&memory_counter_max[cnt]));
 }
 

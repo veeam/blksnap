@@ -8,7 +8,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
@@ -50,7 +50,7 @@ void tracker_free(struct kref *kref)
 	diff_area_put(tracker->diff_area);
 	cbt_map_put(tracker->cbt_map);
 	kfree(tracker);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_tracker);
 #endif
 }
@@ -233,7 +233,7 @@ static struct tracker *tracker_new(struct block_device *bdev)
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
 	if (tracker == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker);
 #endif
 	kref_init(&tracker->kref);
@@ -334,7 +334,7 @@ void tracker_done(void)
 
 		tracker_remove(tr_dev->dev_id);
 		kfree(tr_dev);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
 #endif
 	}
@@ -365,7 +365,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		tracker = ERR_PTR(-ENOMEM);
 		goto put_bdev;
 	}
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracked_device);
 #endif
 	INIT_LIST_HEAD(&tr_dev->link);
@@ -376,7 +376,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		pr_err("Failed to create tracker. errno=%d\n",
 		       abs((int)PTR_ERR(tracker)));
 		kfree(tr_dev);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
 #endif
 	} else {
@@ -430,7 +430,7 @@ int tracker_remove(dev_t dev_id)
 		struct tracked_device *iter_tr_dev;
 
 		spin_lock(&tracked_device_lock);
-		list_for_each_entry (iter_tr_dev, &tracked_device_list, link) {
+		list_for_each_entry(iter_tr_dev, &tracked_device_list, link) {
 			if (iter_tr_dev->dev_id == dev_id) {
 				list_del(&iter_tr_dev->link);
 				tr_dev = iter_tr_dev;
@@ -439,12 +439,11 @@ int tracker_remove(dev_t dev_id)
 		}
 		spin_unlock(&tracked_device_lock);
 
-		if (tr_dev) {
-			kfree(tr_dev);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+		kfree(tr_dev);
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+		if (tr_dev)
 			memory_object_dec(memory_object_tracked_device);
 #endif
-		}
 	}
 put_tracker:
 	tracker_put(tracker);
@@ -534,14 +533,14 @@ int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
 		 * Just calculate trackers list length
 		 */
 		spin_lock(&tracked_device_lock);
-		list_for_each_entry (tr_dev, &tracked_device_list, link)
+		list_for_each_entry(tr_dev, &tracked_device_list, link)
 			++count;
 		spin_unlock(&tracked_device_lock);
 		goto out;
 	}
 
 	spin_lock(&tracked_device_lock);
-	list_for_each_entry (tr_dev, &tracked_device_list, link) {
+	list_for_each_entry(tr_dev, &tracked_device_list, link) {
 		if (count >= max_count) {
 			ret = -ENOBUFS;
 			break;

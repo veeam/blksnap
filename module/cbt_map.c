@@ -6,7 +6,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "cbt_map.h"
@@ -111,7 +111,7 @@ static inline void cbt_map_destroy(struct cbt_map *cbt_map)
 
 	cbt_map_deallocate(cbt_map);
 	kfree(cbt_map);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_cbt_map);
 #endif
 }
@@ -125,7 +125,7 @@ struct cbt_map *cbt_map_create(struct block_device *bdev)
 	cbt_map = kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
 	if (cbt_map == NULL)
 		return NULL;
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_cbt_map);
 #endif
 	cbt_map->device_capacity = bdev_nr_sectors(bdev);

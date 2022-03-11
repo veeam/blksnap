@@ -17,13 +17,13 @@ struct cbt_map;
  * @capacity:
  *
  * @tag_set:
- * 	Area to keep a shared tag map.
+ *	Area to keep a shared tag map.
  * @disk:
  *
  * @diff_area:
- * 	Pointer to owned &struct diff_area.
+ *	Pointer to owned &struct diff_area.
  * @cbt_map:
- * 	Pointer to owned &struct cbt_map.
+ *	Pointer to owned &struct cbt_map.
  */
 struct snapimage {
 	dev_t image_dev_id;

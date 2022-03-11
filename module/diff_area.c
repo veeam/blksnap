@@ -7,7 +7,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
@@ -110,14 +110,9 @@ void diff_area_free(struct kref *kref)
 	}
 
 	atomic_set(&diff_area->corrupt_flag, 1);
-
-	//flush_work(&diff_area->storing_chunks_work);
 	flush_work(&diff_area->cache_release_work);
-	//flush_work(&diff_area->corrupt_work);
-
-	xa_for_each (&diff_area->chunk_map, inx, chunk) {
+	xa_for_each(&diff_area->chunk_map, inx, chunk)
 		chunk_free(chunk);
-	}
 	xa_destroy(&diff_area->chunk_map);
 
 	if (diff_area->orig_bdev) {
@@ -129,7 +124,7 @@ void diff_area_free(struct kref *kref)
 	diff_buffer_cleanup(diff_area);
 
 	kfree(diff_area);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_area);
 #endif
 }
@@ -289,7 +284,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_area);
 #endif
 	diff_area->orig_bdev = bdev;
@@ -303,14 +298,13 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	xa_init(&diff_area->chunk_map);
 
 	if (!diff_storage->capacity) {
-#ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
+#ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 		diff_area->in_memory = true;
 		pr_debug("Difference storage is empty.\n");
-		pr_debug(
-			"Only the memory cache will be used to store the snapshots difference.\n");
+		pr_debug("Only the memory cache will be used to store the snapshots difference.\n");
 #else
 		pr_err("Difference storage is empty.\n");
-		pr_err("In-memory diff storage is not supported");
+		pr_err("In-memory difference storage is not supported");
 		return ERR_PTR(-EFAULT);
 #endif
 	}
@@ -550,13 +544,13 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk #%ld corrupted\n", chunk->number);
-#ifdef BLK_SNAP_DEBUGLOG
-		pr_err("new_chunk_number=%ld\n", new_chunk_number);
-		pr_err("sector=%llu\n", sector);
-		pr_err("Chunk size %llu in bytes\n",
+
+		pr_debug("new_chunk_number=%ld\n", new_chunk_number);
+		pr_debug("sector=%llu\n", sector);
+		pr_debug("Chunk size %llu in bytes\n",
 		       (1ULL << diff_area->chunk_shift));
-		pr_err("Chunk count %lu\n", diff_area->chunk_count);
-#endif
+		pr_debug("Chunk count %lu\n", diff_area->chunk_count);
+
 		ret = -EIO;
 		goto fail_unlock_chunk;
 	}
@@ -593,7 +587,7 @@ static inline sector_t diff_area_chunk_start(struct diff_area *diff_area,
 
 /**
  * diff_area_image_io - Implements copying data from chunk to bio_vec when
- * 	reading or from bio_tec to chunk when writing.
+ *	reading or from bio_tec to chunk when writing.
  */
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos)

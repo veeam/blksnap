@@ -7,7 +7,7 @@ struct diff_buffer;
 
 /**
  * struct diff_region - Describes the location of the chunks data on
- * 	difference storage.
+ *	difference storage.
  *
  */
 struct diff_region {
@@ -44,12 +44,11 @@ void diff_io_done(void);
 
 static inline void diff_io_free(struct diff_io *diff_io)
 {
-	if (diff_io) {
-		kfree(diff_io);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+	kfree(diff_io);
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (diff_io)
 		memory_object_dec(memory_object_diff_io);
 #endif
-	}
 }
 
 struct diff_io *diff_io_new_sync(bool is_write);

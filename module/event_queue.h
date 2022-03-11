@@ -31,19 +31,13 @@ void event_queue_done(struct event_queue *event_queue);
 
 int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 	      const void *data, int data_size);
-/*
-int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code,
-		  const char *fmt, ...);
-*/
 struct event *event_wait(struct event_queue *event_queue,
 			 unsigned long timeout_ms);
-
 static inline void event_free(struct event *event)
 {
-	if (event) {
-		kfree(event);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+	kfree(event);
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (event)
 		memory_object_dec(memory_object_event);
 #endif
-	}
 };

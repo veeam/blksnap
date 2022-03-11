@@ -3,13 +3,11 @@
 # block io layer filter module configuration
 #
 #
-#select BLK_FILTER
 
 config BLK_SNAP
-	tristate "Block device snapshot filter"
+	tristate "Block device snapshot and change tracker module"
 	depends on BLK_FILTER
 	help
-
 	  Allow to create snapshots and track block changes for a block
 	  devices. Designed for creating backups for any block devices
 	  (without device mapper). Snapshots are temporary and are released
@@ -80,3 +78,32 @@ config BLK_SNAP_DIFF_STORAGE_MINIMUM
 	default 2097152
 	help
 	  When reached, an event is generated about the lack of free space.
+
+config BLK_SNAP_DEBUG_MEMORY_LEAK
+	depends on BLK_SNAP
+	bool "Enable memory leak detector"
+	default n
+	help
+	  Enables debugging code to monitor memory consumption by the module.
+
+	  If unsure, say N.
+
+config BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
+	depends on BLK_SNAP
+	bool "Enable filters locking"
+	default n
+	help
+	  Enables locking of filters at the moment of taking and
+	  releasing the snapshot.
+
+config BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
+	depends on BLK_SNAP
+	bool "Allow difference storage in memory"
+	default n
+	help
+	  Enables the ability to create a repository of changes in memory.
+	  This feature can be useful for debugging. Or it can be used for
+	  mobile phones or other devices if there are guaranteed not to be
+	  a large number of writings during the snapshot hold.
+
+	  If unsure, say N.

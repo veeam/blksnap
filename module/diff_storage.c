@@ -9,7 +9,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
@@ -65,7 +65,7 @@ struct diff_storage *diff_storage_new(void)
 	diff_storage = kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
 	if (!diff_storage)
 		return NULL;
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_storage);
 #endif
 	kref_init(&diff_storage->kref);
@@ -111,7 +111,7 @@ void diff_storage_free(struct kref *kref)
 	while ((blk = first_empty_storage_block(diff_storage))) {
 		list_del(&blk->link);
 		kfree(blk);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_storage_block);
 #endif
 	}
@@ -119,7 +119,7 @@ void diff_storage_free(struct kref *kref)
 	while ((blk = first_filled_storage_block(diff_storage))) {
 		list_del(&blk->link);
 		kfree(blk);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_storage_block);
 #endif
 	}
@@ -128,14 +128,14 @@ void diff_storage_free(struct kref *kref)
 		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
 		list_del(&storage_bdev->link);
 		kfree(storage_bdev);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_storage_bdev);
 #endif
 	}
 	event_queue_done(&diff_storage->event_queue);
 
 	kfree(diff_storage);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_storage);
 #endif
 }
@@ -147,7 +147,7 @@ struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage,
 	struct storage_bdev *storage_bdev;
 
 	spin_lock(&diff_storage->lock);
-	list_for_each_entry (storage_bdev, &diff_storage->storage_bdevs, link) {
+	list_for_each_entry(storage_bdev, &diff_storage->storage_bdevs, link) {
 		if (storage_bdev->dev_id == dev_id) {
 			bdev = storage_bdev->bdev;
 			break;
@@ -176,7 +176,7 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_storage_bdev);
 #endif
 	storage_bdev->bdev = bdev;
@@ -195,13 +195,14 @@ static inline int diff_storage_add_range(struct diff_storage *diff_storage,
 					 sector_t sector, sector_t count)
 {
 	struct storage_block *storage_block;
+
 	pr_debug("Add range to diff storage: [%u:%u] %llu:%llu\n",
 		 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
 
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
 		return -ENOMEM;
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_storage_block);
 #endif
 	INIT_LIST_HEAD(&storage_block->link);
@@ -275,7 +276,7 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 	diff_region = kzalloc(sizeof(struct diff_region), GFP_NOIO);
 	if (!diff_region)
 		return ERR_PTR(-ENOMEM);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_region);
 #endif
 	spin_lock(&diff_storage->lock);
@@ -301,8 +302,6 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 			diff_storage->filled += count;
 			break;
 		}
-
-		//pr_debug("DEBUG! Switch to next storage block for chunk %ld", number);
 
 		list_del(&storage_block->link);
 		list_add_tail(&storage_block->link,

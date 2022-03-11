@@ -13,31 +13,31 @@ struct diff_region;
  * @lock:
  *
  * @storage_bdevs:
- * 	List of opened block devices. Blocks for storing snapshot data can be
- * 	located on different block devices.
- * 	So, all opened block devices are located in this list.
+ *	List of opened block devices. Blocks for storing snapshot data can be
+ *	located on different block devices.
+ *	So, all opened block devices are located in this list.
  *	A storage from which blocks are allocated for storing chunks data.
  * @empty_blocks:
- * 	List of empty blocks on storage. This list can be updated while
- * 	holding a snapshot. It's allowing us to dynamically increase the
- * 	storage size for these snapshots.
+ *	List of empty blocks on storage. This list can be updated while
+ *	holding a snapshot. It's allowing us to dynamically increase the
+ *	storage size for these snapshots.
  * @filled_blocks:
- * 	List of filled blocks. When the blocks from the empty list are filled,
- * 	we move them to the filled list.
+ *	List of filled blocks. When the blocks from the empty list are filled,
+ *	we move them to the filled list.
  * @capacity:
- * 	Total amount of available storage space.
+ *	Total amount of available storage space.
  * @filled:
- * 	The number of sectors already filled in.
+ *	The number of sectors already filled in.
  * @requested:
- * 	The number of sectors already requested from user-space.
+ *	The number of sectors already requested from user-space.
  * @low_space_flag:
  *
  * @overflow_flag:
  *
  * @event_queue:
- * 	A queue of events to pass them to the user-space. Diff storage and his
- * 	owner can notify his snapshot about events like snapshot overflow,
- * 	low free space and snapshot terminated.
+ *	A queue of events to pass them to the user-space. Diff storage and his
+ *	owner can notify his snapshot about events like snapshot overflow,
+ *	low free space and snapshot terminated.
  */
 struct diff_storage {
 	struct kref kref;
@@ -82,10 +82,9 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 
 static inline void diff_storage_free_region(struct diff_region *region)
 {
-	if (region) {
-		kfree(region);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+	kfree(region);
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	if (region)
 		memory_object_dec(memory_object_diff_region);
 #endif
-	}
 }

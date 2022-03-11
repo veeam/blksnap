@@ -2,7 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-event_queue: " fmt
 #include <linux/slab.h>
 #include <linux/sched.h>
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "event_queue.h"
@@ -41,7 +41,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 	event = kzalloc(sizeof(struct event) + data_size, flags);
 	if (!event)
 		return -ENOMEM;
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_event);
 #endif
 	event->time = ktime_get();
@@ -59,32 +59,7 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 	wake_up(&event_queue->wq_head);
 	return 0;
 }
-/*
-int event_gen_msg(struct event_queue *event_queue, gfp_t flags, int code, const char *fmt, ...)
-{
-	va_list args;
-	int ret;
-	char *data;
-	int data_size = PAGE_SIZE - sizeof(struct event);
 
-	data = kzalloc(data_size, flags);
-	if (!data)
-		return -ENOMEM;
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
-	memory_object_inc(memory_object_data);
-#endif
-	va_start(args, fmt);
-	data_size = vsnprintf(data, data_size, fmt, args);
-	va_end(args);
-
-	ret = event_gen(event_queue, flags, code, data, data_size);
-	kfree(data);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
-	memory_object_dec(memory_object_data);
-#endif
-	return ret;
-}
-*/
 struct event *event_wait(struct event_queue *event_queue,
 			 unsigned long timeout_ms)
 {
@@ -107,12 +82,11 @@ struct event *event_wait(struct event_queue *event_queue,
 			 event->code);
 		return event;
 	}
-	if (ret == 0) {
-		//pr_debug("%s - timeout\n", __FUNCTION__);
+	if (ret == 0)
 		return ERR_PTR(-ENOENT);
-	}
+
 	if (ret == -ERESTARTSYS) {
-		pr_debug("%s - interrupted\n", __FUNCTION__);
+		pr_debug("event waiting interrupted\n");
 		return ERR_PTR(-EINTR);
 	}
 

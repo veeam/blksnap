@@ -44,12 +44,12 @@ struct chunk;
  *	The chunks that need to be stored in diff storage are accumitale in
  *	this list.
  * @storage_list_lock:
- * 	Spin lock for the @storing_chunks list.
+ *	Spin lock for the @storing_chunks list.
  * caches_lock:
  *      Spin lock for the @read_cache_queue list.
  * @storing_chunks_work:
  *	The workqueue work item. This worker saves the chunks to the diff
- * 	storage.
+ *	storage.
  * @read_cache_queue:
  *	After copying the sectors from the original block device to diff
  *	storage, the sectors are still located in memory. When the snapshot
@@ -79,7 +79,7 @@ struct diff_area {
 	unsigned long long chunk_shift;
 	unsigned long chunk_count;
 	struct xarray chunk_map;
-#ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
+#ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	bool in_memory;
 #endif
 	spinlock_t caches_lock;
@@ -123,7 +123,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 
 /**
  * struct diff_area_image_ctx - The context for processing an io request to
- * 	the snapshot image.
+ *	the snapshot image.
  * @diff_area:
  *	Pointer to &struct diff_area for current snapshot image.
  * @is_write:

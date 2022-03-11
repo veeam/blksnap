@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include <linux/dm-io.h>
 #include <linux/sched/mm.h>
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "params.h"
@@ -55,7 +55,7 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 		 "The chunk already in the cache"))
 		return -EINVAL;
 
-#ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
+#ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	if (diff_area->in_memory) {
 		up(&chunk->lock);
 		return 0;
@@ -67,7 +67,7 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 		diff_region = diff_storage_new_region(
 			diff_area->diff_storage,
 			diff_area_chunk_sectors(diff_area));
-		if (unlikely(IS_ERR(diff_region))) {
+		if (IS_ERR(diff_region)) {
 			pr_debug("Cannot get store for chunk #%ld\n",
 				 chunk->number);
 			return PTR_ERR(diff_region);
@@ -172,12 +172,10 @@ static void chunk_notify_load(void *ctx)
 		goto out;
 	}
 
-	pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__,
-	       atomic_read(&chunk->state));
+	pr_err("invalid chunk state 0x%x\n", atomic_read(&chunk->state));
 	up(&chunk->lock);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
-	return;
 }
 
 static void chunk_notify_store(void *ctx)
@@ -221,12 +219,10 @@ static void chunk_notify_store(void *ctx)
 			goto out;
 		}
 	} else
-		pr_err("%s - Invalid chunk state 0x%x\n", __FUNCTION__,
-		       atomic_read(&chunk->state));
+		pr_err("invalid chunk state 0x%x\n", atomic_read(&chunk->state));
 	up(&chunk->lock);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
-	return;
 }
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
@@ -236,7 +232,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_chunk);
 #endif
 	INIT_LIST_HEAD(&chunk->cache_link);
@@ -260,7 +256,7 @@ void chunk_free(struct chunk *chunk)
 	up(&chunk->lock);
 
 	kfree(chunk);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_chunk);
 #endif
 }
@@ -358,7 +354,7 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 
 /**
  * chunk_load_orig() - Performs synchronous loading of a chunk from the
- * 	original block device.
+ *	original block device.
  */
 int chunk_load_orig(struct chunk *chunk)
 {
@@ -388,7 +384,7 @@ int chunk_load_orig(struct chunk *chunk)
 
 /**
  * chunk_load_diff() - Performs synchronous loading of a chunk from the
- * 	difference storage.
+ *	difference storage.
  */
 int chunk_load_diff(struct chunk *chunk)
 {
