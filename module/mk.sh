@@ -59,7 +59,6 @@ case "$CMD" in
 		;;
 	load-flt)
 		echo "Loading ${FILTER_NAME} kernel module from current folder"
-		modprobe dm-mod
 		insmod ./${FILTER_NAME}.ko
 		;;
 	unload-flt)
