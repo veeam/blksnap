@@ -103,7 +103,7 @@ enum blk_snap_compat_flags {
 static_assert(blk_snap_compat_flags_end <= 64,
 	      "There are too many compatibility flags.");
 
-#define BLK_SNAP_MOD_NAME_LIMIT 32
+#define BLK_SNAP_MOD_NAME_LIMIT 31
 
 /**
  * struct blk_snap_modification - Result for &IOCTL_BLK_SNAP_VERSION control.
@@ -116,7 +116,7 @@ static_assert(blk_snap_compat_flags_end <= 64,
  */
 struct blk_snap_mod {
 	__u64 compatibility_flags;
-	__u8 name[BLK_SNAP_MOD_NAME_LIMIT];
+	__u8 name[BLK_SNAP_MOD_NAME_LIMIT + 1];
 };
 
 /**
