@@ -1,4 +1,4 @@
-# [TBD]
+#
 # Copyright (C) 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
 #
 # This file is part of blksnap-tests
