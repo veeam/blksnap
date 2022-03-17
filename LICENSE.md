@@ -1,3 +1,7 @@
+This license applies to all files in this repository except files in
+directories lib and include, which are licensed under separate license
+available directly at these directories.
+
 ### GNU GENERAL PUBLIC LICENSE
 
 Version 3, 29 June 2007
