@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
 #include <linux/workqueue.h>
 #include <linux/completion.h>

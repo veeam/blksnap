@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 
