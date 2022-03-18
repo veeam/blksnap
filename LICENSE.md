@@ -7,19 +7,6 @@ Valid-License-Identifier: GPL-2.0-only <br>
 Valid-License-Identifier: GPL-2.0+ <br>
 Valid-License-Identifier: GPL-2.0-or-later <br>
 SPDX-URL: https://spdx.org/licenses/GPL-2.0.html <br>
-Usage-Guide: <br>
-  To use this license in source code, put one of the following SPDX <br>
-  tag/value pairs into a comment according to the placement <br>
-  guidelines in the licensing rules documentation. <br>
-  For 'GNU General Public License (GPL) version 2 only' use: <br>
-    SPDX-License-Identifier: GPL-2.0 <br>
-  or <br>
-    SPDX-License-Identifier: GPL-2.0-only <br>
-  For 'GNU General Public License (GPL) version 2 or any later version' use: <br>
-    SPDX-License-Identifier: GPL-2.0+ <br>
-  or <br>
-    SPDX-License-Identifier: GPL-2.0-or-later <br>
-License-Text: <br>
 
 ### GNU GENERAL PUBLIC LICENSE
 
