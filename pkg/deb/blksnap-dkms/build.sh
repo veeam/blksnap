@@ -68,7 +68,7 @@ Upstream-Name: ${NAME}
 
 Files: debian/*
 Copyright: 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
-License: GNU GPL [TBD]
+License: GNU GPL-2.0
 EOF
 
 cat > ${BUILD_DIR}/debian/changelog << EOF

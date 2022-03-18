@@ -6,7 +6,7 @@ Summary:        Veeam Agent for Linux (kernel module)
 Packager:       Veeam Software Group GmbH
 Vendor:         Veeam Software Group GmbH
 Group:          System Environment/Kernel
-License:        GPL-2
+License:        GPL-2.0
 AutoReqProv:    no
 Requires:       dkms
 Requires:       gcc, make, perl
