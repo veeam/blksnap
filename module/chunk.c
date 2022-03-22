@@ -13,6 +13,15 @@
 #include "diff_area.h"
 #include "diff_storage.h"
 
+#ifdef BLK_SNAP_DEBUGLOG
+#undef pr_debug
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+DEFINE_MUTEX(logging_lock);
+#endif
+
 void chunk_diff_buffer_release(struct chunk *chunk)
 {
 	if (unlikely(!chunk->diff_buffer))
@@ -92,6 +101,10 @@ void chunk_schedule_caching(struct chunk *chunk)
 			      &diff_area->write_cache_queue);
 		in_cache_count =
 			atomic_inc_return(&diff_area->write_cache_count);
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+		pr_debug("chunk #%ld should be stored. already in cache %d\n",
+			 chunk->number, in_cache_count);
+#endif
 	} else {
 		list_add_tail(&chunk->cache_link, &diff_area->read_cache_queue);
 		in_cache_count =
@@ -102,6 +115,15 @@ void chunk_schedule_caching(struct chunk *chunk)
 	up(&chunk->lock);
 
 	// Initiate the cache clearing process.
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+	if (atomic_read(&diff_area->write_cache_count) >
+	    chunk_maximum_in_cache) {
+		pr_debug(
+			"Need to cleanup write cache: in_cache_count=%d, chunk_maximum_in_cache=%d\n",
+			atomic_read(&diff_area->write_cache_count),
+			chunk_maximum_in_cache);
+	}
+#endif
 	if ((in_cache_count > chunk_maximum_in_cache) &&
 	    !diff_area_is_corrupted(diff_area))
 		queue_work(system_wq, &diff_area->cache_release_work);
@@ -115,6 +137,13 @@ static void chunk_notify_load(void *ctx)
 	diff_io_free(chunk->diff_io);
 	chunk->diff_io = NULL;
 
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	mutex_lock(&logging_lock);
+	pr_debug("DEBUG! loaded chunk #%ld \n", chunk->number);
+	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
+		       page_address(chunk->diff_buffer->pages[0]), 96, true);
+	mutex_unlock(&logging_lock);
+#endif
 	might_sleep();
 
 	if (unlikely(error)) {
@@ -175,6 +204,11 @@ static void chunk_notify_store(void *ctx)
 
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
 			chunk_state_unset(chunk, CHUNK_ST_DIRTY);
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+			pr_debug("chunk #%ld has been stored\n", chunk->number);
+			pr_debug("Release buffer for chunk #%ld\n",
+				 chunk->number);
+#endif
 			chunk_diff_buffer_release(chunk);
 		} else {
 			unsigned int current_flag;
@@ -242,6 +276,14 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 		 "The chunk already in the cache"))
 		return -EINVAL;
 
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	mutex_lock(&logging_lock);
+	pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+		 chunk->number, region->sector, region->count);
+	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
+		       page_address(chunk->diff_buffer->pages[0]), 96, true);
+	mutex_unlock(&logging_lock);
+#endif
 	diff_io = diff_io_new_async_write(chunk_notify_store, chunk, is_nowait);
 	if (unlikely(!diff_io)) {
 		if (is_nowait)
@@ -260,6 +302,10 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 		atomic_dec(&chunk->diff_area->pending_io_count);
 		diff_io_free(chunk->diff_io);
 		chunk->diff_io = NULL;
+#ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
+		pr_debug("Failed to write diff for chunk #%ld\n",
+			 chunk->number);
+#endif
 	}
 
 	return ret;
@@ -280,6 +326,10 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 		.count = chunk->sector_count,
 	};
 
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+		 chunk->number, region.sector, region.count);
+#endif
 	diff_io = diff_io_new_async_read(chunk_notify_load, chunk, is_nowait);
 	if (unlikely(!diff_io)) {
 		if (is_nowait)
@@ -316,7 +366,10 @@ int chunk_load_orig(struct chunk *chunk)
 			  diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
-
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	//pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+	//	chunk->number, region.sector, region.count);
+#endif
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
 		return -ENOMEM;
@@ -339,6 +392,10 @@ int chunk_load_diff(struct chunk *chunk)
 	struct diff_io *diff_io;
 	struct diff_region *region = chunk->diff_region;
 
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	pr_debug("%s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
+		 chunk->number, region->sector, region->count);
+#endif
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
 		return -ENOMEM;
@@ -348,5 +405,12 @@ int chunk_load_diff(struct chunk *chunk)
 		ret = diff_io->error;
 
 	diff_io_free(diff_io);
+#ifdef BLK_SNAP_DEBUG_CHUNK_IO
+	mutex_lock(&logging_lock);
+	pr_debug("DEBUG! loaded chunk #%ld from diff area\n", chunk->number);
+	print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET, 32, 1,
+		       page_address(chunk->diff_buffer->pages[0]), 96, true);
+	mutex_unlock(&logging_lock);
+#endif
 	return ret;
 }

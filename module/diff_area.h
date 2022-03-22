@@ -154,3 +154,13 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
  *
  */
 void diff_area_throttling_io(struct diff_area *diff_area);
+
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+/**
+ *
+ */
+int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector,
+			       unsigned int *chunk_state);
+int diff_area_get_sector_image(struct diff_area *diff_area, sector_t pos,
+			       void *buf);
+#endif

@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: GPL-2.0
+# Additions for standalone module modification
+
+EXTRA_CFLAGS += "-DBLK_SNAP_MODIFICATION"
+EXTRA_CFLAGS += "-DMOD_NAME=\"standalone\" "
+
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "blk_qc_t submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&& \
+		echo -DHAVE_QC_SUBMIT_BIO_NOACCT)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "void submit_bio_noacct" $(srctree)/include/linux/blkdev.h &&	\
+		echo -DHAVE_VOID_SUBMIT_BIO_NOACCT)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "struct super_block \*freeze_bdev"				\
+		$(srctree)/include/linux/blkdev.h &&				\
+		echo -DHAVE_SUPER_BLOCK_FREEZE)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
+		echo -DHAVE_BI_BDEV)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
+		echo -DHAVE_BI_BDISK)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
+		echo -DHAVE_BDEV_NR_SECTORS)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
+		echo -DHAVE_BLK_MQ_ALLOC_DISK)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "BIO_MAX_PAGES" $(srctree)/include/linux/bio.h &&		\
+		echo -DHAVE_BIO_MAX_PAGES)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "int add_disk" $(srctree)/include/linux/genhd.h &&		\
+		echo -DHAVE_ADD_DISK_RESULT)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "int __must_check add_disk" $(srctree)/include/linux/genhd.h && \
+		echo -DHAVE_ADD_DISK_RESULT)
+
+
+# The power of 2 for minimum trackings block size.
+# The minimum tracking block size by default is 64 KB (shift 16)
+# It's looks good for block device 128 GB or lower.
+# In this case, the block device is divided into 2097152 blocks.
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT=16"
+
+# The limit of the maximum number of trackings blocks.
+# As the size of the block device grows, the size of the tracking block
+# size should also grow. For this purpose, the limit of the maximum
+# number of block size is set.
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT=2097152"
+
+# The minimum chunk size is 256 KB (shift 18).
+# It's looks good for block device 128 GB or lower.
+# In this case, the block device is divided into 524288 chunks.
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT=18"
+
+# As the size of the block device grows, the size of the chunk should also grow.
+# For this purpose, the limit of the maximum number of chunks is set.
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT=2097152"
+
+# Since reading and writing to snapshots is performed in large chunks,
+# a cache is implemented to optimize reading small portions of data
+# from the snapshot image. As the number of chunks in the cache
+# increases, memory consumption also increases.
+# The minimum recommended value is four.
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=32"
+
+# A buffer can be allocated for each chunk. After use, this buffer is not
+# released immediately, but is sent to the pool of free buffers.
+# However, if there are too many free buffers in the pool, they are released
+# immediately. The maximum size of the pool is regulated by this define.
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE=128"
+
+# The minimum allowable size of the difference storage in sectors.
+# When reached, an event is generated about the lack of free space.
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM=2097152"
+
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DEBUGLOG"
+# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_STORAGE_LISTS"
+# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_BUFFER"
+# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_CHUNK_IO"
+# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_IMAGE_WRITE"
+EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK"
+# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_SECTOR_STATE"
+# EXTRA_CFLAGS += "-DBLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
+EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_RELEASE_SNAPSHOT"
+# EXTRA_CFLAGS += "-DBLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK"

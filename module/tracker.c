@@ -3,7 +3,11 @@
 #include <linux/slab.h>
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
+#ifdef HAVE_LP_FILTER
+#include "blk_snap.h"
+#else
 #include <linux/blk_snap.h>
+#endif
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
@@ -11,6 +15,22 @@
 #include "tracker.h"
 #include "cbt_map.h"
 #include "diff_area.h"
+
+#ifdef BLK_SNAP_DEBUGLOG
+#undef pr_debug
+#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
+#ifdef HAVE_LP_FILTER
+#include "lp_filter.h"
+#endif
+
+#ifndef HAVE_BDEV_NR_SECTORS
+static inline sector_t bdev_nr_sectors(struct block_device *bdev)
+{
+	return i_size_read(bdev->bd_inode) >> 9;
+};
+#endif
 
 struct tracked_device {
 	struct list_head link;
@@ -49,6 +69,10 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 	return tracker;
 }
 
+#ifdef HAVE_LP_FILTER
+void diff_io_endio(struct bio *bio);
+#endif
+
 static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio, void *ctx)
 {
 	int err = 0;
@@ -57,6 +81,20 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio, void *ctx)
 	sector_t count;
 	unsigned int current_flag;
 
+#ifdef HAVE_LP_FILTER
+	/**
+	 * For the upstream version of the module, the definition of bio that
+	 * does not need to be intercepted is performed using the flag
+	 * BIO_FILTERED.
+	 * But for the standalone version of the module, we can only use the
+	 * context of bio.
+	 */
+	if (bio->bi_end_io == diff_io_endio)
+		return bdev_filter_pass;
+#else
+	if (WARN_ONCE((bio->bi_end_io == diff_io_endio),
+		      "We should not intercept our own ."))
+#endif
 	if (!op_is_write(bio_op(bio)))
 		return bdev_filter_pass;
 
@@ -122,11 +160,18 @@ static int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 {
 	int ret;
 	unsigned int current_flag;
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	struct super_block *superblock = NULL;
+#else
 	bool is_frozen = false;
+#endif
 
 	pr_debug("Tracker %s filter\n",
 		 (flt_cmd == filter_cmd_add) ? "add" : "delete");
 
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	_freeze_bdev(bdev, &superblock);
+#else
 	if (freeze_bdev(bdev))
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
 		       MINOR(bdev->bd_dev));
@@ -135,6 +180,7 @@ static int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
 			 MINOR(bdev->bd_dev));
 	}
+#endif
 
 	current_flag = memalloc_noio_save();
 	bdev_filter_write_lock(bdev);
@@ -154,6 +200,9 @@ static int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 	bdev_filter_write_unlock(bdev);
 	memalloc_noio_restore(current_flag);
 
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	_thaw_bdev(bdev, superblock);
+#else
 	if (is_frozen) {
 		if (thaw_bdev(bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
@@ -162,6 +211,7 @@ static int tracker_filter(struct tracker *tracker, enum filter_cmd flt_cmd,
 			pr_debug("Device [%u:%u] was unfrozen\n",
 				 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
+#endif
 
 	if (ret)
 		pr_err("Failed to %s device [%u:%u]\n",
