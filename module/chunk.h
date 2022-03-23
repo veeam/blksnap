@@ -27,7 +27,7 @@ struct diff_io;
  *	In the process of saving data to the difference storage.
  *
  * Chunks live circle.
- * COW on write to original:
+ * Copy-on-write when writing to original:
  *	0 -> LOADING -> BUFFER_READY -> BUFFER_READY | STORING ->
  *	BUFFER_READY | STORE_READY -> STORE_READY
  * Write to snapshot image:
@@ -45,54 +45,53 @@ enum chunk_st {
 };
 
 /**
- * struct chunk - Elementary copy block.
+ * struct chunk - Minimum data storage unit.
  *
  * @cache_link:
- *	If the data of the chunk has been changed or has just been read,
- *      then the chunk gets into a temporary buffer.
+ *	The list header allows to combine chunks into cache linked lists.
  * @diff_area:
- *      The struct diff_area describes the storage of changes specifically
- *      for a specific device.
+ *      Pointer to a difference area.
  * @number:
  *	Sequential number of chunk.
  * @sector_count:
  *	Numbers of sectors in current chunk this is especially true for the
- *	last piece.
- * @state:
- *	Defines the state of the chunk. May contain CHUNK_ST_* bits.
+ *	last chunk.
  * @lock:
- *	Syncs access to the chunks fields: state, diff_buffer and diff_region.
- *	The semaphore is blocked for writing if there is no actual data
- *	in the buffer, since a block of data is being read from the original
- *	device or from a diff storage.
- *	If data is being read or written from the chunk buffer, the semaphore
- *	must be blocked for reading.
- *	The module does not prohibit reading and writing data to the snapshot
- *	from different threads in parallel.
- *	To avoid the problem with simultaneous access, it is enough to open
- *	the snapshot image block device with the FMODE_EXCL parameter.
+ *	Binary semaphore. Syncs access to the chunks fields: state,
+ *      diff_buffer, diff_region and diff_io.
+ * @state:
+ *      Defines the state of the chunk. May contain CHUNK_ST_* bits.
  * @diff_buffer:
  *	Pointer to &struct diff_buffer. Describes a buffer in memory for
  *	storing chunk data.
  * @diff_region:
  *	Pointer to &struct diff_region. Describes a copy of the chunk data
  *	on the difference storage.
- * diff_io:
+ * @diff_io:
  *	The struct diff_io provides I/O operations for a chunk.
  *
  * This structure describes the block of data that the module operates with
- * when executing the COW algorithm and when performing IO to snapshot images.
+ * when executing the copy-on-write algorithm and when performing I/O to
+ * snapshot images.
+ *
+ * If the data of the chunk has been changed or has just been read, then the
+ * chunk gets into a temporary buffer.
+ *
+ * The semaphore is blocked for writing if there is no actual data in the
+ * buffer, since a block of data is being read from the original device or
+ * from a diff storage. If data is being read from or written to the
+ * diff_buffer, the semaphore must be locked.
  */
 struct chunk {
 	struct list_head cache_link;
 	struct diff_area *diff_area;
 
 	unsigned long number;
-	atomic_t state;
 	sector_t sector_count;
 
 	struct semaphore lock;
 
+        atomic_t state;
 	struct diff_buffer *diff_buffer;
 	struct diff_region *diff_region;
 	struct diff_io *diff_io;
