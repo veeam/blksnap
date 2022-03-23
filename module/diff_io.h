@@ -8,7 +8,12 @@ struct diff_buffer;
 /**
  * struct diff_region - Describes the location of the chunks data on
  *	difference storage.
- *
+ * @bdev:
+ *	The target block device.
+ * @sector:
+ * 	The sector offset of the region's first sector.
+ * @count:
+ *	The count of sectors in the region.
  */
 struct diff_region {
 	struct block_device *bdev;
@@ -16,18 +21,57 @@ struct diff_region {
 	sector_t count;
 };
 
-/* for synchronous IO */
+/**
+ * struct diff_io_sync - Structure for notification of completion for
+ *	synchronous I/O.
+ * @completion:
+ *	Indicates that the request has been processed.
+ *
+ * Allows to wait for the completion of the I/O operation in the
+ * current thread.
+ */
 struct diff_io_sync {
 	struct completion completion;
 };
 
-/* for asynchronous IO */
+/**
+ * struct diff_io_async - Structure for notification of completion for
+ *	asynchronous I/O.
+ * @work:
+ *	The struct work_struct allows to schedule perform an I/O operation
+ * 	in a separate process.
+ * @notify_cb:
+ *	A pointer to the callback function that will be executed when
+ * 	the I/O execution is completed.
+ * @ctx:
+ *	The context for the callback function &notify_cb.
+ *
+ * Allows to schedule the execution of an I/O operation.
+ */
 struct diff_io_async {
 	struct work_struct work;
 	void (*notify_cb)(void *ctx);
 	void *ctx;
 };
 
+/**
+ * struct diff_io - Structure for I/O maintenance.
+ * @error:
+ *	Zero if the I/O operation is successful, or an error code if it fails.
+ * @bio_count:
+ *	The count of bio in the input/output request.
+ * @is_write:
+ *	Indicates that a write operation is being performed.
+ * @is_sync_io:
+ *	Indicates that the operation is being performed synchronously.
+ * @notify:
+ *	This union may contain a diff_io_sync or diff_io_async structure
+ * 	for synchronous or asynchronous request.
+ *
+ * The request to perform an I/O operation is executed for a region of sectors.
+ * Such a region may contain several bio. It is necessary to notify about the
+ * completion of processing of all bio. Struct diff_io allows to do it.
+ */
 struct diff_io {
 	int error;
 	atomic_t bio_count;
