@@ -10,7 +10,7 @@ struct cbt_map;
 struct diff_area;
 
 /**
- * struct tracker - Tracker for block device.
+ * struct tracker - Tracker for a block device.
  *
  * @kref:
  *	Protects the structure from being released during the processing of
@@ -18,11 +18,16 @@ struct diff_area;
  * @dev_id:
  *	Original block device ID.
  * @snapshot_is_taken:
- *
+ *	Indicates that a snapshot was taken for the device whose bios are
+ *	handled by this tracker.
  * @cbt_map:
- *
+ *	Pointer to a change block tracker map.
  * @diff_area:
+ *	Pointer to a difference area.
  *
+ * The main goal of the tracker is to handle a bios. The tracker detectes
+ * the range of sectors that will change and transmits them to the CBT map
+ * and to the difference area.
  */
 struct tracker {
 	struct kref kref;
