@@ -20,7 +20,7 @@ struct snapimage;
  *	The list header allows to store snapshots in a linked list.
  * @kref:
  *	Protects the structure from being released during the processing of
- *	a IOCTL.
+ *	an IOCTL.
  * @id:
  *	UUID of snapshot.
  * @is_taken:

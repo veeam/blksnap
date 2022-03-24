@@ -209,7 +209,7 @@ static struct tracker *tracker_new(struct block_device *bdev)
 		goto fail;
 	}
 	/*
-	 * The filter store a pointer to the tracker.
+	 * The filter stores a pointer to the tracker.
 	 * The tracker will not be released until its filter is released.
 	 */
 	kref_get(&tracker->kref);
@@ -480,7 +480,7 @@ int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
 
 	if (!cbt_info) {
 		/**
-		 * Just calculate trackers list length
+		 * Just calculate trackers list length.
 		 */
 		spin_lock(&tracked_device_lock);
 		list_for_each_entry(tr_dev, &tracked_device_list, link)

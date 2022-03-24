@@ -267,7 +267,7 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 
 /**
  * chunk_async_load_orig() - Starts asynchronous loading of a chunk from
- *	the origian block device.
+ *	the original block device.
  */
 int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 {

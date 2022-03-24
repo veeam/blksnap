@@ -7,7 +7,7 @@
 #include <linux/wait.h>
 
 /**
- * struct event - An event to pass it to the user-space.
+ * struct event - An event to be passed to the user space.
  * @link:
  *	The list header allows to combine events from the queue.
  * @time:

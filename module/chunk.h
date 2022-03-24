@@ -13,20 +13,20 @@ struct diff_io;
  * enum chunk_st - Possible states for a chunk.
  *
  * @CHUNK_ST_FAILED:
- *	An error occurred while processing the chunks data.
+ *	An error occurred while processing the chunk data.
  * @CHUNK_ST_DIRTY:
- *	The data on the original device and the snapshot image differ
- *	in this chunk.
+ *	The chunk is in the dirty state. The chunk is marked dirty in case
+ *	there was a write operation to the snapshot image.
  * @CHUNK_ST_BUFFER_READY:
  *	The data of the chunk is ready to be read from the RAM buffer.
  * @CHUNK_ST_STORE_READY:
- *	The data of the chunk was wrote to the difference storage.
+ *	The data of the chunk has been written to the difference storage.
  * @CHUNK_ST_LOADING:
- *	In the process of reading data from the original block device.
+ *	The data is being read from the original block device.
  * @CHUNK_ST_STORING:
- *	In the process of saving data to the difference storage.
+ *	The data is being saved to the difference storage.
  *
- * Chunks live circle.
+ * Chunks life circle.
  * Copy-on-write when writing to original:
  *	0 -> LOADING -> BUFFER_READY -> BUFFER_READY | STORING ->
  *	BUFFER_READY | STORE_READY -> STORE_READY
@@ -48,34 +48,35 @@ enum chunk_st {
  * struct chunk - Minimum data storage unit.
  *
  * @cache_link:
- *	The list header allows to combine chunks into cache linked lists.
+ *	If the data of a chunk has been changed or has been just read,
+ *	then the chunk gets into a temporary buffer.
  * @diff_area:
- *      Pointer to a difference area.
+ *	Describes the storage of changes for a specific device.
  * @number:
- *	Sequential number of chunk.
+ *	Sequential number of the chunk.
  * @sector_count:
- *	Numbers of sectors in current chunk this is especially true for the
- *	last chunk.
+ *	Number of sectors in the current chunk. This is especially true
+ *	for the	last chunk.
  * @lock:
  *	Binary semaphore. Syncs access to the chunks fields: state,
  *      diff_buffer, diff_region and diff_io.
  * @state:
- *      Defines the state of the chunk. May contain CHUNK_ST_* bits.
+ *      Defines the state of a chunk. May contain CHUNK_ST_* bits.
  * @diff_buffer:
- *	Pointer to &struct diff_buffer. Describes a buffer in memory for
- *	storing chunk data.
+ *	Pointer to &struct diff_buffer. Describes a buffer in the memory
+ *	for storing the chunk data.
  * @diff_region:
  *	Pointer to &struct diff_region. Describes a copy of the chunk data
  *	on the difference storage.
  * @diff_io:
- *	The struct diff_io provides I/O operations for a chunk.
+ *	Provides I/O operations for a chunk.
  *
- * This structure describes the block of data that the module operates with
- * when executing the copy-on-write algorithm and when performing I/O to
- * snapshot images.
+ * This structure describes the block of data that the module operates
+ * with when executing the copy-on-write algorithm and when performing I/O
+ * to snapshot images.
  *
- * If the data of the chunk has been changed or has just been read, then the
- * chunk gets into a temporary buffer.
+ * If the data of the chunk has been changed or has just been read, then
+ * the chunk gets into a temporary buffer.
  *
  * The semaphore is blocked for writing if there is no actual data in the
  * buffer, since a block of data is being read from the original device or
@@ -91,7 +92,7 @@ struct chunk {
 
 	struct semaphore lock;
 
-        atomic_t state;
+	atomic_t state;
 	struct diff_buffer *diff_buffer;
 	struct diff_region *diff_region;
 	struct diff_io *diff_io;

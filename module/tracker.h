@@ -13,8 +13,8 @@ struct diff_area;
  * struct tracker - Tracker for a block device.
  *
  * @kref:
- *	Protects the structure from being released during the processing of
- *	a IOCTL.
+ *	Protects the structure from being released during processing of
+ *	an IOCTL.
  * @dev_id:
  *	Original block device ID.
  * @snapshot_is_taken:

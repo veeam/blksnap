@@ -27,7 +27,7 @@ index d5d4197b7ed2..d8b720799e20 100644
 +	bool "Enable block device filters"
 +	default n
 +	help
-+	  Enabling this lets the block layer filters to handle bio requests.
++	  Enabling this lets the block layer filters handle bio requests.
 +	  Kernel modules can use this feature to extend the functionality
 +	  of the block layer.
 +
@@ -112,20 +112,20 @@ index 102837a37051..1acabda9b00c 100644
 +}
 +
 +/**
-+ * bdev_filter_add - Attach a filter to original block device.
++ * bdev_filter_add - Attach a filter to the original block device.
 + * @bdev:
 + *	Block device.
 + * @name:
-+ *	Name of new block device filter.
++ *	Name of the new block device filter.
 + * @fops:
 + *	Table of filter callbacks.
 + * @ctx:
 + *	Filter specific private data.
 + *
-+ * Before adding a filter, it is necessary to lock the processing
-+ * of bio requests of the original device by calling bdev_filter_write_lock().
++ * Before adding a filter, it is necessary to lock processing
++ * of bio requests for the original device by calling the bdev_filter_write_lock() function.
 + *
-+ * The filter_del() function allows to delete the filter from the block device.
++ * The bdev_filter_del() function allows to delete the filter from the block device.
 + *
 + * Return:
 + * 0 - OK
@@ -160,14 +160,14 @@ index 102837a37051..1acabda9b00c 100644
 +EXPORT_SYMBOL_GPL(bdev_filter_add);
 +
 +/**
-+ * bdev_filter_del - Delete filter from the block device.
++ * bdev_filter_del - Delete a filter from the block device.
 + * @bdev:
 + *	Block device.
 + * @name:
-+ *	Name of new block device filter.
++ *	Name of the block device filter.
 + *
-+ * Before deleting a filter, it is necessary to lock the processing
-+ * of bio requests of the device by calling filter_write_lock().
++ * Before deleting a filter, it is necessary to lock processing
++ * of bio requests for the device by calling the filter_write_lock() function.
 + *
 + * The filter should be added using the bdev_filter_add() function.
 + *
@@ -194,13 +194,13 @@ index 102837a37051..1acabda9b00c 100644
 +EXPORT_SYMBOL_GPL(bdev_filter_del);
 +
 +/**
-+ * bdev_filter_get_ctx - Get filters context value.
++ * bdev_filter_get_ctx - Get the filter's context value.
 + * @bdev:
 + *	Block device.
 + * @name:
-+ *	Name of new block device filter.
++ *	Name of the block device filter.
 + *
-+ * Necessary to lock list of filters by calling filter_read_lock().
++ * Before geting the filter's context value, it is necessary to lock the list of filters by calling the filter_read_lock() function.
 + *
 + * Return:
 + * pointer - &ctx value from &struct blk_filter or NULL
@@ -230,15 +230,15 @@ index 1039515c99d6..e092d5df1804 100644
 +#ifdef CONFIG_BLK_FILTER
 +
 +/**
-+ * __filter_bio() - Processing of a bio by the block device filter.
++ * __filter_bio() - Process bio by the block device filter.
 + * @flt:
-+ *	block device filter
++ *	Block device filter.
 + * @bio:
-+ *	original I/O unit
++ *	Original I/O unit.
 + *
 + * Return:
 + * bdev_filter_pass - original bio should be submitted
-+ * bdev_filter_skip - do not submit a original bio
++ * bdev_filter_skip - do not submit original bio
 + * bdev_filter_redirect - repeat bio processing for another block device
 + */
 +static inline enum bdev_filter_result __filter_bio(struct bdev_filter *flt,
@@ -268,13 +268,13 @@ index 1039515c99d6..e092d5df1804 100644
 +}
 +
 +/**
-+ * filter_bio_apply() - Passing a bio to the block device filters.
++ * filter_bio_apply() - Pass bio to the block device filters.
 + * @bio:
-+ *	original I/O unit
++ *	Original I/O unit.
 + *
 + * Return:
 + * true - original bio should be submitted
-+ * false - do not submit a original bio
++ * false - do not submit original bio
 + */
 +static bool filter_bio(struct bio *bio)
 +{
@@ -315,8 +315,8 @@ index 1039515c99d6..e092d5df1804 100644
 +#endif
 +
  /**
-  * submit_bio_noacct - re-submit a bio to the block device layer for I/O
-  * @bio:  The bio describing the location in memory and on the device.
+  * submit_bio_noacct - Re-submit bio to the block device layer for I/O.
+  * @bio:  Bio describing the location in the memory and on the device.
 @@ -895,9 +982,15 @@ void submit_bio_noacct(struct bio *bio)
  	 * to collect a list of requests submited by a ->submit_bio method while
  	 * it is active, and then process them after it returned.
@@ -355,7 +355,7 @@ index fe065c394fff..2c42d6d09be0 100644
  	BIO_ZONE_WRITE_LOCKED,	/* Owns a zoned device zone write lock */
  	BIO_PERCPU_CACHE,	/* can participate in per-cpu alloc cache */
 +#ifdef CONFIG_BLK_FILTER
-+	BIO_FILTERED,		/* a bio already has been filtered */
++	BIO_FILTERED,		/* bio has already been filtered */
 +#endif
  	BIO_FLAG_LAST
  };
@@ -371,18 +371,18 @@ index 16b47035e4b0..ee2db9f6245e 100644
 +#ifdef CONFIG_BLK_FILTER
 +#define BDEV_FILTER_NAME_MAX_LENGTH 31
 +/**
-+ * enum bdev_filter_result - The result of processing the bio by
++ * enum bdev_filter_result - The result of bio processing by
 + *	the block device filter.
 + *
 + * @bdev_filter_skip:
-+ *	The original bio does not need to be submitted.
++ *	Original bio does not need to be submitted.
 + * @bdev_filter_pass:
 + *	It is necessary to submit the original request.
 + * @bdev_filter_repeat:
 + *	Bio processing has not been completed, a second call is required.
 + * @bdev_filter_redirect:
-+ *	The original bio was redirected to another block device. The set
-+ *	of filters on it is different, so the processing must be repeated.
++ *	Original bio was redirected to another block device. The set
++ *	of filters on it is different, so processing must be repeated.
 + */
 +enum bdev_filter_result {
 +	bdev_filter_skip = 0,
@@ -394,7 +394,7 @@ index 16b47035e4b0..ee2db9f6245e 100644
 + * bdev_filter_operations - List of callback functions for the filter.
 + *
 + * @submit_bio_cb:
-+ *	A callback function for processing the bio.
++ *	A callback function for bio processing.
 + * @detach_cb:
 + *	A callback function to disable the filter when removing a block
 + *	device from the system.
@@ -422,13 +422,13 @@ index 16b47035e4b0..ee2db9f6245e 100644
 +	void *ctx;
 +};
 +/**
-+ * filter_write_lock() - Locks the processing of I/O requests for block device.
++ * filter_write_lock() - Locks processing of I/O requests for a block device.
 + * @bdev:
 + *	Pointer to &struct block_device.
 + *
-+ * Locks block device the execution of the submit_bio_noacct() function for it.
++ * Locks execution of the submit_bio_noacct() function for the block device.
 + * To avoid calling a deadlock, do not call I/O operations after this lock.
-+ * To do this, using the memalloc_noio_save() function can be useful.
++ * The memalloc_noio_save() function can be useful for this purpose.
 + *
 + */
 +static inline void bdev_filter_write_lock(struct block_device *bdev)
@@ -436,7 +436,7 @@ index 16b47035e4b0..ee2db9f6245e 100644
 +	percpu_down_write(&bdev->bd_filters_lock);
 +};
 +/**
-+ * filter_write_unlock - Unlocks the processing of I/O requests for block device.
++ * filter_write_unlock - Unlocks processing of I/O requests for a block device.
 + * @bdev:
 + *	Pointer to &struct block_device.
 + *
@@ -447,11 +447,11 @@ index 16b47035e4b0..ee2db9f6245e 100644
 +	percpu_up_write(&bdev->bd_filters_lock);
 +};
 +/**
-+ * filter_read_lock - Lock filters list, protecting them from changes.
++ * filter_read_lock - Lock the list of filters to protect them from changes.
 + * @bdev:
 + *	Pointer to &struct block_device.
 + *
-+ * The lock ensures that the filter will not be removed from the list until
++ * The lock ensures that a filter will not be removed from the list until
 + * the lock is removed.
 + */
 +static inline void bdev_filter_read_lock(struct block_device *bdev)
@@ -459,7 +459,7 @@ index 16b47035e4b0..ee2db9f6245e 100644
 +	percpu_down_read(&bdev->bd_filters_lock);
 +};
 +/**
-+ * filter_read_unlock - Unlock filters list.
++ * filter_read_unlock - Unlock the list of filters.
 + * @bdev:
 + *	Pointer to &struct block_device.
 + */

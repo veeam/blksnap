@@ -275,7 +275,7 @@ static int ioctl_snapshot_append_storage(unsigned long arg)
 
 	/*
 	 * Rarely, but there are file systems in which the blocks on the disk
-	 * are significantly fragmented. And the drive for diff storage can be
+	 * are significantly fragmented. And the drive for the diff storage can be
 	 * quite large.
 	 * At the same time, an attempt to allocate several pages of continuous
 	 * address space on such systems often causes an ENOMEM error.

@@ -11,29 +11,29 @@
 struct blk_snap_block_range;
 
 /**
- * struct cbt_map - The table of changes fo block device.
+ * struct cbt_map - The table of changes for a block device.
  *
  * @kref:
  *	Reference counter.
  * @locker:
  *	Locking for atomic modification of structure members.
  * @blk_size_shift:
- *	The power of two to the change tracking block size.
+ *	The power of 2 used to specify the change tracking block size.
  * @blk_count:
- *	The number of blocks.
+ *	The number of change tracking blocks.
  * @device_capacity:
  *	The actual capacity of the device.
  * @read_map:
- *	A table of changes available for reading. It is this table that can
+ *	A table of changes available for reading. This is the table that can
  *	be read after taking a snapshot.
  * @write_map:
  *	The current table for tracking changes.
  * @snap_number_active:
- *	The current number of changes. It is this number that is written to
+ *	The current sequential number of changes. This is the number that is written to
  *	the current table when the block data changes.
  * @snap_number_previous:
- *	The previous number of changes. This number is used to identify the
- *	blocks that were changed between the penultimate and last snapshot.
+ *	The previous sequential number of changes. This number is used to identify the
+ *	blocks that were changed between the penultimate snapshot and the last snapshot.
  * @generation_id:
  *	UUID of the generation of changes.
  * @is_corrupted:

@@ -160,7 +160,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	}
 	atomic_set(&diff_io->bio_count, 2);
 
-	// submit bio with datas
+	// Submit bio with datas
 	bio_set_flag(bio, BIO_FILTERED);
 	bio->bi_end_io = diff_io_endio;
 	bio->bi_private = diff_io;
@@ -190,7 +190,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	}
 	submit_bio_noacct(bio);
 
-	// submit flush bio
+	// Submit flush bio
 	bio_set_flag(flush_bio, BIO_FILTERED);
 	flush_bio->bi_end_io = diff_io_endio;
 	flush_bio->bi_private = diff_io;
