@@ -17,24 +17,24 @@ struct snapimage;
 /**
  * struct snapshot - Snapshot structure.
  * @link:
- *
+ *  [TBD]
  * @kref:
  *	Protects the structure from being released during the processing of
- *	a IOCTL.
+ *	an IOCTL.
  * @id:
  *	UUID of snapshot.
  * @is_taken:
  *	Flag that the snapshot was taken.
  * @lock:
- *
+ *  [TBD]
  * @diff_storage:
- *
+ *  [TBD]
  * @count:
- *
+ *  [TBD]
  * @tracker_array:
- *
+ *  [TBD]
  * @snapimage_array:
- *
+ *  [TBD]
  */
 struct snapshot {
 	struct list_head link;

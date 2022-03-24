@@ -7,7 +7,7 @@ struct diff_buffer;
 
 /**
  * struct diff_region - Describes the location of the chunks data on
- *	difference storage.
+ *	the difference storage.
  *
  */
 struct diff_region {
@@ -16,12 +16,12 @@ struct diff_region {
 	sector_t count;
 };
 
-/* for synchronous IO */
+/* For synchronous IO */
 struct diff_io_sync {
 	struct completion completion;
 };
 
-/* for asynchronous IO */
+/* For asynchronous IO */
 struct diff_io_async {
 	struct work_struct work;
 	void (*notify_cb)(void *ctx);

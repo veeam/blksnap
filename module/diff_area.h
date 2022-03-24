@@ -15,49 +15,49 @@ struct chunk;
 /**
  * struct diff_area - Discribes the difference area for one original device.
  * @kref:
- *	This structure can be shared between &struct tracker and &struct
+ *	This structure can be shared between the &struct tracker and &struct
  *	snapimage.
  * @orig_bdev:
- *	A pointer to the structure of an open block device.
+ *	A pointer to the structure of an opened block device.
  * @diff_storage:
  *	The same &struct diff_area can use the same diff_storage to store
  *	its data.
  * @chunk_shift:
- *	Power of 2 for chunk size. It's allow to set various chunk size for
- *	huge and small block device.
+ *	Power of 2 used to specify the chunk size. This allows to set different chunk sizes for
+ *	huge and small block devices.
  * @chunk_count:
  *	Count of chunks. The number of chunks into which the block device
  *	is divided.
  * @chunk_map:
- *	A map of chunk. xarray can be too little on x32 systems. This creates
- *	a limit in the size of supported disks to 256 TB with a chunk size of
+ *	A map of chunks. xarray can be too small on x32 systems. This creates
+ *	a limit for the size of supported disks to 256 TB with a chunk size of
  *	65536 bytes. In addition, such a large array will take up too much
- *	space in memory.
+ *	space in the memory.
  *	Therefore, the size of the chunk should be selected so that the size
  *	of the map is not too large, and the index does not exceed 32 bits.
  * @storing_chunks:
- *	A list of chunks that are waiting to be store sectors from memory to
- *	diff storage.
+ *	A list of chunks that are waiting to store sectors from the memory to the
+ *	difference storage.
  *	Reading data from the original block device is performed in the context
- *	of the thread in which the filtering is performed. But storing data to
- *	diff storage is performed in workqueue.
- *	The chunks that need to be stored in diff storage are accumitale in
+ *	of the thread in which the filtering is performed. But storing data to the
+ *	difference storage is performed in workqueue.
+ *	The chunks that need to be stored in the difference storage are accumitaled in
  *	this list.
  * @storage_list_lock:
  *	Spin lock for the @storing_chunks list.
- * caches_lock:
- *      Spin lock for the @read_cache_queue list.
+ * @caches_lock:
+ *  Spin lock for the @read_cache_queue list.
  * @storing_chunks_work:
- *	The workqueue work item. This worker saves the chunks to the diff
+ *	The workqueue work item. This worker saves the chunks to the difference
  *	storage.
  * @read_cache_queue:
- *	After copying the sectors from the original block device to diff
- *	storage, the sectors are still located in memory. When the snapshot
- *	data is read or written, they also remain in memory for some time.
+ *	After copying the sectors from the original block device to the difference
+ *	storage, the sectors are still located in the memory. When the snapshot
+ *	data is read or written, they also remain in the memory for some time.
  * @read_cache_count:
  *	The number of chunks in the cache.
  * @cache_release_work:
- *	The workqueue work item which controls the cache size.
+ *	The workqueue work item that controls the cache size.
  * @corrupt_flag:
  *	The flag is set if an error occurred in the operation of the data
  *	saving mechanism in the diff area. In this case, an error will be
@@ -67,7 +67,7 @@ struct chunk;
  * It is used to save the differences between the original block device and
  * the snapshot image. That is, when writing data to the original device,
  * the differences are copied as chunks to the difference storage.
- * Reading and writing from the snapshot image are also performed using
+ * Reading and writing from the snapshot image is also performed using
  * &struct diff_area.
  */
 struct diff_area {
@@ -125,7 +125,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
  * struct diff_area_image_ctx - The context for processing an io request to
  *	the snapshot image.
  * @diff_area:
- *	Pointer to &struct diff_area for current snapshot image.
+ *	Pointer to &struct diff_area for the current snapshot image.
  * @is_write:
  *	Distinguishes between the behavior of reading or writing when
  *	processing a request.

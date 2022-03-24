@@ -13,13 +13,13 @@ struct cbt_map;
  * struct snapimage - Snapshot image block device.
  *
  * @image_dev_id:
- *
+ *  [TBD]
  * @capacity:
- *
+ *  [TBD]
  * @tag_set:
  *	Area to keep a shared tag map.
  * @disk:
- *
+ *  [TBD]
  * @diff_area:
  *	Pointer to owned &struct diff_area.
  * @cbt_map:

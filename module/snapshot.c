@@ -23,7 +23,7 @@ static void snapshot_release(struct snapshot *snapshot)
 
 	pr_info("Release snapshot %pUb\n", &snapshot->id);
 
-	/* destroy all snapshot images */
+	/* Destroy all snapshot images. */
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct snapimage *snapimage = snapshot->snapimage_array[inx];
 
@@ -31,7 +31,7 @@ static void snapshot_release(struct snapshot *snapshot)
 			snapimage_free(snapimage);
 	}
 
-	/* flush and freeze fs on each original block device */
+	/* Flush and freeze fs on each original block device. */
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -44,7 +44,7 @@ static void snapshot_release(struct snapshot *snapshot)
 	}
 
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* lock filters */
+	/* Lock filters. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -54,13 +54,13 @@ static void snapshot_release(struct snapshot *snapshot)
 	}
 #endif
 	current_flag = memalloc_noio_save();
-	/* Set tracker as available for new snapshots */
+	/* Set tracker as available for new snapshots. */
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
 	memalloc_noio_restore(current_flag);
 
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* unlock filters */
+	/* Unlock filters. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -69,7 +69,7 @@ static void snapshot_release(struct snapshot *snapshot)
 		bdev_filter_write_unlock(tracker->diff_area->orig_bdev);
 	}
 #endif
-	/* thaw fs on each original block device */
+	/* Thaw fs on each original block device. */
 
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
@@ -82,7 +82,7 @@ static void snapshot_release(struct snapshot *snapshot)
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 	}
 
-	/* destroy diff area for each tracker */
+	/* Destroy diff area for each tracker. */
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -359,7 +359,7 @@ int snapshot_take(uuid_t *id)
 		goto out;
 	}
 
-	/* allocate diff area for each device in snapshot */
+	/* Allocate diff area for each device in the snapshot. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 		struct diff_area *diff_area;
@@ -376,7 +376,7 @@ int snapshot_take(uuid_t *id)
 		tracker->diff_area = diff_area;
 	}
 
-	/* try to flush and freeze file system on each original block device */
+	/* Try to flush and freeze file system on each original block device. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -389,7 +389,7 @@ int snapshot_take(uuid_t *id)
 	}
 
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* lock filters */
+	/* Lock filters. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -400,7 +400,7 @@ int snapshot_take(uuid_t *id)
 #endif
 	current_flag = memalloc_noio_save();
 
-	/* take snapshot - switch CBT tables and enable COW logic for each tracker */
+	/* Take snapshot - switch CBT tables and enable COW logic for each tracker. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (!snapshot->tracker_array[inx])
 			continue;
@@ -425,7 +425,7 @@ int snapshot_take(uuid_t *id)
 
 	memalloc_noio_restore(current_flag);
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* unlock filters */
+	/* Unlock filters. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -434,7 +434,7 @@ int snapshot_take(uuid_t *id)
 		bdev_filter_write_unlock(tracker->diff_area->orig_bdev);
 	}
 #endif
-	/* thaw file systems on original block devices */
+	/* Thaw file systems on original block devices. */
 
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
@@ -453,7 +453,7 @@ int snapshot_take(uuid_t *id)
 	pr_info("Snapshot was taken successfully\n");
 
 	/**
-	 * Sometimes a snapshot is in a state of corrupt immediately
+	 * Sometimes a snapshot is in the state of corrupt immediately
 	 * after it is taken.
 	 */
 	for (inx = 0; inx < snapshot->count; inx++) {
@@ -470,7 +470,7 @@ int snapshot_take(uuid_t *id)
 		}
 	}
 
-	/* create all image block device */
+	/* Create all image block devices. */
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct snapimage *snapimage;
 		struct tracker *tracker = snapshot->tracker_array[inx];

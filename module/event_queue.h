@@ -7,7 +7,7 @@
 #include <linux/wait.h>
 
 /**
- * struct event - An event to pass it to the user-space.
+ * struct event - An event to be passed to the user space.
  */
 struct event {
 	struct list_head link;
