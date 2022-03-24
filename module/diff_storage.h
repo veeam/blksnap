@@ -9,14 +9,14 @@ struct diff_region;
  * struct diff_storage - Difference storage.
  *
  * @kref:
- *
+ *	The reference counter.
  * @lock:
- *
+ *	Spinlock allows to guarantee the safety of linked lists.
  * @storage_bdevs:
  *	List of opened block devices. Blocks for storing snapshot data can be
- *	located on different block devices.
- *	So, all opened block devices are located in this list.
- *	A storage from which blocks are allocated for storing chunks data.
+ *	located on different block devices. So, all opened block devices are
+ *	located in this list. A storage from which blocks are allocated for
+ *	storing chunks data.
  * @empty_blocks:
  *	List of empty blocks on storage. This list can be updated while
  *	holding a snapshot. It's allowing us to dynamically increase the
@@ -31,13 +31,21 @@ struct diff_region;
  * @requested:
  *	The number of sectors already requested from user-space.
  * @low_space_flag:
- *
+ *	The flag is set if there are less than the allowed minimum free
+ *	regions available in the difference storage.
  * @overflow_flag:
- *
+ *	The request for a free region failed due to the absence of free
+ *	regions in the difference storage.
  * @event_queue:
  *	A queue of events to pass them to the user-space. Diff storage and his
  *	owner can notify his snapshot about events like snapshot overflow,
  *	low free space and snapshot terminated.
+ *
+ * The difference storage manages the regions of block devices that are used
+ * to store the data of the original block devices in snapshot.
+ * The difference storage is created one per snapshot and is used to store
+ * data from all the original snapshot block devices. At the same time, the
+ * difference storage itself can contain regions on various block devices.
  */
 struct diff_storage {
 	struct kref kref;
