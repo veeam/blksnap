@@ -8,6 +8,20 @@
 
 /**
  * struct event - An event to pass it to the user-space.
+ * @link:
+ *	The list header allows to combine events from the queue.
+ * @time:
+ *	A timestamp lets know when an event occurred.
+ * @code:
+ *	Event code.
+ * @data_size:
+ *	The number of bytes in the events data array.
+ * @data:
+ *	An array of event data.
+ *
+ * Events can be different, so they contain different data. The size of the
+ * data array is not defined exactly, but it has limitations. The size of
+ * the event structure may exceed the PAGE_SIZE.
  */
 struct event {
 	struct list_head link;
@@ -19,6 +33,13 @@ struct event {
 
 /**
  * struct event_queue - A queue of &struct event.
+ * @list:
+ *	Linked list for storing events.
+ * @lock:
+ *	Spinlock allows to guarantee the safety of linked list.
+ * @wq_head:
+ *	A wait queue allows to put a user thread in a waiting state until
+ *	an event appears in the linked list.
  */
 struct event_queue {
 	struct list_head list;
