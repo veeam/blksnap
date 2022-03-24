@@ -17,7 +17,7 @@ struct snapimage;
 /**
  * struct snapshot - Snapshot structure.
  * @link:
- *
+ *	The list header allows to store snapshots in a linked list.
  * @kref:
  *	Protects the structure from being released during the processing of
  *	a IOCTL.
@@ -25,15 +25,25 @@ struct snapimage;
  *	UUID of snapshot.
  * @is_taken:
  *	Flag that the snapshot was taken.
- * @lock:
- *
  * @diff_storage:
- *
+ *	A pointer to the difference storage of this snapshot.
  * @count:
- *
+ *	The number of block devices in the snapshot. This number
+ *	corresponds to the size of arrays of pointers to trackers
+ *	and snapshot images.
  * @tracker_array:
- *
+ *	Array of pointers to block device trackers.
  * @snapimage_array:
+ *	Array of pointers to images of snapshots of block devices.
+ *
+ * A snapshot corresponds to a single backup session and provides snapshot
+ * images for multiple block devices. Several backup sessions can be
+ * performed at the same time, which means that several snapshots can
+ * exist at the same time. However, the original block device can only
+ * belong to one snapshot. Creating multiple snapshots from the same block
+ * device is not allowed.
+ *
+ * A UUID is used to identify the snapshot.
  *
  */
 struct snapshot {
@@ -41,10 +51,7 @@ struct snapshot {
 	struct kref kref;
 	uuid_t id;
 	bool is_taken;
-
-	struct rw_semaphore lock;
 	struct diff_storage *diff_storage;
-
 	int count;
 	struct tracker **tracker_array;
 	struct snapimage **snapimage_array;
