@@ -10,13 +10,13 @@ struct diff_area;
 /**
  * struct diff_buffer - Difference buffer.
  * @link:
- *	[TBD]
+ *	The list header allows to create pool of the diff_buffer structures.
  * @size:
- *      Number of bytes in the buffer.
+ *      Count of bytes in the buffer.
  * @page_count:
- *	[TBD]
+ *	The number of pages reserved for the buffer.
  * @pages:
- *	[TBD]
+ *	An array of pointers to pages.
  *
  * Describes the memory buffer for a chunk in the memory.
  */

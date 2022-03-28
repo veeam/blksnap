@@ -31,7 +31,6 @@ struct diff_io;
  *	0 -> LOADING -> BUFFER_READY -> BUFFER_READY | STORING ->
  *	BUFFER_READY | STORE_READY -> STORE_READY
  * Write to snapshot image:
- *	[TBD] It would be necessary to double-check the diagram
  *	0 -> LOADING -> BUFFER_READY | DIRTY -> DIRTY | STORING ->
  *	BUFFER_READY | STORE_READY -> STORE_READY
  */
