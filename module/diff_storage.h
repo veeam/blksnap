@@ -31,8 +31,8 @@ struct diff_region;
  * @requested:
  *	The number of sectors already requested from user space.
  * @low_space_flag:
- *	The flag is set if there are less than the allowed minimum free
- *	regions available in the difference storage.
+ *	The flag is set if the number of free regions available in the 
+ *	difference storage is less than the allowed minimum.
  * @overflow_flag:
  *	The request for a free region failed due to the absence of free
  *	regions in the difference storage.
@@ -42,7 +42,7 @@ struct diff_region;
  *	low free space and snapshot terminated.
  *
  * The difference storage manages the regions of block devices that are used
- * to store the data of the original block devices in snapshot.
+ * to store the data of the original block devices in the snapshot.
  * The difference storage is created one per snapshot and is used to store
  * data from all the original snapshot block devices. At the same time, the
  * difference storage itself can contain regions on various block devices.

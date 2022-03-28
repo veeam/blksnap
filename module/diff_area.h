@@ -15,8 +15,8 @@ struct chunk;
 /**
  * struct diff_area - Discribes the difference area for one original device.
  * @kref:
- *	This structure can be shared between the &struct tracker and &struct
- *	snapimage.
+ *	The reference counter. The &struct diff_area can be shared between 
+ *	the &struct tracker and &struct snapimage.
  * @orig_bdev:
  *	A pointer to the structure of an opened block device.
  * @diff_storage:
@@ -30,10 +30,10 @@ struct chunk;
  * @chunk_map:
  *	A map of chunks.
  * @in_memory:
- *	A sign that difference storage is no prepared and all difference are
+ *	A sign that difference storage is not prepared and all differences are
  *	stored in RAM.
  * @caches_lock:
- *	This spinlock guarantees the consistency of the linked lists of chunks
+ *	This spinlock guarantees consistency of the linked lists of chunk
  *	caches.
  * @read_cache_queue:
  *	Queue for the read cache.
@@ -44,12 +44,13 @@ struct chunk;
  * @write_cache_count:
  *	The number of chunks in the write cache.
  * @cache_release_work:
- *	The workqueue work item that controls the cache size.
+ *	The workqueue work item. This worker limits the number of chunks
+ *	that store their data in RAM.
  * @free_diff_buffers_lock:
- *	This spinlock guarantees the consistency of the linked lists of
+ *	This spinlock guarantees consistency of the linked lists of
  *	free difference buffers.
  * @free_diff_buffers:
- *	Linked list of free difference buffer allows to reduce the number
+ *	Linked list of free difference buffers allows to reduce the number
  *	of buffer allocation and release operations.
  * @free_diff_buffers_count:
  *	The number of free difference buffers in the linked list.
@@ -71,8 +72,9 @@ struct chunk;
  * The xarray has a limit on the maximum size. This can be especially
  * noticeable on 32-bit systems. This creates a limit in the size of
  * supported disks.
+ *
  * For example, for a 256 TiB disk with a block size of 65536 bytes, the
- * number of elements in the chunk map will be equal to two with a power of 32.
+ * number of elements in the chunk map will be equal to 2 with a power of 32.
  * Therefore, the number of chunks into which the block device is divided is
  * limited.
  *
@@ -80,7 +82,7 @@ struct chunk;
  * used. The cache algorithm is the simplest. If the data of the chunk was
  * read to the difference buffer, then the buffer is not released immediately,
  * but is placed at the end of the queue. The worker thread checks the number
- * of chunks in the queue and release a difference buffer for the first chunk
+ * of chunks in the queue and releases a difference buffer for the first chunk
  * in the queue, but only if the binary semaphore of the chunk is not locked.
  * If the read thread accesses the chunk from the cache again, it returns
  * back to the end of the queue.

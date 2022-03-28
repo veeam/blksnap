@@ -11,11 +11,11 @@
  * @link:
  *	The list header allows to combine events from the queue.
  * @time:
- *	A timestamp lets know when an event occurred.
+ *	A timestamp indicates when an event occurred.
  * @code:
  *	Event code.
  * @data_size:
- *	The number of bytes in the events data array.
+ *	The number of bytes in the event data array.
  * @data:
  *	An array of event data.
  *
@@ -36,7 +36,7 @@ struct event {
  * @list:
  *	Linked list for storing events.
  * @lock:
- *	Spinlock allows to guarantee the safety of linked list.
+ *	Spinlock allows to guarantee safety of the linked list.
  * @wq_head:
  *	A wait queue allows to put a user thread in a waiting state until
  *	an event appears in the linked list.

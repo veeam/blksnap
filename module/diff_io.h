@@ -22,12 +22,12 @@ struct diff_region {
 };
 
 /**
- * struct diff_io_sync - Structure for notification of completion for
+ * struct diff_io_sync - Structure for notification about completion of
  *	synchronous I/O.
  * @completion:
  *	Indicates that the request has been processed.
  *
- * Allows to wait for the completion of the I/O operation in the
+ * Allows to wait for completion of the I/O operation in the
  * current thread.
  */
 struct diff_io_sync {
@@ -35,10 +35,10 @@ struct diff_io_sync {
 };
 
 /**
- * struct diff_io_async - Structure for notification of completion for
+ * struct diff_io_async - Structure for notification about completion of
  *	asynchronous I/O.
  * @work:
- *	The struct work_struct allows to schedule perform an I/O operation
+ *	The &struct work_struct allows to schedule execution of an I/O operation
  * 	in a separate process.
  * @notify_cb:
  *	A pointer to the callback function that will be executed when
@@ -46,7 +46,7 @@ struct diff_io_sync {
  * @ctx:
  *	The context for the callback function &notify_cb.
  *
- * Allows to schedule the execution of an I/O operation.
+ * Allows to schedule execution of an I/O operation.
  */
 struct diff_io_async {
 	struct work_struct work;
@@ -59,18 +59,18 @@ struct diff_io_async {
  * @error:
  *	Zero if the I/O operation is successful, or an error code if it fails.
  * @bio_count:
- *	The count of bio in the input/output request.
+ *	The count of bio in the I/O request.
  * @is_write:
  *	Indicates that a write operation is being performed.
  * @is_sync_io:
  *	Indicates that the operation is being performed synchronously.
  * @notify:
- *	This union may contain a diff_io_sync or diff_io_async structure
+ *	This union may contain the diff_io_sync or diff_io_async structure
  * 	for synchronous or asynchronous request.
  *
  * The request to perform an I/O operation is executed for a region of sectors.
- * Such a region may contain several bio. It is necessary to notify about the
- * completion of processing of all bio. Struct diff_io allows to do it.
+ * Such a region may contain several bios. It is necessary to notify about the
+ * completion of processing of all bios. The diff_io structure allows to do it.
  */
 struct diff_io {
 	int error;

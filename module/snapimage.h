@@ -27,11 +27,11 @@ struct cbt_map;
  * @tag_set:
  *	Area to keep a shared tag map.
  * @disk:
- *	A pointer to &struct gendisk for image block device.
+ *	A pointer to the &struct gendisk for the image block device.
  * @diff_area:
- *	A pointer to owned &struct diff_area.
+ *	A pointer to the owned &struct diff_area.
  * @cbt_map:
- *	A pointer to owned &struct cbt_map.
+ *	A pointer to the owned &struct cbt_map.
  *
  * The snapshot image is presented in the system as a block device. But
  * when reading or writing a snapshot image, the data is redirected to

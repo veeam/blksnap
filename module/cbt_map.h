@@ -40,7 +40,7 @@ struct blk_snap_block_range;
  *	A flag that the change tracking data is no longer reliable.
  *
  * The change block tracking map is a byte table. Each byte stores the
- * number of changes for one block. To determine which blocks have changed
+ * sequential number of changes for one block. To determine which blocks have changed
  * since the previous snapshot with the change number 4, it is enough to
  * find all bytes with the number more than 4.
  *
@@ -49,10 +49,10 @@ struct blk_snap_block_range;
  * unique generation identifier is generated. Tracking changes is
  * possible only for tables of the same generation.
  *
- * But there are two tables on the change block tracking map. One is
- * available for reading, the other for writing. At the moment of taking
+ * There are two tables on the change block tracking map. One is
+ * available for reading, and the other is available for writing. At the moment of taking
  * a snapshot, the tables are synchronized. The user's process, when
- * calling the corresponding ioctl, can read a table that is readable.
+ * calling the corresponding ioctl, can read the readable table.
  * At the same time, the change tracking mechanism continues to work with
  * the writable table.
  *

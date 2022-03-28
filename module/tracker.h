@@ -14,7 +14,7 @@ struct diff_area;
  *
  * @kref:
  *	Protects the structure from being released during processing of
- *	an IOCTL.
+ *	an ioctl.
  * @dev_id:
  *	Original block device ID.
  * @snapshot_is_taken:
@@ -25,7 +25,7 @@ struct diff_area;
  * @diff_area:
  *	Pointer to a difference area.
  *
- * The main goal of the tracker is to handle a bios. The tracker detectes
+ * The main goal of the tracker is to handle bios. The tracker detectes
  * the range of sectors that will change and transmits them to the CBT map
  * and to the difference area.
  */

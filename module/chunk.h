@@ -48,10 +48,9 @@ enum chunk_st {
  * struct chunk - Minimum data storage unit.
  *
  * @cache_link:
- *	If the data of a chunk has been changed or has been just read,
- *	then the chunk gets into a temporary buffer.
+ *	The list header allows to create caches of chunks.
  * @diff_area:
- *	Describes the storage of changes for a specific device.
+ *	Pointer to the difference area - the storage of changes for a specific device.
  * @number:
  *	Sequential number of the chunk.
  * @sector_count:
@@ -59,9 +58,9 @@ enum chunk_st {
  *	for the	last chunk.
  * @lock:
  *	Binary semaphore. Syncs access to the chunks fields: state,
- *      diff_buffer, diff_region and diff_io.
+ *	diff_buffer, diff_region and diff_io.
  * @state:
- *      Defines the state of a chunk. May contain CHUNK_ST_* bits.
+ *	Defines the state of a chunk. May contain CHUNK_ST_* bits.
  * @diff_buffer:
  *	Pointer to &struct diff_buffer. Describes a buffer in the memory
  *	for storing the chunk data.
@@ -76,7 +75,7 @@ enum chunk_st {
  * to snapshot images.
  *
  * If the data of the chunk has been changed or has just been read, then
- * the chunk gets into a temporary buffer.
+ * the chunk gets into cache.
  *
  * The semaphore is blocked for writing if there is no actual data in the
  * buffer, since a block of data is being read from the original device or
