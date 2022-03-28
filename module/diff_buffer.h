@@ -10,9 +10,9 @@ struct diff_area;
 /**
  * struct diff_buffer - Difference buffer.
  * @link:
- *	The list header allows to create pool of the diff_buffer structures.
+ *	The list header allows to create a pool of the diff_buffer structures.
  * @size:
- *      Count of bytes in the buffer.
+ *	Count of bytes in the buffer.
  * @page_count:
  *	The number of pages reserved for the buffer.
  * @pages:
