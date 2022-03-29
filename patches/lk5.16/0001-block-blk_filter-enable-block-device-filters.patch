@@ -1,28 +1,29 @@
-From fc8f911c3e5767d10d3481a878bf3fbb6968c884 Mon Sep 17 00:00:00 2001
+From 27892e46a58243b6e45596f8aa6e549046977369 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Fri, 11 Mar 2022 12:38:02 +0100
-Subject: [PATCH 1/2] blk_filter - enable block device filters
+Date: Tue, 29 Mar 2022 12:51:47 +0200
+Subject: [PATCH 01/20] block, blk_filter: enable block device filters
 
-Allow the block layer filters to handle bio requests. Kernel modules
-can use this feature to extend the functionality of the block layer.
+Allows to attach block device filters to the block devices.
+Kernel modules can use this functionality to extend the
+capabilities of the block layer.
 
 Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
 ---
  block/Kconfig             |   8 ++
- block/bdev.c              | 154 ++++++++++++++++++++++++++++++++++++++
- block/blk-core.c          |  97 +++++++++++++++++++++++-
+ block/bdev.c              | 159 ++++++++++++++++++++++++++++++++++++++
+ block/blk-core.c          |  97 ++++++++++++++++++++++-
  include/linux/blk_types.h |   7 ++
  include/linux/blkdev.h    | 108 ++++++++++++++++++++++++++
- 5 files changed, 372 insertions(+), 2 deletions(-)
+ 5 files changed, 377 insertions(+), 2 deletions(-)
 
 diff --git a/block/Kconfig b/block/Kconfig
-index d5d4197b7ed2..d8b720799e20 100644
+index d5d4197b7ed2..f57543794da2 100644
 --- a/block/Kconfig
 +++ b/block/Kconfig
 @@ -214,6 +214,14 @@ config BLK_MQ_RDMA
  config BLK_PM
  	def_bool PM
-
+ 
 +config BLK_FILTER
 +	bool "Enable block device filters"
 +	default n
@@ -35,23 +36,23 @@ index d5d4197b7ed2..d8b720799e20 100644
  config BLOCK_HOLDER_DEPRECATED
  	bool
 diff --git a/block/bdev.c b/block/bdev.c
-index 102837a37051..1acabda9b00c 100644
+index 102837a37051..1070fe0e9374 100644
 --- a/block/bdev.c
 +++ b/block/bdev.c
 @@ -397,6 +397,9 @@ static void bdev_free_inode(struct inode *inode)
  {
  	struct block_device *bdev = I_BDEV(inode);
-
+ 
 +#ifdef CONFIG_BLK_FILTER
 +	percpu_free_rwsem(&bdev->bd_filters_lock);
 +#endif
  	free_percpu(bdev->bd_stats);
  	kfree(bdev->bd_meta_info);
-
+ 
 @@ -419,8 +422,15 @@ static void init_once(void *data)
  	inode_init_once(&ei->vfs_inode);
  }
-
+ 
 +#ifdef CONFIG_BLK_FILTER
 +static void bdev_filter_cleanup(struct block_device *bdev);
 +#endif
@@ -75,8 +76,8 @@ index 102837a37051..1acabda9b00c 100644
 +#endif
  	return bdev;
  }
-
-@@ -1061,3 +1076,142 @@ void sync_bdevs(bool wait)
+ 
+@@ -1061,3 +1076,147 @@ void sync_bdevs(bool wait)
  	spin_unlock(&blockdev_superblock->s_inode_list_lock);
  	iput(old_inode);
  }
@@ -89,7 +90,8 @@ index 102837a37051..1acabda9b00c 100644
 +
 +	might_sleep();
 +	bdev_filter_write_lock(bdev);
-+	while ((flt = list_first_entry_or_null(&bdev->bd_filters, struct bdev_filter, link))) {
++	while ((flt = list_first_entry_or_null(&bdev->bd_filters,
++					       struct bdev_filter, link))) {
 +		if (flt->fops && flt->fops->detach_cb)
 +			flt->fops->detach_cb(flt->ctx);
 +		list_del(&flt->link);
@@ -97,7 +99,8 @@ index 102837a37051..1acabda9b00c 100644
 +	bdev_filter_write_unlock(bdev);
 +}
 +
-+static inline struct bdev_filter *bdev_filter_find(struct block_device *bdev, const char *name)
++static inline struct bdev_filter *bdev_filter_find(struct block_device *bdev,
++						   const char *name)
 +{
 +	struct bdev_filter *flt;
 +
@@ -123,9 +126,11 @@ index 102837a37051..1acabda9b00c 100644
 + *	Filter specific private data.
 + *
 + * Before adding a filter, it is necessary to lock processing
-+ * of bio requests for the original device by calling the bdev_filter_write_lock() function.
++ * of bio requests for the original device by calling the
++ * bdev_filter_write_lock() function.
 + *
-+ * The bdev_filter_del() function allows to delete the filter from the block device.
++ * The bdev_filter_del() function allows to delete the filter from the block
++ * device.
 + *
 + * Return:
 + * 0 - OK
@@ -200,7 +205,8 @@ index 102837a37051..1acabda9b00c 100644
 + * @name:
 + *	Name of the block device filter.
 + *
-+ * Before geting the filter's context value, it is necessary to lock the list of filters by calling the filter_read_lock() function.
++ * Before geting the filter's context value, it is necessary to lock the list
++ * of filters by calling the filter_read_lock() function.
 + *
 + * Return:
 + * pointer - &ctx value from &struct blk_filter or NULL
@@ -220,13 +226,13 @@ index 102837a37051..1acabda9b00c 100644
 +
 +#endif
 diff --git a/block/blk-core.c b/block/blk-core.c
-index 1039515c99d6..e092d5df1804 100644
+index 779b4a1f66ac..4044eee8592d 100644
 --- a/block/blk-core.c
 +++ b/block/blk-core.c
-@@ -878,6 +878,93 @@ static void __submit_bio_noacct_mq(struct bio *bio)
+@@ -882,6 +882,93 @@ static void __submit_bio_noacct_mq(struct bio *bio)
  	current->bio_list = NULL;
  }
-
+ 
 +#ifdef CONFIG_BLK_FILTER
 +
 +/**
@@ -315,9 +321,9 @@ index 1039515c99d6..e092d5df1804 100644
 +#endif
 +
  /**
-  * submit_bio_noacct - Re-submit bio to the block device layer for I/O.
-  * @bio:  Bio describing the location in the memory and on the device.
-@@ -895,9 +982,15 @@ void submit_bio_noacct(struct bio *bio)
+  * submit_bio_noacct - re-submit a bio to the block device layer for I/O
+  * @bio:  The bio describing the location in memory and on the device.
+@@ -899,9 +986,15 @@ void submit_bio_noacct(struct bio *bio)
  	 * to collect a list of requests submited by a ->submit_bio method while
  	 * it is active, and then process them after it returned.
  	 */
@@ -336,7 +342,7 @@ index 1039515c99d6..e092d5df1804 100644
  	else
  		__submit_bio_noacct(bio);
 diff --git a/include/linux/blk_types.h b/include/linux/blk_types.h
-index fe065c394fff..2c42d6d09be0 100644
+index fe065c394fff..d195eadb8143 100644
 --- a/include/linux/blk_types.h
 +++ b/include/linux/blk_types.h
 @@ -68,6 +68,10 @@ struct block_device {
@@ -348,7 +354,7 @@ index fe065c394fff..2c42d6d09be0 100644
 +	struct percpu_rw_semaphore bd_filters_lock;
 +#endif
  } __randomize_layout;
-
+ 
  #define bdev_whole(_bdev) \
 @@ -321,6 +325,9 @@ enum {
  	BIO_REMAPPED,
@@ -359,15 +365,15 @@ index fe065c394fff..2c42d6d09be0 100644
 +#endif
  	BIO_FLAG_LAST
  };
-
+ 
 diff --git a/include/linux/blkdev.h b/include/linux/blkdev.h
-index 16b47035e4b0..ee2db9f6245e 100644
+index 16b47035e4b0..a3a5988085ca 100644
 --- a/include/linux/blkdev.h
 +++ b/include/linux/blkdev.h
 @@ -1341,4 +1341,112 @@ struct io_comp_batch {
-
+ 
  #define DEFINE_IO_COMP_BATCH(name)	struct io_comp_batch name = { }
-
+ 
 +#ifdef CONFIG_BLK_FILTER
 +#define BDEV_FILTER_NAME_MAX_LENGTH 31
 +/**
@@ -477,6 +483,6 @@ index 16b47035e4b0..ee2db9f6245e 100644
 +#endif
 +
  #endif /* _LINUX_BLKDEV_H */
---
+-- 
 2.20.1
 

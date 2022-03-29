@@ -1,0 +1,54 @@
+From 38a1ddf004ee422defbc5da17fe9b2ac1f9028d3 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 29 Mar 2022 13:41:20 +0200
+Subject: [PATCH 20/20] block, blksnap: adds a blksnap to the kernel tree.
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/Kconfig  | 4 +++-
+ drivers/block/Makefile | 3 ++-
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/block/Kconfig b/drivers/block/Kconfig
+index 519b6d38d4df..f4b80bda3a47 100644
+--- a/drivers/block/Kconfig
++++ b/drivers/block/Kconfig
+@@ -236,7 +236,7 @@ config BLK_DEV_SX8
+ 	tristate "Promise SATA SX8 support"
+ 	depends on PCI
+ 	help
+-	  Saying Y or M here will enable support for the 
++	  Saying Y or M here will enable support for the
+ 	  Promise SATA SX8 controllers.
+ 
+ 	  Use devices /dev/sx8/$N and /dev/sx8/$Np$M.
+@@ -394,4 +394,6 @@ config BLK_DEV_RBD
+ 
+ source "drivers/block/rnbd/Kconfig"
+ 
++source "drivers/block/blksnap/Kconfig"
++
+ endif # BLK_DEV
+diff --git a/drivers/block/Makefile b/drivers/block/Makefile
+index 934a9c7c3a7c..4fa5478d9f7a 100644
+--- a/drivers/block/Makefile
++++ b/drivers/block/Makefile
+@@ -4,7 +4,7 @@
+ #
+ # 12 June 2000, Christoph Hellwig <hch@infradead.org>
+ # Rewritten to use lists instead of if-statements.
+-# 
++#
+ 
+ # needed for trace events
+ ccflags-y				+= -I$(src)
+@@ -38,5 +38,6 @@ obj-$(CONFIG_ZRAM) += zram/
+ obj-$(CONFIG_BLK_DEV_RNBD)	+= rnbd/
+ 
+ obj-$(CONFIG_BLK_DEV_NULL_BLK)	+= null_blk/
++obj-$(CONFIG_BLK_SNAP)	+= blksnap/
+ 
+ swim_mod-y	:= swim.o swim_asm.o
+-- 
+2.20.1
+

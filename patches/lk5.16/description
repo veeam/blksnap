@@ -137,3 +137,19 @@ Of course, the kernel contains mechanisms for detecting memory leaks. There are 
 
 + memory_checker.h
 + memory_checker.c
+
+# block, blksnap: Kconfig
+
+The module configuration file allows you to set default values for module parameters.
+
++ block/blksnap/Kconfig
+
+# block, blksnap: Makefile
+
++ block/blksnap/Makefile
+
+
+# block, blksnap: adds a module to the kernel tree.
+
++ block/Kconfig
++ block/Makefile
