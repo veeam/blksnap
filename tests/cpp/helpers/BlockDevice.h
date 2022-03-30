@@ -12,6 +12,7 @@ public:
     void Write(const void* buf, size_t count, off_t offset);
 
     off_t Size();
+    size_t BlockSize();
     const std::string& Name();
 
 private:

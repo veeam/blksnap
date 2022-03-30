@@ -55,6 +55,23 @@ off_t CBlockDevice::Size()
     return m_size;
 };
 
+size_t CBlockDevice::BlockSize()
+{
+    size_t size = 0;
+    /*
+     * On the arm64 platform the BLKBSZGET call can returns a value only in
+     * lower 32-bit digits.
+     * Therefore, the size must be set to zero before calling on le arch.
+     * In the big endian systems, this code may have problems.
+     * It looks like something is wrong for the case when CONFIG_COMPAT is
+     * enabled.
+     */
+    if (::ioctl(m_fd, BLKBSZGET, &size) == -1)
+        throw std::system_error(errno, std::generic_category(), "Failed to get block size for device");
+
+    return size;
+}
+
 const std::string& CBlockDevice::Name()
 {
     return m_name;
