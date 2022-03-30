@@ -27,7 +27,7 @@ using blksnap::SRange;
  */
 void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::shared_ptr<CBlockDevice>& ptrBdev)
 {
-    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
@@ -50,7 +50,7 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::shared
 void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::shared_ptr<CBlockDevice>& ptrBdev,
               const int seqNumber, const clock_t seqTime)
 {
-    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
@@ -73,7 +73,7 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::share
 void FillBlocks(const std::shared_ptr<CTestSectorGenetor>& ptrGen, const std::shared_ptr<CBlockDevice>& ptrBdev,
                 off_t offset, size_t size)
 {
-    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, size);
+    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), size);
 
     ptrGen->Generate(portion.Data(), size, offset >> SECTOR_SHIFT);
     ptrBdev->Write(portion.Data(), size, offset);
@@ -86,20 +86,22 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor>& ptrGen, const s
                       const int count)
 {
     off_t sizeBdev = ptrBdev->Size();
+    size_t blkszSectors = ptrBdev->BlockSize() >> SECTOR_SHIFT;
     size_t totalSize = 0;
     std::stringstream ss;
 
     logger.Detail(std::string("write " + std::to_string(count) + " transactions"));
     for (int cnt = 0; cnt < count; cnt++)
     {
-        size_t size = static_cast<size_t>((std::rand() & 0x1F) + 1) << SECTOR_SHIFT;
+        size_t size = static_cast<size_t>((std::rand() & 0x1F) + blkszSectors) * blkszSectors * SECTOR_SIZE;
+
 #if 0
         //ordered by default chunk size
-        off_t offset = static_cast<off_t>(std::rand() + 1) << (SECTOR_SHIFT + 9);
+        off_t offset = static_cast<off_t>(std::rand()) << (SECTOR_SHIFT + 9);
         if (offset > (sizeBdev - size))
             offset = (offset % (sizeBdev - size)) & ~((1 << 9) - 1);
 #else
-        off_t offset = static_cast<off_t>(std::rand() + 1) << SECTOR_SHIFT;
+        off_t offset = static_cast<off_t>(std::rand()) * blkszSectors * SECTOR_SIZE;
         if (offset > (sizeBdev - size))
             offset = offset % (sizeBdev - size);
 #endif
@@ -229,6 +231,9 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>(false);
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync);
+
+    logger.Info("device size: " + std::to_string(ptrOrininal->Size()));
+    logger.Info("device block size: " + std::to_string(ptrOrininal->BlockSize()));
 
     logger.Info("-- Fill original device collection by test pattern");
     FillAll(ptrGen, ptrOrininal);
@@ -563,7 +568,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
             logger.Info("DEBUG! write some sectors to snapshot images");
             for (const std::shared_ptr<SCheckerContext>& ptrCtx : checkerCtxs)
             {
-                AlignedBuffer<char> buf(SECTOR_SIZE);
+                AlignedBuffer<char> buf(ptrCtx->ptrBdev->BlockSize());
                 memset(buf.Data(), 0, buf.Size());
                 strncpy(buf.Data(),
                         "To check the verification algorithm, we explicitly write data to the snapshot image.",
