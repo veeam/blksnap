@@ -9,14 +9,16 @@ struct diff_area;
 
 /**
  * struct diff_buffer - Difference buffer.
- *
+ * @link:
+ *	The list header allows to create a pool of the diff_buffer structures.
  * @size:
- *      Number of bytes in byffer.
+ *	Count of bytes in the buffer.
+ * @page_count:
+ *	The number of pages reserved for the buffer.
  * @pages:
- *      An array and at the same time a singly linked list of pages.
- *      It is convenient to use with dm-io.
+ *	An array of pointers to pages.
  *
- * Describes the memory buffer for chunk in memory.
+ * Describes the memory buffer for a chunk in the memory.
  */
 struct diff_buffer {
 	struct list_head link;
@@ -29,13 +31,13 @@ struct diff_buffer {
 };
 
 /**
- * struct diff_buffer_iter - Iterator for &struct diff_buffer
+ * struct diff_buffer_iter - Iterator for &struct diff_buffer.
  * @page:
  *      A pointer to the current page.
  * @offset:
  *      The offset in bytes in the current page.
  * @bytes:
- *      The number of bytes that can be read or written from this page.
+ *      The number of bytes that can be read or written from the current page.
  *
  * It is convenient to use when copying data from or to &struct bio_vec.
  */

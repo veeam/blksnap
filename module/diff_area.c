@@ -120,7 +120,7 @@ void diff_area_free(struct kref *kref)
 		diff_area->orig_bdev = NULL;
 	}
 
-	/* Cleanup free_diff_buffers */
+	/* Clean up free_diff_buffers */
 	diff_buffer_cleanup(diff_area);
 
 	kfree(diff_area);
@@ -148,7 +148,7 @@ get_chunk_from_cache_and_write_lock(spinlock_t *caches_lock,
 		}
 		/*
 		 * If it is not possible to lock a chunk for writing,
-		 * then it is currently in use and we try to cleanup
+		 * then it is currently in use, and we try to clean up the
 		 * next chunk.
 		 */
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
@@ -324,7 +324,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	atomic_set(&diff_area->pending_io_count, 0);
 
 	/**
-	 * Allocating all chunks in advance allows not to do this in
+	 * Allocating all chunks in advance allows to avoid doing this in
 	 * the process of filtering bio.
 	 * In addition, the chunk structure has an rw semaphore that allows
 	 * to lock data of a single chunk.
@@ -417,9 +417,9 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 						     CHUNK_ST_STORE_READY)) {
 			/*
 			 * The сhunk has already been:
-			 * - failed, when snapshot corrupted,
-			 * - overwritten in the image of a snapshot,
-			 * - already store in diff storage.
+			 * - Failed, when the snapshot is corrupted
+			 * - Overwritten in the snapshot image
+			 * - Already stored in the diff storage
 			 */
 			up(&chunk->lock);
 			continue;
@@ -468,7 +468,7 @@ static inline void diff_area_image_put_chunk(struct chunk *chunk, bool is_write)
 {
 	if (is_write) {
 		/**
-		 * Since the chunk was taken to perform a writing,
+		 * Since the chunk was taken to perform writing,
 		 * we mark it as dirty.
 		 */
 		chunk_state_set(chunk, CHUNK_ST_DIRTY);
@@ -556,9 +556,9 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 	}
 
 	/*
-	 * If there is already data in the buffer, then nothing needs to be load.
-	 * Otherwise, the chunk needs to be load from the original device or
-	 * from diff storage.
+	 * If there is already data in the buffer, then nothing needs to be loaded.
+	 * Otherwise, the chunk needs to be loaded from the original device or
+	 * from the difference storage.
 	 */
 	if (!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 		ret = diff_area_load_chunk_from_storage(diff_area, chunk);
@@ -586,8 +586,8 @@ static inline sector_t diff_area_chunk_start(struct diff_area *diff_area,
 }
 
 /**
- * diff_area_image_io - Implements copying data from chunk to bio_vec when
- *	reading or from bio_tec to chunk when writing.
+ * diff_area_image_io - Implements copying data from the chunk to bio_vec when
+ *	reading or from bio_tec to the chunk when writing.
  */
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos)

@@ -26,7 +26,7 @@ static ssize_t major_show(struct class *class, struct class_attribute *attr,
 	return strlen(buf);
 }
 
-/* declare class_attr_major */
+/* Declare class_attr_major */
 CLASS_ATTR_RO(major);
 
 static struct class *blk_snap_class;

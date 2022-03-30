@@ -1,0 +1,155 @@
+# email introduction
+Hi all.
+
+I suggest the blksnap kernel module for consideration. It allows to create non-persistent snapshots of any block devices. The main purpose of such snapshots is to create backups of block devices entirely.
+
+A snapshot is created simultaneously for several block devices, ensuring their consistent state in the backup.
+
+A change tracker is implemented in the module. It allows to determine which blocks were changed during the time between the last snapshot created and any of the previous snapshots of the same generation. This allows to implement the logic of both incremental and differential backups.
+
+An arbitrary range of sectors on any block device can be used to store snapshot changes. The size of the change store can be increased after the snapshot is created by adding new sector ranges. This allows to create a storage of differes in individual files on a file system that can occupy the entire space of a block device and increase the storage of differes as needed.
+
+To create images of snapshots of block devices, the module stores blocks of the original block device that have been changed since the snapshot was taken. To do this, the module intercepts write requests and reads blocks that need to be overwritten. This algorithm guarantees the safety of the data of the original block device in case of overflow of the snapshot and even in case of unpredictable critical errors.
+
+To connect and disconnect the module to the block layer, the concept of a block device filter is introduced. Functions for connecting filters are added to the block layer and the ability to intercept I/O requests is provided.
+
+The blksnap module was created specifically for upstream based on the experience of operating the out-of-tree veeamsnap module, which is part of the Veeam Agent for Linux product. I am sure that the module will be in demand by other creators of backup tools and will save them from having to use their out-of-tree kernel modules.
+
+A tool, a library for working with blksnap, as well as tests, can be found at www.github.com/veeam/blksnap.
+
+# block, blk_filter: enable block device filters
+
+Allows to attach block device filters to the block devices. Kernel modules can use this functionality to extend the capabilities of the block layer.
+
+
+# block, blksnap: header file of the module interface
+
+The header file contains a set of declarations, structures and control requests (ioctl) that allows to manage the module from the user space.
+
++ blk_snap.h
+
+# block, blksnap: module management interface functions
+
+Implementation of module management interface functions. At this level, the input and output parameters are converted and the corresponding subsystems of the module are called.
+
++ ctrl.h
++ ctrl.c
+
+# block, blksnap: init() and exit() functions
+
+Contains callback functions for loading and unloading the module. The module parameters and other mandatory declarations for the kernel module are also defined.
+
++ main.c
++ params.h
++ version.h
+
+# block, blksnap: interaction with sysfs
+
+Provides creation of a class file /sys/class/blksnap and a device file /dev/blksnap for module management.
+
++ sysfs.h
++ sysfs.c
+
+# block, blksnap: attaching and destaching the filter and handling a I/O units
+
+The struct tracker contains callback functions for handling a I/O units of a block device. When a write request is handled, the change block tracking (CBT) map functions are called and initiates the process of copying data from the original block device to the change store. Attaching and detaching the tracker is provided by the functions bdev_filter_*() of the kernel.
+
++ tracker.h
++ tracker.c
+
+# block, blksnap: map of change block tracking
+
+Description of the struct cbt_map for storing change map data and functions for managing this map.
+
++ cbt_map.h
++ cbt_map.c
+
+# block, blksnap: big buffer in the form of an array of pages
+
+Description of the struct big_buffer, which is used to store sufficiently large amounts of data, such as a CBT map, and functions for working with it.
+There are systems on which quite often the kmalloc() memory allocation function of several hundred kilobytes ends with an error code, and it is impossible to use virtual memory when handling an I/O unit, since a PAGE FAULT situation is possible. A simple array of pages solves this problem.
+
++ big_buffer.h
++ big_buffer.c
+
+# block, blksnap: minimum data storage unit of the original block device
+
+The struct chunk describes the minimum data storage unit of the original block device. Functions for working with these minimal blocks implement algorithms for reading and writing blocks.
+
++ chunk.h
++ chunk.c
+
+# block, blksnap: buffer in memory for the minimum data storage unit
+
+The struct diff_buffer describes a buffer in memory for the minimum data storage block of the original block device (struct chunk). Buffer allocation and release functions allow to reduce the number of allocations and releases of a large number of memory pages.
+
++ diff_buffer.h
++ diff_buffer.c
+
+# block, blksnap: functions and structures for performing block I/O operations
+
+Provides synchronous and asynchronous block I/O operations for the buffer of the minimum data storage block (struct diff_buffer).
+
++ diff_io.h
++ diff_io.c
+
+# block, blksnap: storage for storing difference blocks
+
+Provides management of regions of block devices available for storing difference blocks of a snapshot. Contains lists of free and already occupied regions.
+
++ diff_storage.h
++ diff_storage.c
+
+# block, blksnap: event queue from the difference storage
+
+Provides transmission of events from the difference storage to the user process. Only two events are currently defined. The first is that there are few free regions in the difference storage. The second is that the request for a free region for storing differences failed with an error, since there are no more free regions left in the difference storage (the snapshot overflow state).
+
++ event_queue.h
++ event_queue.c
+
+# block, blksnap: owner of information about overwritten blocks of the original block device
+
+This is perhaps the key component of the module. It stores information about the modified blocks of the original device and the location of the regions where these blocks are stored in the difference storage. This information allows to restore the state of the block device at the time of taking the snapshot and represent the snapshot image as a block device.
+When reading from a snapshot, if the block on the original device has not yet been changed since the snapshot was taken, then the data is read from the original block device. If the data on the original block device has been overwritten, then the block is read from the difference storage.
+Reads and writes are performed with minimal data storage blocks (struct chunk).
+
++ diff_area.h
++ diff_area.c
+
+# block, blksnap: snapshot image block device
+
+Provides the operation of block devices of snapshot images. Read and write operations are redirected to the regions of difference blocks for block device (struct diff_area).
+
++ snapimage.h
++ snapimage.c
+
+# block, blksnap: snapshot
+
+The struck snapshot combines block devices, for which a snapshot is created, block devices of their snapshot images, as well as a difference storage.
+There may be several snapshots at the same time, but they should not contain common block devices. This can be used for cases when backup is scheduled once an hour for some block devices, and once a day for others, and once a week for others. In this case, it is possible that three snapshots are used at the same time.
+
++ snapshot.h
++ snapshot.c
+
+# block, blksnap: debugging mechanism for monitoring memory consumption
+
+Of course, the kernel contains mechanisms for detecting memory leaks. There are tools for monitoring memory consumption. However, this mechanism turned out to be very simple and convenient for debugging, and therefore it was decided to leave it in the current version.
+
++ memory_checker.h
++ memory_checker.c
+
+# block, blksnap: Kconfig
+
+The module configuration file allows you to set default values for module parameters.
+
++ block/blksnap/Kconfig
+
+# block, blksnap: Makefile
+
++ block/blksnap/Makefile
+
+
+# block, blksnap: adds a module to the kernel tree.
+
++ block/Kconfig
++ block/Makefile

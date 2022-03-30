@@ -11,36 +11,54 @@
 struct blk_snap_block_range;
 
 /**
- * struct cbt_map - The table of changes fo block device.
+ * struct cbt_map - The table of changes for a block device.
  *
  * @kref:
  *	Reference counter.
  * @locker:
  *	Locking for atomic modification of structure members.
  * @blk_size_shift:
- *	The power of two to the change tracking block size.
+ *	The power of 2 used to specify the change tracking block size.
  * @blk_count:
- *	The number of blocks.
+ *	The number of change tracking blocks.
  * @device_capacity:
  *	The actual capacity of the device.
  * @read_map:
- *	A table of changes available for reading. It is this table that can
+ *	A table of changes available for reading. This is the table that can
  *	be read after taking a snapshot.
  * @write_map:
  *	The current table for tracking changes.
  * @snap_number_active:
- *	The current number of changes. It is this number that is written to
+ *	The current sequential number of changes. This is the number that is written to
  *	the current table when the block data changes.
  * @snap_number_previous:
- *	The previous number of changes. This number is used to identify the
- *	blocks that were changed between the penultimate and last snapshot.
+ *	The previous sequential number of changes. This number is used to identify the
+ *	blocks that were changed between the penultimate snapshot and the last snapshot.
  * @generation_id:
- *	Since one byte is allocated to track changes in one block, the change
- *	table is created again at the 255th snapshot. At the same time, a new
- *	unique generation identifier is generated. Tracking changes is
- *	possible only for tables of the same generation.
- *@is_corrupted:
+ *	UUID of the generation of changes.
+ * @is_corrupted:
  *	A flag that the change tracking data is no longer reliable.
+ *
+ * The change block tracking map is a byte table. Each byte stores the
+ * sequential number of changes for one block. To determine which blocks have changed
+ * since the previous snapshot with the change number 4, it is enough to
+ * find all bytes with the number more than 4.
+ *
+ * Since one byte is allocated to track changes in one block, the change
+ * table is created again at the 255th snapshot. At the same time, a new
+ * unique generation identifier is generated. Tracking changes is
+ * possible only for tables of the same generation.
+ *
+ * There are two tables on the change block tracking map. One is
+ * available for reading, and the other is available for writing. At the moment of taking
+ * a snapshot, the tables are synchronized. The user's process, when
+ * calling the corresponding ioctl, can read the readable table.
+ * At the same time, the change tracking mechanism continues to work with
+ * the writable table.
+ *
+ * To provide the ability to mount a snapshot image as writeable, it is
+ * possible to make changes to both of these tables simultaneously.
+ *
  */
 struct cbt_map {
 	struct kref kref;

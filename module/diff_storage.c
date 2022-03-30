@@ -24,7 +24,7 @@
 #endif
 
 /**
- * struct storage_bdev - Information about opened block device.
+ * struct storage_bdev - Information about the opened block device.
  */
 struct storage_bdev {
 	struct list_head link;

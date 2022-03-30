@@ -314,7 +314,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	disk->major = _major;
 	disk->first_minor = minor;
-	disk->minors = 1; // one disk have only one partition.
+	disk->minors = 1; // One disk has only one partition.
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;

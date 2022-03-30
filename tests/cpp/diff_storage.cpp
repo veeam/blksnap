@@ -60,7 +60,7 @@ static void FillRange(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                       const std::shared_ptr<CBlockDevice>& ptrBdev,
                       const SRange& rg)
 {
-    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
 
     off_t from = rg.sector * SECTOR_SIZE;
     off_t to = (rg.sector + rg.count) * SECTOR_SIZE;
@@ -89,7 +89,7 @@ static void CheckRange(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                        const SRange& rg,
                        const int seqNumber, const clock_t seqTime)
 {
-    AlignedBuffer<unsigned char> portion(SECTOR_SIZE, 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
 
     off_t from = rg.sector * SECTOR_SIZE;
     off_t to = (rg.sector + rg.count) * SECTOR_SIZE;
@@ -191,7 +191,10 @@ static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
     while (writeRanges.size() < granularity)
     {
         SRange rg;
-        /* generate range block size from 8 up to 256 sectors */
+        /*
+         * generate range block size from 8 up to 256 sectors
+         * the ranges are aligned to the page size
+         */
         rg.sector = static_cast<sector_t>(std::rand() * offsetScaling)  & ~7ull;
         rg.count = (8 + std::rand() / blockSizeScaling) & ~7ul;
 
@@ -215,7 +218,7 @@ static void LogRanges(const std::string& header, const std::vector<SRange>& rang
     logger.Info("Total sectors: " + std::to_string(totalSectors));
 }
 
-static void CheckDiffStorage(const std::string& origDevName, const int durationLimitSec)
+static void CheckDiffStorage(const std::string& origDevName, const int durationLimitSec, const bool isSync)
 {
     std::vector<SRange> diffStorage;
 
@@ -225,10 +228,10 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>(false);
-    //auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, false, 1024*1024*1024ull);
-    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, true/*, 1024*1024*1024ull*/);
+    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync/*, 1024*1024*1024ull*/);
 
-    logger.Info("Device size: " + std::to_string(ptrOrininal->Size() >> SECTOR_SHIFT) + " sectors");
+    logger.Info("device size: " + std::to_string(ptrOrininal->Size()));
+    logger.Info("device block size: " + std::to_string(ptrOrininal->BlockSize()));
 
     std::vector<std::string> devices;
     devices.push_back(origDevName);
@@ -261,7 +264,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         }
 
         /*{
-            AlignedBuffer<char> buf(512);
+            AlignedBuffer<char> buf(ptrBdev->BlockSize());
 
             logger.Info("Original first sector:");
             ptrOrininal->Read(buf.Data(), buf.Size(), 0 << SECTOR_SHIFT);
@@ -293,7 +296,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
         /*{
-            AlignedBuffer<char> buf(512);
+            AlignedBuffer<char> buf(ptrBdev->BlockSize());
 
             logger.Info("Images first sector:");
             ptrImage->Read(buf.Data(), buf.Size(), 0 << SECTOR_SHIFT);
@@ -326,7 +329,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
             {
                 logger.Info("FAIL: " + std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
 
-                AlignedBuffer<char> buf(512);
+                AlignedBuffer<char> buf(ptrOrininal->BlockSize());
                 ptrOrininal->Read(buf.Data(), buf.Size(), rg.sector << SECTOR_SHIFT);
                 logger.Err(buf.Data(), 128);
             }
@@ -360,7 +363,8 @@ void Main(int argc, char* argv[])
         ("help,h", "Show usage information.")
         ("log,l", po::value<std::string>(),"Detailed log of all transactions.")
         ("device,d", po::value<std::string>(), "Device name. ")
-        ("duration,u", po::value<int>(), "The test duration limit in minutes.");
+        ("duration,u", po::value<int>(), "The test duration limit in minutes.")
+        ("sync", "Use O_SYNC for access to original device.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
@@ -387,8 +391,12 @@ void Main(int argc, char* argv[])
     if (vm.count("duration"))
         duration = vm["duration"].as<int>();
 
+    bool isSync = false;
+    if (vm.count("sync"))
+        isSync = true;
+
     std::srand(std::time(0));
-    CheckDiffStorage(origDevName, duration * 60);
+    CheckDiffStorage(origDevName, duration * 60, isSync);
 }
 
 int main(int argc, char* argv[])

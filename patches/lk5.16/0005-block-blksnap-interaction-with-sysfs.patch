@@ -1,0 +1,117 @@
+From 21a489cdd00348472963f897f7d9b0d03b6ae867 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 29 Mar 2022 13:01:19 +0200
+Subject: [PATCH 05/20] block, blksnap: interaction with sysfs
+
+Provides creation of a class file /sys/class/blksnap and a
+device file /dev/blksnap for module management.
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/blksnap/sysfs.c | 81 +++++++++++++++++++++++++++++++++++
+ drivers/block/blksnap/sysfs.h |  5 +++
+ 2 files changed, 86 insertions(+)
+ create mode 100644 drivers/block/blksnap/sysfs.c
+ create mode 100644 drivers/block/blksnap/sysfs.h
+
+diff --git a/drivers/block/blksnap/sysfs.c b/drivers/block/blksnap/sysfs.c
+new file mode 100644
+index 000000000000..32a34609d106
+--- /dev/null
++++ b/drivers/block/blksnap/sysfs.c
+@@ -0,0 +1,81 @@
++// SPDX-License-Identifier: GPL-2.0
++#define pr_fmt(fmt) KBUILD_MODNAME "-sysfs: " fmt
++#include <linux/blkdev.h>
++#include <linux/sysfs.h>
++#include <linux/device.h>
++#include <linux/blk_snap.h>
++#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
++#include "memory_checker.h"
++#endif
++#include "sysfs.h"
++#include "ctrl.h"
++
++static ssize_t major_show(struct class *class, struct class_attribute *attr,
++			  char *buf)
++{
++	sprintf(buf, "%d", get_blk_snap_major());
++	return strlen(buf);
++}
++
++/* Declare class_attr_major */
++CLASS_ATTR_RO(major);
++
++static struct class *blk_snap_class;
++
++static struct device *blk_snap_device;
++
++int sysfs_init(void)
++{
++	struct device *dev;
++	int res;
++
++	blk_snap_class = class_create(THIS_MODULE, BLK_SNAP_MODULE_NAME);
++	if (IS_ERR(blk_snap_class)) {
++		res = PTR_ERR(blk_snap_class);
++
++		pr_err("Bad class create. errno=%d\n", abs(res));
++		return res;
++	}
++
++	pr_info("Create 'major' sysfs attribute\n");
++	res = class_create_file(blk_snap_class, &class_attr_major);
++	if (res) {
++		pr_err("Failed to create 'major' sysfs file\n");
++
++		class_destroy(blk_snap_class);
++		blk_snap_class = NULL;
++		return res;
++	}
++
++	dev = device_create(blk_snap_class, NULL,
++			    MKDEV(get_blk_snap_major(), 0), NULL,
++			    BLK_SNAP_MODULE_NAME);
++	if (IS_ERR(dev)) {
++		res = PTR_ERR(dev);
++		pr_err("Failed to create device, errno=%d\n", abs(res));
++
++		class_remove_file(blk_snap_class, &class_attr_major);
++		class_destroy(blk_snap_class);
++		blk_snap_class = NULL;
++		return res;
++	}
++
++	blk_snap_device = dev;
++	return res;
++}
++
++void sysfs_done(void)
++{
++	pr_info("Cleanup sysfs\n");
++
++	if (blk_snap_device) {
++		device_unregister(blk_snap_device);
++		blk_snap_device = NULL;
++	}
++
++	if (blk_snap_class != NULL) {
++		class_remove_file(blk_snap_class, &class_attr_major);
++		class_destroy(blk_snap_class);
++		blk_snap_class = NULL;
++	}
++}
+diff --git a/drivers/block/blksnap/sysfs.h b/drivers/block/blksnap/sysfs.h
+new file mode 100644
+index 000000000000..b41c301fe33b
+--- /dev/null
++++ b/drivers/block/blksnap/sysfs.h
+@@ -0,0 +1,5 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#pragma once
++
++int sysfs_init(void);
++void sysfs_done(void);
+-- 
+2.20.1
+
