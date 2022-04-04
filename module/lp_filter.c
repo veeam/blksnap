@@ -5,99 +5,88 @@
 #include <linux/bio.h>
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
+#include <linux/list.h>
 
 #include "lp_filter.h"
 #include "version.h"
-/**
- * struct bdev_filter - Description of the block device filter.
- * @link:
- * @dev_id:
- * @fops:
- * @ctx:
- *
- */
-struct bdev_filter {
+
+struct bdev_extension {
 	struct list_head link;
+
 	dev_t dev_id;
-	char name[BDEV_FILTER_NAME_MAX_LENGTH + 1];
 #if defined(HAVE_BI_BDISK)
 	struct gendisk *disk;
 	u8 partno;
 #endif
-	const struct bdev_filter_operations *fops;
-	void *ctx;
+
+	struct bdev_filter *bd_filters[bdev_filter_alt_end];
+	spinlock_t bd_filters_lock;
 };
 
-/* The list of filters for this block device */
-static LIST_HEAD(bd_filters);
+/* The list of extensions for this block device */
+static LIST_HEAD(bdev_extension_list);
 
-/* Lock the queue of block device to add or delete filter. */
-DEFINE_PERCPU_RWSEM(bd_filters_lock);
+/* Lock the queue of block device to add or delete extension. */
+static DEFINE_SPINLOCK(bdev_extension_list_lock);
 
-/**
- * filter_write_lock() - Locks the processing of I/O requests for block device.
- * @bdev:
- *	Pointer to &struct block_device.
- *
- * Locks block device the execution of the submit_bio_noacct() function for it.
- * To avoid calling a deadlock, do not call I/O operations after this lock.
- * To do this, using the memalloc_noio_save() function can be useful.
- *
- */
-void bdev_filter_write_lock(struct block_device *__attribute__((__unused__))
-			    bdev)
+static inline struct bdev_extension *bdev_extension_find(dev_t dev_id)
 {
-	percpu_down_write(&bd_filters_lock);
-};
-EXPORT_SYMBOL(bdev_filter_write_lock);
+	struct bdev_extension *ext;
 
-/**
- * filter_write_unlock - Unlocks the processing of I/O requests for block device.
- * @bdev:
- *	Pointer to &struct block_device.
- *
- * The submit_bio_noacct() function can be continued.
- */
-void bdev_filter_write_unlock(struct block_device *__attribute__((__unused__))
-			      bdev)
-{
-	percpu_up_write(&bd_filters_lock);
-};
-EXPORT_SYMBOL(bdev_filter_write_unlock);
-
-static inline struct bdev_filter *filter_find(dev_t dev_id, const char *name)
-{
-	struct bdev_filter *flt;
-
-	if (list_empty(&bd_filters))
+	if (list_empty(&bdev_extension_list))
 		return NULL;
 
-	list_for_each_entry (flt, &bd_filters, link) {
-		if ((dev_id == flt->dev_id) &&
-		    (strncmp(name, flt->name, BDEV_FILTER_NAME_MAX_LENGTH) ==
-		     0)) {
-			return flt;
-		}
-	}
+	list_for_each_entry (ext, &bdev_extension_list, link)
+		if (dev_id == ext->dev_id)
+			return ext;
+
 	return NULL;
 }
 
 #if defined(HAVE_BI_BDISK)
-static inline struct bdev_filter *filter_find_by_disk(struct gendisk *disk,
-						      int partno)
+static inline struct bdev_extension *bdev_extension_find_part(struct gendisk *disk,
+							 u8 partno)
 {
-	struct bdev_filter *flt;
+	struct bdev_extension *ext;
 
-	if (list_empty(&bd_filters))
+	if (list_empty(&bdev_extension_list))
 		return NULL;
 
-	list_for_each_entry (flt, &bd_filters, link) {
-		if ((disk == flt->disk) && (partno == flt->partno))
-			return flt;
-	}
+	list_for_each_entry (ext, &bdev_extension_list, link)
+		if ((disk == ext->disk) && (partno == ext->partno))
+			return ext;
+
 	return NULL;
 }
 #endif
+
+static inline struct bdev_extension *bdev_extension_append(struct block_device *bdev)
+{
+	struct bdev_extension *ext;
+	struct bdev_extension *ext_new;
+
+	ext_new = kzalloc(sizeof(struct bdev_extension), GFP_NOIO);
+	if (!ext_new)
+		return NULL;
+
+	ext_new->dev_id = bdev->bd_dev;
+#if defined(HAVE_BI_BDISK)
+	ext_new->disk = bdev->bd_disk;
+	ext_new->partno = bdev->bd_partno;
+#endif
+
+	spin_lock(&bdev_extension_list_lock);
+	ext = bdev_extension_find(bdev->bd_dev);
+	if (!ext)
+		list_add_tail(&ext_new->link, &bdev_extension_list);
+	spin_unlock(&bdev_extension_list_lock);
+
+	if (!ext)
+		return ext_new;
+
+	kfree(ext_new);
+	return ext;
+}
 
 /**
  * bdev_filter_add - Attach a filter to original block device.
@@ -113,35 +102,29 @@ static inline struct bdev_filter *filter_find_by_disk(struct gendisk *disk,
  *
  * The bdev_filter_del() function allows to delete the filter from the block device.
  */
-int bdev_filter_add(struct block_device *bdev, const char *name,
-		    const struct bdev_filter_operations *fops, void *ctx)
+int bdev_filter_attach(struct block_device *bdev,
+		       const enum bdev_filter_altitudes altitude,
+		       struct bdev_filter *flt)
 {
-	struct bdev_filter *flt;
+	int ret = 0;
+	struct bdev_extension *ext;
 
-	if (strlen(name) >= BDEV_FILTER_NAME_MAX_LENGTH)
-		return -EINVAL;
+	pr_info("Attach block device filter");
 
-	if (filter_find(bdev->bd_dev, name))
-		return -EBUSY;
-
-	flt = kzalloc(sizeof(struct bdev_filter), GFP_NOIO);
-	if (!flt)
+	ext = bdev_extension_append(bdev);
+	if (!ext)
 		return -ENOMEM;
 
-	INIT_LIST_HEAD(&flt->link);
-	flt->dev_id = bdev->bd_dev;
-	strncpy(flt->name, name, BDEV_FILTER_NAME_MAX_LENGTH);
-#if defined(HAVE_BI_BDISK)
-	flt->disk = bdev->bd_disk;
-	flt->partno = bdev->bd_partno;
-#endif
-	flt->fops = fops;
-	flt->ctx = ctx;
-	list_add(&flt->link, &bd_filters);
+	spin_lock(&ext->bd_filters_lock);
+	if (ext->bd_filters[altitude])
+		ret = -EBUSY;
+	else
+		ext->bd_filters[altitude] = flt;
+	spin_unlock(&ext->bd_filters_lock);
 
-	return 0;
+	return ret;
 }
-EXPORT_SYMBOL(bdev_filter_add);
+EXPORT_SYMBOL(bdev_filter_attach);
 
 /**
  * bdev_bdev_filter_del - Delete filter from the block device.
@@ -155,49 +138,34 @@ EXPORT_SYMBOL(bdev_filter_add);
  *
  * The filter should be added using the bdev_bdev_filter_add() function.
  */
-int bdev_filter_del(struct block_device *bdev, const char *name)
+int bdev_filter_detach(struct block_device *bdev,
+		       const enum bdev_filter_altitudes altitude)
 {
+	struct bdev_extension *ext;
 	struct bdev_filter *flt;
 
-	flt = filter_find(bdev->bd_dev, name);
+	pr_info("Detach block device filter");
+
+	spin_lock(&bdev_extension_list_lock);
+	ext = bdev_extension_find(bdev->bd_dev);
+	spin_unlock(&bdev_extension_list_lock);
+	if (!ext)
+		return -ENOENT;
+
+	spin_lock(&ext->bd_filters_lock);
+	flt = ext->bd_filters[altitude];
+	if (flt)
+		ext->bd_filters[altitude] = NULL;
+	spin_unlock(&ext->bd_filters_lock);
+
 	if (!flt)
 		return -ENOENT;
 
-	if (flt->fops->detach_cb)
-		flt->fops->detach_cb(flt->ctx);
-	list_del(&flt->link);
-	kfree(flt);
+	bdev_filter_put(flt);
 
 	return 0;
 }
-EXPORT_SYMBOL(bdev_filter_del);
-
-/**
- * filter_read_lock - Lock filters list, protecting them from changes.
- * @bdev:
- *	Pointer to &struct block_device.
- *
- * The lock ensures that the filter will not be removed from the list until
- * the lock is removed.
- */
-void bdev_filter_read_lock(struct block_device *__attribute__((__unused__))
-			   bdev)
-{
-	percpu_down_read(&bd_filters_lock);
-}
-EXPORT_SYMBOL(bdev_filter_read_lock);
-
-/**
- * filter_read_unlock - Unlock filters list.
- * @bdev:
- *	Pointer to &struct block_device.
- */
-void bdev_filter_read_unlock(struct block_device *__attribute__((__unused__))
-			     bdev)
-{
-	percpu_up_read(&bd_filters_lock);
-}
-EXPORT_SYMBOL(bdev_filter_read_unlock);
+EXPORT_SYMBOL(bdev_filter_detach);
 
 /**
  * bdev_filter_get_ctx - Get filters context value.
@@ -209,46 +177,74 @@ EXPORT_SYMBOL(bdev_filter_read_unlock);
  *
  * Necessary to lock list of filters by calling bdev_filter_read_lock().
  */
-void *bdev_filter_get_ctx(struct block_device *bdev, const char *name)
+struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
+				const enum bdev_filter_altitudes altitude)
 {
-	struct bdev_filter *flt;
+	struct bdev_extension *ext;
+	struct bdev_filter *flt = NULL;
 
-	flt = filter_find(bdev->bd_dev, name);
-	if (flt)
-		return flt->ctx;
-	else
-		return NULL;
+	spin_lock(&bdev_extension_list_lock);
+	ext = bdev_extension_find(bdev->bd_dev);
+	spin_unlock(&bdev_extension_list_lock);
+	if (!ext)
+		return NULL; //-ENOENT;
+
+	spin_lock(&ext->bd_filters_lock);
+	flt = ext->bd_filters[altitude];
+	bdev_filter_get(flt);
+	spin_unlock(&ext->bd_filters_lock);
+
+	return flt;
 }
-EXPORT_SYMBOL(bdev_filter_get_ctx);
+EXPORT_SYMBOL(bdev_filter_get_by_altitude);
 
-static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio)
+static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio, enum bdev_filter_altitudes *paltitude)
 {
-	struct bdev_filter *flt;
 	enum bdev_filter_result result = bdev_filter_pass;
+	struct bdev_extension *ext;
+	struct bdev_filter *flt;
 
-	if (bio->bi_opf & REQ_NOWAIT) {
-		if (!percpu_down_read_trylock(&bd_filters_lock)) {
-			bio_wouldblock_error(bio);
-			return false;
-		}
-	} else
-		percpu_down_read(&bd_filters_lock);
-
-	if (!list_empty(&bd_filters)) {
-		list_for_each_entry (flt, &bd_filters, link) {
+	spin_lock(&bdev_extension_list_lock);
 #if defined(HAVE_BI_BDISK)
-			if ((bio->bi_disk == flt->disk) &&
-			    (bio->bi_partno == flt->partno))
+	ext = bdev_extension_find_part(bio->bi_disk, bio->bi_partno);
 #else
-			if ((bio->bi_bdev->bd_dev == flt->dev_id))
+	ext = bdev_extension_find(bio->bi_bdev->bd_dev);
 #endif
-				result = flt->fops->submit_bio_cb(bio, flt->ctx);
-			if (result != bdev_filter_pass)
-				break;
-		}
-	}
+	spin_unlock(&bdev_extension_list_lock);
+	if (!ext)
+		return result;
 
-	percpu_up_read(&bd_filters_lock);
+
+	spin_lock(&ext->bd_filters_lock);
+	while (*paltitude < bdev_filter_alt_end) {
+		flt = ext->bd_filters[*paltitude];
+		if (!flt) {
+			*paltitude = *paltitude + 1;
+			continue;
+		}
+
+		bdev_filter_get(flt);
+		spin_unlock(&ext->bd_filters_lock);
+
+		result = flt->fops->submit_bio_cb(bio, flt);
+
+		switch (result) {
+		case bdev_filter_skip:
+		case bdev_filter_repeat:
+			*paltitude = bdev_filter_alt_end;
+			break;
+		case bdev_filter_pass:
+			*paltitude = *paltitude + 1;
+			break;
+		case bdev_filter_redirect:
+			*paltitude = bdev_filter_alt_unidentified;
+			break;
+		}
+
+		bdev_filter_put(flt);
+		spin_lock(&ext->bd_filters_lock);
+	};
+	spin_unlock(&ext->bd_filters_lock);
 
 	return result;
 }
@@ -278,6 +274,7 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
 	if (!current->bio_list) {
+		enum bdev_filter_altitudes altitude = bdev_filter_alt_unidentified;
 		enum bdev_filter_result result;
 		struct bio_list bio_list_on_stack[2] = { };
 		struct bio *new_bio;
@@ -287,7 +284,7 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 			current->bio_list = bio_list_on_stack;
 			barrier();
 
-			result = bdev_filters_apply(bio);
+			result = bdev_filters_apply(bio, &altitude);
 
 			current->bio_list = NULL;
 			barrier();
@@ -330,34 +327,10 @@ static struct klp_func funcs[] = {
 	{ 0 }
 };
 
-#ifdef BDEV_FILTER_LOCKAPI
-static void post_patch(struct klp_object *obj)
-{
-	pr_warn("Filter is ready for using\n");
-	percpu_up_read(&bd_filters_lock);
-}
-
-static void pre_unpatch(struct klp_object *obj)
-{
-	pr_warn("Filter will be turned off now\n");
-}
-
-static struct klp_callbacks callbacks {
-	.pre_patch = NULL,
-	.post_patch = post_patch,
-	.pre_unpatch = pre_unpatch,
-	.post_unpatch = NULL,
-	.post_unpatch_enabled = false,
-};
-#endif
-
 static struct klp_object objs[] = {
 	{
 		/* name being NULL means vmlinux */
 		.funcs = funcs,
-#ifdef BDEV_FILTER_LOCKAPI
-		.callbacks = callbacks,
-#endif
 	},
 	{ 0 }
 };
@@ -367,27 +340,31 @@ static struct klp_patch patch = {
 	.objs = objs,
 };
 
-int bdev_filter_init(void)
+static int __init lp_filter_init(void)
 {
-#ifdef BDEV_FILTER_LOCKAPI
-	percpu_down_read(&bd_filters_lock);
-#endif
 	return klp_enable_patch(&patch);
 }
 
 /*
  * For standalone only:
- * Before unload module livepatch should be detached.
+ * Before unload module all filters should be detached and livepatch are
+ * disabled.
  *
  * echo 0 > /sys/kernel/livepatch/bdev_filter/enabled
  */
-void bdev_filter_done(void)
+static void __exit lp_filter_done(void)
 {
-	percpu_free_rwsem(&bd_filters_lock);
+	struct bdev_extension *ext;
+
+	while ((ext = list_first_entry_or_null(&bdev_extension_list,
+					       struct bdev_extension, link))) {
+		list_del(&ext->link);
+		kfree(ext);
+	}
 }
 
-module_init(bdev_filter_init);
-module_exit(bdev_filter_done);
+module_init(lp_filter_init);
+module_exit(lp_filter_done);
 
 MODULE_DESCRIPTION("Block Device Filter kernel module");
 MODULE_VERSION(VERSION_STR);

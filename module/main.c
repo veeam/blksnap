@@ -80,6 +80,10 @@ static int __init blk_snap_init(void)
 	if (result)
 		return result;
 
+	result = tracker_init();
+	if (result)
+		return result;
+
 	result = ctrl_init();
 	if (result)
 		return result;

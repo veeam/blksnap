@@ -2,9 +2,14 @@
 #pragma once
 #include <linux/kref.h>
 #include <linux/spinlock.h>
+#include <linux/list.h>
 #include <linux/rwsem.h>
 #include <linux/blkdev.h>
 #include <linux/fs.h>
+
+#ifdef HAVE_LP_FILTER
+#include "lp_filter.h"
+#endif
 
 struct cbt_map;
 struct diff_area;
@@ -17,6 +22,8 @@ struct diff_area;
  *	an ioctl.
  * @dev_id:
  *	Original block device ID.
+ * @submit_lock:
+ *	Provides blocking of I/O operations for a block device.
  * @snapshot_is_taken:
  *	Indicates that a snapshot was taken for the device whose bios are
  *	handled by this tracker.
@@ -30,23 +37,38 @@ struct diff_area;
  * and to the difference area.
  */
 struct tracker {
-	struct kref kref;
+	struct bdev_filter flt;
+	struct list_head link;
 	dev_t dev_id;
 
+	struct percpu_rw_semaphore submit_lock;
 	atomic_t snapshot_is_taken;
 
 	struct cbt_map *cbt_map;
 	struct diff_area *diff_area;
 };
 
-void tracker_free(struct kref *kref);
+static inline void tracker_lock(struct tracker *tracker)
+{
+	if (likely(tracker))
+		percpu_down_write(&tracker->submit_lock);
+};
+
+static inline void tracker_unlock(struct tracker *tracker)
+{
+	if (likely(tracker))
+		percpu_up_write(&tracker->submit_lock);
+};
+
 static inline void tracker_put(struct tracker *tracker)
 {
 	if (likely(tracker))
-		kref_put(&tracker->kref, tracker_free);
+		bdev_filter_put(&tracker->flt);
+
 };
 struct tracker *tracker_get_by_dev(struct block_device *bdev);
 
+int tracker_init(void);
 void tracker_done(void);
 
 struct tracker *tracker_create_or_get(dev_t dev_id);

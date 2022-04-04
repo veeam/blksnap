@@ -70,17 +70,9 @@ static void snapshot_release(struct snapshot *snapshot)
 	}
 
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* Lock filters. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - lock filters\n", __FUNCTION__);
-#endif
-	for (inx = 0; inx < snapshot->count; inx++) {
-		struct tracker *tracker = snapshot->tracker_array[inx];
-
-		if (!tracker)
-			continue;
-		bdev_filter_write_lock(tracker->diff_area->orig_bdev);
-	}
+	pr_info("Lock trackers\n");
+	for (inx = 0; inx < snapshot->count; inx++)
+		tracker_lock(snapshot->tracker_array[inx]);
 #endif
 	current_flag = memalloc_noio_save();
 	/* Set tracker as available for new snapshots. */
@@ -93,17 +85,9 @@ static void snapshot_release(struct snapshot *snapshot)
 	memalloc_noio_restore(current_flag);
 
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* Unlock filters. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - unlock filter\n", __FUNCTION__);
-#endif
-	for (inx = 0; inx < snapshot->count; inx++) {
-		struct tracker *tracker = snapshot->tracker_array[inx];
-
-		if (!tracker)
-			continue;
-		bdev_filter_write_unlock(tracker->diff_area->orig_bdev);
-	}
+	for (inx = 0; inx < snapshot->count; inx++)
+		tracker_unlock(snapshot->tracker_array[inx]);
+	pr_info("Trackers have been unlocked\n");
 #endif
 
 	/* Thaw fs on each original block device. */
@@ -488,19 +472,9 @@ int snapshot_take(uuid_t *id)
 	}
 
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-
-	/* Lock filters. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - lock filters\n", __FUNCTION__);
-#endif
-
-	for (inx = 0; inx < snapshot->count; inx++) {
-		struct tracker *tracker = snapshot->tracker_array[inx];
-
-		if (!tracker)
-			continue;
-		bdev_filter_write_lock(tracker->diff_area->orig_bdev);
-	}
+	pr_info("Lock trackers\n");
+	for (inx = 0; inx < snapshot->count; inx++)
+		tracker_lock(snapshot->tracker_array[inx]);
 #endif
 	current_flag = memalloc_noio_save();
 
@@ -542,14 +516,9 @@ int snapshot_take(uuid_t *id)
 	memalloc_noio_restore(current_flag);
 
 #ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* Unlock filters. */
-	for (inx = 0; inx < snapshot->count; inx++) {
-		struct tracker *tracker = snapshot->tracker_array[inx];
-
-		if (!tracker)
-			continue;
-		bdev_filter_write_unlock(tracker->diff_area->orig_bdev);
-	}
+	for (inx = 0; inx < snapshot->count; inx++)
+		tracker_unlock(snapshot->tracker_array[inx]);
+	pr_info("Trackers have been unlocked\n");
 #endif
 
 	/* Thaw file systems on original block devices. */
