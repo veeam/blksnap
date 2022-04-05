@@ -92,17 +92,23 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
  * bdev_filter_add - Attach a filter to original block device.
  * @bdev:
  * 	block device
- * @fops:
- * 	table of filter callbacks
- * @ctx:
- * 	Filter specific private data
+ * @name:
+ *	Name of the block device filter.
+ * @altitude:
+ *	Altituda number of the block device filter.
+ * @flt:
+ *	Pointer to the filter structure.
  *
- * Before adding a filter, it is necessary to lock the processing
- * of bio requests of the original device by calling bdev_filter_write_lock().
+ * Before adding a filter, it is necessary to initialize &struct bdev_filter.
  *
- * The bdev_filter_del() function allows to delete the filter from the block device.
+ * The bdev_filter_detach() function allows to detach the filter from the block
+ * device.
+ *
+ * Return:
+ * 0 - OK
+ * -EALREADY - a filter with this name already exists
  */
-int bdev_filter_attach(struct block_device *bdev,
+int bdev_filter_attach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude,
 		       struct bdev_filter *flt)
 {
@@ -122,23 +128,29 @@ int bdev_filter_attach(struct block_device *bdev,
 		ext->bd_filters[altitude] = flt;
 	spin_unlock(&ext->bd_filters_lock);
 
+	if (!ret)
+		pr_info("block device filter '%s' has been attached to %d:%d",
+			name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	return ret;
 }
 EXPORT_SYMBOL(bdev_filter_attach);
 
 /**
- * bdev_bdev_filter_del - Delete filter from the block device.
+ * bdev_bdev_filter_del - Detach a filter from the block device.
  * @bdev:
  * 	block device.
- * @filter_name:
- * 	unique filters name.
+ * @name:
+ *	Name of the block device filter.
+ * @altitude:
+ *	Altituda number of the block device filter.
  *
- * Before deleting a filter, it is necessary to lock the processing
- * of bio requests of the device by calling bdev_filter_write_lock().
+ * The filter should be added using the bdev_filter_attach() function.
  *
- * The filter should be added using the bdev_bdev_filter_add() function.
+ * Return:
+ * 0 - OK
+ * -ENOENT - the filter was not found in the linked list
  */
-int bdev_filter_detach(struct block_device *bdev,
+int bdev_filter_detach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude)
 {
 	struct bdev_extension *ext;
@@ -162,7 +174,8 @@ int bdev_filter_detach(struct block_device *bdev,
 		return -ENOENT;
 
 	bdev_filter_put(flt);
-
+	pr_info("block device filter '%s' has been detached from %d:%d",
+		name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	return 0;
 }
 EXPORT_SYMBOL(bdev_filter_detach);

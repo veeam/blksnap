@@ -220,7 +220,8 @@ static int tracker_filter_attach(struct block_device *bdev,
 	}
 #endif
 
-	ret = bdev_filter_attach(bdev, bdev_filter_alt_blksnap, &tracker->flt);
+	ret = bdev_filter_attach(bdev, KBUILD_MODNAME, bdev_filter_alt_blksnap,
+				 &tracker->flt);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -267,7 +268,7 @@ static int tracker_filter_detach(struct block_device *bdev)
 	}
 #endif
 
-	ret = bdev_filter_detach(bdev, bdev_filter_alt_blksnap);
+	ret = bdev_filter_detach(bdev, KBUILD_MODNAME, bdev_filter_alt_blksnap);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);

@@ -50,10 +50,10 @@ static inline void bdev_filter_init(struct bdev_filter *flt,
 	flt->fops = fops;
 }
 
-int bdev_filter_attach(struct block_device *bdev,
+int bdev_filter_attach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude,
 		       struct bdev_filter *flt);
-int bdev_filter_detach(struct block_device *bdev,
+int bdev_filter_detach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude);
 struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 		       const enum bdev_filter_altitudes altitude);
