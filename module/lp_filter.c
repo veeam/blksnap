@@ -168,14 +168,13 @@ int bdev_filter_detach(struct block_device *bdev,
 EXPORT_SYMBOL(bdev_filter_detach);
 
 /**
- * bdev_filter_get_ctx - Get filters context value.
- * @dev_id:
- * 	Block device ID.
+ * bdev_filter_get_by_altitude - [TBD]Get filter by altitude.
+ * @bdev:
+ * 	Pointer to the block device structure.
  *
- * Return &ctx value from &struct bdev_filter or NULL.
- * NULL is returned if the filter was not found.
+ * Return value from array &struct bdev_filter or NULL.
+ * NULL value is returned if no filter has been set.
  *
- * Necessary to lock list of filters by calling bdev_filter_read_lock().
  */
 struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 				const enum bdev_filter_altitudes altitude)
@@ -274,7 +273,7 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
 	if (!current->bio_list) {
-		enum bdev_filter_altitudes altitude = bdev_filter_alt_unidentified;
+		enum bdev_filter_altitudes altitude = 0;
 		enum bdev_filter_result result;
 		struct bio_list bio_list_on_stack[2] = { };
 		struct bio *new_bio;
