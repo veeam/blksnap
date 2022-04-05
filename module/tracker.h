@@ -7,10 +7,6 @@
 #include <linux/blkdev.h>
 #include <linux/fs.h>
 
-#ifdef HAVE_LP_FILTER
-#include "lp_filter.h"
-#endif
-
 struct cbt_map;
 struct diff_area;
 
@@ -20,6 +16,8 @@ struct diff_area;
  * @kref:
  *	Protects the structure from being released during processing of
  *	an ioctl.
+ * @link:
+ *	List header.
  * @dev_id:
  *	Original block device ID.
  * @submit_lock:
@@ -83,52 +81,3 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 
 int tracker_take_snapshot(struct tracker *tracker);
 void tracker_release_snapshot(struct tracker *tracker);
-
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-static inline int _freeze_bdev(struct block_device *bdev,
-			       struct super_block **psuperblock)
-{
-	struct super_block *superblock;
-
-	if (bdev->bd_super == NULL) {
-		pr_warn("Unable to freeze device [%u:%u]: no superblock was found\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-		return 0;
-	}
-
-	superblock = freeze_bdev(bdev);
-	if (IS_ERR_OR_NULL(superblock)) {
-		int result;
-
-		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
-		       MINOR(bdev->bd_dev));
-
-		if (superblock == NULL)
-			result = -ENODEV;
-		else {
-			result = PTR_ERR(superblock);
-			pr_err("Error code: %d\n", result);
-		}
-		return result;
-	}
-
-	pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
-		 MINOR(bdev->bd_dev));
-	*psuperblock = superblock;
-
-	return 0;
-}
-static inline void _thaw_bdev(struct block_device *bdev,
-			      struct super_block *superblock)
-{
-	if (superblock == NULL)
-		return;
-
-	if (thaw_bdev(bdev, superblock))
-		pr_err("Failed to unfreeze device [%u:%u]\n",
-		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	else
-		pr_debug("Device [%u:%u] was unfrozen\n", MAJOR(bdev->bd_dev),
-			 MINOR(bdev->bd_dev));
-}
-#endif

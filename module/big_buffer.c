@@ -7,11 +7,6 @@
 #endif
 #include "big_buffer.h"
 
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 static inline size_t page_count_calc(size_t buffer_size)
 {
 	size_t page_count = buffer_size / PAGE_SIZE;

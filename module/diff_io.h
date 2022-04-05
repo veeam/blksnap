@@ -11,7 +11,7 @@ struct diff_buffer;
  * @bdev:
  *	The target block device.
  * @sector:
- * 	The sector offset of the region's first sector.
+ *	The sector offset of the region's first sector.
  * @count:
  *	The count of sectors in the region.
  */
@@ -39,10 +39,10 @@ struct diff_io_sync {
  *	asynchronous I/O.
  * @work:
  *	The &struct work_struct allows to schedule execution of an I/O operation
- * 	in a separate process.
+ *	in a separate process.
  * @notify_cb:
  *	A pointer to the callback function that will be executed when
- * 	the I/O execution is completed.
+ *	the I/O execution is completed.
  * @ctx:
  *	The context for the callback function &notify_cb.
  *
@@ -66,7 +66,7 @@ struct diff_io_async {
  *	Indicates that the operation is being performed synchronously.
  * @notify:
  *	This union may contain the diff_io_sync or diff_io_async structure
- * 	for synchronous or asynchronous request.
+ *	for synchronous or asynchronous request.
  *
  * The request to perform an I/O operation is executed for a region of sectors.
  * Such a region may contain several bios. It is necessary to notify about the

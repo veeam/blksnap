@@ -31,7 +31,7 @@ struct diff_region;
  * @requested:
  *	The number of sectors already requested from user space.
  * @low_space_flag:
- *	The flag is set if the number of free regions available in the 
+ *	The flag is set if the number of free regions available in the
  *	difference storage is less than the allowed minimum.
  * @overflow_flag:
  *	The request for a free region failed due to the absence of free
@@ -63,10 +63,6 @@ struct diff_storage {
 	atomic_t overflow_flag;
 
 	struct event_queue event_queue;
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	atomic_t free_block_count;
-	atomic_t user_block_count;
-#endif
 };
 
 struct diff_storage *diff_storage_new(void);

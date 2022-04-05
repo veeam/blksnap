@@ -5,11 +5,7 @@
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
-#ifdef HAVE_LP_FILTER
-#include "blk_snap.h"
-#else
 #include <linux/blk_snap.h>
-#endif
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
@@ -20,11 +16,6 @@
 #include "snapimage.h"
 #include "tracker.h"
 #include "big_buffer.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
 
 static int blk_snap_major;
 
@@ -42,13 +33,6 @@ static const struct blk_snap_version version = {
 	.revision = VERSION_REVISION,
 	.build = VERSION_BUILD,
 };
-
-#ifdef BLK_SNAP_MODIFICATION
-static const struct blk_snap_mod modification = {
-	.compatibility_flags = (1ULL << blk_snap_compat_flags_end) - 1,
-	.name = MOD_NAME,
-};
-#endif
 
 int get_blk_snap_major(void)
 {
@@ -446,75 +430,13 @@ static_assert(
 	sizeof(blk_snap_ioctl_table) == (blk_snap_ioctl_end * sizeof(void *)),
 	"The size of table blk_snap_ioctl_table does not match the enum blk_snap_ioctl.");
 
-#ifdef BLK_SNAP_MODIFICATION
-
-int ioctl_mod(unsigned long arg)
-{
-	if (copy_to_user((void *)arg, &modification, sizeof(modification))) {
-		pr_err("Unable to get modification: invalid user buffer\n");
-		return -ENODATA;
-	}
-
-	return 0;
-}
-
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-static int ioctl_get_sector_state(unsigned long arg)
-{
-	int ret;
-	struct blk_snap_get_sector_state karg;
-	dev_t dev_id;
-
-	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
-		pr_err("Unable to get sector state: invalid user buffer\n");
-		return -ENODATA;
-	}
-
-	dev_id = MKDEV(karg.image_dev_id.mj, karg.image_dev_id.mn);
-	ret = snapshot_get_chunk_state(dev_id, karg.sector, &karg.state);
-	if (unlikely(ret)) {
-		pr_err("Failed to get sector state: cannot get chunk state\n");
-		return ret;
-	}
-
-	if (copy_to_user((void *)arg, &karg, sizeof(karg))) {
-		pr_err("Unable to get sector state: invalid user buffer\n");
-		return -ENODATA;
-	}
-
-	return ret;
-}
-#endif
-
-static int (*const blk_snap_ioctl_table_mod[])(unsigned long arg) = {
-	ioctl_mod,
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-	ioctl_get_sector_state,
-#endif
-};
-static_assert(
-	sizeof(blk_snap_ioctl_table_mod) ==
-		((blk_snap_ioctl_end_mod - IOCTL_MOD) * sizeof(void *)),
-	"The size of table blk_snap_ioctl_table_mod does not match the enum blk_snap_ioctl.");
-#endif
-
 static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg)
 {
 	int nr = _IOC_NR(cmd);
 
-	if (nr > (sizeof(blk_snap_ioctl_table) / sizeof(void *))) {
-#ifdef BLK_SNAP_MODIFICATION
-		if ((nr >= IOCTL_MOD) &&
-		    (nr < (IOCTL_MOD + (sizeof(blk_snap_ioctl_table_mod) /
-					sizeof(void *))))) {
-			nr -= IOCTL_MOD;
-			if (blk_snap_ioctl_table_mod[nr])
-				return blk_snap_ioctl_table_mod[nr](arg);
-		}
-#endif
+	if (nr > (sizeof(blk_snap_ioctl_table) / sizeof(void *)))
 		return -ENOTTY;
-	}
 
 	if (!blk_snap_ioctl_table[nr])
 		return -ENOTTY;

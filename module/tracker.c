@@ -3,11 +3,7 @@
 #include <linux/slab.h>
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
-#ifdef HAVE_LP_FILTER
-#include "blk_snap.h"
-#else
 #include <linux/blk_snap.h>
-#endif
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
@@ -15,18 +11,6 @@
 #include "tracker.h"
 #include "cbt_map.h"
 #include "diff_area.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
-#ifndef HAVE_BDEV_NR_SECTORS
-static inline sector_t bdev_nr_sectors(struct block_device *bdev)
-{
-	return i_size_read(bdev->bd_inode) >> 9;
-};
-#endif
 
 struct tracked_device {
 	struct list_head link;
@@ -74,10 +58,6 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 	return NULL;
 }
 
-#ifdef HAVE_LP_FILTER
-void diff_io_endio(struct bio *bio);
-#endif
-
 static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		struct bdev_filter *flt)
 {
@@ -87,18 +67,6 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	sector_t sector;
 	sector_t count;
 	unsigned int current_flag;
-
-#ifdef HAVE_LP_FILTER
-	/**
-	 * For the upstream version of the module, the definition of bio that
-	 * does not need to be intercepted is performed using the flag
-	 * BIO_FILTERED.
-	 * But for the standalone version of the module, we can only use the
-	 * context of bio.
-	 */
-	if (bio->bi_end_io == diff_io_endio)
-		return ret;
-#endif
 
 	if (bio->bi_opf & REQ_NOWAIT) {
 		if (!percpu_down_read_trylock(&tracker->submit_lock)) {
@@ -165,7 +133,6 @@ static void tracker_release_work(struct work_struct *work)
 		container_of(work, struct tracker_release_worker, work);
 
 	do {
-
 		spin_lock(&tracker_release->lock);
 		tracker = list_first_entry_or_null(&tracker_release->list,
 						   struct tracker, link);
@@ -175,7 +142,6 @@ static void tracker_release_work(struct work_struct *work)
 
 		if (tracker)
 			tracker_free(tracker);
-
 	} while(tracker);
 }
 
@@ -200,16 +166,10 @@ static int tracker_filter_attach(struct block_device *bdev,
 				 struct tracker *tracker)
 {
 	int ret;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	struct super_block *superblock = NULL;
-#else
 	bool is_frozen = false;
-#endif
+
 	pr_debug("Tracker attach filter\n");
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_freeze_bdev(bdev, &superblock);
-#else
 	if (freeze_bdev(bdev))
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
 		       MINOR(bdev->bd_dev));
@@ -218,13 +178,9 @@ static int tracker_filter_attach(struct block_device *bdev,
 		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
 			 MINOR(bdev->bd_dev));
 	}
-#endif
 
-	ret = bdev_filter_attach(bdev, bdev_filter_alt_blksnap, &tracker->flt);
-
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_thaw_bdev(bdev, superblock);
-#else
+	ret = bdev_filter_attach(bdev, KBUILD_MODNAME, bdev_filter_alt_blksnap,
+				 &tracker->flt);
 	if (is_frozen) {
 		if (thaw_bdev(bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
@@ -233,7 +189,6 @@ static int tracker_filter_attach(struct block_device *bdev,
 			pr_debug("Device [%u:%u] was unfrozen\n",
 				 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
-#endif
 
 	if (ret) {
 		pr_err("Failed to attach tracker to device [%u:%u]\n",
@@ -247,16 +202,9 @@ static int tracker_filter_attach(struct block_device *bdev,
 static int tracker_filter_detach(struct block_device *bdev)
 {
 	int ret;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	struct super_block *superblock = NULL;
-#else
 	bool is_frozen = false;
-#endif
 
 	pr_debug("Tracker delete filter\n");
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_freeze_bdev(bdev, &superblock);
-#else
 	if (freeze_bdev(bdev))
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
 		       MINOR(bdev->bd_dev));
@@ -265,13 +213,9 @@ static int tracker_filter_detach(struct block_device *bdev)
 		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
 			 MINOR(bdev->bd_dev));
 	}
-#endif
 
-	ret = bdev_filter_detach(bdev, bdev_filter_alt_blksnap);
+	ret = bdev_filter_detach(bdev, KBUILD_MODNAME, bdev_filter_alt_blksnap);
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_thaw_bdev(bdev, superblock);
-#else
 	if (is_frozen) {
 		if (thaw_bdev(bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
@@ -280,7 +224,6 @@ static int tracker_filter_detach(struct block_device *bdev)
 			pr_debug("Device [%u:%u] was unfrozen\n",
 				 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
-#endif
 
 	if (ret)
 		pr_err("Failed to detach filter from device [%u:%u]\n",

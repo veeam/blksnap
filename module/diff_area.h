@@ -15,7 +15,7 @@ struct chunk;
 /**
  * struct diff_area - Discribes the difference area for one original device.
  * @kref:
- *	The reference counter. The &struct diff_area can be shared between 
+ *	The reference counter. The &struct diff_area can be shared between
  *	the &struct tracker and &struct snapimage.
  * @orig_bdev:
  *	A pointer to the structure of an opened block device.
@@ -177,13 +177,3 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
  *
  */
 void diff_area_throttling_io(struct diff_area *diff_area);
-
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-/**
- *
- */
-int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector,
-			       unsigned int *chunk_state);
-int diff_area_get_sector_image(struct diff_area *diff_area, sector_t pos,
-			       void *buf);
-#endif
