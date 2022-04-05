@@ -30,8 +30,8 @@ generate_version ${BUILD_DIR}/src/version.h ${VERSION}
 mkdir -p ${BUILD_DIR}/debian
 mkdir -p ${BUILD_DIR}/debian/source
 
-cp ./pkg/blksnap.dkms ${BUILD_DIR}/debian/
-sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/debian/blksnap.dkms
+cp ./pkg/${NAME}.dkms ${BUILD_DIR}/debian/
+sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/debian/${NAME}.dkms
 
 cat > ${BUILD_DIR}/debian/source/format << EOF
 3.0 (native)
@@ -46,13 +46,12 @@ Source: ${NAME}
 Section: admin
 Priority: standard
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
-Build-Depends: debhelper (>= 9.0.0),
-	       dkms
+Build-Depends: debhelper (>= 9.0.0)
 
 Package: ${NAME}
 Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
-Depends: ${misc:Depends}
+Depends: dkms, ${shlibs:Depends}, ${misc:Depends}
 Homepage: https://github.org/veeam/blksnap/
 Description: Veeam Agent for Linux (kernel module)
  This kernel module implements snapshot and changed block tracking
