@@ -1,0 +1,36 @@
+From 1d57e690b764bf3437187c2c13fc6bf8a2c7b3b4 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 5 Apr 2022 13:50:50 +0200
+Subject: [PATCH 20/20] block, blksnap: adds a blksnap to the kernel tree
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/Kconfig  | 2 ++
+ drivers/block/Makefile | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/drivers/block/Kconfig b/drivers/block/Kconfig
+index 519b6d38d4df..f2f4cdba5774 100644
+--- a/drivers/block/Kconfig
++++ b/drivers/block/Kconfig
+@@ -394,4 +394,6 @@ config BLK_DEV_RBD
+
+ source "drivers/block/rnbd/Kconfig"
+
++source "drivers/block/blksnap/Kconfig"
++
+ endif # BLK_DEV
+diff --git a/drivers/block/Makefile b/drivers/block/Makefile
+index 934a9c7c3a7c..0d95279bbe92 100644
+--- a/drivers/block/Makefile
++++ b/drivers/block/Makefile
+@@ -38,5 +38,6 @@ obj-$(CONFIG_ZRAM) += zram/
+ obj-$(CONFIG_BLK_DEV_RNBD)	+= rnbd/
+
+ obj-$(CONFIG_BLK_DEV_NULL_BLK)	+= null_blk/
++obj-$(CONFIG_BLK_SNAP)	+= blksnap/
+
+ swim_mod-y	:= swim.o swim_asm.o
+--
+2.20.1
+

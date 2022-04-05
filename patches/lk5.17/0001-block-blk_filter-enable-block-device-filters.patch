@@ -1,0 +1,443 @@
+From 1387c6d25e63ed6519483322eecdf57a9f70751d Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 5 Apr 2022 13:32:02 +0200
+Subject: [PATCH 01/20] block, blk_filter: enable block device filters
+
+Allows to attach block device filters to the block devices.
+Kernel modules can use this functionality to extend the
+capabilities of the block layer.
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ block/Kconfig             |   8 +++
+ block/bdev.c              | 128 ++++++++++++++++++++++++++++++++++++++
+ block/blk-core.c          |  92 ++++++++++++++++++++++++++-
+ include/linux/blk_types.h |  24 +++++++
+ include/linux/blkdev.h    |  82 ++++++++++++++++++++++++
+ 5 files changed, 332 insertions(+), 2 deletions(-)
+
+diff --git a/block/Kconfig b/block/Kconfig
+index d5d4197b7ed2..f57543794da2 100644
+--- a/block/Kconfig
++++ b/block/Kconfig
+@@ -214,6 +214,14 @@ config BLK_MQ_RDMA
+ config BLK_PM
+ 	def_bool PM
+
++config BLK_FILTER
++	bool "Enable block device filters"
++	default n
++	help
++	  Enabling this lets the block layer filters handle bio requests.
++	  Kernel modules can use this feature to extend the functionality
++	  of the block layer.
++
+ # do not use in new code
+ config BLOCK_HOLDER_DEPRECATED
+ 	bool
+diff --git a/block/bdev.c b/block/bdev.c
+index 102837a37051..915e81de6896 100644
+--- a/block/bdev.c
++++ b/block/bdev.c
+@@ -419,8 +419,15 @@ static void init_once(void *data)
+ 	inode_init_once(&ei->vfs_inode);
+ }
+
++#ifdef CONFIG_BLK_FILTER
++static void bdev_filter_cleanup(struct block_device *bdev);
++#endif
++
+ static void bdev_evict_inode(struct inode *inode)
+ {
++#ifdef CONFIG_BLK_FILTER
++	bdev_filter_cleanup(I_BDEV(inode));
++#endif
+ 	truncate_inode_pages_final(&inode->i_data);
+ 	invalidate_inode_buffers(inode); /* is it needed here? */
+ 	clear_inode(inode);
+@@ -496,6 +503,11 @@ struct block_device *bdev_alloc(struct gendisk *disk, u8 partno)
+ 		return NULL;
+ 	}
+ 	bdev->bd_disk = disk;
++
++#ifdef CONFIG_BLK_FILTER
++	memset(bdev->bd_filters, 0, sizeof(bdev->bd_filters));
++	spin_lock_init(&bdev->bd_filters_lock);
++#endif
+ 	return bdev;
+ }
+
+@@ -1061,3 +1073,119 @@ void sync_bdevs(bool wait)
+ 	spin_unlock(&blockdev_superblock->s_inode_list_lock);
+ 	iput(old_inode);
+ }
++
++#ifdef CONFIG_BLK_FILTER
++static void bdev_filter_cleanup(struct block_device *bdev)
++{
++	int altitude;
++	struct bdev_filter *flt;
++
++	for (altitude = 0; altitude < bdev_filter_alt_end; altitude++) {
++		spin_lock(&bdev->bd_filters_lock);
++		flt = bdev->bd_filters[altitude];
++		bdev->bd_filters[altitude] = NULL;
++		spin_unlock(&bdev->bd_filters_lock);
++
++		bdev_filter_put(flt);
++	}
++}
++
++/**
++ * bdev_filter_attach - [TBD]Attach a filter to the original block device.
++ * @bdev:
++ *	Block device.
++ * @name:
++ *	Name of the block device filter.
++ * @altitude:
++ *	Altituda number of the block device filter.
++ * @flt:
++ *	Pointer to the filter structure.
++ *
++ * Before adding a filter, it is necessary to initialize &struct bdev_filter.
++ *
++ * The bdev_filter_detach() function allows to detach the filter from the block
++ * device.
++ *
++ * Return:
++ * 0 - OK
++ * -EALREADY - a filter with this name already exists
++ */
++int bdev_filter_attach(struct block_device *bdev, const char *name,
++		       const enum bdev_filter_altitudes altitude,
++		       struct bdev_filter *flt)
++{
++	int ret = 0;
++
++	spin_lock(&bdev->bd_filters_lock);
++	if (bdev->bd_filters[altitude])
++		ret = -EALREADY;
++	else
++		bdev->bd_filters[altitude] = flt;
++	spin_unlock(&bdev->bd_filters_lock);
++
++	if (!ret)
++		pr_info("block device filter '%s' has been attached to %d:%d",
++			name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(bdev_filter_attach);
++
++/**
++ * bdev_filter_detach - [TBD]Detach a filter from the block device.
++ * @bdev:
++ *	Block device.
++ * @name:
++ *	Name of the block device filter.
++ * @altitude:
++ *	Altituda number of the block device filter.
++ *
++ * The filter should be added using the bdev_filter_attach() function.
++ *
++ * Return:
++ * 0 - OK
++ * -ENOENT - the filter was not found in the linked list
++ */
++int bdev_filter_detach(struct block_device *bdev, const char *name,
++		       const enum bdev_filter_altitudes altitude)
++{
++	struct bdev_filter *flt = NULL;
++
++	spin_lock(&bdev->bd_filters_lock);
++	flt = bdev->bd_filters[altitude];
++	bdev->bd_filters[altitude] = NULL;
++	spin_unlock(&bdev->bd_filters_lock);
++
++	if (!flt)
++		return -ENOENT;
++
++	bdev_filter_put(flt);
++	pr_info("block device filter '%s' has been detached from %d:%d",
++		name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
++	return 0;
++}
++EXPORT_SYMBOL_GPL(bdev_filter_detach);
++
++/**
++ * bdev_filter_get_by_altitude - [TBD]Get filter by altitude.
++ * @bdev:
++ * 	Pointer to the block device structure.
++ *
++ * Return:
++ * pointer - pointer to filters structure from &struct blk_filter
++ * NULL - no filter has been set
++ */
++struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
++				const enum bdev_filter_altitudes altitude)
++{
++	struct bdev_filter *flt;
++
++	spin_lock(&bdev->bd_filters_lock);
++	flt = bdev->bd_filters[altitude];
++	bdev_filter_get(flt);
++	spin_unlock(&bdev->bd_filters_lock);
++
++	return flt;
++}
++EXPORT_SYMBOL_GPL(bdev_filter_get_by_altitude);
++#endif
+diff --git a/block/blk-core.c b/block/blk-core.c
+index 779b4a1f66ac..665e82189063 100644
+--- a/block/blk-core.c
++++ b/block/blk-core.c
+@@ -882,6 +882,88 @@ static void __submit_bio_noacct_mq(struct bio *bio)
+ 	current->bio_list = NULL;
+ }
+
++#ifdef CONFIG_BLK_FILTER
++
++/**
++ * __filter_bio() - Process bio by the block device filter.
++ * @flt:
++ *	Block device filter.
++ * @bio:
++ *	Original I/O unit.
++ *
++ * Return:
++ * bdev_filter_pass - original bio should be submitted
++ * bdev_filter_skip - do not submit original bio
++ * bdev_filter_redirect - repeat bio processing for another block device
++ */
++static inline enum bdev_filter_result __filter_bio(struct bdev_filter *flt,
++						   struct bio *bio)
++{
++	enum bdev_filter_result result;
++	struct bio *new_bio;
++	struct bio_list bio_list[2] = { };
++
++	do {
++		bio_list_init(&bio_list[0]);
++		current->bio_list = bio_list;
++
++		result = flt->fops->submit_bio_cb(bio, flt);
++
++		current->bio_list = NULL;
++
++		while ((new_bio = bio_list_pop(&bio_list[0]))) {
++			if (!new_bio->bi_bdev->bd_disk->fops->submit_bio)
++				__submit_bio_noacct_mq(new_bio);
++			else
++				__submit_bio_noacct(new_bio);
++		};
++	} while (result == bdev_filter_repeat);
++
++	return result;
++}
++
++/**
++ * filter_bio_apply() - Pass bio to the block device filters.
++ * @bio:
++ *	Original I/O unit.
++ *
++ * Return:
++ * true - original bio should be submitted
++ * false - do not submit original bio
++ */
++static bool filter_bio(struct bio *bio)
++{
++	enum bdev_filter_result result = bdev_filter_pass;
++
++	if (bio_flagged(bio, BIO_FILTERED))
++		return true;
++	do {
++		struct block_device *bdev = bio->bi_bdev;
++		unsigned int altitude = 0;
++
++		while (altitude < bdev_filter_alt_end) {
++			struct bdev_filter *flt;
++
++			spin_lock(&bdev->bd_filters_lock);
++			flt = bdev->bd_filters[altitude];
++			if (flt)
++				bdev_filter_get(flt);
++			spin_unlock(&bdev->bd_filters_lock);
++
++			if (flt) {
++				result = __filter_bio(flt, bio);
++				bdev_filter_put(flt);
++			}
++			if (result != bdev_filter_pass)
++				break;
++			altitude++;
++		}
++	} while (result == bdev_filter_redirect);
++
++	return (result == bdev_filter_pass);
++}
++#endif
++
+ /**
+  * submit_bio_noacct - re-submit a bio to the block device layer for I/O
+  * @bio:  The bio describing the location in memory and on the device.
+@@ -899,9 +981,15 @@ void submit_bio_noacct(struct bio *bio)
+ 	 * to collect a list of requests submited by a ->submit_bio method while
+ 	 * it is active, and then process them after it returned.
+ 	 */
+-	if (current->bio_list)
++	if (current->bio_list) {
+ 		bio_list_add(&current->bio_list[0], bio);
+-	else if (!bio->bi_bdev->bd_disk->fops->submit_bio)
++		return;
++	}
++#ifdef CONFIG_BLK_FILTER
++	if (!filter_bio(bio))
++		return;
++#endif
++	if (!bio->bi_bdev->bd_disk->fops->submit_bio)
+ 		__submit_bio_noacct_mq(bio);
+ 	else
+ 		__submit_bio_noacct(bio);
+diff --git a/include/linux/blk_types.h b/include/linux/blk_types.h
+index fe065c394fff..c51300a0f1c5 100644
+--- a/include/linux/blk_types.h
++++ b/include/linux/blk_types.h
+@@ -37,6 +37,23 @@ struct bio_crypt_ctx;
+ #define PAGE_SECTORS		(1 << PAGE_SECTORS_SHIFT)
+ #define SECTOR_MASK		(PAGE_SECTORS - 1)
+
++#ifdef CONFIG_BLK_FILTER
++/**
++ * enum bdev_filter_altitudes - [TBD]Set of reserved altitudes for block device
++ *	filters.
++ *
++ * @bdev_filter_alt_blksnap:
++ *	An altitude for the blksnap module.
++ * @bdev_filter_alt_end:
++ *	Indicates the end of the altitude set.
++ */
++enum bdev_filter_altitudes {
++	bdev_filter_alt_blksnap = 0,
++	bdev_filter_alt_end
++};
++struct bdev_filter;
++#endif
++
+ struct block_device {
+ 	sector_t		bd_start_sect;
+ 	sector_t		bd_nr_sectors;
+@@ -68,6 +85,10 @@ struct block_device {
+ #ifdef CONFIG_FAIL_MAKE_REQUEST
+ 	bool			bd_make_it_fail;
+ #endif
++#ifdef CONFIG_BLK_FILTER
++	struct bdev_filter	*bd_filters[bdev_filter_alt_end];
++	spinlock_t		bd_filters_lock;
++#endif
+ } __randomize_layout;
+
+ #define bdev_whole(_bdev) \
+@@ -321,6 +342,9 @@ enum {
+ 	BIO_REMAPPED,
+ 	BIO_ZONE_WRITE_LOCKED,	/* Owns a zoned device zone write lock */
+ 	BIO_PERCPU_CACHE,	/* can participate in per-cpu alloc cache */
++#ifdef CONFIG_BLK_FILTER
++	BIO_FILTERED,		/* bio has already been filtered */
++#endif
+ 	BIO_FLAG_LAST
+ };
+
+diff --git a/include/linux/blkdev.h b/include/linux/blkdev.h
+index 16b47035e4b0..6691c6dbf18a 100644
+--- a/include/linux/blkdev.h
++++ b/include/linux/blkdev.h
+@@ -1341,4 +1341,86 @@ struct io_comp_batch {
+
+ #define DEFINE_IO_COMP_BATCH(name)	struct io_comp_batch name = { }
+
++#ifdef CONFIG_BLK_FILTER
++/**
++ * enum bdev_filter_result - The result of bio processing by
++ *	the block device filter.
++ *
++ * @bdev_filter_skip:
++ *	Original bio does not need to be submitted.
++ * @bdev_filter_pass:
++ *	It is necessary to submit the original request.
++ * @bdev_filter_repeat:
++ *	Bio processing has not been completed, a second call is required.
++ * @bdev_filter_redirect:
++ *	Original bio was redirected to another block device. The set
++ *	of filters on it is different, so processing must be repeated.
++ */
++enum bdev_filter_result {
++	bdev_filter_skip = 0,
++	bdev_filter_pass,
++	bdev_filter_repeat,
++	bdev_filter_redirect
++};
++struct bdev_filter;
++/**
++ * bdev_filter_operations - List of callback functions for the filter.
++ *
++ * @submit_bio_cb:
++ *	A callback function for bio processing.
++ * @detach_cb:
++ *	A callback function to disable the filter when removing a block
++ *	device from the system.
++ */
++struct bdev_filter_operations {
++	enum bdev_filter_result (*submit_bio_cb)(struct bio *bio,
++						 struct bdev_filter *flt);
++	void (*detach_cb)(struct kref *kref);
++};
++/**
++ * struct bdev_filter - [TBD]Block device filter.
++ *
++ * @kref:
++ *	Kernel reference counter.
++ * @fops:
++ *	The pointer to &struct bdev_filter_operations with callback
++ *	functions for the filter.
++ */
++struct bdev_filter {
++	struct kref kref;
++	const struct bdev_filter_operations *fops;
++};
++/**
++ * bdev_filter_init -[TBD]Initialization of the filter structure.
++ * @flt:
++ *	Pointer to the &struct bdev_filter to be initialized.
++ * @fops:
++ *	The callback functions for the filter.
++ */
++static inline void bdev_filter_init(struct bdev_filter *flt,
++		const struct bdev_filter_operations *fops)
++{
++	kref_init(&flt->kref);
++	flt->fops = fops;
++};
++int bdev_filter_attach(struct block_device *bdev, const char *name,
++		       const enum bdev_filter_altitudes altitude,
++		       struct bdev_filter *flt);
++int bdev_filter_detach(struct block_device *bdev, const char *name,
++		       const enum bdev_filter_altitudes altitude);
++struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
++		       const enum bdev_filter_altitudes altitude);
++static inline void bdev_filter_get(struct bdev_filter *flt)
++{
++	if (flt)
++		kref_get(&flt->kref);
++}
++static inline void bdev_filter_put(struct bdev_filter *flt)
++{
++	if (flt && flt->fops->detach_cb)
++		kref_put(&flt->kref, flt->fops->detach_cb);
++};
++
++#endif
++
+ #endif /* _LINUX_BLKDEV_H */
+--
+2.20.1
+

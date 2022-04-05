@@ -1,0 +1,132 @@
+From 817d0367f33cf4ff98bc2b51b65c247cd02475ea Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 5 Apr 2022 13:49:59 +0200
+Subject: [PATCH 18/20] block, blksnap: Kconfig
+
+The module configuration file allows you to set default values for
+module parameters.
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/blksnap/Kconfig | 109 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 109 insertions(+)
+ create mode 100644 drivers/block/blksnap/Kconfig
+
+diff --git a/drivers/block/blksnap/Kconfig b/drivers/block/blksnap/Kconfig
+new file mode 100644
+index 000000000000..8b44fc757a5a
+--- /dev/null
++++ b/drivers/block/blksnap/Kconfig
+@@ -0,0 +1,109 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# block io layer filter module configuration
++#
++#
++
++config BLK_SNAP
++	tristate "Block device snapshot and change tracker module"
++	depends on BLK_FILTER
++	help
++	  Allow to create snapshots and track block changes for a block
++	  devices. Designed for creating backups for any block devices
++	  (without device mapper). Snapshots are temporary and are released
++	  then backup is completed. Change block tracking allows you to
++	  create incremental or differential backups.
++
++config BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT
++	depends on BLK_SNAP
++	int "The power of 2 for minimum trackings block size"
++	default 16
++	help
++	  The minimum tracking block size by default is 64 KB (shift 16)
++	  It's looks good for block device 128 GB or lower.
++	  In this case, the block device is divided into 2097152 blocks.
++
++config BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT
++	depends on BLK_SNAP
++	int "The limit of the maximum number of trackings blocks"
++	default 2097152
++	help
++	  As the size of the block device grows, the size of the tracking block
++	  size should also grow. For this purpose, the limit of the maximum
++	  number of block size is set.
++
++config BLK_SNAP_CHUNK_MINIMUM_SHIFT
++	depends on BLK_SNAP
++	int "The power of 2 for minimum snapshots chunk size"
++	default 18
++	help
++	  The minimum chunk size by default is 256 KB (shift 18)
++	  It's looks good for block device 128 GB or lower.
++	  In this case, the block device is divided into 524288 chunks.
++
++config BLK_SNAP_CHUNK_MAXIMUM_COUNT
++	depends on BLK_SNAP
++	int "The limit of the maximum number of snapshots chunks"
++	default 2097152
++	help
++	  As the size of the block device grows, the size of the chunk
++	  should also grow. For this purpose, the limit of the maximum number
++	  of chunks is set.
++
++config BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE
++	depends on BLK_SNAP
++	int "The limit of the maximum chunks in memory cache"
++	default 64
++	help
++	  Since reading and writing to snapshots is performed in large chunks,
++	  a cache is implemented to optimize reading small portions of data
++	  from the snapshot image. As the number of chunks in the cache
++	  increases, memory consumption also increases.
++	  The minimum recommended value is four.
++
++config BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE
++	depends on BLK_SNAP
++	int "The maximum size of the free buffers pool"
++	default 128
++	help
++	  A buffer can be allocated for each chunk. After use, this buffer is
++	  not released immediately, but is sent to the pool of free buffers.
++	  However, if there are too many free buffers in the pool, they are
++	  released immediately. The maximum size of the pool is regulated by
++	  this define.
++
++config BLK_SNAP_DIFF_STORAGE_MINIMUM
++	depends on BLK_SNAP
++	int "The minimum allowable size of the difference storage in sectors"
++	default 2097152
++	help
++	  When reached, an event is generated about the lack of free space.
++
++config BLK_SNAP_DEBUG_MEMORY_LEAK
++	depends on BLK_SNAP
++	bool "Enable memory leak detector"
++	default n
++	help
++	  Enables debugging code to monitor memory consumption by the module.
++
++	  If unsure, say N.
++
++config BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
++	depends on BLK_SNAP
++	bool "Enable filters locking"
++	default n
++	help
++	  Enables locking of filters at the moment of taking and
++	  releasing the snapshot.
++
++config BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
++	depends on BLK_SNAP
++	bool "Allow difference storage in memory"
++	default n
++	help
++	  Enables the ability to create a repository of changes in memory.
++	  This feature can be useful for debugging. Or it can be used for
++	  mobile phones or other devices if there are guaranteed not to be
++	  a large number of writings during the snapshot hold.
++
++	  If unsure, say N.
+--
+2.20.1
+

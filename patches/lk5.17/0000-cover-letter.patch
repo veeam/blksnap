@@ -1,0 +1,152 @@
+From 1d57e690b764bf3437187c2c13fc6bf8a2c7b3b4 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 5 Apr 2022 13:55:21 +0200
+Subject: [PATCH 00/20] blksnap - creating non-persistent snapshots for backup
+
+Hi all.
+
+I suggest the blksnap kernel module for consideration. It allows to create
+non-persistent snapshots of any block devices. The main purpose of such
+snapshots is to create backups of block devices entirely.
+
+A snapshot is created simultaneously for several block devices, ensuring
+their consistent state in the backup.
+
+A change tracker is implemented in the module. It allows to determine
+which blocks were changed during the time between the last snapshot
+created and any of the previous snapshots of the same generation.
+This allows to implement the logic of both incremental and differential
+backups.
+
+An arbitrary range of sectors on any block device can be used to store
+snapshot changes. The size of the change store can be increased after the
+snapshot is created by adding new sector ranges. This allows to create a
+storage of differes in individual files on a file system that can occupy
+the entire space of a block device and increase the storage of differes
+as needed.
+
+To create images of snapshots of block devices, the module stores blocks
+of the original block device that have been changed since the snapshot was
+taken. To do this, the module intercepts write requests and reads blocks
+that need to be overwritten. This algorithm guarantees the safety of the
+data of the original block device in case of overflow of the snapshot and
+even in case of unpredictable critical errors.
+
+To connect and disconnect the module to the block layer, the concept of a
+block device filter is introduced. Functions for connecting filters are
+added to the block layer and the ability to intercept I/O requests is
+provided.
+
+The blksnap module was created specifically for upstream based on the
+experience of operating the out-of-tree veeamsnap module, which is part of
+the Veeam Agent for Linux product. I am sure that the module will be in
+demand by other creators of backup tools and will save them from having to
+use their out-of-tree kernel modules.
+
+A tool, a library for working with blksnap and tests can be found at
+www.github.com/veeam/blksnap.
+
+Sergei Shtepa (20):
+  block, blk_filter: enable block device filters
+  block, blksnap: header file of the module interface
+  block, blksnap: module management interface functions
+  block, blksnap: init() and exit() functions
+  block, blksnap: interaction with sysfs
+  block, blksnap: attaching and detaching the filter and handling a bios
+  block, blksnap: map of change block tracking
+  block, blksnap: big buffer in the form of an array of pages
+  block, blksnap: minimum data storage unit of the original block device
+  block, blksnap: buffer in memory for the minimum data storage unit
+  block, blksnap: functions and structures for performing block I/O
+    operations
+  block, blksnap: storage for storing difference blocks
+  block, blksnap: event queue from the difference storage
+  block, blksnap: owner of information about overwritten blocks of the
+    original block device
+  block, blksnap: snapshot image block device
+  block, blksnap: snapshot
+  block, blksnap: debugging mechanism for monitoring memory consumption
+  block, blksnap: Kconfig
+  block, blksnap: Makefile
+  block, blksnap: adds a blksnap to the kernel tree
+
+ block/Kconfig                          |   8 +
+ block/bdev.c                           | 128 +++++
+ block/blk-core.c                       |  92 +++-
+ drivers/block/Kconfig                  |   2 +
+ drivers/block/Makefile                 |   1 +
+ drivers/block/blksnap/Kconfig          | 109 ++++
+ drivers/block/blksnap/Makefile         |  20 +
+ drivers/block/blksnap/big_buffer.c     | 218 ++++++++
+ drivers/block/blksnap/big_buffer.h     |  27 +
+ drivers/block/blksnap/cbt_map.c        | 280 ++++++++++
+ drivers/block/blksnap/cbt_map.h        | 112 ++++
+ drivers/block/blksnap/chunk.c          | 352 +++++++++++++
+ drivers/block/blksnap/chunk.h          | 132 +++++
+ drivers/block/blksnap/ctrl.c           | 445 ++++++++++++++++
+ drivers/block/blksnap/ctrl.h           |   7 +
+ drivers/block/blksnap/diff_area.c      | 602 ++++++++++++++++++++++
+ drivers/block/blksnap/diff_area.h      | 179 +++++++
+ drivers/block/blksnap/diff_buffer.c    | 146 ++++++
+ drivers/block/blksnap/diff_buffer.h    |  78 +++
+ drivers/block/blksnap/diff_io.c        | 215 ++++++++
+ drivers/block/blksnap/diff_io.h        | 122 +++++
+ drivers/block/blksnap/diff_storage.c   | 316 ++++++++++++
+ drivers/block/blksnap/diff_storage.h   |  94 ++++
+ drivers/block/blksnap/event_queue.c    |  90 ++++
+ drivers/block/blksnap/event_queue.h    |  64 +++
+ drivers/block/blksnap/main.c           | 109 ++++
+ drivers/block/blksnap/memory_checker.c |  81 +++
+ drivers/block/blksnap/memory_checker.h |  41 ++
+ drivers/block/blksnap/params.h         |  10 +
+ drivers/block/blksnap/snapimage.c      | 345 +++++++++++++
+ drivers/block/blksnap/snapimage.h      |  66 +++
+ drivers/block/blksnap/snapshot.c       | 685 +++++++++++++++++++++++++
+ drivers/block/blksnap/snapshot.h       |  76 +++
+ drivers/block/blksnap/sysfs.c          |  81 +++
+ drivers/block/blksnap/sysfs.h          |   5 +
+ drivers/block/blksnap/tracker.c        | 629 +++++++++++++++++++++++
+ drivers/block/blksnap/tracker.h        |  83 +++
+ drivers/block/blksnap/version.h        |   8 +
+ include/linux/blk_snap.h               | 460 +++++++++++++++++
+ include/linux/blk_types.h              |  24 +
+ include/linux/blkdev.h                 |  82 +++
+ 41 files changed, 6622 insertions(+), 2 deletions(-)
+ create mode 100644 drivers/block/blksnap/Kconfig
+ create mode 100644 drivers/block/blksnap/Makefile
+ create mode 100644 drivers/block/blksnap/big_buffer.c
+ create mode 100644 drivers/block/blksnap/big_buffer.h
+ create mode 100644 drivers/block/blksnap/cbt_map.c
+ create mode 100644 drivers/block/blksnap/cbt_map.h
+ create mode 100644 drivers/block/blksnap/chunk.c
+ create mode 100644 drivers/block/blksnap/chunk.h
+ create mode 100644 drivers/block/blksnap/ctrl.c
+ create mode 100644 drivers/block/blksnap/ctrl.h
+ create mode 100644 drivers/block/blksnap/diff_area.c
+ create mode 100644 drivers/block/blksnap/diff_area.h
+ create mode 100644 drivers/block/blksnap/diff_buffer.c
+ create mode 100644 drivers/block/blksnap/diff_buffer.h
+ create mode 100644 drivers/block/blksnap/diff_io.c
+ create mode 100644 drivers/block/blksnap/diff_io.h
+ create mode 100644 drivers/block/blksnap/diff_storage.c
+ create mode 100644 drivers/block/blksnap/diff_storage.h
+ create mode 100644 drivers/block/blksnap/event_queue.c
+ create mode 100644 drivers/block/blksnap/event_queue.h
+ create mode 100644 drivers/block/blksnap/main.c
+ create mode 100644 drivers/block/blksnap/memory_checker.c
+ create mode 100644 drivers/block/blksnap/memory_checker.h
+ create mode 100644 drivers/block/blksnap/params.h
+ create mode 100644 drivers/block/blksnap/snapimage.c
+ create mode 100644 drivers/block/blksnap/snapimage.h
+ create mode 100644 drivers/block/blksnap/snapshot.c
+ create mode 100644 drivers/block/blksnap/snapshot.h
+ create mode 100644 drivers/block/blksnap/sysfs.c
+ create mode 100644 drivers/block/blksnap/sysfs.h
+ create mode 100644 drivers/block/blksnap/tracker.c
+ create mode 100644 drivers/block/blksnap/tracker.h
+ create mode 100644 drivers/block/blksnap/version.h
+ create mode 100644 include/linux/blk_snap.h
+
+-- 
+2.20.1
+
