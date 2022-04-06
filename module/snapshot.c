@@ -69,11 +69,10 @@ static void snapshot_release(struct snapshot *snapshot)
 #endif
 	}
 
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	pr_info("Lock trackers\n");
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_lock(snapshot->tracker_array[inx]);
-#endif
+
 	current_flag = memalloc_noio_save();
 	/* Set tracker as available for new snapshots. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -84,11 +83,9 @@ static void snapshot_release(struct snapshot *snapshot)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
 	memalloc_noio_restore(current_flag);
 
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_unlock(snapshot->tracker_array[inx]);
 	pr_info("Trackers have been unlocked\n");
-#endif
 
 	/* Thaw fs on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -471,11 +468,9 @@ int snapshot_take(uuid_t *id)
 #endif
 	}
 
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	pr_info("Lock trackers\n");
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_lock(snapshot->tracker_array[inx]);
-#endif
 	current_flag = memalloc_noio_save();
 
 	/*
@@ -515,11 +510,9 @@ int snapshot_take(uuid_t *id)
 
 	memalloc_noio_restore(current_flag);
 
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_unlock(snapshot->tracker_array[inx]);
 	pr_info("Trackers have been unlocked\n");
-#endif
 
 	/* Thaw file systems on original block devices. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT

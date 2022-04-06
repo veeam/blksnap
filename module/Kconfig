@@ -88,14 +88,6 @@ config BLK_SNAP_DEBUG_MEMORY_LEAK
 
 	  If unsure, say N.
 
-config BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	depends on BLK_SNAP
-	bool "Enable filters locking"
-	default n
-	help
-	  Enables locking of filters at the moment of taking and
-	  releasing the snapshot.
-
 config BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	depends on BLK_SNAP
 	bool "Allow difference storage in memory"
