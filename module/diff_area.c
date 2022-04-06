@@ -78,6 +78,7 @@ void diff_area_free(struct kref *kref)
 	struct diff_area *diff_area =
 		container_of(kref, struct diff_area, kref);
 
+	might_sleep();
 	inx = 0;
 	start_waiting = jiffies_64;
 	while (atomic_read(&diff_area->pending_io_count)) {

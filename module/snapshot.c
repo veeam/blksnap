@@ -43,24 +43,20 @@ static void snapshot_release(struct snapshot *snapshot)
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 	}
 
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* Lock filters. */
 	pr_info("Lock trackers\n");
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_lock(snapshot->tracker_array[inx]);
-#endif
+
 	current_flag = memalloc_noio_save();
 	/* Set tracker as available for new snapshots. */
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
 	memalloc_noio_restore(current_flag);
 
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* Unlock filters. */
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_unlock(snapshot->tracker_array[inx]);
 	pr_info("Trackers have been unlocked\n");
-#endif
+
 	/* Thaw fs on each original block device. */
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
@@ -379,12 +375,9 @@ int snapshot_take(uuid_t *id)
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 	}
 
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* Lock filters. */
 	pr_info("Lock trackers\n");
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_lock(snapshot->tracker_array[inx]);
-#endif
 	current_flag = memalloc_noio_save();
 
 	/* Take snapshot - switch CBT tables and enable COW logic for each tracker. */
@@ -411,12 +404,10 @@ int snapshot_take(uuid_t *id)
 		snapshot->is_taken = true;
 
 	memalloc_noio_restore(current_flag);
-#ifdef CONFIG_BLK_SNAP_SNAPSHOT_BDEVFILTER_LOCK
-	/* Unlock filters. */
 	for (inx = 0; inx < snapshot->count; inx++)
 		tracker_unlock(snapshot->tracker_array[inx]);
 	pr_info("Trackers have been unlocked\n");
-#endif
+
 	/* Thaw file systems on original block devices. */
 
 	for (inx = 0; inx < snapshot->count; inx++) {

@@ -55,13 +55,13 @@ static void __exit blk_snap_exit(void)
 {
 	pr_info("Unloading module\n");
 
+	sysfs_done();
+	ctrl_done();
+
 	diff_io_done();
 	snapshot_done();
 	snapimage_done();
 	tracker_done();
-
-	sysfs_done();
-	ctrl_done();
 
 	pr_info("Module was unloaded\n");
 }
