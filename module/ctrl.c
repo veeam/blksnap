@@ -89,7 +89,7 @@ static int ioctl_tracker_collect(unsigned long arg)
 	struct blk_snap_tracker_collect karg;
 	struct blk_snap_cbt_info *cbt_info = NULL;
 
-	pr_debug("Collecting tracking devices:\n");
+	pr_debug("Collecting tracking devices\n");
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to collect tracking devices: invalid user buffer\n");
