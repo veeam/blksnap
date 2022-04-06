@@ -511,7 +511,11 @@ int tracker_remove(dev_t dev_id)
 	if (IS_ERR(bdev)) {
 		pr_err("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
+#ifdef HAVE_LP_FILTER
+		return lp_bdev_filter_detach(dev_id, KBUILD_MODNAME, bdev_filter_alt_blksnap);
+#else
 		return PTR_ERR(bdev);
+#endif
 	}
 
 	tracker = tracker_get_by_dev(bdev);

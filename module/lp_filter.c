@@ -135,6 +135,43 @@ int bdev_filter_attach(struct block_device *bdev, const char *name,
 }
 EXPORT_SYMBOL(bdev_filter_attach);
 
+
+/*
+ * Only for livepatch version
+ * It is necessary for correct processing of the case when the block device
+ * was removed from the system. Unlike the upstream version, we have no way
+ * to handle device extraction.
+ */
+int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
+			  const enum bdev_filter_altitudes altitude)
+{
+	struct bdev_extension *ext;
+	struct bdev_filter *flt;
+
+	pr_info("Detach block device filter");
+
+	spin_lock(&bdev_extension_list_lock);
+	ext = bdev_extension_find(dev_id);
+	spin_unlock(&bdev_extension_list_lock);
+	if (!ext)
+		return -ENOENT;
+
+	spin_lock(&ext->bd_filters_lock);
+	flt = ext->bd_filters[altitude];
+	if (flt)
+		ext->bd_filters[altitude] = NULL;
+	spin_unlock(&ext->bd_filters_lock);
+
+	if (!flt)
+		return -ENOENT;
+
+	bdev_filter_put(flt);
+	pr_info("block device filter '%s' has been detached from %d:%d",
+		name, MAJOR(dev_id), MINOR(dev_id));
+	return 0;
+}
+EXPORT_SYMBOL(lp_bdev_filter_detach);
+
 /**
  * bdev_bdev_filter_del - Detach a filter from the block device.
  * @bdev:
@@ -153,30 +190,7 @@ EXPORT_SYMBOL(bdev_filter_attach);
 int bdev_filter_detach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude)
 {
-	struct bdev_extension *ext;
-	struct bdev_filter *flt;
-
-	pr_info("Detach block device filter");
-
-	spin_lock(&bdev_extension_list_lock);
-	ext = bdev_extension_find(bdev->bd_dev);
-	spin_unlock(&bdev_extension_list_lock);
-	if (!ext)
-		return -ENOENT;
-
-	spin_lock(&ext->bd_filters_lock);
-	flt = ext->bd_filters[altitude];
-	if (flt)
-		ext->bd_filters[altitude] = NULL;
-	spin_unlock(&ext->bd_filters_lock);
-
-	if (!flt)
-		return -ENOENT;
-
-	bdev_filter_put(flt);
-	pr_info("block device filter '%s' has been detached from %d:%d",
-		name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	return 0;
+	return lp_bdev_filter_detach(bdev->bd_dev, name, altitude);
 }
 EXPORT_SYMBOL(bdev_filter_detach);
 

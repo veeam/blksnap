@@ -67,3 +67,7 @@ static inline void bdev_filter_put(struct bdev_filter *flt)
 	if (likely(flt && flt->fops->detach_cb))
 		kref_put(&flt->kref, flt->fops->detach_cb);
 };
+
+/* Only for livepatch version */
+int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
+			   const enum bdev_filter_altitudes altitude);
