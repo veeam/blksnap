@@ -35,6 +35,7 @@ struct tracked_device {
 
 LIST_HEAD(tracked_device_list);
 DEFINE_SPINLOCK(tracked_device_lock);
+static refcount_t trackers_counter = REFCOUNT_INIT(1);
 
 struct tracker_release_worker {
 	struct work_struct work;
@@ -45,6 +46,8 @@ static struct tracker_release_worker tracker_release_worker;
 
 void tracker_free(struct tracker *tracker)
 {
+	might_sleep();
+
 	pr_debug("Free tracker for device [%u:%u].\n", MAJOR(tracker->dev_id),
 		 MINOR(tracker->dev_id));
 
@@ -56,6 +59,7 @@ void tracker_free(struct tracker *tracker)
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_tracker);
 #endif
+	refcount_dec(&trackers_counter);
 }
 
 static inline void tracker_get(struct tracker *tracker)
@@ -304,6 +308,7 @@ static struct tracker *tracker_new(struct block_device *bdev)
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker);
 #endif
+	refcount_inc(&trackers_counter);
 	bdev_filter_init(&tracker->flt, &tracker_fops);
 	INIT_LIST_HEAD(&tracker->link);
 	percpu_init_rwsem(&tracker->submit_lock);
@@ -394,6 +399,29 @@ int tracker_init(void)
 	return 0;
 }
 
+/**
+ * tracker_wait_for_release - Waiting for all trackers are released.
+ *
+ */
+static void tracker_wait_for_release(void)
+{
+	long inx = 0;
+	u64 start_waiting = jiffies_64;
+
+	while (refcount_read(&trackers_counter) > 1) {
+		schedule_timeout_interruptible(HZ);
+		if (jiffies_64 > (start_waiting + 10*HZ)) {
+			start_waiting = jiffies_64;
+			inx++;
+
+			if (inx <= 12)
+				pr_warn("Waiting for trackers release\n");
+
+			WARN_ONCE(inx > 12, "Failed to release trackers\n");
+		}
+	}
+}
+
 void tracker_done(void)
 {
 	struct tracked_device *tr_dev;
@@ -417,8 +445,7 @@ void tracker_done(void)
 #endif
 	}
 
-	/* Waiting for all trackers are released */
-	flush_work(&tracker_release_worker.work);
+	tracker_wait_for_release();
 }
 
 struct tracker *tracker_create_or_get(dev_t dev_id)
