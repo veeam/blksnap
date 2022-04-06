@@ -68,19 +68,38 @@ void memory_object_dec(enum memory_object_type type)
 	atomic_dec(&memory_counter[type]);
 }
 
-void memory_object_print(void)
+int memory_object_print(void)
 {
-	int cnt;
+	int inx;
+	int not_free = 0;
 
-	pr_info("Statistics for objects in memory:\n");
-	for (cnt = 0; cnt < memory_object_count; cnt++)
-		pr_info("%s: %d\n", memory_object_names[cnt],
-			 atomic_read(&memory_counter[cnt]));
+	pr_info("Objects in memory:\n");
+	for (inx = 0; inx < memory_object_count; inx++) {
+		int count = atomic_read(&memory_counter[inx]);
 
-	pr_info("Maximim for objects in memory:\n");
-	for (cnt = 0; cnt < memory_object_count; cnt++)
-		pr_info("%s: %d\n", memory_object_names[cnt],
-			 atomic_read(&memory_counter_max[cnt]));
+		if (count) {
+			not_free += count;
+			pr_info("%s: %d\n", memory_object_names[inx], count);
+		}
+	}
+	if (not_free)
+		pr_info("Found %d allocated objects\n", not_free);
+	else
+		pr_info("All objects have been released\n");
+	return not_free;
 }
 
+void memory_object_max_print(void)
+{
+	int inx;
+
+	pr_info("Maximim objects in memory:\n");
+	for (inx = 0; inx < memory_object_count; inx++) {
+		int count = atomic_read(&memory_counter_max[inx]);
+
+		if (count)
+			pr_info("%s: %d\n", memory_object_names[inx], count);
+	}
+	pr_info(".\n");
+}
 #endif
