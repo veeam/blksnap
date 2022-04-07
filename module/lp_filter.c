@@ -89,7 +89,7 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
 }
 
 /**
- * bdev_filter_add - Attach a filter to original block device.
+ * bdev_filter_attach - Attach a filter to original block device.
  * @bdev:
  * 	block device
  * @name:
@@ -99,14 +99,14 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
  * @flt:
  *	Pointer to the filter structure.
  *
- * Before adding a filter, it is necessary to initialize &struct bdev_filter.
  *
  * The bdev_filter_detach() function allows to detach the filter from the block
  * device.
  *
  * Return:
  * 0 - OK
- * -EALREADY - a filter with this name already exists
+ * -EBUSY - a filter on this altitude already exists
+ * -EINVAL - invalid altitude
  */
 int bdev_filter_attach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude,
@@ -115,7 +115,9 @@ int bdev_filter_attach(struct block_device *bdev, const char *name,
 	int ret = 0;
 	struct bdev_extension *ext;
 
-	pr_info("Attach block device filter");
+	pr_info("Attach block device filter '%s'", name);
+	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
+		return -EINVAL;
 
 	ext = bdev_extension_append(bdev);
 	if (!ext)
@@ -124,8 +126,10 @@ int bdev_filter_attach(struct block_device *bdev, const char *name,
 	spin_lock(&ext->bd_filters_lock);
 	if (ext->bd_filters[altitude])
 		ret = -EBUSY;
-	else
+	else {
+		bdev_filter_get(flt);
 		ext->bd_filters[altitude] = flt;
+	}
 	spin_unlock(&ext->bd_filters_lock);
 
 	if (!ret)
@@ -148,7 +152,10 @@ int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 	struct bdev_extension *ext;
 	struct bdev_filter *flt;
 
-	pr_info("Detach block device filter");
+	pr_info("Detach block device filter '%s'", name);
+
+	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
+		return -EINVAL;
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(dev_id);
@@ -186,6 +193,7 @@ EXPORT_SYMBOL(lp_bdev_filter_detach);
  * Return:
  * 0 - OK
  * -ENOENT - the filter was not found in the linked list
+ * -EINVAL - invalid altitude
  */
 int bdev_filter_detach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude)
@@ -210,11 +218,14 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 	struct bdev_extension *ext;
 	struct bdev_filter *flt = NULL;
 
+	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
+		return ERR_PTR(-EINVAL);
+
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(bdev->bd_dev);
 	spin_unlock(&bdev_extension_list_lock);
 	if (!ext)
-		return NULL; //-ENOENT;
+		return NULL;
 
 	spin_lock(&ext->bd_filters_lock);
 	flt = ext->bd_filters[altitude];

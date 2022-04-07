@@ -5,8 +5,8 @@
 #include <linux/blk_types.h>
 
 enum bdev_filter_altitudes {
-	bdev_filter_alt_unidentified = 0,
-	bdev_filter_alt_blksnap,
+	bdev_filter_alt_blksnap = 0,
+	bdev_filter_alt_unidentified,
 	bdev_filter_alt_end
 };
 

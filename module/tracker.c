@@ -72,10 +72,11 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 	struct bdev_filter *flt;
 
 	flt = bdev_filter_get_by_altitude(bdev, bdev_filter_alt_blksnap);
-	if (likely(flt))
-		return container_of(flt, struct tracker, flt);
-
-	return NULL;
+	if (IS_ERR(flt))
+		return ERR_PTR(PTR_ERR(flt));
+	if (!flt)
+		return NULL;
+	return container_of(flt, struct tracker, flt);
 }
 
 #ifdef HAVE_LP_FILTER
@@ -240,11 +241,9 @@ static int tracker_filter_attach(struct block_device *bdev,
 	}
 #endif
 
-	if (ret) {
+	if (ret)
 		pr_err("Failed to attach tracker to device [%u:%u]\n",
 		       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-		tracker_put(tracker);
-	}
 
 	return ret;
 }
@@ -456,12 +455,19 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_err("Cannot open device [%u:%u]\n", MAJOR(dev_id),
+		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
 		return ERR_PTR(PTR_ERR(bdev));
 	}
 
 	tracker = tracker_get_by_dev(bdev);
+	if (IS_ERR(tracker)) {
+		int err = PTR_ERR(tracker);
+
+		pr_err("Cannot get tracker for device [%u:%u]. errno=%d\n",
+			 MAJOR(dev_id), MINOR(dev_id), abs(err));
+		goto put_bdev;
+	}
 	if (tracker) {
 		pr_debug("Device [%u:%u] is already under tracking\n",
 			 MAJOR(dev_id), MINOR(dev_id));
@@ -481,14 +487,14 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 
 	tracker = tracker_new(bdev);
 	if (IS_ERR(tracker)) {
-		pr_err("Failed to create tracker. errno=%d\n",
-		       abs((int)PTR_ERR(tracker)));
+		int err = PTR_ERR(tracker);
+
+		pr_err("Failed to create tracker. errno=%d\n", abs(err));
 		kfree(tr_dev);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
 #endif
 	} else {
-		tracker_get(tracker);
 		spin_lock(&tracked_device_lock);
 		list_add_tail(&tr_dev->link, &tracked_device_list);
 		spin_unlock(&tracked_device_lock);
@@ -509,7 +515,7 @@ int tracker_remove(dev_t dev_id)
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_err("Cannot open device [%u:%u]\n", MAJOR(dev_id),
+		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
 #ifdef HAVE_LP_FILTER
 		return lp_bdev_filter_detach(dev_id, KBUILD_MODNAME, bdev_filter_alt_blksnap);
@@ -519,10 +525,17 @@ int tracker_remove(dev_t dev_id)
 	}
 
 	tracker = tracker_get_by_dev(bdev);
+	if (IS_ERR(tracker)) {
+		ret = PTR_ERR(tracker);
+
+		pr_err("Failed to get tracker for device [%u:%u]. errno=%d\n",
+			 MAJOR(dev_id), MINOR(dev_id), abs(ret));
+		goto put_bdev;
+	}
 	if (!tracker) {
-		pr_err("Unable to remove device [%u:%u] from tracking: ",
+		pr_info("Unable to remove device [%u:%u] from tracking: ",
 		       MAJOR(dev_id), MINOR(dev_id));
-		pr_err("tracker not found\n");
+		pr_info("tracker not found\n");
 		ret = -ENODATA;
 		goto put_bdev;
 	}
@@ -574,31 +587,36 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
-		pr_err("Cannot open device [%u:%u]\n", MAJOR(dev_id),
+		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
 		return PTR_ERR(bdev);
 	}
 
 	tracker = tracker_get_by_dev(bdev);
+	if (IS_ERR(tracker)) {
+		pr_err("Cannot get tracker for device [%u:%u]\n",
+			 MAJOR(dev_id), MINOR(dev_id));
+		ret = PTR_ERR(tracker);
+		goto put_bdev;
+	}
 	if (!tracker) {
-		pr_err("Unable to read CBT bitmap for device [%u:%u]: ",
+		pr_info("Unable to read CBT bitmap for device [%u:%u]: ",
 		       MAJOR(dev_id), MINOR(dev_id));
-		pr_err("tracker not found\n");
+		pr_info("tracker not found\n");
 		ret = -ENODATA;
 		goto put_bdev;
 	}
 
-	if (!atomic_read(&tracker->snapshot_is_taken)) {
+	if (atomic_read(&tracker->snapshot_is_taken)) {
+		ret = cbt_map_read_to_user(tracker->cbt_map, user_buff,
+					   offset, length);
+	} else {
 		pr_err("Unable to read CBT bitmap for device [%u:%u]: ",
 		       MAJOR(dev_id), MINOR(dev_id));
 		pr_err("device is not captured by snapshot\n");
 		ret = -EPERM;
-		goto put_tracker;
 	}
 
-	ret = cbt_map_read_to_user(tracker->cbt_map, user_buff, offset, length);
-
-put_tracker:
 	tracker_put(tracker);
 put_bdev:
 	blkdev_put(bdev, 0);
@@ -619,10 +637,11 @@ static inline void collect_cbt_info(dev_t dev_id,
 	}
 
 	tracker = tracker_get_by_dev(bdev);
-	if (!tracker)
+	if (IS_ERR_OR_NULL(tracker))
 		goto put_bdev;
 	if (!tracker->cbt_map)
 		goto put_tracker;
+
 	cbt_info->device_capacity =
 		(__u64)(tracker->cbt_map->device_capacity << SECTOR_SHIFT);
 	cbt_info->blk_size = (__u32)cbt_map_blk_size(tracker->cbt_map);
@@ -700,9 +719,15 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 		 MAJOR(dev_id), MINOR(dev_id));
 
 	tracker = tracker_get_by_dev(bdev);
+	if (IS_ERR(tracker)) {
+		pr_err("Failed to get tracker for device [%u:%u]\n",
+		       MAJOR(dev_id), MINOR(dev_id));
+		ret = PTR_ERR(tracker);
+		goto put_bdev;
+	}
 	if (!tracker) {
-		pr_err("Cannot find device [%u:%u]\n", MAJOR(dev_id),
-		       MINOR(dev_id));
+		pr_err("Cannot find tracker for device [%u:%u]\n",
+		       MAJOR(dev_id), MINOR(dev_id));
 		ret = -ENODEV;
 		goto put_bdev;
 	}
