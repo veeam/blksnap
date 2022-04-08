@@ -1,12 +1,8 @@
 # blksnap - module for snapshots of block devices
 
 ## Introduction
-There is no novelty in the idea of snapshots for block devices. Even the Linux kernel already has mechanisms for creating snapshots of block devices.
-First of all, this is Device Mapper, which allows you to create persistent and non-persistent snapshots of block devices.
-There are file systems that support snapshots, such as BTRFS. There are others, but they all have their own features.
-These features do not allow them to be used as a universal tool for creating backups.
-That is why different backup vendors offer their own kernel modules for creating snapshots.
-Unfortunately, none of these modules meet the upstream requirements of the Linux kernel.
+There is no novelty in the idea of snapshots for block devices. Even the Linux kernel already has mechanisms for creating snapshots of block devices. First of all, this is Device Mapper, which allows you to create persistent and non-persistent snapshots of block devices. There are file systems that support snapshots, such as BTRFS. There are others, but they all have their own features. These features do not allow them to be used as a universal tool for creating backups. That is why different backup vendors offer their own kernel modules for creating snapshots. Unfortunately, none of these modules meet the upstream requirements of the Linux kernel.
+
 The blksnap module was created precisely for the purpose of offering it to the upstream. It provides the creation of non-persistent snapshots on most modern systems without the requirement to change their configuration.
 
 ## Features of the blksnap module
@@ -22,19 +18,16 @@ The snapshot is created specifically for the block device, and not for the state
 
 The listed set of features allows to use it for the purposes of backup and replication of the entire contents of the disk subsystem as a whole. As a result, restoring the system from a backup is much easier.
 
-In addition to the kernel module itself, a set of related software has been developed under the GPL and LGPL licenses.
-The console tool and the C++ library for module management can be used for integration with other projects.
-The test suite will allow regression testing after module changes, after bug fixes, or after adding new features.
-The developed documentation is designed to make the study of the module more comfortable.
+In addition to the kernel module itself, a set of related software has been developed under the GPL and LGPL licenses. The console tool and the C++ library for module management can be used for integration with other projects. The test suite will allow regression testing after module changes, after bug fixes, or after adding new features. The developed documentation is designed to make the study of the module more comfortable.
 
-## Как это работает
+## How it works
 
-## Алгоритм перехвата запроса ввода/вывода
+## I/O request handling algorithm
 
-## Алгоритм трекера изменений
+## Change tracker algorithm
 
-## Алгоритм добавления областей для храниения изменений
+## Algorithm for adding storages for storing difference
 
-## Как этим пользоваться
+## How to use it
 
-## Что дальше
+## What's next
