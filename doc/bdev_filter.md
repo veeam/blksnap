@@ -9,23 +9,23 @@ The kernel's support for block device filters will allow to return the ability t
 
 ## How it works
 The block device filter is added at the top of the block layer.
-
+```
  +-------------+ +-------------+
  | File System | |  Direct I/O |
  +-------------+ +-------------+
-        ||             ||
-        \/             \/
+       ||              ||
+       \/              \/
  +-----------------------------+
  |   | Block Device Filter|    |
  |   +--------------------+    |
  |         Block layer         |
  +-----------------------------+
-	||  ||  ...  ||
-	\/  \/       \/
+        ||  ||  ...  ||
+        \/  \/       \/
        +------+   +------+
        | Disk |   | Disk |
        +------+   +------+
-
+```
 Requests sent to the block layer are handled by filters and processed.
 The filter can pass the request for further execution, skip processing the request, or redirect the request to another device.
 In some cases, the filter cannot immediately process the request, in which case it requires repeated processing.
