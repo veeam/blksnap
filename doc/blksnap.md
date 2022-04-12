@@ -21,12 +21,21 @@ The listed set of features allows to use it for the purposes of backup and repli
 In addition to the kernel module itself, a set of related software has been developed under the GPL and LGPL licenses. The console tool and the C++ library for module management can be used for integration with other projects. The test suite will allow regression testing after module changes, after bug fixes, or after adding new features. The developed documentation is designed to make the study of the module more comfortable.
 
 ## How it works
+The blksnap module is a block layer filter. It handles all write I/O requests.
+The filter is attached to the block device when the snapshot is created for the first time.
+The change tracker marks all overwritten blocks. When creating a snapshot, information about the history of changes on the block device is available.
+The module reads the blocks that need to be overwritten and stores them in the change store. When reading from a snapshot image, reading is performed either from the original device or from the change store.
 
-## I/O request handling algorithm
+### Change tracking
+A change tracker map is created for each block device. One byte of this map corresponds to one block. The block size is set by the module configuration parameters: tracking_block_minimum_shift and tracking_block_maximum_count. The default values for these parameters are determined by the module configuration declarations: CONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT and CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT. The size of the change tracker block is determined depending on the size of the block device when adding a tracking device, that is, when the snapshot is taken for the first time. The block size may need to be a multiple of the power of two. The tracking_block_minimum_shift parameter limits the minimum block size for tracking, while tracking_block_maximum_count defines the maximum allowed number of blocks.
 
-## Change tracker algorithm
+The byte of the change tracking map stores a number from 0 to 255. This is the snapshot number, since the removal of which there have been changes in the block. Each time a snapshot is taken, the number of the current snapshot increases by one. This number is written to the cell of the change tracking map when writing to the block. Thus, knowing the number of one of the previous snapshots and the number of the last one, we can determine from the change tracking map which blocks have been changed. When the number of the current change has reached the maximum allowable value for the map of 255, when creating the next snapshot, the change tracking map is reset to zero, and the number of the current snapshot is assigned the value 1. The tracker of changes is reset and a new UUID is generated - a unique identifier of the generation of snapshots. The snapshot generation identifier allows to identify that a change tracking reset has been performed.
 
-## Algorithm for adding storages for storing difference
+The change map has two copies. One is active, and tracks the current changes on the block device. The second one is available for reading while the snapshot is being held, and contains the history until the snapshot is taken. Copies are synchronized at the moment of taking a snapshot. After the snapshot is released, a second copy of the map is not needed, but it is not released, so as not to allocate memory for it again the next time the snapshot is created.
+
+### Copy-On-Write
+
+### Storing difference
 
 ## How to use it
 
