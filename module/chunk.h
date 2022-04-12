@@ -96,9 +96,6 @@ struct chunk {
 	struct diff_io *diff_io;
 };
 
-unsigned long long
-chunk_calculate_optimal_size_shift(struct block_device *bdev);
-
 static inline void chunk_state_set(struct chunk *chunk, int st)
 {
 	atomic_or(st, &chunk->state);
