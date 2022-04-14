@@ -49,8 +49,45 @@ This algorithm allows to efficiently perform backups of systems with Round Robin
 
 But there is also a drawback. Since when overwriting at least one sector, an entire chunk is copied, then a situation of rapid filling of the difference storage when writing data to a block device in small portions in random order is possible. This situation is possible with a strong fragmentation of the file system. At the same time, the performance of the machine is severely degraded even without the blksnap module. Therefore, this problem does not occur on real servers, although it can easily be created by artificial tests.
 
-### Storing difference
+### Difference storage
+Before considering how the blksnap module organizes the difference storage, let's look at how things are in other similar solutions.
+
+BTRFS implements snapshots at the file system level. If the snapshot is taken, then when overwriting files, the storing is performed in new blocks. The old blocks remain and are used for the snapshot image. Therefore, when the snapshot overflows, there is no space to store new up-to-date data and the system loses its operability.
+
+Device Mapper implements snapshot support using dm-snap. It implements the logic of a snapshot of a block device. The copy-on-write algorithm is about the same as that of the blksnap module. Before overwriting the data on the original device, it is read and stored in a block device specially allocated for this purpose. In practice, this means that when taking a snapshot from several block devices, you need to have one or several an empty block devices, allocate areas on it for each device from which the snapshot is taken. The first problem is that the system may not have free disk space for storing difference. If there is free space on the disk, then the question arises: "Is there enough free disk space and how to divide it between block devices?". You can divide this space equally, or proportionally to the size. But the load on different disks is usually unevenly distributed. As a result, a snapshot overflow occurs for one of the block devices, while for the others all the reserved space may remain free. It turns out that the reserved space is used suboptimally.
+
+The difference storage of the blksnap module does not have the listed disadvantages.
+1. Copying when writing differences to the storage saves the old data needed for snapshot images. Therefore, when the snapshot is overflowing, the snapshot images become inconsistent, the backup process fails, but the system remains operational without data loss.
+2. The difference storage is common to all block devices in snapshot. There is no need to distribute the difference storage area between block devices.
+3. The difference storage is a pool of disk space areas on different block devices. That is, the load of storing changes can be distributed.
+4. There is no need to allocate a large disk space immediately before taking a snapshot. Even while the snapshot is being held, the difference storage can be expanded.
+
+Thanks to the listed features of the blksnap module difference storage, we do not need to allocate free disk space in advance. It is enough to have free space on the file system. Areas of disk space can be allocated using fallocate(). Unfortunately, not all file systems support this system call, but the most common XFS and EXT4 support it (as well as BTRFS, but conversion of virtual offsets to physical ones is required). When holding a snapshot, user-space process can poll its status using a special ioctl. When the free space in the difference storage runs out, the module notifies the user process about it, which can prepare a new area and transfer it to the module to expand the difference storage.
 
 ## How to use it
+Depending on the needs and the selected license, you can choose different options for managing the module:
+1. directly via ioctl;
+2. using a static C++ library;
+3. using the blksnap console tool.
+
+### Using ioctl
+The kernel module provides a header file blk_snap.h. It describes all available ioctl and structures for interacting with the module. Each ioctl and structure is documented in detail. This should be enough to understand the interface. If you think that something is missing, I suggest expanding the description in the header file.
+In addition, the libblksnap library and the blksnap tool use this interface, so in case of difficulty, you can use their source code as an example.
+
+### Static C++ library
+The library was created primarily to simplify the creation of tests in C++. This is also a good example of using the ioctl interface of the module. You can use it directly in the GPL-2+ application or make an LGPL-2+ library, with which the proprietary application will be dynamically linked.
+
+The library interface is quite simple and intuitive. There are tests that apply it. They can be an example of using the library. Therefore, I will briefly describe only the purpose of the key classes.
+* Class blksnap::CBlksnap (include/blksnap/Blksnap.h) is a thin C++ wrapper for the ioctl interface of the kernel module. Abstraction at this level may be enough for you.
+* Interface blksnap::Session (include/blksnap/Session.h) its static Create() method creates a snapshot object and holds it. The snapshot is released when this object is released. The object itself contains the implementation of the algorithm for allocating new portions for the repository of changes and processing events from the module. To work, it is enough to create a session and use the GetImageDevice() call to get the name of the snapshot image block device. It is very suitable for quickly prototyping an application.
+* The interface blksnap::ICbt (include/blksnap/Cbt.h) allows to access the change tracker data.
+* File include/blksnap/Service.h contains the function of getting the kernel module version and may contain other functionality for debugging the module.
+
+### blksnap console tool
+In accordance with the paradigm "the best documentation is code", tool contains a detailed built-in help. Calling "blksnap --help" allows to get a list of commands. When requesting "blksnap \<command name\> --help", a description of the command is output. If in your opinion this documentation is not enough, I suggest adding it to the built-in help system of the tool.
+If you still have questions about how to use the tool, then you can use tests written in bash as an example.
 
 ## What's next
+* It is necessary to ensure the operability of the module and related software on different architectures. At the moment, it is tested to work on amd64. Testing on the arm64le architecture was quite successful. A system crash was found on the ppc64le architecture. Testing on other architectures has not been performed yet.
+* For the blksnap console tool, add the ability to return data in the form of a json structure. This should facilitate integration with other programs, such as written on pythons.
+* For the blksnap console tool, it would be great to make a man page.
