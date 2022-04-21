@@ -266,18 +266,14 @@ static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio, enum b
 
 		result = flt->fops->submit_bio_cb(bio, flt);
 
-		switch (result) {
-		case bdev_filter_skip:
-		case bdev_filter_repeat:
-			*paltitude = bdev_filter_alt_end;
-			break;
-		case bdev_filter_pass:
-			*paltitude = *paltitude + 1;
-			break;
-		case bdev_filter_redirect:
+		if (result == bdev_filter_redirect)
 			*paltitude = 0;
-			break;
+		if (result != bdev_filter_pass) {
+			bdev_filter_put(flt);
+			return result;
 		}
+
+		*paltitude = *paltitude + 1;
 
 		bdev_filter_put(flt);
 		spin_lock(&ext->bd_filters_lock);
