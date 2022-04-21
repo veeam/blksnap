@@ -275,7 +275,7 @@ static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio, enum b
 			*paltitude = *paltitude + 1;
 			break;
 		case bdev_filter_redirect:
-			*paltitude = bdev_filter_alt_unidentified;
+			*paltitude = 0;
 			break;
 		}
 
@@ -312,7 +312,7 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
 	if (!current->bio_list) {
-		enum bdev_filter_altitudes altitude = bdev_filter_alt_unidentified;
+		enum bdev_filter_altitudes altitude = 0;
 		enum bdev_filter_result result;
 		struct bio_list bio_list_on_stack[2] = { };
 		struct bio *new_bio;
