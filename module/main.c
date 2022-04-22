@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>
@@ -23,7 +23,7 @@
 #define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #pragma message("Have livepatch filter")
 #endif
 #ifdef HAVE_QC_SUBMIT_BIO_NOACCT
@@ -156,7 +156,7 @@ MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
 
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 /*
  * Allow to be loaded on OpenSUSE/SLES
  */

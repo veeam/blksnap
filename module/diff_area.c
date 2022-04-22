@@ -2,7 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-area: " fmt
 #include <linux/genhd.h>
 #include <linux/slab.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>

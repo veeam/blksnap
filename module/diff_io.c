@@ -37,7 +37,7 @@ static void diff_io_notify_cb(struct work_struct *work)
 	async->notify_cb(async->ctx);
 }
 
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 void diff_io_endio(struct bio *bio)
 #else
 static void diff_io_endio(struct bio *bio)
@@ -168,7 +168,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			}
 		}
 
-#ifndef HAVE_LP_FILTER
+#ifndef STANDALONE_BDEVFILTER
 		bio_set_flag(bio, BIO_FILTERED);
 #endif
 		bio->bi_end_io = diff_io_endio;
@@ -222,7 +222,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		}
 	}
 
-#ifndef HAVE_LP_FILTER
+#ifndef STANDALONE_BDEVFILTER
 	bio_set_flag(bio, BIO_FILTERED);
 #endif
 	bio->bi_end_io = diff_io_endio;
@@ -305,7 +305,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	atomic_set(&diff_io->bio_count, 2);
 
 	// submit bio with datas
-#ifndef HAVE_LP_FILTER
+#ifndef STANDALONE_BDEVFILTER
 	bio_set_flag(bio, BIO_FILTERED);
 #endif
 	bio->bi_end_io = diff_io_endio;
@@ -337,7 +337,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	submit_bio_noacct(bio);
 
 	// submit flush bio
-#ifndef HAVE_LP_FILTER
+#ifndef STANDALONE_BDEVFILTER
 	bio_set_flag(flush_bio, BIO_FILTERED);
 #endif
 	flush_bio->bi_end_io = diff_io_endio;

@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>

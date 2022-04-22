@@ -5,7 +5,7 @@
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>

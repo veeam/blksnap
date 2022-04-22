@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>
@@ -79,7 +79,7 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 	return container_of(flt, struct tracker, flt);
 }
 
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 void diff_io_endio(struct bio *bio);
 #endif
 
@@ -93,7 +93,7 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	sector_t count;
 	unsigned int current_flag;
 
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 	/**
 	 * For the upstream version of the module, the definition of bio that
 	 * does not need to be intercepted is performed using the flag
@@ -517,7 +517,7 @@ int tracker_remove(dev_t dev_id)
 	if (IS_ERR(bdev)) {
 		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 		return lp_bdev_filter_detach(dev_id, KBUILD_MODNAME, bdev_filter_alt_blksnap);
 #else
 		return PTR_ERR(bdev);

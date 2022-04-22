@@ -4,7 +4,7 @@
 #include <linux/sched/mm.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>

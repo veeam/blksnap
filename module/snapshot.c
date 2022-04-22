@@ -2,7 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapshot: " fmt
 #include <linux/slab.h>
 #include <linux/sched/mm.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>
@@ -22,8 +22,8 @@
 #define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-#ifdef HAVE_LP_FILTER
-#include "lp_filter.h"
+#ifdef STANDALONE_BDEVFILTER
+#include "bdevfilter.h"
 #endif
 
 LIST_HEAD(snapshots);

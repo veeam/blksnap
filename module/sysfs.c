@@ -3,7 +3,7 @@
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
-#ifdef HAVE_LP_FILTER
+#ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
 #include <linux/blk_snap.h>

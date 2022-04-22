@@ -7,8 +7,8 @@
 #include <linux/blkdev.h>
 #include <linux/fs.h>
 
-#ifdef HAVE_LP_FILTER
-#include "lp_filter.h"
+#ifdef STANDALONE_BDEVFILTER
+#include "bdevfilter.h"
 #endif
 
 struct cbt_map;

@@ -7,7 +7,7 @@
 #include <linux/blkdev.h>
 #include <linux/list.h>
 
-#include "lp_filter.h"
+#include "bdevfilter.h"
 #include "version.h"
 
 struct bdev_extension {
