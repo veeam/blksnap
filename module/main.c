@@ -24,7 +24,7 @@
 #endif
 
 #ifdef STANDALONE_BDEVFILTER
-#pragma message("Have livepatch filter")
+#pragma message("Standalone bdevfilter")
 #endif
 #ifdef HAVE_QC_SUBMIT_BIO_NOACCT
 #pragma message(                                                               \

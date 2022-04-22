@@ -352,6 +352,7 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 }
 
 #ifdef CONFIG_LIVEPATCH
+#pragma message("livepatch used")
 
 static struct klp_func funcs[] = {
 	{
@@ -399,8 +400,77 @@ static void __exit lp_filter_done(void)
 module_init(lp_filter_init);
 module_exit(lp_filter_done);
 MODULE_INFO(livepatch, "Y");
+
+#elif defined(CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS)
+#pragma message("ftrace filter used")
+
+#ifdef HAVE_FTRACE_REGS
+static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
+			struct ftrace_ops *fops,
+			struct ftrace_regs *fregs)
+{
+	ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
+}
 #else
-#error "CONFIG_LIVEPATCH needed."
+static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
+			struct ftrace_ops *fops,
+			struct pt_regs *regs)
+{
+	regs->ip = (unsigned long)submit_bio_noacct_handler;
+}
+#endif
+
+unsigned char* funcname_submit_bio_noacct = "submit_bio_noacct";
+static struct ftrace_ops ops_submit_bio_noacct = {
+	.func = ftrace_handler_submit_bio_noacct,
+	.flags = FTRACE_OPS_FL_DYNAMIC |
+#ifndef CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS
+		FTRACE_OPS_FL_SAVE_REGS |
+#endif
+		FTRACE_OPS_FL_IPMODIFY |
+		FTRACE_OPS_FL_PERMANENT,
+};
+
+static int __init trace_filter_init(void)
+{
+	int ret = 0;
+
+	ret = ftrace_set_filter(&ops_submit_bio_noacct, funcname_submit_bio_noacct, strlen(funcname_submit_bio_noacct), 0);
+	if (ret) {
+		pr_err("Failed to set ftrace filter for function '%s' (%d)\n", funcname_submit_bio_noacct, ret);
+		goto err;
+	}
+
+	ret = register_ftrace_function(&ops_submit_bio_noacct);
+	if (ret) {
+		pr_err("Failed to register ftrace handler (%d)\n", ret);
+		ftrace_set_filter(&ops_submit_bio_noacct, NULL, 0, 1);
+		goto err;
+	}
+
+err:
+	return ret;
+}
+
+static void __exit trace_filter_done(void)
+{
+	struct bdev_extension *ext;
+
+	unregister_ftrace_function(&ops_submit_bio_noacct);
+
+	spin_lock(&bdev_extension_list_lock);
+	while ((ext = list_first_entry_or_null(&bdev_extension_list,
+					       struct bdev_extension, link))) {
+		list_del(&ext->link);
+		kfree(ext);
+	}
+	spin_unlock(&bdev_extension_list_lock);
+}
+
+module_init(trace_filter_init);
+module_exit(trace_filter_done);
+#else
+#error "The bdevfilter cannot be used for the current kernels configuration"
 #endif
 
 MODULE_DESCRIPTION("Block Device Filter kernel module");

@@ -3,4 +3,8 @@
 
 EXTRA_CFLAGS += "-DSTANDALONE_BDEVFILTER"
 
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "struct ftrace_regs" $(srctree)/include/linux/ftrace.h	&&	\
+		echo -DHAVE_FTRACE_REGS)
+
 obj-m	 += bdevfilter.o
