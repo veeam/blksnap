@@ -351,6 +351,8 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 }
 
+#ifdef CONFIG_LIVEPATCH
+
 static struct klp_func funcs[] = {
 	{
 		.old_name = "submit_bio_noacct",
@@ -394,14 +396,16 @@ static void __exit lp_filter_done(void)
 		kfree(ext);
 	}
 }
-
 module_init(lp_filter_init);
 module_exit(lp_filter_done);
+MODULE_INFO(livepatch, "Y");
+#else
+#error "CONFIG_LIVEPATCH needed."
+#endif
 
 MODULE_DESCRIPTION("Block Device Filter kernel module");
 MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
-MODULE_INFO(livepatch, "Y");
 /* Allow to be loaded on OpenSUSE/SLES */
 MODULE_INFO(supported, "external");
