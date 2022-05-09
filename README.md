@@ -18,8 +18,15 @@ is concentrated in blksnap. The upstream variant does not contain a bdevfilter,
 but accesses the kernel to attach and detach the block device filter.
 
 ### How to build
+Installing the necessary deb packages.
 ``` bash
-sudo apt install gcc g++ cmake linux-headers
+sudo apt install gcc linux-headers
+```
+Or installing the necessary rpm packages.
+``` bash
+sudo yum install gcc kernel-devel
+```
+``` bash
 cd ./mobule
 mk.sh build
 ```
@@ -46,14 +53,23 @@ The program allows to execute individual ioctls of the blksnap module.
 The interface of the program may seem inconvenient to the user,
 since it is assumed that it will be called by other applications.
 ### How to build
+Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-all-dev libssl-dev
+sudo apt install g++ cmake uuid-dev libboost-all-dev
+```
+Or installing the necessary rpm packages.
+``` bash
+sudo yum install g++ cmake libuuid-devel boost-static libstdc++-static
+```
+Build.
+``` bash
 cd ./tools/blksnap
 mkdir bin
 cd bin
 cmake ..
 make
 ```
+
 ### How to create deb package
 ``` bash
 sudo apt install debhelper
@@ -68,8 +84,16 @@ But to demonstrate how to call the ioctl, a static c++ library was created.
 The library can also help you quickly create a working prototype.
 In the project, the library is used for tests.
 ### How to build
+Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-all-dev libssl-dev
+sudo apt install g++ cmake uuid-dev libboost-all-dev
+```
+Or installing the necessary rpm packages.
+``` bash
+sudo yum install g++ cmake libuuid-devel boost-static libstdc++-static
+```
+Build.
+``` bash
 cd ./lib/blksnap
 mkdir bin
 cd bin
@@ -90,8 +114,16 @@ the module. To implement complex test algorithms, С++ tests are implemented.
 C++ tests use the static library libblksnap.a and it must be compiled to
 build С++ tests.
 ### How to build
+Installing the necessary deb packages.
 ``` bash
 sudo apt install g++ cmake uuid-dev libboost-all-dev libssl-dev
+```
+Or installing the necessary rpm packages.
+``` bash
+sudo yum install g++ cmake libuuid-devel boost-static libstdc++-static openssl-static
+```
+Build.
+``` bash
 cd ./tests/cpp
 mkdir bin
 cd bin
