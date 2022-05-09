@@ -9,9 +9,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
 set(Boost_USE_STATIC_LIBS ON)
 FIND_PACKAGE( Boost COMPONENTS program_options filesystem REQUIRED)
 
-find_library(LIBUUID_LIBRARY libuuid.a REQUIRED)
+FIND_LIBRARY(LIBUUID_LIBRARY libuuid.so REQUIRED)
 if (NOT LIBUUID_LIBRARY)
-    message(FATAL_ERROR "libuuid not found. please install uuid-dev package.")
+    message(FATAL_ERROR "libuuid not found. please install uuid-dev or libuuid-devel package.")
 endif ()
 
 include_directories(${CMAKE_SOURCE_DIR}/../../include)
