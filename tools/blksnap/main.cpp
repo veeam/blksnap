@@ -143,7 +143,7 @@ namespace
             {
                 ret = errno;
                 errMessage = "Failed to call FS_IOC_FIEMAP.";
-                goto fail;
+                goto out;
             }
 
             for (int i = 0; i < map->fm_mapped_extents; ++i)
@@ -155,7 +155,7 @@ namespace
                 {
                     ret = EINVAL;
                     errMessage = "File location is not ordered by sector size.";
-                    goto fail;
+                    goto out;
                 }
 
                 rg.sector_offset = extent->fe_physical >> SECTOR_SHIFT;
@@ -168,15 +168,13 @@ namespace
             }
         }
 
-        ::close(fd);
-        return;
-
-    fail:
+    out:
         if (map)
             ::free(map);
         if (fd >= 0)
             ::close(fd);
-        throw std::system_error(ret, std::generic_category(), errMessage);
+        if (ret)
+            throw std::system_error(ret, std::generic_category(), errMessage);
     }
 } // namespace
 
