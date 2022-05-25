@@ -121,7 +121,7 @@ namespace
         {
             ret = errno;
             errMessage = "Failed to open file.";
-            goto fail;
+            goto out;
         }
 
         map = (struct fiemap*)::malloc(sizeof(struct fiemap) + sizeof(struct fiemap_extent) * extentMax);
@@ -129,7 +129,7 @@ namespace
         {
             ret = ENOMEM;
             errMessage = "Failed to allocate memory for fiemap structure.";
-            goto fail;
+            goto out;
         }
 
         for (long long fileOffset = 0; fileOffset < fileSize;)
