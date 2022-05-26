@@ -3,21 +3,12 @@
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
-#ifdef STANDALONE_BDEVFILTER
-#include "blk_snap.h"
-#else
 #include <linux/blk_snap.h>
-#endif
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
 #include "sysfs.h"
 #include "ctrl.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
 
 static ssize_t major_show(struct class *class, struct class_attribute *attr,
 			  char *buf)

@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
-#ifdef STANDALONE_BDEVFILTER
-#include "blk_snap.h"
-#else
 #include <linux/blk_snap.h>
-#endif
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
@@ -17,43 +13,6 @@
 #include "snapshot.h"
 #include "tracker.h"
 #include "diff_io.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
-#ifdef STANDALONE_BDEVFILTER
-#pragma message("Standalone bdevfilter")
-#endif
-#ifdef HAVE_QC_SUBMIT_BIO_NOACCT
-#pragma message(                                                               \
-	"The blk_qc_t submit_bio_noacct(struct bio *) function was found.")
-#endif
-#ifdef HAVE_VOID_SUBMIT_BIO_NOACCT
-#pragma message("The void submit_bio_noacct(struct bio *) function was found.")
-#endif
-#ifdef HAVE_SUPER_BLOCK_FREEZE
-#pragma message("The freeze_bdev() and thaw_bdev() have struct super_block.")
-#endif
-#ifdef HAVE_BI_BDEV
-#pragma message("The struct bio have pointer to struct block_device.")
-#endif
-#ifdef HAVE_BI_BDISK
-#pragma message("The struct bio have pointer to struct gendisk.")
-#endif
-#ifdef HAVE_BDEV_NR_SECTORS
-#pragma message("The bdev_nr_sectors() function was found.")
-#endif
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-#pragma message("The blk_mq_alloc_disk() function was found.")
-#endif
-#ifdef HAVE_BIO_MAX_PAGES
-#pragma message("The BIO_MAX_PAGES define was found.")
-#endif
-#ifdef HAVE_ADD_DISK_RESULT
-#pragma message("The function add_disk() has a return code.")
-#endif
 
 static int __init blk_snap_init(void)
 {
@@ -104,13 +63,6 @@ static void __exit blk_snap_exit(void)
 	snapimage_done();
 	tracker_done();
 
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	{
-		int not_free = memory_object_print();
-
-		WARN(not_free, "Several objects [%d] were not released", not_free);
-	}
-#endif
 	pr_info("Module was unloaded\n");
 }
 
@@ -155,10 +107,3 @@ MODULE_DESCRIPTION("Block Layer Snapshot Kernel Module");
 MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
-
-#ifdef STANDALONE_BDEVFILTER
-/*
- * Allow to be loaded on OpenSUSE/SLES
- */
-MODULE_INFO(supported, "external");
-#endif

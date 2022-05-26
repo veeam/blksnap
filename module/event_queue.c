@@ -7,11 +7,6 @@
 #endif
 #include "event_queue.h"
 
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 void event_queue_init(struct event_queue *event_queue)
 {
 	INIT_LIST_HEAD(&event_queue->list);

@@ -5,11 +5,6 @@
 #include <linux/module.h>
 #include "memory_checker.h"
 
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
 char *memory_object_names[] = {
 	/*alloc_page*/
 	"page",

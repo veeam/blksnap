@@ -4,11 +4,7 @@
 #include <linux/sched/mm.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-#ifdef STANDALONE_BDEVFILTER
-#include "blk_snap.h"
-#else
 #include <linux/blk_snap.h>
-#endif
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
 #endif
@@ -17,11 +13,6 @@
 #include "diff_io.h"
 #include "diff_buffer.h"
 #include "diff_storage.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#endif
 
 /**
  * struct storage_bdev - Information about the opened block device.
@@ -212,15 +203,8 @@ static inline int diff_storage_add_range(struct diff_storage *diff_storage,
 
 	spin_lock(&diff_storage->lock);
 	list_add_tail(&storage_block->link, &diff_storage->empty_blocks);
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	atomic_inc(&diff_storage->free_block_count);
-#endif
 	diff_storage->capacity += count;
 	spin_unlock(&diff_storage->lock);
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	pr_debug("free storage blocks %d\n",
-		 atomic_read(&diff_storage->free_block_count));
-#endif
 
 	return 0;
 }
@@ -306,10 +290,6 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 		list_del(&storage_block->link);
 		list_add_tail(&storage_block->link,
 			      &diff_storage->filled_blocks);
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-		atomic_dec(&diff_storage->free_block_count);
-		atomic_inc(&diff_storage->user_block_count);
-#endif
 		/*
 		 * If there is still free space in the storage block, but
 		 * it is not enough to store a piece, then such a block is
@@ -321,13 +301,6 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 	} while (1);
 	sectors_left = diff_storage->requested - diff_storage->filled;
 	spin_unlock(&diff_storage->lock);
-
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	pr_debug("free storage blocks %d\n",
-		 atomic_read(&diff_storage->free_block_count));
-	pr_debug("user storage blocks %d\n",
-		 atomic_read(&diff_storage->user_block_count));
-#endif
 
 	if (ret) {
 		pr_err("Cannot get empty storage block\n");
