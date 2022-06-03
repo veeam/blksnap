@@ -54,7 +54,12 @@
 #ifdef HAVE_ADD_DISK_RESULT
 #pragma message("The function add_disk() has a return code.")
 #endif
-
+#ifdef HAVE_GENHD_H
+#pragma message("The header file 'genhd.h' was found.")
+#endif
+#ifdef HAVE_BDEV_BIO_ALLOC
+#pragma message("The function bio_alloc_bioset() has a parameter bdev.")
+#endif
 static int __init blk_snap_init(void)
 {
 	int result;

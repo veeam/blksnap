@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #pragma once
 #include <linux/blk_types.h>
+#ifdef HAVE_GENHD_H
+#include <linux/genhd.h>
+#endif
 #include <linux/blkdev.h>
 #include <linux/blk-mq.h>
-#include <linux/genhd.h>
 #include <linux/kthread.h>
 
 struct diff_area;

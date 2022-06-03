@@ -3,7 +3,9 @@
 #include <linux/module.h>
 #include <linux/livepatch.h>
 #include <linux/bio.h>
+#ifdef HAVE_GENHD_H
 #include <linux/genhd.h>
+#endif
 #include <linux/blkdev.h>
 #include <linux/list.h>
 
