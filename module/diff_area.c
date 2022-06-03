@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-area: " fmt
-#include <linux/genhd.h>
+#include <linux/blkdev.h>
 #include <linux/slab.h>
 #include <linux/blk_snap.h>
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK

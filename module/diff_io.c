@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-io: " fmt
-#include <linux/genhd.h>
+#include <linux/blkdev.h>
 #include <linux/slab.h>
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
@@ -114,6 +114,8 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	struct bio *bio = NULL;
 	struct bio *flush_bio = NULL;
 	struct page **current_page_ptr;
+	unsigned int opf;
+	gfp_t gfp;
 	unsigned short nr_iovecs;
 	sector_t processed = 0;
 
@@ -130,46 +132,39 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		goto fail;
 	}
 
-	// Allocate both bio
-	if (is_nowait) {
-		bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, nr_iovecs,
-				       &diff_io_bioset);
-		if (unlikely(!bio)) {
-			ret = -EAGAIN;
-			goto fail;
-		}
+	// Allocate both bios
+	opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
+	gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
 
-		flush_bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, 0,
-					     &diff_io_bioset);
-		if (unlikely(!flush_bio)) {
+	bio = bio_alloc_bioset(diff_region->bdev, nr_iovecs,
+				opf | REQ_SYNC | REQ_IDLE | REQ_FUA,
+				gfp, &diff_io_bioset);
+	if (unlikely(!bio)) {
+		if (is_nowait)
 			ret = -EAGAIN;
-			goto fail;
-		}
-	} else {
-		bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &diff_io_bioset);
-		if (unlikely(!bio)) {
+		else
 			ret = -ENOMEM;
-			goto fail;
-		}
-
-		flush_bio = bio_alloc_bioset(GFP_NOIO, 0, &diff_io_bioset);
-		if (unlikely(!flush_bio)) {
-			ret = -ENOMEM;
-			goto fail;
-		}
+		goto fail;
 	}
+
+	flush_bio = bio_alloc_bioset(diff_region->bdev, 0,
+				opf | REQ_SYNC | REQ_PREFLUSH,
+				gfp, &diff_io_bioset);
+	if (unlikely(!flush_bio)) {
+		if (is_nowait)
+			ret = -EAGAIN;
+		else
+			ret = -ENOMEM;
+		goto fail;
+	}
+
 	atomic_set(&diff_io->bio_count, 2);
 
 	// Submit bio with datas
 	bio_set_flag(bio, BIO_FILTERED);
 	bio->bi_end_io = diff_io_endio;
 	bio->bi_private = diff_io;
-	bio_set_dev(bio, diff_region->bdev);
 	bio->bi_iter.bi_sector = diff_region->sector;
-
-	bio_set_op_attrs(bio,
-			 diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ,
-			 REQ_SYNC | REQ_IDLE | REQ_FUA);
 
 	current_page_ptr = diff_buffer->pages;
 	while (processed < diff_region->count) {
@@ -194,12 +189,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	bio_set_flag(flush_bio, BIO_FILTERED);
 	flush_bio->bi_end_io = diff_io_endio;
 	flush_bio->bi_private = diff_io;
-	bio_set_dev(flush_bio, diff_region->bdev);
 	flush_bio->bi_iter.bi_sector = 0;
-
-	bio_set_op_attrs(flush_bio,
-			 diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ,
-			 REQ_SYNC | REQ_PREFLUSH);
 	submit_bio_noacct(flush_bio);
 
 	if (diff_io->is_sync_io)

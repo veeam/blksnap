@@ -3,7 +3,6 @@
 #include <linux/module.h>
 #include <linux/livepatch.h>
 #include <linux/bio.h>
-#include <linux/genhd.h>
 #include <linux/blkdev.h>
 #include <linux/list.h>
 

@@ -3,7 +3,6 @@
 #include <linux/blk_types.h>
 #include <linux/blkdev.h>
 #include <linux/blk-mq.h>
-#include <linux/genhd.h>
 #include <linux/kthread.h>
 
 struct diff_area;
