@@ -137,8 +137,8 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
 
 	bio = bio_alloc_bioset(diff_region->bdev, nr_iovecs,
-				opf | REQ_SYNC | REQ_IDLE | REQ_FUA,
-				gfp, &diff_io_bioset);
+			       opf | REQ_SYNC | REQ_IDLE | REQ_FUA,
+			       gfp, &diff_io_bioset);
 	if (unlikely(!bio)) {
 		if (is_nowait)
 			ret = -EAGAIN;
@@ -148,8 +148,8 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	}
 
 	flush_bio = bio_alloc_bioset(diff_region->bdev, 0,
-				opf | REQ_SYNC | REQ_PREFLUSH,
-				gfp, &diff_io_bioset);
+				     opf | REQ_SYNC | REQ_PREFLUSH,
+				     gfp, &diff_io_bioset);
 	if (unlikely(!flush_bio)) {
 		if (is_nowait)
 			ret = -EAGAIN;
