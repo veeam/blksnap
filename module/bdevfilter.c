@@ -130,10 +130,8 @@ int bdev_filter_attach(struct block_device *bdev, const char *name,
 	spin_lock(&ext->bd_filters_lock);
 	if (ext->bd_filters[altitude])
 		ret = -EBUSY;
-	else {
-		bdev_filter_get(flt);
+	else
 		ext->bd_filters[altitude] = flt;
-	}
 	spin_unlock(&ext->bd_filters_lock);
 
 	if (!ret)
@@ -148,7 +146,7 @@ EXPORT_SYMBOL(bdev_filter_attach);
  * Only for livepatch version
  * It is necessary for correct processing of the case when the block device
  * was removed from the system. Unlike the upstream version, we have no way
- * to handle device extraction.
+ * to handle device extension.
  */
 int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 			  const enum bdev_filter_altitudes altitude)
