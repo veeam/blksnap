@@ -22,8 +22,6 @@ struct diff_area;
  *	an ioctl.
  * @dev_id:
  *	Original block device ID.
- * @submit_lock:
- *	Provides blocking of I/O operations for a block device.
  * @snapshot_is_taken:
  *	Indicates that a snapshot was taken for the device whose bios are
  *	handled by this tracker.
@@ -48,24 +46,15 @@ struct tracker {
 	struct diff_area *diff_area;
 };
 
-static inline void tracker_lock(struct tracker *tracker)
-{
-	if (likely(tracker))
-		percpu_down_write(&tracker->submit_lock);
-};
-
-static inline void tracker_unlock(struct tracker *tracker)
-{
-	if (likely(tracker))
-		percpu_up_write(&tracker->submit_lock);
-};
+void tracker_lock(void );
+void tracker_unlock(void );
 
 static inline void tracker_put(struct tracker *tracker)
 {
 	if (likely(tracker))
 		bdev_filter_put(&tracker->flt);
-
 };
+
 struct tracker *tracker_get_by_dev(struct block_device *bdev);
 
 int tracker_init(void);
