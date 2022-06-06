@@ -68,11 +68,13 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
 	if (!ext_new)
 		return NULL;
 
+	INIT_LIST_HEAD(&ext_new->link);
 	ext_new->dev_id = bdev->bd_dev;
 #if defined(HAVE_BI_BDISK)
 	ext_new->disk = bdev->bd_disk;
 	ext_new->partno = bdev->bd_partno;
 #endif
+	spin_lock_init(&ext_new->bd_filters_lock);
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(bdev->bd_dev);
