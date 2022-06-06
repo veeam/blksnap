@@ -59,12 +59,11 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 		       const enum bdev_filter_altitudes altitude);
 static inline void bdev_filter_get(struct bdev_filter *flt)
 {
-	if (likely(flt))
-		kref_get(&flt->kref);
+	kref_get(&flt->kref);
 }
 static inline void bdev_filter_put(struct bdev_filter *flt)
 {
-	if (likely(flt && flt->fops->detach_cb))
+	if (likely(flt))
 		kref_put(&flt->kref, flt->fops->detach_cb);
 };
 

@@ -233,7 +233,8 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 
 	spin_lock(&ext->bd_filters_lock);
 	flt = ext->bd_filters[altitude];
-	bdev_filter_get(flt);
+	if (flt)
+		bdev_filter_get(flt);
 	spin_unlock(&ext->bd_filters_lock);
 
 	return flt;
