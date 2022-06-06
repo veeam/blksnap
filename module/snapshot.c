@@ -43,19 +43,15 @@ static void snapshot_release(struct snapshot *snapshot)
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 	}
 
-	pr_info("Lock trackers\n");
-	for (inx = 0; inx < snapshot->count; inx++)
-		tracker_lock(snapshot->tracker_array[inx]);
-
 	current_flag = memalloc_noio_save();
+	tracker_lock();
+
 	/* Set tracker as available for new snapshots. */
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
-	memalloc_noio_restore(current_flag);
 
-	for (inx = 0; inx < snapshot->count; inx++)
-		tracker_unlock(snapshot->tracker_array[inx]);
-	pr_info("Trackers have been unlocked\n");
+	tracker_unlock();
+	memalloc_noio_restore(current_flag);
 
 	/* Thaw fs on each original block device. */
 	for (inx = 0; inx < snapshot->count; ++inx) {
@@ -377,10 +373,8 @@ int snapshot_take(uuid_t *id)
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 	}
 
-	pr_info("Lock trackers\n");
-	for (inx = 0; inx < snapshot->count; inx++)
-		tracker_lock(snapshot->tracker_array[inx]);
 	current_flag = memalloc_noio_save();
+	tracker_lock();
 
 	/*
 	 * Take snapshot - switch CBT tables and enable COW logic
@@ -408,11 +402,8 @@ int snapshot_take(uuid_t *id)
 	} else
 		snapshot->is_taken = true;
 
+	tracker_unlock();
 	memalloc_noio_restore(current_flag);
-
-	for (inx = 0; inx < snapshot->count; inx++)
-		tracker_unlock(snapshot->tracker_array[inx]);
-	pr_info("Trackers have been unlocked\n");
 
 	/* Thaw file systems on original block devices. */
 	for (inx = 0; inx < snapshot->count; inx++) {

@@ -17,6 +17,7 @@ struct tracked_device {
 	dev_t dev_id;
 };
 
+DEFINE_PERCPU_RWSEM(tracker_submit_lock);
 LIST_HEAD(tracked_device_list);
 DEFINE_SPINLOCK(tracked_device_lock);
 static refcount_t trackers_counter = REFCOUNT_INIT(1);
@@ -28,6 +29,17 @@ struct tracker_release_worker {
 };
 static struct tracker_release_worker tracker_release_worker;
 
+void tracker_lock(void )
+{
+	pr_info("Lock trackers\n");
+	percpu_down_write(&tracker_submit_lock);
+};
+void tracker_unlock(void )
+{
+	percpu_up_write(&tracker_submit_lock);
+	pr_info("Trackers have been unlocked\n");
+};
+
 void tracker_free(struct tracker *tracker)
 {
 	might_sleep();
@@ -38,17 +50,11 @@ void tracker_free(struct tracker *tracker)
 	diff_area_put(tracker->diff_area);
 	cbt_map_put(tracker->cbt_map);
 
-	percpu_free_rwsem(&tracker->submit_lock);
 	kfree(tracker);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_tracker);
 #endif
 	refcount_dec(&trackers_counter);
-}
-
-static inline void tracker_get(struct tracker *tracker)
-{
-	bdev_filter_get(&tracker->flt);
 }
 
 struct tracker *tracker_get_by_dev(struct block_device *bdev)
@@ -74,12 +80,12 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	unsigned int current_flag;
 
 	if (bio->bi_opf & REQ_NOWAIT) {
-		if (!percpu_down_read_trylock(&tracker->submit_lock)) {
+		if (!percpu_down_read_trylock(&tracker_submit_lock)) {
 			bio_wouldblock_error(bio);
 			return bdev_filter_skip;
 		}
 	} else
-		percpu_down_read(&tracker->submit_lock);
+		percpu_down_read(&tracker_submit_lock);
 
 	if (!op_is_write(bio_op(bio)))
 		goto out;
@@ -126,7 +132,7 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	if (!bio_list_empty(current->bio_list) && (bio->bi_opf & REQ_SYNC))
 		ret = bdev_filter_repeat;
 out:
-	percpu_up_read(&tracker->submit_lock);
+	percpu_up_read(&tracker_submit_lock);
 	return ret;
 }
 
@@ -147,7 +153,7 @@ static void tracker_release_work(struct work_struct *work)
 
 		if (tracker)
 			tracker_free(tracker);
-	} while(tracker);
+	} while (tracker);
 }
 
 static void tracker_detach_cb(struct kref *kref)
@@ -252,7 +258,6 @@ static struct tracker *tracker_new(struct block_device *bdev)
 	refcount_inc(&trackers_counter);
 	bdev_filter_init(&tracker->flt, &tracker_fops);
 	INIT_LIST_HEAD(&tracker->link);
-	percpu_init_rwsem(&tracker->submit_lock);
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->dev_id = bdev->bd_dev;
 
@@ -436,6 +441,13 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		memory_object_dec(memory_object_tracked_device);
 #endif
 	} else {
+		/*
+		 * It is normal that the new trackers filter will have
+		 * a ref counter value of 2. This allows not to detach
+		 * the filter when the snapshot is released.
+		 */
+	        bdev_filter_get(&tracker->flt);
+
 		spin_lock(&tracked_device_lock);
 		list_add_tail(&tr_dev->link, &tracked_device_list);
 		spin_unlock(&tracked_device_lock);
