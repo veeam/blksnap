@@ -1,0 +1,42 @@
+From 3c35b6134d7ad657d29b33a4c16e1af59105c917 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 7 Jun 2022 14:53:20 +0200
+Subject: [PATCH 19/20] block, blksnap: Makefile
+
+Allows to build a module.
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/blksnap/Makefile | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+ create mode 100644 drivers/block/blksnap/Makefile
+
+diff --git a/drivers/block/blksnap/Makefile b/drivers/block/blksnap/Makefile
+new file mode 100644
+index 000000000000..18b6b9e8f944
+--- /dev/null
++++ b/drivers/block/blksnap/Makefile
+@@ -0,0 +1,20 @@
++# SPDX-License-Identifier: GPL-2.0
++KERNEL_MODULE_NAME := blksnap
++
++$(KERNEL_MODULE_NAME)-y += big_buffer.o
++$(KERNEL_MODULE_NAME)-y += cbt_map.o
++$(KERNEL_MODULE_NAME)-y += chunk.o
++$(KERNEL_MODULE_NAME)-y += ctrl.o
++$(KERNEL_MODULE_NAME)-y += diff_io.o
++$(KERNEL_MODULE_NAME)-y += diff_area.o
++$(KERNEL_MODULE_NAME)-y += diff_buffer.o
++$(KERNEL_MODULE_NAME)-y += diff_storage.o
++$(KERNEL_MODULE_NAME)-y += event_queue.o
++$(KERNEL_MODULE_NAME)-y += main.o
++$(KERNEL_MODULE_NAME)-y += snapimage.o
++$(KERNEL_MODULE_NAME)-y += snapshot.o
++$(KERNEL_MODULE_NAME)-y += sysfs.o
++$(KERNEL_MODULE_NAME)-y += tracker.o
++$(KERNEL_MODULE_NAME)-y += memory_checker.o
++
++obj-m	 += $(KERNEL_MODULE_NAME).o
+-- 
+2.20.1
+

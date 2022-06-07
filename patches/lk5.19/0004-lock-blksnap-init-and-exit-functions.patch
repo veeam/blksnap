@@ -1,0 +1,167 @@
+From 0c498bd7f4e0ea8d0f0fa72ebfc0c4238f32fb96 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 7 Jun 2022 14:27:37 +0200
+Subject: [PATCH 04/20] lock, blksnap: init() and exit() functions
+
+Contains callback functions for loading and unloading the module. The
+module parameters and other mandatory declarations for the kernel module
+are also defined.
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/blksnap/main.c    | 109 ++++++++++++++++++++++++++++++++
+ drivers/block/blksnap/params.h  |  10 +++
+ drivers/block/blksnap/version.h |   8 +++
+ 3 files changed, 127 insertions(+)
+ create mode 100644 drivers/block/blksnap/main.c
+ create mode 100644 drivers/block/blksnap/params.h
+ create mode 100644 drivers/block/blksnap/version.h
+
+diff --git a/drivers/block/blksnap/main.c b/drivers/block/blksnap/main.c
+new file mode 100644
+index 000000000000..9737df4e6461
+--- /dev/null
++++ b/drivers/block/blksnap/main.c
+@@ -0,0 +1,109 @@
++// SPDX-License-Identifier: GPL-2.0
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++#include <linux/module.h>
++#include <linux/blk_snap.h>
++#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
++#include "memory_checker.h"
++#endif
++#include "version.h"
++#include "params.h"
++#include "ctrl.h"
++#include "sysfs.h"
++#include "snapimage.h"
++#include "snapshot.h"
++#include "tracker.h"
++#include "diff_io.h"
++
++static int __init blk_snap_init(void)
++{
++	int result;
++
++	pr_info("Loading\n");
++	pr_debug("Version: %s\n", VERSION_STR);
++	pr_debug("tracking_block_minimum_shift: %d\n",
++		 tracking_block_minimum_shift);
++	pr_debug("tracking_block_maximum_count: %d\n",
++		 tracking_block_maximum_count);
++	pr_debug("chunk_minimum_shift: %d\n", chunk_minimum_shift);
++	pr_debug("chunk_maximum_count: %d\n", chunk_maximum_count);
++	pr_debug("chunk_maximum_in_cache: %d\n", chunk_maximum_in_cache);
++	pr_debug("free_diff_buffer_pool_size: %d\n",
++		 free_diff_buffer_pool_size);
++	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
++
++	result = diff_io_init();
++	if (result)
++		return result;
++
++	result = snapimage_init();
++	if (result)
++		return result;
++
++	result = tracker_init();
++	if (result)
++		return result;
++
++	result = ctrl_init();
++	if (result)
++		return result;
++
++	result = sysfs_init();
++	return result;
++}
++
++static void __exit blk_snap_exit(void)
++{
++	pr_info("Unloading module\n");
++
++	sysfs_done();
++	ctrl_done();
++
++	diff_io_done();
++	snapshot_done();
++	snapimage_done();
++	tracker_done();
++
++	pr_info("Module was unloaded\n");
++}
++
++module_init(blk_snap_init);
++module_exit(blk_snap_exit);
++
++int tracking_block_minimum_shift = CONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT;
++int tracking_block_maximum_count = CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT;
++int chunk_minimum_shift = CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT;
++int chunk_maximum_count = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT;
++int chunk_maximum_in_cache = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE;
++int free_diff_buffer_pool_size = CONFIG_BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE;
++int diff_storage_minimum = CONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM;
++
++module_param_named(tracking_block_minimum_shift, tracking_block_minimum_shift,
++		   int, 0644);
++MODULE_PARM_DESC(tracking_block_minimum_shift,
++		 "The power of 2 for minimum trackings block size");
++module_param_named(tracking_block_maximum_count, tracking_block_maximum_count,
++		   int, 0644);
++MODULE_PARM_DESC(tracking_block_maximum_count,
++		 "The limit of the maximum number of trackings blocks");
++module_param_named(chunk_minimum_shift, chunk_minimum_shift, int, 0644);
++MODULE_PARM_DESC(chunk_minimum_shift,
++		 "The power of 2 for minimum snapshots chunk size");
++module_param_named(chunk_maximum_count, chunk_maximum_count, int, 0644);
++MODULE_PARM_DESC(chunk_maximum_count,
++		 "The limit of the maximum number of snapshots chunks");
++module_param_named(chunk_maximum_in_cache, chunk_maximum_in_cache, int, 0644);
++MODULE_PARM_DESC(chunk_maximum_in_cache,
++		 "The limit of the maximum chunks in memory cache");
++module_param_named(free_diff_buffer_pool_size, free_diff_buffer_pool_size, int,
++		   0644);
++MODULE_PARM_DESC(free_diff_buffer_pool_size,
++		 "The maximum size of the free buffers pool");
++module_param_named(diff_storage_minimum, diff_storage_minimum, int, 0644);
++MODULE_PARM_DESC(
++	diff_storage_minimum,
++	"The minimum allowable size of the difference storage in sectors");
++
++MODULE_DESCRIPTION("Block Layer Snapshot Kernel Module");
++MODULE_VERSION(VERSION_STR);
++MODULE_AUTHOR("Veeam Software Group GmbH");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/block/blksnap/params.h b/drivers/block/blksnap/params.h
+new file mode 100644
+index 000000000000..1f8f0bd23e9f
+--- /dev/null
++++ b/drivers/block/blksnap/params.h
+@@ -0,0 +1,10 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#pragma once
++
++extern int tracking_block_minimum_shift;
++extern int tracking_block_maximum_count;
++extern int chunk_minimum_shift;
++extern int chunk_maximum_count;
++extern int chunk_maximum_in_cache;
++extern int free_diff_buffer_pool_size;
++extern int diff_storage_minimum;
+diff --git a/drivers/block/blksnap/version.h b/drivers/block/blksnap/version.h
+new file mode 100644
+index 000000000000..0d02a68f44a8
+--- /dev/null
++++ b/drivers/block/blksnap/version.h
+@@ -0,0 +1,8 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#pragma once
++
++#define VERSION_MAJOR 1
++#define VERSION_MINOR 0
++#define VERSION_REVISION 0
++#define VERSION_BUILD 0
++#define VERSION_STR "1.0.0.0"
+-- 
+2.20.1
+
