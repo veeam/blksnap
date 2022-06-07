@@ -48,7 +48,6 @@ static void diff_io_endio(struct bio *bio)
 {
 	struct diff_io *diff_io = bio->bi_private;
 
-	cant_sleep();
 	if (bio->bi_status != BLK_STS_OK)
 		diff_io->error = -EIO;
 
