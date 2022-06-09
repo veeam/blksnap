@@ -1,6 +1,6 @@
-From 3c35b6134d7ad657d29b33a4c16e1af59105c917 Mon Sep 17 00:00:00 2001
+From bf704a0b3da5f4a8eac6e446d04bc7d9ef84dea4 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:53:20 +0200
+Date: Thu, 9 Jun 2022 09:32:30 +0200
 Subject: [PATCH 19/20] block, blksnap: Makefile
 
 Allows to build a module.

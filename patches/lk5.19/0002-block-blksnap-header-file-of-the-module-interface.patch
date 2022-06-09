@@ -1,6 +1,6 @@
-From edd582fd7d4be91afea106a894c56fd025d61bab Mon Sep 17 00:00:00 2001
+From 6fabad8061c1db3c6f8685cd553fdec6ebb6207e Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:24:33 +0200
+Date: Thu, 9 Jun 2022 09:21:03 +0200
 Subject: [PATCH 02/20] block, blksnap: header file of the module interface
 
 The header file contains a set of declarations, structures and control

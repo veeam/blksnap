@@ -1,6 +1,6 @@
-From c00a9737e45f9eaf7b731206f69e321f7879abbf Mon Sep 17 00:00:00 2001
+From 13377893aba00ba2cb91993f56009e0dd5f3e9b1 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:33:06 +0200
+Date: Thu, 9 Jun 2022 09:24:02 +0200
 Subject: [PATCH 06/20] block, blksnap: attaching and detaching the filter and
  handling a bios
 

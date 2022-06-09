@@ -1,6 +1,6 @@
-From 4e447af7a8e0db9b0e4ad42abfa0f8fc68565600 Mon Sep 17 00:00:00 2001
+From 511dc1a8a630a23b47c30861381bebda6501a564 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:28:57 +0200
+Date: Thu, 9 Jun 2022 09:23:19 +0200
 Subject: [PATCH 05/20] block, blksnap: interaction with sysfs
 
 Provides creation of a class file /sys/class/blksnap and a device file

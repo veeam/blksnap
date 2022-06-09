@@ -1,6 +1,6 @@
-From 368a0d654f130c2b930fcfbd1a8c00156b56de5c Mon Sep 17 00:00:00 2001
+From 4948f6f0f26e77e2c1b44fa0a771538f685f07e8 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:36:03 +0200
+Date: Thu, 9 Jun 2022 09:28:53 +0200
 Subject: [PATCH 10/20] block, blksnap: buffer in memory for the minimum data
  storage unit
 

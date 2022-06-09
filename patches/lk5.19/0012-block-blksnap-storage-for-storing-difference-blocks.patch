@@ -1,6 +1,6 @@
-From 272f1808072fb22db473b8aa8ff6ae54e63fc767 Mon Sep 17 00:00:00 2001
+From afdb820bc89974dbb1124c0a355962450cd69da5 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:37:41 +0200
+Date: Thu, 9 Jun 2022 09:29:37 +0200
 Subject: [PATCH 12/20] block, blksnap: storage for storing difference blocks
 
 Provides management of regions of block devices available for storing

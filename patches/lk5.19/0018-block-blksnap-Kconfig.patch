@@ -1,6 +1,6 @@
-From 5044218e210564c4bd9a53e967e9ade316037b1d Mon Sep 17 00:00:00 2001
+From ddff9ec7b8cbc65149954a79ffdaf512db98f3b1 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:52:16 +0200
+Date: Thu, 9 Jun 2022 09:32:15 +0200
 Subject: [PATCH 18/20] block, blksnap: Kconfig
 
 The module configuration file allows you to set default values for

@@ -1,6 +1,6 @@
-From 05a59d6daa81d02ce5794826be2e200e4c03b6fe Mon Sep 17 00:00:00 2001
+From 27ae9c2ab9ec503d5b118ad40aae52a451cce6d2 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:41:20 +0200
+Date: Thu, 9 Jun 2022 09:30:53 +0200
 Subject: [PATCH 15/20] block, blksnap: snapshot image block device
 
 Provides the operation of block devices of snapshot images. Read and

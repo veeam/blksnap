@@ -1,6 +1,6 @@
-From b0a5ff75fd0938d1393317723728a5caeb229780 Mon Sep 17 00:00:00 2001
+From 3c0764f543637f9e9bd60e89a06247e0b5a6c214 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:26:08 +0200
+Date: Thu, 9 Jun 2022 09:21:32 +0200
 Subject: [PATCH 03/20] block, blksnap: module management interface functions
 
 Implementation of module management interface functions. At this level,

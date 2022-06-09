@@ -1,7 +1,7 @@
-From 0c498bd7f4e0ea8d0f0fa72ebfc0c4238f32fb96 Mon Sep 17 00:00:00 2001
+From 097d4ceca95728d384240fc15e98fbf60dd55e3c Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:27:37 +0200
-Subject: [PATCH 04/20] lock, blksnap: init() and exit() functions
+Date: Thu, 9 Jun 2022 09:22:55 +0200
+Subject: [PATCH 04/20] block, blksnap: init() and exit() functions
 
 Contains callback functions for loading and unloading the module. The
 module parameters and other mandatory declarations for the kernel module

@@ -1,6 +1,6 @@
-From 859a9e1f9c0d37bcb4e20c63fb201e424a006c08 Mon Sep 17 00:00:00 2001
+From 874944758a1ea0c532b8346222a3301ff2d38f0d Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:34:37 +0200
+Date: Thu, 9 Jun 2022 09:25:02 +0200
 Subject: [PATCH 08/20] block, blksnap: big buffer in the form of an array of
  pages
 

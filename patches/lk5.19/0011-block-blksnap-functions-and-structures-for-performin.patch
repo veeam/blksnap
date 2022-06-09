@@ -1,6 +1,6 @@
-From 82e8fd0f13fc708f750e21f5e078437cda4960f7 Mon Sep 17 00:00:00 2001
+From def5fa2d6cfac456f86be1cc428b7ece79605288 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@veeam.com>
-Date: Tue, 7 Jun 2022 14:37:00 +0200
+Date: Thu, 9 Jun 2022 09:29:17 +0200
 Subject: [PATCH 11/20] block, blksnap: functions and structures for performing
  block I/O operations
 
@@ -9,18 +9,18 @@ buffer of the minimum data storage block (struct diff_buffer).
 
 Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
 ---
- drivers/block/blksnap/diff_io.c | 205 ++++++++++++++++++++++++++++++++
+ drivers/block/blksnap/diff_io.c | 204 ++++++++++++++++++++++++++++++++
  drivers/block/blksnap/diff_io.h | 122 +++++++++++++++++++
- 2 files changed, 327 insertions(+)
+ 2 files changed, 326 insertions(+)
  create mode 100644 drivers/block/blksnap/diff_io.c
  create mode 100644 drivers/block/blksnap/diff_io.h
 
 diff --git a/drivers/block/blksnap/diff_io.c b/drivers/block/blksnap/diff_io.c
 new file mode 100644
-index 000000000000..075f3d6bbe74
+index 000000000000..0be179c461d9
 --- /dev/null
 +++ b/drivers/block/blksnap/diff_io.c
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,204 @@
 +// SPDX-License-Identifier: GPL-2.0
 +#define pr_fmt(fmt) KBUILD_MODNAME "-diff-io: " fmt
 +#include <linux/blkdev.h>
@@ -59,7 +59,6 @@ index 000000000000..075f3d6bbe74
 +{
 +	struct diff_io *diff_io = bio->bi_private;
 +
-+	cant_sleep();
 +	if (bio->bi_status != BLK_STS_OK)
 +		diff_io->error = -EIO;
 +
