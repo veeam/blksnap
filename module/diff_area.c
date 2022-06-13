@@ -417,7 +417,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		if (chunk_state_check(chunk, CHUNK_ST_FAILED | CHUNK_ST_DIRTY |
 						     CHUNK_ST_STORE_READY)) {
 			/*
-			 * The сhunk has already been:
+			 * The chunk has already been:
 			 * - Failed, when the snapshot is corrupted
 			 * - Overwritten in the snapshot image
 			 * - Already stored in the diff storage
