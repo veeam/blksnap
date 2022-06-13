@@ -50,18 +50,14 @@ struct diff_buffer_iter {
 #define SECTOR_IN_PAGE (1 << (PAGE_SHIFT - SECTOR_SHIFT))
 
 static inline bool diff_buffer_iter_get(struct diff_buffer *diff_buffer,
-					sector_t ofs,
+					size_t buff_offset,
 					struct diff_buffer_iter *iter)
 {
-	size_t page_inx;
-
-	if (diff_buffer->size <= (ofs << SECTOR_SHIFT))
+	if (diff_buffer->size <= buff_offset)
 		return false;
 
-	page_inx = ofs >> (PAGE_SHIFT - SECTOR_SHIFT);
-
-	iter->page = diff_buffer->pages[page_inx];
-	iter->offset = (size_t)(ofs & (SECTOR_IN_PAGE - 1)) << SECTOR_SHIFT;
+	iter->page = diff_buffer->pages[buff_offset >> PAGE_SHIFT];
+	iter->offset = (size_t)(buff_offset & (PAGE_SIZE - 1));
 	/*
 	 * The size cannot exceed the size of the page, taking into account
 	 * the offset in this page.
@@ -69,7 +65,7 @@ static inline bool diff_buffer_iter_get(struct diff_buffer *diff_buffer,
 	 * buffer.
 	 */
 	iter->bytes = min_t(size_t, (PAGE_SIZE - iter->offset),
-			    (diff_buffer->size - (ofs << SECTOR_SHIFT)));
+			    (diff_buffer->size - buff_offset));
 
 	return true;
 };

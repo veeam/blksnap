@@ -591,7 +591,7 @@ static inline sector_t diff_area_chunk_start(struct diff_area *diff_area,
 
 /**
  * diff_area_image_io - Implements copying data from the chunk to bio_vec when
- *	reading or from bio_tec to the chunk when writing.
+ *	reading or from bio_vec to the chunk when writing.
  */
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos)
@@ -604,32 +604,35 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 	while (bv_len) {
 		struct diff_buffer_iter diff_buffer_iter;
 		struct chunk *chunk;
-		sector_t buff_offset;
+		size_t buff_offset;
 
 		chunk = diff_area_image_context_get_chunk(io_ctx, *pos);
 		if (IS_ERR(chunk))
 			return BLK_STS_IOERR;
 
-		buff_offset = *pos - chunk_sector(chunk);
+		buff_offset = (size_t)(*pos - chunk_sector(chunk))
+				<< SECTOR_SHIFT;
 		while (bv_len &&
 		       diff_buffer_iter_get(chunk->diff_buffer, buff_offset,
 					    &diff_buffer_iter)) {
-			ssize_t sz;
+			size_t sz;
 
 			if (io_ctx->is_write)
 				sz = copy_page_from_iter(
 					diff_buffer_iter.page,
 					diff_buffer_iter.offset,
-					diff_buffer_iter.bytes, &iter);
+					diff_buffer_iter.bytes,
+					&iter);
 			else
-				sz = copy_page_to_iter(diff_buffer_iter.page,
-						       diff_buffer_iter.offset,
-						       diff_buffer_iter.bytes,
-						       &iter);
+				sz = copy_page_to_iter(
+					diff_buffer_iter.page,
+					diff_buffer_iter.offset,
+					diff_buffer_iter.bytes,
+					&iter);
 			if (!sz)
 				return BLK_STS_IOERR;
 
-			buff_offset += (sz >> SECTOR_SHIFT);
+			buff_offset += sz;
 			*pos += (sz >> SECTOR_SHIFT);
 			bv_len -= sz;
 		}
