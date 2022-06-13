@@ -122,6 +122,10 @@ static int snapimage_init_request(struct blk_mq_tag_set *set,
 	return 0;
 }
 
+/*
+ * Cannot fall asleep in the context of this function, as we are under
+ * rwsem lockdown.
+ */
 static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 				       const struct blk_mq_queue_data *bd)
 {
@@ -130,16 +134,11 @@ static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 	struct snapimage *snapimage = rq->q->queuedata;
 	struct snapimage_cmd *cmd = blk_mq_rq_to_pdu(rq);
 
-	/*
-	 * Cannot fall asleep in the context of this function,
-	 * as we are under rwsem lockdown.
-	 */
-
 	blk_mq_start_request(rq);
 
 	if (unlikely(!snapimage->is_ready)) {
-		blk_mq_end_request(rq, BLK_STS_IOERR);
-		return BLK_STS_IOERR;
+		blk_mq_end_request(rq, BLK_STS_NOSPC);
+		return BLK_STS_NOSPC;
 	}
 
 	if (op_is_write(req_op(rq))) {

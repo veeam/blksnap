@@ -88,6 +88,12 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	//pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->caches_lock);
+
+	/*
+	 * The locked chunk cannot be in the cache.
+	 * If the check reveals that the chunk is in the cache, then something
+	 * is wrong in the algorithm.
+	 */
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
 		 "The chunk already in the cache")) {
 		spin_unlock(&diff_area->caches_lock);
@@ -203,6 +209,12 @@ static void chunk_notify_store(void *ctx)
 		chunk_state_set(chunk, CHUNK_ST_STORE_READY);
 
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
+			/*
+			 * The chunk marked "dirty" was stored in the difference
+			 * storage. Now it is processed in the same way as any
+			 * other stored chunks.
+			 * Therefore, the "dirty" mark can be removed.
+			 */
 			chunk_state_unset(chunk, CHUNK_ST_DIRTY);
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
 			pr_debug("chunk #%ld has been stored\n", chunk->number);

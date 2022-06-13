@@ -219,20 +219,17 @@ static void diff_area_cache_release(struct diff_area *diff_area)
 	while (!diff_area_is_corrupted(diff_area) &&
 	       (chunk = diff_area_get_chunk_from_cache_and_write_lock(
 			diff_area))) {
-//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-//		pr_debug("Free buffer for chunk #%ld\n", chunk->number);
-//		pr_debug("read_cache_count=%d. chunk_maximum_in_cache=%d\n",
-//			atomic_read(&diff_area->read_cache_count),
-//			chunk_maximum_in_cache);
-//#endif
-#if 1
+		/*
+		 * There cannot be a chunk in the cache whose buffer is
+		 * not ready.
+		 */
 		if (WARN(!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY),
 			 "Cannot release empty buffer for chunk #%ld",
 			 chunk->number)) {
 			up(&chunk->lock);
 			continue;
 		}
-#endif
+
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
 			int ret;
 
@@ -471,7 +468,7 @@ fail_unlock_chunk:
 static inline void diff_area_image_put_chunk(struct chunk *chunk, bool is_write)
 {
 	if (is_write) {
-		/**
+		/*
 		 * Since the chunk was taken to perform writing,
 		 * we mark it as dirty.
 		 */
