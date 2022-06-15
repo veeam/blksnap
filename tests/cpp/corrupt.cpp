@@ -22,12 +22,14 @@ namespace fs = boost::filesystem;
 using blksnap::sector_t;
 using blksnap::SRange;
 
+int g_blksz = 512;
+
 /**
  * Fill the contents of the block device with special test data.
  */
 void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::shared_ptr<CBlockDevice>& ptrBdev)
 {
-    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(g_blksz, 1024 * 1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
@@ -50,7 +52,7 @@ void FillAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::shared
 void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::shared_ptr<CBlockDevice>& ptrBdev,
               const int seqNumber, const clock_t seqTime)
 {
-    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(g_blksz, 1024 * 1024);
     off_t sizeBdev = ptrBdev->Size();
     sector_t sector = 0;
 
@@ -73,7 +75,7 @@ void CheckAll(const std::shared_ptr<CTestSectorGenetor> ptrGen, const std::share
 void FillBlocks(const std::shared_ptr<CTestSectorGenetor>& ptrGen, const std::shared_ptr<CBlockDevice>& ptrBdev,
                 off_t offset, size_t size)
 {
-    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), size);
+    AlignedBuffer<unsigned char> portion(g_blksz, size);
 
     ptrGen->Generate(portion.Data(), size, offset >> SECTOR_SHIFT);
     ptrBdev->Write(portion.Data(), size, offset);
@@ -86,7 +88,7 @@ void FillRandomBlocks(const std::shared_ptr<CTestSectorGenetor>& ptrGen, const s
                       const int count)
 {
     off_t sizeBdev = ptrBdev->Size();
-    size_t blkszSectors = ptrBdev->BlockSize() >> SECTOR_SHIFT;
+    size_t blkszSectors = g_blksz >> SECTOR_SHIFT;
     size_t totalSize = 0;
     std::stringstream ss;
 
@@ -233,7 +235,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync);
 
     logger.Info("device size: " + std::to_string(ptrOrininal->Size()));
-    logger.Info("device block size: " + std::to_string(ptrOrininal->BlockSize()));
+    logger.Info("device block size: " + std::to_string(g_blksz));
 
     logger.Info("-- Fill original device collection by test pattern");
     FillAll(ptrGen, ptrOrininal);
@@ -293,11 +295,11 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
         }
 
         // Write first sector, like superblock
-        FillBlocks(ptrGen, ptrOrininal, 0, 4096);
+        FillBlocks(ptrGen, ptrOrininal, 0, g_blksz);
         // second chunk
-        FillBlocks(ptrGen, ptrOrininal, 1ULL << (SECTOR_SHIFT + 9), 4096);
+        FillBlocks(ptrGen, ptrOrininal, 1ULL << (SECTOR_SHIFT + 9), g_blksz * 2);
         // next chunk
-        FillBlocks(ptrGen, ptrOrininal, 2ULL << (SECTOR_SHIFT + 9), 4096);
+        FillBlocks(ptrGen, ptrOrininal, 2ULL << (SECTOR_SHIFT + 9), g_blksz * 3);
 
         std::time_t startFillRandom = std::time(nullptr);
         do
@@ -307,7 +309,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
             FillRandomBlocks(ptrGen, ptrOrininal, std::rand() / static_cast<int>((RAND_MAX + 1ull) / blocksCountMax));
 
             // Rewrite first sector again
-            FillBlocks(ptrGen, ptrOrininal, 0, 4096);
+            FillBlocks(ptrGen, ptrOrininal, 0, g_blksz);
 
             logger.Info("- Check image corruption");
 
@@ -568,7 +570,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
             logger.Info("DEBUG! write some sectors to snapshot images");
             for (const std::shared_ptr<SCheckerContext>& ptrCtx : checkerCtxs)
             {
-                AlignedBuffer<char> buf(ptrCtx->ptrBdev->BlockSize());
+                AlignedBuffer<char> buf(g_blksz);
                 memset(buf.Data(), 0, buf.Size());
                 strncpy(buf.Data(),
                         "To check the verification algorithm, we explicitly write data to the snapshot image.",
@@ -737,6 +739,9 @@ void Main(int argc, char* argv[])
     bool isSync = false;
     if (vm.count("sync"))
         isSync = true;
+
+    if (vm.count("blksz"))
+        g_blksz = vm["duration"].as<int>();
 
     int blocksCountMax = 0x1000;
     if (vm.count("blocks"))
