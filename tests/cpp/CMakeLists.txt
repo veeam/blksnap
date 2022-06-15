@@ -74,6 +74,23 @@ set_target_properties(${TEST_DIFF_STORAGE}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
 )
 
+set(BOUNDARY_SRC
+    TestSector.cpp
+    boundary.cpp
+)
+set(TEST_BOUNDARY test_boundary)
+add_executable(${TEST_BOUNDARY} ${BOUNDARY_SRC})
+target_link_libraries(${TEST_BOUNDARY} PRIVATE Helpers::Lib)
+target_link_libraries(${TEST_BOUNDARY} PRIVATE ${BLKSNAP_LIBRARY})
+target_link_libraries(${TEST_BOUNDARY} PRIVATE Boost::program_options)
+target_link_libraries(${TEST_BOUNDARY} PRIVATE Boost::filesystem )
+target_link_libraries(${TEST_BOUNDARY} PRIVATE ${LIBUUID_LIBRARY})
+target_include_directories(${TEST_BOUNDARY} PRIVATE ./)
+set_target_properties(${TEST_BOUNDARY}
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
+)
+
 set(PERFORMANCE_SRC
     performance.cpp
 )

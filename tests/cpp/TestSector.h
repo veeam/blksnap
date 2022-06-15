@@ -12,7 +12,7 @@ struct STestHeader
     blksnap::sector_t sector;
     clock_t seqTime;
 
-    static void Set(STestHeader* header, int inSeqNumber, blksnap::sector_t inSector);
+    void Init(int inSeqNumber, blksnap::sector_t inSector, const clock_t inSeqTime);
 };
 
 struct STestSector
@@ -48,7 +48,8 @@ public:
     };
 
     void Generate(unsigned char* buffer, size_t size, blksnap::sector_t sector);
-    void Check(unsigned char* buffer, size_t size, blksnap::sector_t sector, const int seqNumber, const clock_t seqTime);
+    void Generate(unsigned char* buffer, size_t size, blksnap::sector_t sector, clock_t seqTime);
+    void Check(unsigned char* buffer, size_t size, blksnap::sector_t sector, const int seqNumber, const clock_t seqTime, const bool isStrictly = false);
 
 
     inline int Fails()

@@ -10,48 +10,49 @@ using blksnap::SRange;
 
 const char* testHeadMagic = "testhead";
 
-void STestHeader::Set(STestHeader* header, int inSeqNumber, sector_t inSector)
+void STestHeader::Init(const int inSeqNumber, const sector_t inSector, const clock_t inSeqTime)
 {
-    header->seqNumber = inSeqNumber;
-    header->sector = inSector;
-    header->seqTime = std::clock();
-    memcpy(header->head, testHeadMagic, 8);
+    memcpy(head, testHeadMagic, 8);
+    crc = 0xDEC032CC;
+    seqNumber = inSeqNumber;
+    sector = inSector;
+    seqTime = inSeqTime;
 };
 
-void CTestSectorGenetor::Generate(unsigned char* buffer, size_t size, sector_t sector)
+void CTestSectorGenetor::Generate(unsigned char* buffer, size_t size, sector_t sector, const clock_t seqTime)
 {
     for (size_t offset = 0; offset < size; offset += SECTOR_SIZE)
     {
-        STestSector* current = (STestSector*)(buffer + offset);
+        STestSector* t = (STestSector*)(buffer + offset);
 
-        STestHeader* header = &current->header;
-        STestHeader::Set(header, m_seqNumber, sector);
+        t->header.Init(m_seqNumber, sector, seqTime);
 
-        CRandomHelper::GenerateBuffer(current->body, sizeof(current->body));
-        // GenerateBuffer(current->body, sizeof(current->body), header);
+        CRandomHelper::GenerateBuffer(t->body, sizeof(t->body));
 
         if (m_useCrc32)
         {
             boost::crc_32_type calc;
             calc.process_bytes(buffer + offset + offsetof(STestHeader, seqNumber),
                                SECTOR_SIZE - offsetof(STestHeader, seqNumber));
-            header->crc = calc.checksum();
+            t->header.crc = calc.checksum();
         }
-        else
-            header->crc = 0xDEC032CC;
 
         sector++;
     }
 }
 
-void CTestSectorGenetor::Check(unsigned char* buffer, size_t size, sector_t sector, const int seqNumber, const clock_t seqTime)
+void CTestSectorGenetor::Generate(unsigned char* buffer, size_t size, sector_t sector)
+{
+    CTestSectorGenetor::Generate(buffer, size, sector, std::clock());
+}
+
+void CTestSectorGenetor::Check(unsigned char* buffer, size_t size, sector_t sector, const int seqNumber, const clock_t seqTime, bool isStrictly/*=false*/)
 {
     for (size_t offset = 0; offset < size; offset += SECTOR_SIZE)
     {
-        struct STestSector* current = (STestSector*)buffer;
-        STestHeader* header = &current->header;
-        int crc;
+        struct STestSector* t = (STestSector*)buffer;
 
+        int crc = 0xDEC032CC;
         if (m_useCrc32)
         {
             boost::crc_32_type calc;
@@ -59,13 +60,11 @@ void CTestSectorGenetor::Check(unsigned char* buffer, size_t size, sector_t sect
                                SECTOR_SIZE - offsetof(STestHeader, seqNumber));
             crc = calc.checksum();
         }
-        else
-            crc = 0xDEC032CC;
 
-        bool isCorrupted = (crc != header->crc);
-        bool isIncorrect = (sector != header->sector);
-        bool isInvalidSeqNumber = (header->seqNumber > seqNumber);
-        bool isInvalidSeqTime = (header->seqTime > seqTime);
+        bool isCorrupted = (crc != t->header.crc);
+        bool isIncorrect = (sector != t->header.sector);
+        bool isInvalidSeqNumber = isStrictly ? (t->header.seqNumber != seqNumber) : (t->header.seqNumber > seqNumber);
+        bool isInvalidSeqTime = isStrictly ? (t->header.seqTime != seqTime) : (t->header.seqTime > seqTime);
 
         if (isCorrupted || isIncorrect || isInvalidSeqNumber || isInvalidSeqTime)
         {
@@ -80,26 +79,26 @@ void CTestSectorGenetor::Check(unsigned char* buffer, size_t size, sector_t sect
                     failMessage += std::string("Corrupted sector\n");
                     failMessage += std::string("sector " + std::to_string(sector) + "\n");
                     failMessage
-                      += std::string("crc " + std::to_string(header->crc) + " != " + std::to_string(crc) + "\n");
+                      += std::string("crc " + std::to_string(t->header.crc) + " != " + std::to_string(crc) + "\n");
                 }
                 if (isIncorrect)
                 {
                     failMessage += std::string("Incorrect sector\n");
-                    failMessage += std::string("sector " + std::to_string(header->sector)
+                    failMessage += std::string("sector " + std::to_string(t->header.sector)
                                                + " != " + std::to_string(sector) + "\n");
                 }
                 if (isInvalidSeqNumber)
                 {
                     failMessage += std::string("Invalid sequence number\n");
-                    failMessage += std::string("sector " + std::to_string(header->sector) + "\n");
-                    failMessage += std::string("seqNumber " + std::to_string(header->seqNumber) + " > "
+                    failMessage += std::string("sector " + std::to_string(t->header.sector) + "\n");
+                    failMessage += std::string("seqNumber " + std::to_string(t->header.seqNumber) + " > "
                                                + std::to_string(seqNumber) + "\n");
                 }
                 if (isInvalidSeqTime)
                 {
                     failMessage += std::string("Invalid sequence time\n");
-                    failMessage += std::string("sector " + std::to_string(header->sector) + "\n");
-                    failMessage += std::string("seqTime " + std::to_string(header->seqTime) + " > "
+                    failMessage += std::string("sector " + std::to_string(t->header.sector) + "\n");
+                    failMessage += std::string("seqTime " + std::to_string(t->header.seqTime) + " > "
                                                + std::to_string(seqTime) + "\n");
                 }
             }
