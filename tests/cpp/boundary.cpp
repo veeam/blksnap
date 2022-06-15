@@ -113,7 +113,7 @@ static inline off_t randomChunk(const int chunkSize, const off_t downLimit, cons
         if (excludeHistory.find(ret) == excludeHistory.end())
             return ret;
 
-        logger.Info("The chunk " + std::to_string(ret) + " could have been changed.");
+        logger.Info("The chunk " + std::to_string(ret) + " has probably been changed.");
     }
 }
 
