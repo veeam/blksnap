@@ -126,8 +126,8 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		goto out;
 
 	sector = bio->bi_iter.bi_sector;
-	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) /
-			   SECTOR_SIZE);
+	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) >>
+			   SECTOR_SHIFT);
 
 	current_flag = memalloc_noio_save();
 	err = cbt_map_set(tracker->cbt_map, sector, count);
@@ -157,11 +157,13 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	}
 
 	/*
-	 * If a new bio was created during the handling and the original bio
-	 * must be processed synchronously (flag REQ_SYNC), then new bios must
+	 * If a new bio was created during the handling, then new bios must
 	 * be sent and returned to complete the processing of the original bio.
+	 * Unfortunately, this has to be done for any bio, regardless of their
+	 * flags and options.
+	 * Otherwise, write requests confidently overtake read requests.
 	 */
-	if (!bio_list_empty(current->bio_list) && (bio->bi_opf & REQ_SYNC))
+	if (!bio_list_empty(current->bio_list))
 		ret = bdev_filter_repeat;
 out:
 	percpu_up_read(&tracker_submit_lock);
