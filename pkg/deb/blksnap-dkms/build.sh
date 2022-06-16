@@ -52,6 +52,8 @@ Package: ${NAME}
 Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
 Depends: dkms, ${shlibs:Depends}, ${misc:Depends}
+Conflicts: veeamsnap
+Replaces: veeamsnap
 Homepage: https://github.org/veeam/blksnap/
 Description: Veeam Agent for Linux (kernel module)
  This kernel module implements snapshot and changed block tracking
