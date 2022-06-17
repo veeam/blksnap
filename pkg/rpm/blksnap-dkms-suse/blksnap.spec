@@ -15,6 +15,8 @@ Provides:       %{name} = %{version}
 # for compatibility with Veeam Agent for Linux
 Obsoletes:      %{name}-kmp < %{version}
 Obsoletes:      %{name} < %{version}
+Conflicts:      veeamsnap
+Obsoletes:      veeamsnap
 
 %description
 This kernel module implements snapshot and changed block tracking
