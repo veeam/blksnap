@@ -27,8 +27,7 @@
 #pragma message("Standalone bdevfilter")
 #endif
 #ifdef HAVE_QC_SUBMIT_BIO_NOACCT
-#pragma message(                                                               \
-	"The blk_qc_t submit_bio_noacct(struct bio *) function was found.")
+#pragma message("The blk_qc_t submit_bio_noacct(struct bio *) function was found.")
 #endif
 #ifdef HAVE_VOID_SUBMIT_BIO_NOACCT
 #pragma message("The void submit_bio_noacct(struct bio *) function was found.")

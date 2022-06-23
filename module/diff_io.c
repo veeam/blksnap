@@ -110,7 +110,7 @@ struct diff_io *diff_io_new_async(bool is_write, bool is_nowait,
 
 static inline bool check_page_aligned(sector_t sector)
 {
-	return !(sector & ((1ULL << (PAGE_SHIFT - SECTOR_SHIFT)) - 1));
+	return !(sector & ((1ull << (PAGE_SHIFT - SECTOR_SHIFT)) - 1));
 }
 
 static inline unsigned short calc_page_count(sector_t sectors)

@@ -58,8 +58,9 @@ static inline void recalculate_last_chunk_size(struct chunk *chunk)
 static inline unsigned long long count_by_shift(sector_t capacity,
 						unsigned long long shift)
 {
-	return round_up(capacity, 1ull << (shift - SECTOR_SHIFT)) >>
-	       (shift - SECTOR_SHIFT);
+	unsigned long long shift_sector = (shift - SECTOR_SHIFT);
+
+	return round_up(capacity, (1ull << shift_sector)) >> shift_sector;
 }
 
 static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
@@ -69,15 +70,19 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	sector_t capacity;
 	sector_t min_io_sect;
 
-	min_io_sect =
-		(sector_t)(bdev_io_min(diff_area->orig_bdev) >> SECTOR_SHIFT);
+	min_io_sect = (sector_t)(bdev_io_min(diff_area->orig_bdev) >>
+		SECTOR_SHIFT);
 	capacity = bdev_nr_sectors(diff_area->orig_bdev);
+	pr_debug("Minimal IO block %llu sectors\n", min_io_sect);
+	pr_debug("Device capacity %llu sectors\n", capacity);
 
 	count = count_by_shift(capacity, shift);
+	pr_debug("Chunks count %llu\n", count);
 	while ((count > chunk_maximum_count) ||
-	       (diff_area_chunk_sectors(diff_area) < min_io_sect)) {
-		shift = shift << 1;
+		((1ull << (shift - SECTOR_SHIFT)) < min_io_sect)) {
+		shift = shift + 1ull;
 		count = count_by_shift(capacity, shift);
+		pr_debug("Chunks count %llu\n", count);
 	}
 
 	diff_area->chunk_shift = shift;
@@ -292,7 +297,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);
-	pr_debug("Chunk size %llu in bytes\n", 1ULL << diff_area->chunk_shift);
+	pr_debug("Chunk size %llu in bytes\n", 1ull << diff_area->chunk_shift);
 	pr_debug("Chunk count %lu\n", diff_area->chunk_count);
 
 	kref_init(&diff_area->kref);
@@ -549,7 +554,7 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 		pr_debug("new_chunk_number=%ld\n", new_chunk_number);
 		pr_debug("sector=%llu\n", sector);
 		pr_debug("Chunk size %llu in bytes\n",
-		       (1ULL << diff_area->chunk_shift));
+		       (1ull << diff_area->chunk_shift));
 		pr_debug("Chunk count %lu\n", diff_area->chunk_count);
 
 		ret = -EIO;
