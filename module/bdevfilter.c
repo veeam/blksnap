@@ -239,9 +239,10 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 }
 EXPORT_SYMBOL(bdev_filter_get_by_altitude);
 
-static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio, enum bdev_filter_altitudes *paltitude)
+static inline bool bdev_filters_apply(struct bio *bio)
 {
-	enum bdev_filter_result result = bdev_filter_pass;
+	enum bdev_filter_altitudes altitude;
+	enum bdev_filter_result result;
 	struct bdev_extension *ext;
 	struct bdev_filter *flt;
 
@@ -253,14 +254,13 @@ static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio, enum b
 #endif
 	spin_unlock(&bdev_extension_list_lock);
 	if (!ext)
-		return result;
-
+		return true;
 
 	spin_lock(&ext->bd_filters_lock);
-	while (*paltitude < bdev_filter_alt_end) {
-		flt = ext->bd_filters[*paltitude];
+	while (altitude < bdev_filter_alt_end) {
+		flt = ext->bd_filters[altitude];
 		if (!flt) {
-			*paltitude = *paltitude + 1;
+			altitude++;
 			continue;
 		}
 
@@ -270,18 +270,16 @@ static inline enum bdev_filter_result bdev_filters_apply(struct bio *bio, enum b
 		result = flt->fops->submit_bio_cb(bio, flt);
 		bdev_filter_put(flt);
 
-		if (result == bdev_filter_redirect)
-			*paltitude = 0;
-		if (result != bdev_filter_pass)
-			return result;
+		if (result != bdev_filter_res_pass)
+			return false;
 
-		*paltitude = *paltitude + 1;
+		altitude++;
 
 		spin_lock(&ext->bd_filters_lock);
 	};
 	spin_unlock(&ext->bd_filters_lock);
 
-	return result;
+	return true;
 }
 
 #ifdef CONFIG_X86
@@ -303,38 +301,26 @@ static void (*submit_bio_noacct_notrace)(struct bio *) =
 #endif
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+blk_qc_t bdev_filter_submit_bio_noacct_notrace(struct bio *bio)
+{
+	return submit_bio_noacct_notrace(bio);
+}
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
+void bdev_filter_submit_bio_noacct_notrace(struct bio *bio)
+{
+	submit_bio_noacct_notrace(bio);
+}
+#endif
+EXPORT_SYMBOL(bdev_filter_submit_bio_noacct_notrace);
+
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
 #else
 static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
 	if (!current->bio_list) {
-		enum bdev_filter_altitudes altitude = 0;
-		enum bdev_filter_result result;
-		struct bio_list bio_list_on_stack[2] = { };
-		struct bio *new_bio;
-
-		do {
-			bio_list_init(&bio_list_on_stack[0]);
-			current->bio_list = bio_list_on_stack;
-			barrier();
-
-			result = bdev_filters_apply(bio, &altitude);
-
-			current->bio_list = NULL;
-			barrier();
-
-			while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
-				/*
-				 * The result from submitting a bio from the
-				 * filter itself does not need to be processed,
-				 * even if this function has a return code.
-				 */
-				submit_bio_noacct_notrace(new_bio);
-			}
-		} while (result == bdev_filter_repeat);
-
-		if (result == bdev_filter_skip) {
+		if (!bdev_filters_apply(bio)) {
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 			return BLK_QC_T_NONE;
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)

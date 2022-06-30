@@ -144,6 +144,8 @@ static inline sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		   const bool is_nowait);
 
+int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
+                   const bool is_nowait);
 /**
  * struct diff_area_image_ctx - The context for processing an io request to
  *	the snapshot image.

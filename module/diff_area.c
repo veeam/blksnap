@@ -470,6 +470,62 @@ fail_unlock_chunk:
 	return ret;
 }
 
+int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
+                   const bool is_nowait)
+{
+	int ret = 0;
+	sector_t offset;
+	struct chunk *chunk;
+	sector_t area_sect_first;
+	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
+
+	area_sect_first = round_down(sector, chunk_sectors);
+	for (offset = area_sect_first; offset < (sector + count);
+	     offset += chunk_sectors) {
+		chunk = xa_load(&diff_area->chunk_map,
+				chunk_number(diff_area, offset));
+		if (!chunk) {
+			diff_area_set_corrupted(diff_area, -EINVAL);
+			return -EINVAL;
+		}
+		WARN_ON(chunk_number(diff_area, offset) != chunk->number);
+		if (is_nowait) {
+			if (down_trylock(&chunk->lock))
+				return -EAGAIN;
+		} else {
+			ret = down_killable(&chunk->lock);
+			if (unlikely(ret))
+				return ret;
+		}
+
+		if (chunk_state_check(chunk, CHUNK_ST_FAILED )) {
+			/*
+			 * The chunk has already been:
+			 * - Failed, when the snapshot is corrupted
+			 * - Overwritten in the snapshot image
+			 * - Already stored in the diff storage
+			 */
+			up(&chunk->lock);
+			ret = -EFAULT;
+			break;
+		}
+
+		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY |
+				      CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY)) {
+			/*
+			 * The chunk has already been:
+			 * - Read
+			 * - Overwritten in the snapshot image
+			 * - Already stored in the diff storage
+			 */
+			up(&chunk->lock);
+			continue;
+		}
+	}
+
+	return ret;
+}
+
 static inline void diff_area_image_put_chunk(struct chunk *chunk, bool is_write)
 {
 	if (is_write) {

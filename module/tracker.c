@@ -92,7 +92,9 @@ void diff_io_endio(struct bio *bio);
 static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		struct bdev_filter *flt)
 {
-	enum bdev_filter_result ret = bdev_filter_pass;
+	struct bio_list bio_list_on_stack[2] = { };
+	struct bio *new_bio;
+	enum bdev_filter_result ret = bdev_filter_res_pass;
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
 	int err;
 	sector_t sector;
@@ -114,7 +116,7 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	if (bio->bi_opf & REQ_NOWAIT) {
 		if (!percpu_down_read_trylock(&tracker_submit_lock)) {
 			bio_wouldblock_error(bio);
-			return bdev_filter_skip;
+			return bdev_filter_res_skip;
 		}
 	} else
 		percpu_down_read(&tracker_submit_lock);
@@ -142,20 +144,33 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		goto out;
 
 	current_flag = memalloc_noio_save();
+	bio_list_init(&bio_list_on_stack[0]);
+	current->bio_list = bio_list_on_stack;
+	barrier();
+
 	err = diff_area_copy(tracker->diff_area, sector, count,
 			     !!(bio->bi_opf & REQ_NOWAIT));
+
+	current->bio_list = NULL;
+	barrier();
 	memalloc_noio_restore(current_flag);
 
-	if (unlikely(err)) {
-		if (err == -EAGAIN) {
-			bio_wouldblock_error(bio);
-			ret = bdev_filter_skip;
-		} else
-			pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
+	if (unlikely(err))
+		goto fail;
 
-		goto out;
+	while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
+		/*
+		 * The result from submitting a bio from the
+		 * filter itself does not need to be processed,
+		 * even if this function has a return code.
+		 */
+#ifdef STANDALONE_BDEVFILTER
+		bdev_filter_submit_bio_noacct_notrace(new_bio);
+#else
+		io_set_flag(new_bio, BIO_FILTERED);
+		submit_bio_noacct(new_bio);
+#endif
 	}
-
 	/*
 	 * If a new bio was created during the handling, then new bios must
 	 * be sent and returned to complete the processing of the original bio.
@@ -163,8 +178,16 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	 * flags and options.
 	 * Otherwise, write requests confidently overtake read requests.
 	 */
-	if (!bio_list_empty(current->bio_list))
-		ret = bdev_filter_repeat;
+	err = diff_area_wait(tracker->diff_area, sector, count,
+			     !!(bio->bi_opf & REQ_NOWAIT));
+	if (likely(err == 0))
+		goto out;
+fail:
+	if (err == -EAGAIN) {
+		bio_wouldblock_error(bio);
+		ret = bdev_filter_res_skip;
+	} else
+		pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
 out:
 	percpu_up_read(&tracker_submit_lock);
 	return ret;

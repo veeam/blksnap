@@ -11,10 +11,8 @@ enum bdev_filter_altitudes {
 };
 
 enum bdev_filter_result {
-	bdev_filter_skip = 0,
-	bdev_filter_pass,
-	bdev_filter_repeat,
-	bdev_filter_redirect
+	bdev_filter_res_skip = 0,
+	bdev_filter_res_pass
 };
 
 struct bdev_filter;
@@ -70,3 +68,9 @@ static inline void bdev_filter_put(struct bdev_filter *flt)
 /* Only for livepatch version */
 int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 			   const enum bdev_filter_altitudes altitude);
+
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+blk_qc_t bdev_filter_submit_bio_noacct_notrace(struct bio *bio);
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
+void bdev_filter_submit_bio_noacct_notrace(struct bio *bio);
+#endif
