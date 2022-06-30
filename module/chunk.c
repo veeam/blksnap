@@ -50,7 +50,6 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
-	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
 		 "The chunk already in the cache"))
 		return -EINVAL;
@@ -86,7 +85,6 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	might_sleep();
 
-	//pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->caches_lock);
 
 	/*
@@ -120,7 +118,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	up(&chunk->lock);
 
-	// Initiate the cache clearing process.
+	/* Initiate the cache clearing process */
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
 	if (atomic_read(&diff_area->write_cache_count) >
 	    chunk_maximum_in_cache) {
@@ -378,10 +376,7 @@ int chunk_load_orig(struct chunk *chunk)
 			  diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
-#ifdef BLK_SNAP_DEBUG_CHUNK_IO
-	//pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
-	//	chunk->number, region.sector, region.count);
-#endif
+
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
 		return -ENOMEM;

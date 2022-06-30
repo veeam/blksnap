@@ -180,7 +180,7 @@ static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
 		sector_start >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
 	size_t cbt_block_last =
 		(size_t)((sector_start + sector_cnt - 1) >>
-			 (cbt_map->blk_size_shift - SECTOR_SHIFT)); //inclusive
+			 (cbt_map->blk_size_shift - SECTOR_SHIFT));
 
 	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last;
 	     ++cbt_block) {

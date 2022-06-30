@@ -140,7 +140,7 @@ void diff_storage_free(struct kref *kref)
 #endif
 }
 
-struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage,
+static struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage,
 					     dev_t dev_id)
 {
 	struct block_device *bdev = NULL;

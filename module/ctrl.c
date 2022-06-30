@@ -339,7 +339,6 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 	struct blk_snap_snapshot_event *karg;
 	struct event *event;
 
-	//pr_debug("Wait event\n");
 	karg = kzalloc(sizeof(struct blk_snap_snapshot_event), GFP_KERNEL);
 	if (!karg)
 		return -ENOMEM;
@@ -370,7 +369,6 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 		/* If we can't copy all the data, we copy only part of it. */
 	}
 	memcpy(karg->data, event->data, event->data_size);
-	//min_t(size_t, event->data_size, sizeof(karg->data)));
 	event_free(event);
 
 	if (copy_to_user((void *)arg, karg,

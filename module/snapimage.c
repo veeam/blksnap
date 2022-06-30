@@ -161,9 +161,6 @@ static const struct blk_mq_ops mq_ops = {
 
 const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
-	//.open = snapimage_open,
-	//.ioctl = snapimage_ioctl,
-	//.release = snapimage_close,
 };
 
 static inline int snapimage_alloc_tag_set(struct snapimage *snapimage)
@@ -302,8 +299,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	pr_info("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
-	//disk->flags |= GENHD_FL_HIDDEN;
-	//disk->flags |= GENHD_FL_REMOVABLE;
 #ifdef GENHD_FL_NO_PART_SCAN
 	disk->flags |= GENHD_FL_NO_PART_SCAN;
 #else
@@ -313,7 +308,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	disk->major = _major;
 	disk->first_minor = minor;
-	disk->minors = 1; // One disk has only one partition.
+	disk->minors = 1; /* One disk has only one partition */
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;
@@ -410,7 +405,6 @@ int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
 				       &state->snap_number_curr);
 	if (ret)
 		return ret;
-	//#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	{
 		char buf[SECTOR_SIZE];
 
@@ -423,7 +417,7 @@ int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
 		print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET,
 			       32, 1, buf, 96, true);
 	}
-	//#endif
+
 	return 0;
 }
 #endif

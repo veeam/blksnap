@@ -56,7 +56,7 @@ void tracker_unlock(void )
 	pr_info("Trackers have been unlocked\n");
 };
 
-void tracker_free(struct tracker *tracker)
+static void tracker_free(struct tracker *tracker)
 {
 	might_sleep();
 

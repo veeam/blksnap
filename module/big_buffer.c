@@ -89,7 +89,7 @@ size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset,
 	size_t processed_len = 0;
 	size_t unordered = offset & (PAGE_SIZE - 1);
 
-	if (unordered) { //first
+	if (unordered) {
 		size_t page_len =
 			min_t(size_t, (PAGE_SIZE - unordered), length);
 
@@ -131,7 +131,7 @@ size_t big_buffer_copy_from_user(const char __user *src_user, size_t offset,
 	size_t processed_len = 0;
 	size_t unordered = offset & (PAGE_SIZE - 1);
 
-	if (unordered) { //first
+	if (unordered) {
 		size_t page_len =
 			min_t(size_t, (PAGE_SIZE - unordered), length);
 

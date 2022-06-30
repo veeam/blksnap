@@ -594,7 +594,6 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 		io_ctx->chunk = NULL;
 	}
 
-	//pr_err("Take chunk #%ld\n", new_chunk_number);
 	/* Take a next chunk. */
 	chunk = xa_load(&diff_area->chunk_map, new_chunk_number);
 	if (unlikely(!chunk))
