@@ -33,7 +33,7 @@ struct diff_region;
  * @requested:
  *	The number of sectors already requested from user space.
  * @low_space_flag:
- *	The flag is set if the number of free regions available in the 
+ *	The flag is set if the number of free regions available in the
  *	difference storage is less than the allowed minimum.
  * @overflow_flag:
  *	The request for a free region failed due to the absence of free
@@ -93,9 +93,7 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 static inline void diff_storage_free_region(struct diff_region *region)
 {
 	kfree(region);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (region)
 		memory_object_dec(memory_object_diff_region);
-#endif
 }
 #endif /* __BLK_SNAP_DIFF_STORAGE_H */

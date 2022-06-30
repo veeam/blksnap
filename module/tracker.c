@@ -8,9 +8,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "tracker.h"
 #include "cbt_map.h"
@@ -67,9 +65,8 @@ static void tracker_free(struct tracker *tracker)
 	cbt_map_put(tracker->cbt_map);
 
 	kfree(tracker);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_tracker);
-#endif
+
 	refcount_dec(&trackers_counter);
 }
 
@@ -335,9 +332,8 @@ static struct tracker *tracker_new(struct block_device *bdev)
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
 	if (tracker == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker);
-#endif
+
 	refcount_inc(&trackers_counter);
 	bdev_filter_init(&tracker->flt, &tracker_fops);
 	INIT_LIST_HEAD(&tracker->link);
@@ -469,9 +465,7 @@ void tracker_done(void)
 
 		tracker_remove(tr_dev->dev_id);
 		kfree(tr_dev);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
-#endif
 	}
 
 	tracker_wait_for_release();
@@ -509,9 +503,8 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		tracker = ERR_PTR(-ENOMEM);
 		goto put_bdev;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracked_device);
-#endif
+
 	INIT_LIST_HEAD(&tr_dev->link);
 	tr_dev->dev_id = dev_id;
 
@@ -521,9 +514,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 
 		pr_err("Failed to create tracker. errno=%d\n", abs(err));
 		kfree(tr_dev);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
-#endif
 	} else {
 		/*
 		 * It is normal that the new trackers filter will have
@@ -603,10 +594,8 @@ int tracker_remove(dev_t dev_id)
 		spin_unlock(&tracked_device_lock);
 
 		kfree(tr_dev);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		if (tr_dev)
 			memory_object_dec(memory_object_tracked_device);
-#endif
 	}
 put_tracker:
 	tracker_put(tracker);

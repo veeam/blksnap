@@ -2,9 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/slab.h>
 #include <linux/uaccess.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "big_buffer.h"
 
 #ifdef BLK_SNAP_DEBUGLOG
@@ -34,9 +32,8 @@ struct big_buffer *big_buffer_alloc(size_t buffer_size, int gfp_opt)
 			gfp_opt);
 	if (bbuff == NULL)
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_big_buffer);
-#endif
+
 	bbuff->pg_cnt = count;
 	for (inx = 0; inx < bbuff->pg_cnt; ++inx) {
 		struct page *pg = alloc_page(gfp_opt);
@@ -45,9 +42,7 @@ struct big_buffer *big_buffer_alloc(size_t buffer_size, int gfp_opt)
 			res = -ENOMEM;
 			break;
 		}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_inc(memory_object_page);
-#endif
 		bbuff->pg[inx] = page_address(pg);
 	}
 
@@ -67,18 +62,15 @@ void big_buffer_free(struct big_buffer *bbuff)
 	if (bbuff == NULL)
 		return;
 
-	for (inx = 0; inx < count; ++inx)
+	for (inx = 0; inx < count; ++inx) {
 		if (bbuff->pg[inx] != NULL) {
 			free_page((unsigned long)bbuff->pg[inx]);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 			memory_object_dec(memory_object_page);
-#endif
 		}
+	}
 
 	kfree(bbuff);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_big_buffer);
-#endif
 }
 
 size_t big_buffer_copy_to_user(char __user *dst_user, size_t offset,

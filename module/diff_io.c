@@ -5,9 +5,7 @@
 #endif
 #include <linux/blkdev.h>
 #include <linux/slab.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "diff_io.h"
 #include "diff_buffer.h"
 
@@ -69,9 +67,8 @@ static inline struct diff_io *diff_io_new(bool is_write, bool is_nowait)
 	diff_io = kzalloc(sizeof(struct diff_io), gfp_mask);
 	if (unlikely(!diff_io))
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_io);
-#endif
+
 	diff_io->error = 0;
 	diff_io->is_write = is_write;
 	atomic_set(&diff_io->bio_count, 0);

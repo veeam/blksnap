@@ -10,9 +10,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "ctrl.h"
 #include "params.h"
 #include "version.h"
@@ -134,9 +132,8 @@ static int ioctl_tracker_collect(unsigned long arg)
 			   GFP_KERNEL);
 	if (cbt_info == NULL)
 		return -ENOMEM;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_cbt_info);
-#endif
+
 	res = tracker_collect(karg.count, cbt_info, &karg.count);
 	if (res) {
 		pr_err("Failed to execute tracker_collect. errno=%d\n",
@@ -158,9 +155,7 @@ static int ioctl_tracker_collect(unsigned long arg)
 	}
 fail:
 	kfree(cbt_info);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_blk_snap_cbt_info);
-#endif
 	return res;
 }
 
@@ -193,10 +188,8 @@ static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 		karg.count, sizeof(struct blk_snap_block_range), GFP_KERNEL);
 	if (!dirty_blocks_array)
 		return -ENOMEM;
-
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_block_range);
-#endif
+
 	if (copy_from_user(dirty_blocks_array, (void *)karg.dirty_blocks_array,
 			   karg.count * sizeof(struct blk_snap_block_range))) {
 		pr_err("Unable to mark dirty blocks: invalid user buffer\n");
@@ -213,9 +206,8 @@ static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 	}
 
 	kfree(dirty_blocks_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_blk_snap_block_range);
-#endif
+
 	return ret;
 }
 
@@ -237,9 +229,8 @@ static int ioctl_snapshot_create(unsigned long arg)
 		       karg.count);
 		return -ENOMEM;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_dev_t);
-#endif
+
 	if (copy_from_user(dev_id_array, (void *)karg.dev_id_array,
 			   karg.count * sizeof(struct blk_snap_dev_t))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
@@ -257,9 +248,7 @@ static int ioctl_snapshot_create(unsigned long arg)
 	}
 out:
 	kfree(dev_id_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_blk_snap_dev_t);
-#endif
 	return ret;
 }
 
@@ -342,9 +331,8 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 	karg = kzalloc(sizeof(struct blk_snap_snapshot_event), GFP_KERNEL);
 	if (!karg)
 		return -ENOMEM;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_snapshot_event);
-#endif
+
 	if (copy_from_user(karg, (void *)arg,
 			   sizeof(struct blk_snap_snapshot_event))) {
 		pr_err("Unable failed to get snapstore error code: invalid user buffer\n");
@@ -378,9 +366,7 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 	}
 out:
 	kfree(karg);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_blk_snap_snapshot_event);
-#endif
 	return ret;
 }
 

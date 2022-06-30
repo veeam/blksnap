@@ -8,9 +8,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "snapimage.h"
 #include "diff_area.h"
 #include "chunk.h"
@@ -207,9 +205,7 @@ void snapimage_free(struct snapimage *snapimage)
 
 	free_minor(MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
-#endif
 }
 
 struct snapimage *snapimage_create(struct diff_area *diff_area,
@@ -230,9 +226,8 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage);
-#endif
+
 	ret = new_minor(&minor, snapimage);
 	if (ret) {
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
@@ -353,9 +348,7 @@ fail_free_minor:
 	free_minor(minor);
 fail_free_image:
 	kfree(snapimage);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
-#endif
 	return ERR_PTR(ret);
 }
 

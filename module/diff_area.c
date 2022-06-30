@@ -10,9 +10,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
@@ -133,9 +131,7 @@ void diff_area_free(struct kref *kref)
 	diff_buffer_cleanup(diff_area);
 
 	kfree(diff_area);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_area);
-#endif
 }
 
 static inline struct chunk *
@@ -290,9 +286,8 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_area);
-#endif
+
 	diff_area->orig_bdev = bdev;
 	diff_area->diff_storage = diff_storage;
 

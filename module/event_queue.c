@@ -2,9 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-event_queue: " fmt
 #include <linux/slab.h>
 #include <linux/sched.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "event_queue.h"
 
 #ifdef BLK_SNAP_DEBUGLOG
@@ -41,9 +39,8 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 	event = kzalloc(sizeof(struct event) + data_size, flags);
 	if (!event)
 		return -ENOMEM;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_event);
-#endif
+
 	event->time = ktime_get();
 	event->code = code;
 	event->data_size = data_size;

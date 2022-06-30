@@ -3,9 +3,7 @@
 #include <linux/slab.h>
 #include <linux/dm-io.h>
 #include <linux/sched/mm.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "chunk.h"
 #include "diff_io.h"
@@ -242,9 +240,8 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_chunk);
-#endif
+
 	INIT_LIST_HEAD(&chunk->cache_link);
 	sema_init(&chunk->lock, 1);
 	chunk->diff_area = diff_area;
@@ -266,9 +263,7 @@ void chunk_free(struct chunk *chunk)
 	up(&chunk->lock);
 
 	kfree(chunk);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_chunk);
-#endif
 }
 
 /**

@@ -59,9 +59,7 @@ struct event *event_wait(struct event_queue *event_queue,
 static inline void event_free(struct event *event)
 {
 	kfree(event);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (event)
 		memory_object_dec(memory_object_event);
-#endif
 };
 #endif /* __BLK_SNAP_EVENT_QUEUE_H */
