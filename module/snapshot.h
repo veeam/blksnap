@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_SNAPSHOT_H
+#define __BLK_SNAP_SNAPSHOT_H
+
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/mm.h>
@@ -82,3 +84,4 @@ int snapshot_mark_dirty_blocks(dev_t image_dev_id,
 int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
 			     struct blk_snap_sector_state *state);
 #endif
+#endif /* __BLK_SNAP_SNAPSHOT_H */

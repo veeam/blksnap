@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __LINUX_BLK_SNAP_H
+#define __LINUX_BLK_SNAP_H
+
 #include <linux/types.h>
 #include <linux/uuid.h>
 
@@ -540,3 +542,4 @@ struct blk_snap_get_sector_state {
 	     struct blk_snap_get_sector_state)
 
 #endif
+#endif /* __LINUX_BLK_SNAP_H */

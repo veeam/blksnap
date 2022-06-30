@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_DIFF_IO_H
+#define __BLK_SNAP_DIFF_IO_H
+
 #include <linux/workqueue.h>
 #include <linux/completion.h>
 
@@ -120,3 +122,4 @@ diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
 
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	       struct diff_buffer *diff_buffer, const bool is_nowait);
+#endif /* __BLK_SNAP_DIFF_IO_H */

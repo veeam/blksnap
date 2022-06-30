@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_EVENT_QUEUE_H
+#define __BLK_SNAP_EVENT_QUEUE_H
+
 #include <linux/types.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
@@ -62,3 +64,4 @@ static inline void event_free(struct event *event)
 		memory_object_dec(memory_object_event);
 #endif
 };
+#endif /* __BLK_SNAP_EVENT_QUEUE_H */

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __LINUX_BDEVFILTER_H
+#define __LINUX_BDEVFILTER_H
+
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/blk_types.h>
@@ -74,3 +76,4 @@ blk_qc_t bdev_filter_submit_bio_noacct_notrace(struct bio *bio);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
 void bdev_filter_submit_bio_noacct_notrace(struct bio *bio);
 #endif
+#endif /* __LINUX_BDEVFILTER_H */

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_SNAPIMAGE_H
+#define __BLK_SNAP_SNAPIMAGE_H
+
 #include <linux/blk_types.h>
 #ifdef HAVE_GENHD_H
 #include <linux/genhd.h>
@@ -74,3 +76,4 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
 			      struct blk_snap_sector_state *state);
 #endif
+#endif /* __BLK_SNAP_SNAPIMAGE_H */

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_DIFF_STORAGE_H
+#define __BLK_SNAP_DIFF_STORAGE_H
+
 #include "event_queue.h"
 #include "big_buffer.h"
 
@@ -96,3 +98,4 @@ static inline void diff_storage_free_region(struct diff_region *region)
 		memory_object_dec(memory_object_diff_region);
 #endif
 }
+#endif /* __BLK_SNAP_DIFF_STORAGE_H */

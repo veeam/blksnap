@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifndef __BLK_SNAP_MEMORY_CHECKER_H
+#define __BLK_SNAP_MEMORY_CHECKER_H
 
 enum memory_object_type {
 	/*alloc_page*/
@@ -39,3 +39,4 @@ void memory_object_dec(enum memory_object_type type);
 int  memory_object_print(void);
 void memory_object_max_print(void);
 #endif
+#endif /* __BLK_SNAP_MEMORY_CHECKER_H */

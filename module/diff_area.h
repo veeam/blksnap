@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_DIFF_AREA_H
+#define __BLK_SNAP_DIFF_AREA_H
+
 #include <linux/slab.h>
 #include <linux/uio.h>
 #include <linux/kref.h>
@@ -189,3 +191,4 @@ int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector,
 int diff_area_get_sector_image(struct diff_area *diff_area, sector_t pos,
 			       void *buf);
 #endif
+#endif /* __BLK_SNAP_DIFF_AREA_H */

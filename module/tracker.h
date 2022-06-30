@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_TRACKER_H
+#define __BLK_SNAP_TRACKER_H
+
 #include <linux/kref.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>
@@ -121,3 +123,4 @@ static inline void _thaw_bdev(struct block_device *bdev,
 			 MINOR(bdev->bd_dev));
 }
 #endif
+#endif /* __BLK_SNAP_TRACKER_H */
