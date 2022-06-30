@@ -2,7 +2,6 @@
 #ifndef __BLK_SNAP_PARAMS_H
 #define __BLK_SNAP_PARAMS_H
 
-
 extern int tracking_block_minimum_shift;
 extern int tracking_block_maximum_count;
 extern int chunk_minimum_shift;
