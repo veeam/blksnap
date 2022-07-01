@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_DIFF_IO_H
+#define __BLK_SNAP_DIFF_IO_H
+
 #include <linux/workqueue.h>
 #include <linux/completion.h>
 
@@ -89,10 +91,8 @@ void diff_io_done(void);
 static inline void diff_io_free(struct diff_io *diff_io)
 {
 	kfree(diff_io);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (diff_io)
 		memory_object_dec(memory_object_diff_io);
-#endif
 }
 
 struct diff_io *diff_io_new_sync(bool is_write);
@@ -120,3 +120,4 @@ diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
 
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	       struct diff_buffer *diff_buffer, const bool is_nowait);
+#endif /* __BLK_SNAP_DIFF_IO_H */

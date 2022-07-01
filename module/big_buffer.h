@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_BIG_BUFFER_H
+#define __BLK_SNAP_BIG_BUFFER_H
+
 #include <linux/mm.h>
 
 struct big_buffer {
@@ -22,6 +24,6 @@ void *big_buffer_get_element(struct big_buffer *bbuff, size_t index,
 void big_buffer_memset(struct big_buffer *bbuff, int value);
 void big_buffer_memcpy(struct big_buffer *dst, struct big_buffer *src);
 
-//byte access
 int big_buffer_byte_get(struct big_buffer *bbuff, size_t inx, u8 *value);
 int big_buffer_byte_set(struct big_buffer *bbuff, size_t inx, u8 value);
+#endif /* __BLK_SNAP_BIG_BUFFER_H */

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_TRACKER_H
+#define __BLK_SNAP_TRACKER_H
+
 #include <linux/kref.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>
@@ -69,3 +71,5 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 
 int tracker_take_snapshot(struct tracker *tracker);
 void tracker_release_snapshot(struct tracker *tracker);
+
+#endif /* __BLK_SNAP_TRACKER_H */

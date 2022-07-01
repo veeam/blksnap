@@ -20,8 +20,11 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -DHAVE_BI_BDISK)
-EXTRA_CFLAGS += $(shell 							\
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
+		echo -DHAVE_BDEV_NR_SECTORS)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/blkdev.h && \
 		echo -DHAVE_BDEV_NR_SECTORS)
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
@@ -29,13 +32,24 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "BIO_MAX_PAGES" $(srctree)/include/linux/bio.h &&		\
 		echo -DHAVE_BIO_MAX_PAGES)
-EXTRA_CFLAGS += $(shell 							\
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "int add_disk" $(srctree)/include/linux/genhd.h &&		\
 		echo -DHAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell 							\
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "int add_disk" $(srctree)/include/linux/blkdev.h &&		\
+		echo -DHAVE_ADD_DISK_RESULT)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "int __must_check add_disk" $(srctree)/include/linux/genhd.h && \
 		echo -DHAVE_ADD_DISK_RESULT)
-
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "int __must_check add_disk" $(srctree)/include/linux/blkdev.h && \
+		echo -DHAVE_ADD_DISK_RESULT)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+		echo -DHAVE_GENHD_H)
+EXTRA_CFLAGS += $(shell 							\
+	grep "bio_alloc_bioset" $(srctree)/include/linux/bio.h |		\
+	grep -qw "struct block_device" &&					\
+		echo -DHAVE_BDEV_BIO_ALLOC)
 
 # The power of 2 for minimum trackings block size.
 # The minimum tracking block size by default is 64 KB (shift 16)

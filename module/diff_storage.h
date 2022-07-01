@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_DIFF_STORAGE_H
+#define __BLK_SNAP_DIFF_STORAGE_H
+
 #include "event_queue.h"
 #include "big_buffer.h"
 
@@ -87,8 +89,7 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 static inline void diff_storage_free_region(struct diff_region *region)
 {
 	kfree(region);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (region)
 		memory_object_dec(memory_object_diff_region);
-#endif
 }
+#endif /* __BLK_SNAP_DIFF_STORAGE_H */

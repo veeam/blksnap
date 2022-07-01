@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "diff_buffer.h"
 #include "diff_area.h"
 
-void diff_buffer_free(struct diff_buffer *diff_buffer)
+static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	size_t inx = 0;
 	struct page *page;
@@ -19,20 +17,16 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 		page = diff_buffer->pages[inx];
 		if (page) {
 			__free_page(page);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 			memory_object_dec(memory_object_page);
-#endif
 		}
 	}
 
 	kfree(diff_buffer);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_buffer);
-#endif
 }
 
-struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-				    gfp_t gfp_mask)
+static struct diff_buffer *
+diff_buffer_new(size_t page_count, size_t buffer_size, gfp_t gfp_mask)
 {
 	struct diff_buffer *diff_buffer;
 	size_t inx = 0;
@@ -50,9 +44,8 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 			      gfp_mask);
 	if (!diff_buffer)
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_buffer);
-#endif
+
 	INIT_LIST_HEAD(&diff_buffer->link);
 	diff_buffer->size = buffer_size;
 	diff_buffer->page_count = page_count;
@@ -61,9 +54,8 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		page = alloc_page(gfp_mask);
 		if (!page)
 			goto fail;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_inc(memory_object_page);
-#endif
+
 		diff_buffer->pages[inx] = page;
 	}
 	return diff_buffer;

@@ -3,9 +3,7 @@
 #include <linux/slab.h>
 #include <linux/sched/mm.h>
 #include <linux/blk_snap.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "snapshot.h"
 #include "tracker.h"
 #include "diff_storage.h"
@@ -86,21 +84,16 @@ static void snapshot_free(struct kref *kref)
 	if (snapshot->is_taken)
 		snapshot_release(snapshot);
 	kfree(snapshot->snapimage_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
-#endif
 	kfree(snapshot->tracker_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
-#endif
+
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapshot);
-#endif
 }
 
 static inline void snapshot_get(struct snapshot *snapshot)
@@ -123,25 +116,22 @@ static struct snapshot *snapshot_new(unsigned int count)
 		ret = -ENOMEM;
 		goto fail;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapshot);
-#endif
+
 	snapshot->tracker_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->tracker_array) {
 		ret = -ENOMEM;
 		goto fail_free_snapshot;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker_array);
-#endif
+
 	snapshot->snapimage_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->snapimage_array) {
 		ret = -ENOMEM;
 		goto fail_free_trackers;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage_array);
-#endif
+
 	snapshot->diff_storage = diff_storage_new();
 	if (!snapshot->diff_storage) {
 		ret = -ENOMEM;
@@ -157,29 +147,22 @@ static struct snapshot *snapshot_new(unsigned int count)
 
 fail_free_snapimage:
 	kfree(snapshot->snapimage_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_superblock_array);
-#endif
+
 	kfree(snapshot->snapimage_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
-#endif
+
 fail_free_trackers:
 	kfree(snapshot->tracker_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
-#endif
 
 fail_free_snapshot:
 	kfree(snapshot);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot)
 		memory_object_dec(memory_object_snapshot);
-#endif
-
 fail:
 	return ERR_PTR(ret);
 }
@@ -476,7 +459,6 @@ struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms)
 	struct snapshot *snapshot;
 	struct event *event;
 
-	//pr_debug("Wait event\n");
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return ERR_PTR(-ESRCH);
@@ -576,9 +558,8 @@ int snapshot_collect_images(
 		ret = -ENOMEM;
 		goto out;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_image_info);
-#endif
+
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (snapshot->tracker_array[inx]) {
 			dev_t orig_dev_id =
@@ -618,10 +599,8 @@ out:
 	*pcount = snapshot->count;
 
 	kfree(image_info_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (image_info_array)
 		memory_object_dec(memory_object_blk_snap_image_info);
-#endif
 	snapshot_put(snapshot);
 
 	return ret;

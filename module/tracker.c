@@ -4,9 +4,7 @@
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
 #include <linux/blk_snap.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "tracker.h"
 #include "cbt_map.h"
@@ -40,7 +38,7 @@ void tracker_unlock(void )
 	pr_info("Trackers have been unlocked\n");
 };
 
-void tracker_free(struct tracker *tracker)
+static void tracker_free(struct tracker *tracker)
 {
 	might_sleep();
 
@@ -51,9 +49,8 @@ void tracker_free(struct tracker *tracker)
 	cbt_map_put(tracker->cbt_map);
 
 	kfree(tracker);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_tracker);
-#endif
+
 	refcount_dec(&trackers_counter);
 }
 
@@ -72,7 +69,9 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		struct bdev_filter *flt)
 {
-	enum bdev_filter_result ret = bdev_filter_pass;
+	struct bio_list bio_list_on_stack[2] = { };
+	struct bio *new_bio;
+	enum bdev_filter_result ret = bdev_filter_res_pass;
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
 	int err;
 	sector_t sector;
@@ -82,7 +81,7 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	if (bio->bi_opf & REQ_NOWAIT) {
 		if (!percpu_down_read_trylock(&tracker_submit_lock)) {
 			bio_wouldblock_error(bio);
-			return bdev_filter_skip;
+			return bdev_filter_res_skip;
 		}
 	} else
 		percpu_down_read(&tracker_submit_lock);
@@ -94,8 +93,8 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		goto out;
 
 	sector = bio->bi_iter.bi_sector;
-	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) /
-			   SECTOR_SIZE);
+	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) >>
+			   SECTOR_SHIFT);
 
 	current_flag = memalloc_noio_save();
 	err = cbt_map_set(tracker->cbt_map, sector, count);
@@ -110,27 +109,46 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		goto out;
 
 	current_flag = memalloc_noio_save();
+	bio_list_init(&bio_list_on_stack[0]);
+	current->bio_list = bio_list_on_stack;
+	barrier();
+
 	err = diff_area_copy(tracker->diff_area, sector, count,
 			     !!(bio->bi_opf & REQ_NOWAIT));
+
+	current->bio_list = NULL;
+	barrier();
 	memalloc_noio_restore(current_flag);
 
-	if (unlikely(err)) {
-		if (err == -EAGAIN) {
-			bio_wouldblock_error(bio);
-			ret = bdev_filter_skip;
-		} else
-			pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
+	if (unlikely(err))
+		goto fail;
 
-		goto out;
+	while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
+		/*
+		 * The result from submitting a bio from the
+		 * filter itself does not need to be processed,
+		 * even if this function has a return code.
+		 */
+		io_set_flag(new_bio, BIO_FILTERED);
+		submit_bio_noacct(new_bio);
 	}
-
 	/*
-	 * If a new bio was created during the handling and the original bio
-	 * must be processed synchronously (flag REQ_SYNC), then new bios must
+	 * If a new bio was created during the handling, then new bios must
 	 * be sent and returned to complete the processing of the original bio.
+	 * Unfortunately, this has to be done for any bio, regardless of their
+	 * flags and options.
+	 * Otherwise, write requests confidently overtake read requests.
 	 */
-	if (!bio_list_empty(current->bio_list) && (bio->bi_opf & REQ_SYNC))
-		ret = bdev_filter_repeat;
+	err = diff_area_wait(tracker->diff_area, sector, count,
+			     !!(bio->bi_opf & REQ_NOWAIT));
+	if (likely(err == 0))
+		goto out;
+fail:
+	if (err == -EAGAIN) {
+		bio_wouldblock_error(bio);
+		ret = bdev_filter_res_skip;
+	} else
+		pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
 out:
 	percpu_up_read(&tracker_submit_lock);
 	return ret;
@@ -180,7 +198,6 @@ static int tracker_filter_attach(struct block_device *bdev,
 	bool is_frozen = false;
 
 	pr_debug("Tracker attach filter\n");
-
 	if (freeze_bdev(bdev))
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
 		       MINOR(bdev->bd_dev));
@@ -252,9 +269,8 @@ static struct tracker *tracker_new(struct block_device *bdev)
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
 	if (tracker == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker);
-#endif
+
 	refcount_inc(&trackers_counter);
 	bdev_filter_init(&tracker->flt, &tracker_fops);
 	INIT_LIST_HEAD(&tracker->link);
@@ -385,9 +401,7 @@ void tracker_done(void)
 
 		tracker_remove(tr_dev->dev_id);
 		kfree(tr_dev);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
-#endif
 	}
 
 	tracker_wait_for_release();
@@ -425,9 +439,8 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		tracker = ERR_PTR(-ENOMEM);
 		goto put_bdev;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracked_device);
-#endif
+
 	INIT_LIST_HEAD(&tr_dev->link);
 	tr_dev->dev_id = dev_id;
 
@@ -437,9 +450,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 
 		pr_err("Failed to create tracker. errno=%d\n", abs(err));
 		kfree(tr_dev);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_tracked_device);
-#endif
 	} else {
 		/*
 		 * It is normal that the new trackers filter will have
@@ -515,10 +526,8 @@ int tracker_remove(dev_t dev_id)
 		spin_unlock(&tracked_device_lock);
 
 		kfree(tr_dev);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		if (tr_dev)
 			memory_object_dec(memory_object_tracked_device);
-#endif
 	}
 put_tracker:
 	tracker_put(tracker);

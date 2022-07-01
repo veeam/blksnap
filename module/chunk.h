@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_CHUNK_H
+#define __BLK_SNAP_CHUNK_H
+
 #include <linux/blk_types.h>
 #include <linux/blkdev.h>
 #include <linux/rwsem.h>
@@ -17,14 +19,21 @@ struct diff_io;
  * @CHUNK_ST_DIRTY:
  *	The chunk is in the dirty state. The chunk is marked dirty in case
  *	there was a write operation to the snapshot image.
+ *	The flag is removed when the data of the chunk is stored in the
+ *	difference storage.
  * @CHUNK_ST_BUFFER_READY:
  *	The data of the chunk is ready to be read from the RAM buffer.
+ *	The flag is removed when a chunk is removed from the cache and its
+ *	buffer is released.
  * @CHUNK_ST_STORE_READY:
  *	The data of the chunk has been written to the difference storage.
+ *	The flag cannot be removed.
  * @CHUNK_ST_LOADING:
  *	The data is being read from the original block device.
+ *	The flag is replaced with the CHUNK_ST_BUFFER_READY flag.
  * @CHUNK_ST_STORING:
  *	The data is being saved to the difference storage.
+ *	The flag is replaced with the CHUNK_ST_STORE_READY flag.
  *
  * Chunks life circle.
  * Copy-on-write when writing to original:
@@ -127,3 +136,4 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait);
 /* Synchronous operations are used to implement reading and writing to the snapshot image. */
 int chunk_load_orig(struct chunk *chunk);
 int chunk_load_diff(struct chunk *chunk);
+#endif /* __BLK_SNAP_CHUNK_H */

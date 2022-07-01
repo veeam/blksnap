@@ -2,9 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
 #include <linux/blk_snap.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "version.h"
 #include "params.h"
 #include "ctrl.h"
@@ -63,6 +61,9 @@ static void __exit blk_snap_exit(void)
 	snapimage_done();
 	tracker_done();
 
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	WARN(memory_object_print(), "Several objects were not released");
+#endif
 	pr_info("Module was unloaded\n");
 }
 

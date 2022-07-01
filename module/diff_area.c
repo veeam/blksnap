@@ -3,9 +3,7 @@
 #include <linux/blkdev.h>
 #include <linux/slab.h>
 #include <linux/blk_snap.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
@@ -39,8 +37,9 @@ static inline void recalculate_last_chunk_size(struct chunk *chunk)
 static inline unsigned long long count_by_shift(sector_t capacity,
 						unsigned long long shift)
 {
-	return round_up(capacity, 1ull << (shift - SECTOR_SHIFT)) >>
-	       (shift - SECTOR_SHIFT);
+	unsigned long long shift_sector = (shift - SECTOR_SHIFT);
+
+	return round_up(capacity, (1ull << shift_sector)) >> shift_sector;
 }
 
 static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
@@ -50,15 +49,19 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	sector_t capacity;
 	sector_t min_io_sect;
 
-	min_io_sect =
-		(sector_t)(bdev_io_min(diff_area->orig_bdev) >> SECTOR_SHIFT);
+	min_io_sect = (sector_t)(bdev_io_min(diff_area->orig_bdev) >>
+		SECTOR_SHIFT);
 	capacity = bdev_nr_sectors(diff_area->orig_bdev);
+	pr_debug("Minimal IO block %llu sectors\n", min_io_sect);
+	pr_debug("Device capacity %llu sectors\n", capacity);
 
 	count = count_by_shift(capacity, shift);
+	pr_debug("Chunks count %llu\n", count);
 	while ((count > chunk_maximum_count) ||
-	       (diff_area_chunk_sectors(diff_area) < min_io_sect)) {
-		shift = shift << 1;
+		((1ull << (shift - SECTOR_SHIFT)) < min_io_sect)) {
+		shift = shift + 1ull;
 		count = count_by_shift(capacity, shift);
+		pr_debug("Chunks count %llu\n", count);
 	}
 
 	diff_area->chunk_shift = shift;
@@ -108,9 +111,7 @@ void diff_area_free(struct kref *kref)
 	diff_buffer_cleanup(diff_area);
 
 	kfree(diff_area);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_area);
-#endif
 }
 
 static inline struct chunk *
@@ -173,7 +174,10 @@ static void diff_area_cache_release(struct diff_area *diff_area)
 	while (!diff_area_is_corrupted(diff_area) &&
 	       (chunk = diff_area_get_chunk_from_cache_and_write_lock(
 			diff_area))) {
-
+		/*
+		 * There cannot be a chunk in the cache whose buffer is
+		 * not ready.
+		 */
 		if (WARN(!chunk_state_check(chunk, CHUNK_ST_BUFFER_READY),
 			 "Cannot release empty buffer for chunk #%ld",
 			 chunk->number)) {
@@ -224,14 +228,13 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_area);
-#endif
+
 	diff_area->orig_bdev = bdev;
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);
-	pr_debug("Chunk size %llu in bytes\n", 1ULL << diff_area->chunk_shift);
+	pr_debug("Chunk size %llu in bytes\n", 1ull << diff_area->chunk_shift);
 	pr_debug("Chunk count %lu\n", diff_area->chunk_count);
 
 	kref_init(&diff_area->kref);
@@ -400,10 +403,66 @@ fail_unlock_chunk:
 	return ret;
 }
 
+int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
+                   const bool is_nowait)
+{
+	int ret = 0;
+	sector_t offset;
+	struct chunk *chunk;
+	sector_t area_sect_first;
+	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
+
+	area_sect_first = round_down(sector, chunk_sectors);
+	for (offset = area_sect_first; offset < (sector + count);
+	     offset += chunk_sectors) {
+		chunk = xa_load(&diff_area->chunk_map,
+				chunk_number(diff_area, offset));
+		if (!chunk) {
+			diff_area_set_corrupted(diff_area, -EINVAL);
+			return -EINVAL;
+		}
+		WARN_ON(chunk_number(diff_area, offset) != chunk->number);
+		if (is_nowait) {
+			if (down_trylock(&chunk->lock))
+				return -EAGAIN;
+		} else {
+			ret = down_killable(&chunk->lock);
+			if (unlikely(ret))
+				return ret;
+		}
+
+		if (chunk_state_check(chunk, CHUNK_ST_FAILED )) {
+			/*
+			 * The chunk has already been:
+			 * - Failed, when the snapshot is corrupted
+			 * - Overwritten in the snapshot image
+			 * - Already stored in the diff storage
+			 */
+			up(&chunk->lock);
+			ret = -EFAULT;
+			break;
+		}
+
+		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY |
+				      CHUNK_ST_DIRTY | CHUNK_ST_STORE_READY)) {
+			/*
+			 * The chunk has already been:
+			 * - Read
+			 * - Overwritten in the snapshot image
+			 * - Already stored in the diff storage
+			 */
+			up(&chunk->lock);
+			continue;
+		}
+	}
+
+	return ret;
+}
+
 static inline void diff_area_image_put_chunk(struct chunk *chunk, bool is_write)
 {
 	if (is_write) {
-		/**
+		/*
 		 * Since the chunk was taken to perform writing,
 		 * we mark it as dirty.
 		 */
@@ -461,7 +520,6 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 		io_ctx->chunk = NULL;
 	}
 
-	//pr_err("Take chunk #%ld\n", new_chunk_number);
 	/* Take a next chunk. */
 	chunk = xa_load(&diff_area->chunk_map, new_chunk_number);
 	if (unlikely(!chunk))
@@ -477,7 +535,7 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 		pr_debug("new_chunk_number=%ld\n", new_chunk_number);
 		pr_debug("sector=%llu\n", sector);
 		pr_debug("Chunk size %llu in bytes\n",
-		       (1ULL << diff_area->chunk_shift));
+		       (1ull << diff_area->chunk_shift));
 		pr_debug("Chunk count %lu\n", diff_area->chunk_count);
 
 		ret = -EIO;
@@ -516,7 +574,7 @@ static inline sector_t diff_area_chunk_start(struct diff_area *diff_area,
 
 /**
  * diff_area_image_io - Implements copying data from the chunk to bio_vec when
- *	reading or from bio_tec to the chunk when writing.
+ *	reading or from bio_vec to the chunk when writing.
  */
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos)
@@ -529,32 +587,35 @@ blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 	while (bv_len) {
 		struct diff_buffer_iter diff_buffer_iter;
 		struct chunk *chunk;
-		sector_t buff_offset;
+		size_t buff_offset;
 
 		chunk = diff_area_image_context_get_chunk(io_ctx, *pos);
 		if (IS_ERR(chunk))
 			return BLK_STS_IOERR;
 
-		buff_offset = *pos - chunk_sector(chunk);
+		buff_offset = (size_t)(*pos - chunk_sector(chunk))
+				<< SECTOR_SHIFT;
 		while (bv_len &&
 		       diff_buffer_iter_get(chunk->diff_buffer, buff_offset,
 					    &diff_buffer_iter)) {
-			ssize_t sz;
+			size_t sz;
 
 			if (io_ctx->is_write)
 				sz = copy_page_from_iter(
 					diff_buffer_iter.page,
 					diff_buffer_iter.offset,
-					diff_buffer_iter.bytes, &iter);
+					diff_buffer_iter.bytes,
+					&iter);
 			else
-				sz = copy_page_to_iter(diff_buffer_iter.page,
-						       diff_buffer_iter.offset,
-						       diff_buffer_iter.bytes,
-						       &iter);
+				sz = copy_page_to_iter(
+					diff_buffer_iter.page,
+					diff_buffer_iter.offset,
+					diff_buffer_iter.bytes,
+					&iter);
 			if (!sz)
 				return BLK_STS_IOERR;
 
-			buff_offset += (sz >> SECTOR_SHIFT);
+			buff_offset += sz;
 			*pos += (sz >> SECTOR_SHIFT);
 			bv_len -= sz;
 		}

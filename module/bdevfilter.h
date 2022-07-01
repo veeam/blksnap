@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __LINUX_BDEVFILTER_H
+#define __LINUX_BDEVFILTER_H
+
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/blk_types.h>
@@ -11,10 +13,8 @@ enum bdev_filter_altitudes {
 };
 
 enum bdev_filter_result {
-	bdev_filter_skip = 0,
-	bdev_filter_pass,
-	bdev_filter_repeat,
-	bdev_filter_redirect
+	bdev_filter_res_skip = 0,
+	bdev_filter_res_pass
 };
 
 struct bdev_filter;
@@ -34,7 +34,8 @@ struct bdev_filter_operations {
 
 /**
  * struct bdev_filter - Description of the block device filter.
- * @refcount:
+ * @kref:
+ *
  * @fops:
  *
  */
@@ -48,7 +49,7 @@ static inline void bdev_filter_init(struct bdev_filter *flt,
 {
 	kref_init(&flt->kref);
 	flt->fops = fops;
-}
+};
 
 int bdev_filter_attach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude,
@@ -60,7 +61,7 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 static inline void bdev_filter_get(struct bdev_filter *flt)
 {
 	kref_get(&flt->kref);
-}
+};
 static inline void bdev_filter_put(struct bdev_filter *flt)
 {
 	if (likely(flt))
@@ -70,3 +71,10 @@ static inline void bdev_filter_put(struct bdev_filter *flt)
 /* Only for livepatch version */
 int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 			   const enum bdev_filter_altitudes altitude);
+
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+blk_qc_t bdev_filter_submit_bio_noacct_notrace(struct bio *bio);
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
+void bdev_filter_submit_bio_noacct_notrace(struct bio *bio);
+#endif
+#endif /* __LINUX_BDEVFILTER_H */

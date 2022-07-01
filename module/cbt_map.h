@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_CBT_MAP_H
+#define __BLK_SNAP_CBT_MAP_H
+
 #include <linux/kernel.h>
 #include <linux/kref.h>
 #include <linux/uuid.h>
@@ -110,3 +112,5 @@ static inline size_t cbt_map_blk_size(struct cbt_map *cbt_map)
 int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 			      struct blk_snap_block_range *block_ranges,
 			      unsigned int count);
+
+#endif /* __BLK_SNAP_CBT_MAP_H */

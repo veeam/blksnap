@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_SNAPIMAGE_H
+#define __BLK_SNAP_SNAPIMAGE_H
+
 #include <linux/blk_types.h>
 #include <linux/blkdev.h>
 #include <linux/blk-mq.h>
@@ -63,3 +65,4 @@ int snapimage_major(void);
 void snapimage_free(struct snapimage *snapimage);
 struct snapimage *snapimage_create(struct diff_area *diff_area,
 				   struct cbt_map *cbt_map);
+#endif /* __BLK_SNAP_SNAPIMAGE_H */

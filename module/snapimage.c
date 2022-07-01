@@ -4,9 +4,7 @@
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
 #include <linux/blk_snap.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "snapimage.h"
 #include "diff_area.h"
 #include "chunk.h"
@@ -113,6 +111,10 @@ static int snapimage_init_request(struct blk_mq_tag_set *set,
 	return 0;
 }
 
+/*
+ * Cannot fall asleep in the context of this function, as we are under
+ * rwsem lockdown.
+ */
 static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 				       const struct blk_mq_queue_data *bd)
 {
@@ -121,16 +123,11 @@ static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 	struct snapimage *snapimage = rq->q->queuedata;
 	struct snapimage_cmd *cmd = blk_mq_rq_to_pdu(rq);
 
-	/*
-	 * Cannot fall asleep in the context of this function,
-	 * as we are under rwsem lockdown.
-	 */
-
 	blk_mq_start_request(rq);
 
 	if (unlikely(!snapimage->is_ready)) {
-		blk_mq_end_request(rq, BLK_STS_IOERR);
-		return BLK_STS_IOERR;
+		blk_mq_end_request(rq, BLK_STS_NOSPC);
+		return BLK_STS_NOSPC;
 	}
 
 	if (op_is_write(req_op(rq))) {
@@ -153,9 +150,6 @@ static const struct blk_mq_ops mq_ops = {
 
 const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
-	//.open = snapimage_open,
-	//.ioctl = snapimage_ioctl,
-	//.release = snapimage_close,
 };
 
 static inline int snapimage_alloc_tag_set(struct snapimage *snapimage)
@@ -195,9 +189,7 @@ void snapimage_free(struct snapimage *snapimage)
 
 	free_minor(MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
-#endif
 }
 
 struct snapimage *snapimage_create(struct diff_area *diff_area,
@@ -215,9 +207,8 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage);
-#endif
+
 	ret = new_minor(&minor, snapimage);
 	if (ret) {
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
@@ -263,18 +254,10 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	pr_info("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
-	//disk->flags |= GENHD_FL_HIDDEN;
-	//disk->flags |= GENHD_FL_REMOVABLE;
-#ifdef GENHD_FL_NO_PART_SCAN
-	disk->flags |= GENHD_FL_NO_PART_SCAN;
-#else
 	disk->flags |= GENHD_FL_NO_PART;
-#endif
-
-
 	disk->major = _major;
 	disk->first_minor = minor;
-	disk->minors = 1; // One disk has only one partition.
+	disk->minors = 1; /* One disk has only one partition */
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;
@@ -308,9 +291,7 @@ fail_free_minor:
 	free_minor(minor);
 fail_free_image:
 	kfree(snapimage);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
-#endif
 	return ERR_PTR(ret);
 }
 

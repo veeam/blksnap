@@ -4,9 +4,7 @@
 #include <linux/sysfs.h>
 #include <linux/device.h>
 #include <linux/blk_snap.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "sysfs.h"
 #include "ctrl.h"
 

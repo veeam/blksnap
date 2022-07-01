@@ -2,9 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-io: " fmt
 #include <linux/blkdev.h>
 #include <linux/slab.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "diff_io.h"
 #include "diff_buffer.h"
 
@@ -57,9 +55,8 @@ static inline struct diff_io *diff_io_new(bool is_write, bool is_nowait)
 	diff_io = kzalloc(sizeof(struct diff_io), gfp_mask);
 	if (unlikely(!diff_io))
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_io);
-#endif
+
 	diff_io->error = 0;
 	diff_io->is_write = is_write;
 	atomic_set(&diff_io->bio_count, 0);
@@ -98,7 +95,7 @@ struct diff_io *diff_io_new_async(bool is_write, bool is_nowait,
 
 static inline bool check_page_aligned(sector_t sector)
 {
-	return !(sector & ((1ULL << (PAGE_SHIFT - SECTOR_SHIFT)) - 1));
+	return !(sector & ((1ull << (PAGE_SHIFT - SECTOR_SHIFT)) - 1));
 }
 
 static inline unsigned short calc_page_count(sector_t sectors)
@@ -159,7 +156,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 	atomic_set(&diff_io->bio_count, 2);
 
-	// Submit bio with datas
+	/* submit bio with datas */
 	bio_set_flag(bio, BIO_FILTERED);
 	bio->bi_end_io = diff_io_endio;
 	bio->bi_private = diff_io;
@@ -184,7 +181,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	}
 	submit_bio_noacct(bio);
 
-	// Submit flush bio
+	/* submit flush bio */
 	bio_set_flag(flush_bio, BIO_FILTERED);
 	flush_bio->bi_end_io = diff_io_endio;
 	flush_bio->bi_private = diff_io;

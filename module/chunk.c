@@ -3,9 +3,7 @@
 #include <linux/slab.h>
 #include <linux/dm-io.h>
 #include <linux/sched/mm.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "chunk.h"
 #include "diff_io.h"
@@ -41,7 +39,6 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
-	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
 		 "The chunk already in the cache"))
 		return -EINVAL;
@@ -77,8 +74,13 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	might_sleep();
 
-	//pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->caches_lock);
+
+	/*
+	 * The locked chunk cannot be in the cache.
+	 * If the check reveals that the chunk is in the cache, then something
+	 * is wrong in the algorithm.
+	 */
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
 		 "The chunk already in the cache")) {
 		spin_unlock(&diff_area->caches_lock);
@@ -101,7 +103,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	up(&chunk->lock);
 
-	// Initiate the cache clearing process.
+	/* Initiate the cache clearing process */
 	if ((in_cache_count > chunk_maximum_in_cache) &&
 	    !diff_area_is_corrupted(diff_area))
 		queue_work(system_wq, &diff_area->cache_release_work);
@@ -174,6 +176,12 @@ static void chunk_notify_store(void *ctx)
 		chunk_state_set(chunk, CHUNK_ST_STORE_READY);
 
 		if (chunk_state_check(chunk, CHUNK_ST_DIRTY)) {
+			/*
+			 * The chunk marked "dirty" was stored in the difference
+			 * storage. Now it is processed in the same way as any
+			 * other stored chunks.
+			 * Therefore, the "dirty" mark can be removed.
+			 */
 			chunk_state_unset(chunk, CHUNK_ST_DIRTY);
 			chunk_diff_buffer_release(chunk);
 		} else {
@@ -198,9 +206,8 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_chunk);
-#endif
+
 	INIT_LIST_HEAD(&chunk->cache_link);
 	sema_init(&chunk->lock, 1);
 	chunk->diff_area = diff_area;
@@ -222,9 +229,7 @@ void chunk_free(struct chunk *chunk)
 	up(&chunk->lock);
 
 	kfree(chunk);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_chunk);
-#endif
 }
 
 /**
