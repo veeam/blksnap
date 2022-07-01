@@ -99,10 +99,9 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
  * @name:
  *	Name of the block device filter.
  * @altitude:
- *	Altituda number of the block device filter.
+ *	Number of the block device filter.
  * @flt:
  *	Pointer to the filter structure.
- *
  *
  * The bdev_filter_detach() function allows to detach the filter from the block
  * device.
@@ -182,13 +181,13 @@ int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 EXPORT_SYMBOL(lp_bdev_filter_detach);
 
 /**
- * bdev_bdev_filter_del - Detach a filter from the block device.
+ * bdev_filter_detach - Detach a filter from the block device.
  * @bdev:
  * 	block device.
  * @name:
  *	Name of the block device filter.
  * @altitude:
- *	Altituda number of the block device filter.
+ *	Number of the block device filter.
  *
  * The filter should be added using the bdev_filter_attach() function.
  *
@@ -205,12 +204,13 @@ int bdev_filter_detach(struct block_device *bdev, const char *name,
 EXPORT_SYMBOL(bdev_filter_detach);
 
 /**
- * bdev_filter_get_ctx - Get filters context value.
- * @dev_id:
+ * bdev_filter_get_by_altitude - Get filters context value.
+ * @bdev:
  * 	Block device ID.
+ * @altitude:
+ * 	Number of the block device filter.
  *
- * Return &ctx value from &struct bdev_filter or NULL.
- * NULL is returned if the filter was not found.
+ * Return pointer to &struct bdev_filter or NULL if the filter was not found.
  *
  * Necessary to lock list of filters by calling bdev_filter_read_lock().
  */

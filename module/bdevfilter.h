@@ -34,7 +34,8 @@ struct bdev_filter_operations {
 
 /**
  * struct bdev_filter - Description of the block device filter.
- * @refcount:
+ * @kref:
+ *
  * @fops:
  *
  */
@@ -48,7 +49,7 @@ static inline void bdev_filter_init(struct bdev_filter *flt,
 {
 	kref_init(&flt->kref);
 	flt->fops = fops;
-}
+};
 
 int bdev_filter_attach(struct block_device *bdev, const char *name,
 		       const enum bdev_filter_altitudes altitude,
@@ -60,7 +61,7 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 static inline void bdev_filter_get(struct bdev_filter *flt)
 {
 	kref_get(&flt->kref);
-}
+};
 static inline void bdev_filter_put(struct bdev_filter *flt)
 {
 	if (likely(flt))
