@@ -128,7 +128,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		goto fail;
 	}
 
-	// Allocate both bios
+	/* Allocate both bios */
 	opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
 	gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
 
