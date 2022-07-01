@@ -19,6 +19,7 @@ namespace po = boost::program_options;
 using blksnap::sector_t;
 using blksnap::SRange;
 
+int g_blksz = 512;
 
 void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>& diffStorageRanges,
     const int granularity, const sector_t deviceSize)
@@ -28,7 +29,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
 
     for (int inx=0; inx<granularity; inx++)
     {
-        sector_t sector = static_cast<sector_t>(std::rand() * scaling)  & ~7ull;
+        sector_t sector = static_cast<sector_t>(std::rand() * scaling) & ~7ull;
 
         if ((sector == 0) || (sector > deviceSize))
             continue;
@@ -60,7 +61,7 @@ static void FillRange(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                       const std::shared_ptr<CBlockDevice>& ptrBdev,
                       const SRange& rg)
 {
-    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(g_blksz, 1024 * 1024);
 
     off_t from = rg.sector * SECTOR_SIZE;
     off_t to = (rg.sector + rg.count) * SECTOR_SIZE;
@@ -89,7 +90,7 @@ static void CheckRange(const std::shared_ptr<CTestSectorGenetor> ptrGen,
                        const SRange& rg,
                        const int seqNumber, const clock_t seqTime)
 {
-    AlignedBuffer<unsigned char> portion(ptrBdev->BlockSize(), 1024 * 1024);
+    AlignedBuffer<unsigned char> portion(g_blksz, 1024 * 1024);
 
     off_t from = rg.sector * SECTOR_SIZE;
     off_t to = (rg.sector + rg.count) * SECTOR_SIZE;
@@ -183,7 +184,8 @@ static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
 {
     sector_t deviceSize = ptrOrininal->Size() >> SECTOR_SHIFT;
     double offsetScaling = static_cast<double>(deviceSize) / (RAND_MAX + 1ul);
-    int blockSizeScaling = static_cast<unsigned int>((RAND_MAX + 1ul) / (blockSizeLimit - 8));
+    int blockSizeScaling = static_cast<unsigned int>((RAND_MAX + 1ul) / (blockSizeLimit - (g_blksz >> SECTOR_SHIFT)));
+    unsigned long long blockSizeMask = ~(static_cast<unsigned long long>((g_blksz >> SECTOR_SHIFT)) - 1ull);
 
     logger.Info("Write block list generating with granularity=" + std::to_string(granularity) +
                 " and blockSizeLimit=" + std::to_string(blockSizeLimit));
@@ -191,12 +193,9 @@ static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
     while (writeRanges.size() < granularity)
     {
         SRange rg;
-        /*
-         * generate range block size from 8 up to 256 sectors
-         * the ranges are aligned to the page size
-         */
-        rg.sector = static_cast<sector_t>(std::rand() * offsetScaling)  & ~7ull;
-        rg.count = (8 + std::rand() / blockSizeScaling) & ~7ul;
+
+        rg.sector = static_cast<sector_t>(std::rand() * offsetScaling) & blockSizeMask;
+        rg.count = (8 + std::rand() / blockSizeScaling) & blockSizeMask;
 
         if (!NormalizeRange(availableRanges, rg))
             continue;
@@ -231,7 +230,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
     auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync/*, 1024*1024*1024ull*/);
 
     logger.Info("device size: " + std::to_string(ptrOrininal->Size()));
-    logger.Info("device block size: " + std::to_string(ptrOrininal->BlockSize()));
+    logger.Info("device block size: " + std::to_string(g_blksz));
 
     std::vector<std::string> devices;
     devices.push_back(origDevName);
@@ -264,7 +263,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         }
 
         /*{
-            AlignedBuffer<char> buf(ptrBdev->BlockSize());
+            AlignedBuffer<char> buf(g_blksz);
 
             logger.Info("Original first sector:");
             ptrOrininal->Read(buf.Data(), buf.Size(), 0 << SECTOR_SHIFT);
@@ -296,7 +295,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
         /*{
-            AlignedBuffer<char> buf(ptrBdev->BlockSize());
+            AlignedBuffer<char> buf(g_blksz);
 
             logger.Info("Images first sector:");
             ptrImage->Read(buf.Data(), buf.Size(), 0 << SECTOR_SHIFT);
@@ -329,7 +328,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
             {
                 logger.Info("FAIL: " + std::to_string(rg.sector) + " - " + std::to_string(rg.sector + rg.count - 1));
 
-                AlignedBuffer<char> buf(ptrOrininal->BlockSize());
+                AlignedBuffer<char> buf(g_blksz);
                 ptrOrininal->Read(buf.Data(), buf.Size(), rg.sector << SECTOR_SHIFT);
                 logger.Err(buf.Data(), 128);
             }
@@ -364,7 +363,8 @@ void Main(int argc, char* argv[])
         ("log,l", po::value<std::string>(),"Detailed log of all transactions.")
         ("device,d", po::value<std::string>(), "Device name. ")
         ("duration,u", po::value<int>(), "The test duration limit in minutes.")
-        ("sync", "Use O_SYNC for access to original device.");
+        ("sync", "Use O_SYNC for access to original device.")
+        ("blksz", po::value<int>(), "Align reads and writes to the block size.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
@@ -394,6 +394,9 @@ void Main(int argc, char* argv[])
     bool isSync = false;
     if (vm.count("sync"))
         isSync = true;
+
+    if (vm.count("blksz"))
+        g_blksz = vm["duration"].as<int>();
 
     std::srand(std::time(0));
     CheckDiffStorage(origDevName, duration * 60, isSync);

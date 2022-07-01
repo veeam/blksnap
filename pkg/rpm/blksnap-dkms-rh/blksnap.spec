@@ -13,6 +13,8 @@ Requires:       gcc, make, perl
 Requires:       kernel-devel
 Provides:       %{name} = %{version}
 Conflicts:      kmod-%{name}
+Conflicts:      veeamsnap
+Obsoletes:      veeamsnap
 
 %description
 This kernel module implements snapshot and changed block tracking
