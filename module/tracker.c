@@ -27,16 +27,17 @@ struct tracker_release_worker {
 };
 static struct tracker_release_worker tracker_release_worker;
 
-void tracker_lock(void )
+void tracker_lock(void)
 {
 	pr_info("Lock trackers\n");
 	percpu_down_write(&tracker_submit_lock);
-};
-void tracker_unlock(void )
+}
+
+void tracker_unlock(void)
 {
 	percpu_up_write(&tracker_submit_lock);
 	pr_info("Trackers have been unlocked\n");
-};
+}
 
 static void tracker_free(struct tracker *tracker)
 {
@@ -457,7 +458,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		 * a ref counter value of 2. This allows not to detach
 		 * the filter when the snapshot is released.
 		 */
-	        bdev_filter_get(&tracker->flt);
+		bdev_filter_get(&tracker->flt);
 
 		spin_lock(&tracked_device_lock);
 		list_add_tail(&tr_dev->link, &tracked_device_list);

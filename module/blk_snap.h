@@ -9,10 +9,6 @@
 #define BLK_SNAP_IMAGE_NAME "blksnap-image"
 #define BLK_SNAP 'V'
 
-#ifdef BLK_SNAP_MODIFICATION
-#define IOCTL_MOD 32
-#endif
-
 enum blk_snap_ioctl {
 	/*
 	 * Service controls
@@ -36,16 +32,6 @@ enum blk_snap_ioctl {
 	blk_snap_ioctl_snapshot_collect_images,
 	blk_snap_ioctl_snapshot_wait_event,
 	blk_snap_ioctl_end,
-#ifdef BLK_SNAP_MODIFICATION
-        /*
-         * Additional controls for any standalone modification
-         */
-	blk_snap_ioctl_mod = IOCTL_MOD,
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-	blk_snap_ioctl_get_sector_state,
-#endif
-	blk_snap_ioctl_end_mod
-#endif
 };
 
 /**
@@ -74,54 +60,6 @@ struct blk_snap_version {
 #define IOCTL_BLK_SNAP_VERSION                                                 \
 	_IOW(BLK_SNAP, blk_snap_ioctl_version, struct blk_snap_version)
 
-#ifdef BLK_SNAP_MODIFICATION
-
-enum blk_snap_compat_flags {
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-	blk_snap_compat_flag_debug_sector_state,
-#endif
-	/*
-	 * Reserved for new features
-	 */
-	blk_snap_compat_flags_end
-};
-static_assert(blk_snap_compat_flags_end <= 64,
-	      "There are too many compatibility flags.");
-
-#define BLK_SNAP_MOD_NAME_LIMIT 32
-
-/**
- * struct blk_snap_modification - Result for &IOCTL_BLK_SNAP_VERSION control.
- *
- * @compatibility_flags:
- *	[TBD] Reserved for new modification specific features.
- * @name:
- *	Name of modification of the module blksnap (fork name, for example).
- *      It's should be empty string for upstream module.
- */
-struct blk_snap_mod {
-	__u64 compatibility_flags;
-	__u8 name[BLK_SNAP_MOD_NAME_LIMIT];
-};
-
-/**
- * IOCTL_BLK_SNAP_MOD - Get modification name and compatibility flags.
- *
- * Linking the product behavior to the version code does not seem to me a very
- * good idea. However, such an ioctl is good for checking that the module has
- * loaded and is responding to requests.
- *
- * The compatibility flags allows to safely extend the functionality of the
- * module. When the blk_snap kernel module receives new ioctl it will be
- * enough to add a bit.
- *
- * The name of the modification can be used by the authors of forks and branches
- * of the original module. The module in upstream have not any modifications.
- */
-#define IOCTL_BLK_SNAP_MOD                                                     \
-	_IOW(BLK_SNAP, blk_snap_ioctl_mod, struct blk_snap_mod)
-#endif
-
 /*
  * The main functionality of the module is change block tracking (CBT).
  * Next, a number of ioctls will describe the interface for the CBT mechanism.
@@ -135,8 +73,8 @@ struct blk_snap_mod {
  *	Device ID minor part.
  *
  * In user space and in kernel space, block devices are encoded differently.
- * We need to enter our own type to guarantee the correct transmission of the major
- * and minor parts.
+ * We need to enter our own type to guarantee the correct transmission of the
+ * major and minor parts.
  */
 struct blk_snap_dev_t {
 	__u32 mj;
@@ -192,7 +130,8 @@ struct blk_snap_cbt_info {
  *	&IOCTL_BLK_SNAP_TRACKER_COLLECT control.
  * @count:
  *	Size of @cbt_info_array in the number of &struct blk_snap_cbt_info.
- *	If @cbt_info_array has not enough space, it will contain the required size of the array.
+ *	If @cbt_info_array has not enough space, it will contain the required
+ *	size of the array.
  * @cbt_info_array:
  *	Pointer to the array for output.
  */
@@ -257,7 +196,8 @@ struct blk_snap_block_range {
  * @dev_id:
  *	Device ID.
  * @count:
- *	Size of @dirty_blocks_array in the number of &struct blk_snap_block_range.
+ *	Size of @dirty_blocks_array in the number of
+ *	&struct blk_snap_block_range.
  * @dirty_blocks_array:
  *	Pointer to the array of &struct blk_snap_block_range.
  */
@@ -277,7 +217,8 @@ struct blk_snap_tracker_mark_dirty_blocks {
 	     struct blk_snap_tracker_mark_dirty_blocks)
 
 /*
- * Next, there will be a description of the interface for working with snapshots.
+ * Next, there will be a description of the interface for working with
+ * snapshots.
  */
 
 /**
@@ -296,8 +237,9 @@ struct blk_snap_snapshot_create {
 	uuid_t id;
 };
 /**
- * This ioctl creates a snapshot structure in the memory and allocates an identifier
- * for it. Further interaction with the snapshot is possible by this identifier.
+ * This ioctl creates a snapshot structure in the memory and allocates an
+ * identifier for it. Further interaction with the snapshot is possible by
+ * this identifier.
  * Several snapshots can be created at the same time, but with the condition
  * that one block device can only be included in one snapshot.
  */
@@ -345,9 +287,9 @@ struct blk_snap_snapshot_append_storage {
  * IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE - Append storage to the difference
  *	storage of the snapshot.
  *
- * The snapshot difference storage can be set either before or after creating the snapshot
- * images. This allows to dynamically expand the
- * difference storage while holding the snapshot.
+ * The snapshot difference storage can be set either before or after creating
+ * the snapshot images. This allows to dynamically expand the difference
+ * storage while holding the snapshot.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE                                 \
 	_IOW(BLK_SNAP, blk_snap_ioctl_snapshot_append_storage,                 \
@@ -427,8 +369,8 @@ struct blk_snap_snapshot_collect_images {
 	struct blk_snap_image_info *image_info_array;
 };
 /**
- * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES - Get a collection of devices and their
- *	snapshot images.
+ * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES - Get a collection of devices and
+ *	their snapshot images.
  *
  * While holding the snapshot, this ioctl allows you to get a table of
  * correspondences of the original devices and their snapshot images.
@@ -452,8 +394,8 @@ enum blk_snap_event_codes {
 	 * If a chunk could not be allocated when trying to save data to the
 	 * difference storage, this event is generated.
 	 * However, this does not mean that the backup process was interrupted
-	 * with an error. If the snapshot image has been read to the end by this
-	 * time, the backup process is considered successful.
+	 * with an error. If the snapshot image has been read to the end by
+	 * this time, the backup process is considered successful.
 	 */
 	blk_snap_event_code_corrupted,
 };
@@ -484,7 +426,8 @@ static_assert(
 	"The size struct blk_snap_snapshot_event should be equal to the size of the page.");
 
 /**
- * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get the event from the snapshot.
+ * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get the event from the
+ *	snapshot.
  *
  * While holding the snapshot, the kernel module can transmit information about
  * changes in its state in the form of events to the user level.
@@ -506,7 +449,8 @@ struct blk_snap_event_low_free_space {
 };
 
 /**
- * struct blk_snap_event_corrupted - Data for the &blk_snap_event_code_corrupted event.
+ * struct blk_snap_event_corrupted - Data for the
+ *	&blk_snap_event_code_corrupted event.
  * @orig_dev_id:
  *	Device ID.
  * @err_code:
@@ -517,29 +461,4 @@ struct blk_snap_event_corrupted {
 	__s32 err_code;
 };
 
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-
-/**
- *
- */
-struct blk_snap_sector_state {
-	__u8 snap_number_prev;
-	__u8 snap_number_curr;
-	__u32 chunk_state;
-};
-
-struct blk_snap_get_sector_state {
-	struct blk_snap_dev_t image_dev_id;
-	__u64 sector;
-	struct blk_snap_sector_state state;
-};
-
-/**
- *
- */
-#define IOCTL_BLK_SNAP_GET_SECTOR_STATE                                        \
-	_IOW(BLK_SNAP, blk_snap_ioctl_get_sector_state,                        \
-	     struct blk_snap_get_sector_state)
-
-#endif
 #endif /* __LINUX_BLK_SNAP_H */
