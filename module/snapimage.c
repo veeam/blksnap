@@ -219,10 +219,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	struct request_queue *queue;
 #endif
 
-	pr_info("Create snapshot image for device [%u:%u]\n",
-		MAJOR(diff_area->orig_bdev->bd_dev),
-		MINOR(diff_area->orig_bdev->bd_dev));
-
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
 		return ERR_PTR(-ENOMEM);
@@ -238,8 +234,11 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage->is_ready = true;
 	snapimage->capacity = cbt_map->device_capacity;
 	snapimage->image_dev_id = MKDEV(_major, minor);
-	pr_info("Snapshot image device id [%u:%u]\n",
-		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
+	pr_info("Create snapshot image device [%u:%u] for original device [%u:%u]\n",
+		MAJOR(snapimage->image_dev_id),
+		MINOR(snapimage->image_dev_id),
+		MAJOR(diff_area->orig_bdev->bd_dev),
+		MINOR(diff_area->orig_bdev->bd_dev));
 
 	ret = snapimage_prepare_worker(snapimage);
 	if (ret) {
@@ -291,7 +290,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		ret = -EINVAL;
 		goto fail_cleanup_disk;
 	}
-	pr_info("Snapshot image disk name [%s]\n", disk->disk_name);
+	pr_debug("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
 #ifdef GENHD_FL_NO_PART_SCAN

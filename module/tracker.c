@@ -45,13 +45,13 @@ static struct tracker_release_worker tracker_release_worker;
 
 void tracker_lock(void )
 {
-	pr_info("Lock trackers\n");
+	pr_debug("Lock trackers\n");
 	percpu_down_write(&tracker_submit_lock);
 };
 void tracker_unlock(void )
 {
 	percpu_up_write(&tracker_submit_lock);
-	pr_info("Trackers have been unlocked\n");
+	pr_debug("Trackers have been unlocked\n");
 };
 
 static void tracker_free(struct tracker *tracker)
