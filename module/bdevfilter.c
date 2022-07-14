@@ -289,29 +289,17 @@ static inline bool bdev_filters_apply(struct bio *bio)
 #endif
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-static blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
+blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
 	(blk_qc_t(*)(struct bio *))((unsigned long)(submit_bio_noacct) +
 				    CALL_INSTRUCTION_LENGTH);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-static void (*submit_bio_noacct_notrace)(struct bio *) =
+void (*submit_bio_noacct_notrace)(struct bio *) =
 	(void (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
 				 CALL_INSTRUCTION_LENGTH);
 #else
 #error "Your kernel is too old for this module."
 #endif
-
-#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-blk_qc_t bdev_filter_submit_bio_noacct_notrace(struct bio *bio)
-{
-	return submit_bio_noacct_notrace(bio);
-}
-#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-void bdev_filter_submit_bio_noacct_notrace(struct bio *bio)
-{
-	submit_bio_noacct_notrace(bio);
-}
-#endif
-EXPORT_SYMBOL(bdev_filter_submit_bio_noacct_notrace);
+EXPORT_SYMBOL(submit_bio_noacct_notrace);
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)

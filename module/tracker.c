@@ -162,7 +162,7 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 		 * even if this function has a return code.
 		 */
 #ifdef STANDALONE_BDEVFILTER
-		bdev_filter_submit_bio_noacct_notrace(new_bio);
+		submit_bio_noacct_notrace(new_bio);
 #else
 		io_set_flag(new_bio, BIO_FILTERED);
 		submit_bio_noacct(new_bio);
