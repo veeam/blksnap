@@ -64,6 +64,9 @@ static void snapshot_release(struct snapshot *snapshot)
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was frozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
 
@@ -99,6 +102,9 @@ static void snapshot_release(struct snapshot *snapshot)
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was unfrozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
 
@@ -441,6 +447,9 @@ int snapshot_take(uuid_t *id)
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was frozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
 
@@ -503,6 +512,9 @@ int snapshot_take(uuid_t *id)
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was unfrozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
 
