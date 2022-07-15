@@ -37,9 +37,9 @@ enum blk_snap_ioctl {
 	blk_snap_ioctl_snapshot_wait_event,
 	blk_snap_ioctl_end,
 #ifdef BLK_SNAP_MODIFICATION
-        /*
-         * Additional controls for any standalone modification
-         */
+	/*
+	 * Additional controls for any standalone modification
+	 */
 	blk_snap_ioctl_mod = IOCTL_MOD,
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
 	blk_snap_ioctl_get_sector_state,
@@ -135,8 +135,8 @@ struct blk_snap_mod {
  *	Device ID minor part.
  *
  * In user space and in kernel space, block devices are encoded differently.
- * We need to enter our own type to guarantee the correct transmission of the major
- * and minor parts.
+ * We need to enter our own type to guarantee the correct transmission of the
+ * major and minor parts.
  */
 struct blk_snap_dev_t {
 	__u32 mj;
@@ -192,7 +192,8 @@ struct blk_snap_cbt_info {
  *	&IOCTL_BLK_SNAP_TRACKER_COLLECT control.
  * @count:
  *	Size of @cbt_info_array in the number of &struct blk_snap_cbt_info.
- *	If @cbt_info_array has not enough space, it will contain the required size of the array.
+ *	If @cbt_info_array has not enough space, it will contain the required
+ *	size of the array.
  * @cbt_info_array:
  *	Pointer to the array for output.
  */
@@ -257,7 +258,8 @@ struct blk_snap_block_range {
  * @dev_id:
  *	Device ID.
  * @count:
- *	Size of @dirty_blocks_array in the number of &struct blk_snap_block_range.
+ *	Size of @dirty_blocks_array in the number of
+ *	&struct blk_snap_block_range.
  * @dirty_blocks_array:
  *	Pointer to the array of &struct blk_snap_block_range.
  */
@@ -277,7 +279,8 @@ struct blk_snap_tracker_mark_dirty_blocks {
 	     struct blk_snap_tracker_mark_dirty_blocks)
 
 /*
- * Next, there will be a description of the interface for working with snapshots.
+ * Next, there will be a description of the interface for working with
+ * snapshots.
  */
 
 /**
@@ -296,8 +299,9 @@ struct blk_snap_snapshot_create {
 	uuid_t id;
 };
 /**
- * This ioctl creates a snapshot structure in the memory and allocates an identifier
- * for it. Further interaction with the snapshot is possible by this identifier.
+ * This ioctl creates a snapshot structure in the memory and allocates an
+ * identifier for it. Further interaction with the snapshot is possible by
+ * this identifier.
  * Several snapshots can be created at the same time, but with the condition
  * that one block device can only be included in one snapshot.
  */
@@ -345,9 +349,9 @@ struct blk_snap_snapshot_append_storage {
  * IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE - Append storage to the difference
  *	storage of the snapshot.
  *
- * The snapshot difference storage can be set either before or after creating the snapshot
- * images. This allows to dynamically expand the
- * difference storage while holding the snapshot.
+ * The snapshot difference storage can be set either before or after creating
+ * the snapshot images. This allows to dynamically expand the difference
+ * storage while holding the snapshot.
  */
 #define IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE                                 \
 	_IOW(BLK_SNAP, blk_snap_ioctl_snapshot_append_storage,                 \
@@ -427,8 +431,8 @@ struct blk_snap_snapshot_collect_images {
 	struct blk_snap_image_info *image_info_array;
 };
 /**
- * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES - Get a collection of devices and their
- *	snapshot images.
+ * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES - Get a collection of devices and
+ *	their snapshot images.
  *
  * While holding the snapshot, this ioctl allows you to get a table of
  * correspondences of the original devices and their snapshot images.
@@ -452,8 +456,8 @@ enum blk_snap_event_codes {
 	 * If a chunk could not be allocated when trying to save data to the
 	 * difference storage, this event is generated.
 	 * However, this does not mean that the backup process was interrupted
-	 * with an error. If the snapshot image has been read to the end by this
-	 * time, the backup process is considered successful.
+	 * with an error. If the snapshot image has been read to the end by
+	 * this time, the backup process is considered successful.
 	 */
 	blk_snap_event_code_corrupted,
 };
@@ -484,7 +488,8 @@ static_assert(
 	"The size struct blk_snap_snapshot_event should be equal to the size of the page.");
 
 /**
- * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get the event from the snapshot.
+ * IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT - Wait and get the event from the
+ *	snapshot.
  *
  * While holding the snapshot, the kernel module can transmit information about
  * changes in its state in the form of events to the user level.
@@ -506,7 +511,8 @@ struct blk_snap_event_low_free_space {
 };
 
 /**
- * struct blk_snap_event_corrupted - Data for the &blk_snap_event_code_corrupted event.
+ * struct blk_snap_event_corrupted - Data for the
+ *	&blk_snap_event_code_corrupted event.
  * @orig_dev_id:
  *	Device ID.
  * @err_code:

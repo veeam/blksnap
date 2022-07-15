@@ -94,14 +94,13 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 
 void diff_area_free(struct kref *kref)
 {
-	unsigned long inx;
+	unsigned long inx = 0;
 	u64 start_waiting;
 	struct chunk *chunk;
 	struct diff_area *diff_area =
 		container_of(kref, struct diff_area, kref);
 
 	might_sleep();
-	inx = 0;
 	start_waiting = jiffies_64;
 	while (atomic_read(&diff_area->pending_io_count)) {
 		schedule_timeout_interruptible(1);
@@ -146,7 +145,7 @@ get_chunk_from_cache_and_write_lock(spinlock_t *caches_lock,
 #endif
 
 	spin_lock(caches_lock);
-	list_for_each_entry (iter, cache_queue, cache_link) {
+	list_for_each_entry(iter, cache_queue, cache_link) {
 		if (!down_trylock(&iter->lock)) {
 			chunk = iter;
 			break;

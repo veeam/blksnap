@@ -49,8 +49,8 @@ static void diff_buffer_free(struct diff_buffer *diff_buffer)
 #endif
 }
 
-static struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-				    gfp_t gfp_mask)
+static struct diff_buffer *
+diff_buffer_new(size_t page_count, size_t buffer_size, gfp_t gfp_mask)
 {
 	struct diff_buffer *diff_buffer;
 	size_t inx = 0;

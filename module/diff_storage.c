@@ -129,8 +129,8 @@ void diff_storage_free(struct kref *kref)
 	memory_object_dec(memory_object_diff_storage);
 }
 
-static struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage,
-					     dev_t dev_id)
+static struct block_device *
+diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
 {
 	struct block_device *bdev = NULL;
 	struct storage_bdev *storage_bdev;

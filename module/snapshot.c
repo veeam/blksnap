@@ -108,7 +108,6 @@ static void snapshot_release(struct snapshot *snapshot)
 #endif
 	}
 
-
 	/* Destroy diff area for each tracker. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s - destroy diff area for each tracker",
@@ -345,7 +344,7 @@ int snapshot_destroy(uuid_t *id)
 	if (!list_empty(&snapshots)) {
 		struct snapshot *s = NULL;
 
-		list_for_each_entry (s, &snapshots, link) {
+		list_for_each_entry(s, &snapshots, link) {
 			if (uuid_equal(&s->id, id)) {
 				snapshot = s;
 				list_del(&snapshot->link);

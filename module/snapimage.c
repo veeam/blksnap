@@ -298,8 +298,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 #else
 	disk->flags |= GENHD_FL_NO_PART;
 #endif
-
-
 	disk->major = _major;
 	disk->first_minor = minor;
 	disk->minors = 1; /* One disk has only one partition */
@@ -324,11 +322,9 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		       disk->disk_name);
 		goto fail_cleanup_disk;
 	}
-
 #else
 	add_disk(disk);
 #endif
-
 	return snapimage;
 
 fail_cleanup_disk:

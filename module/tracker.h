@@ -22,6 +22,8 @@ struct diff_area;
  * @kref:
  *	Protects the structure from being released during processing of
  *	an ioctl.
+ * @link:
+ *	List header.
  * @dev_id:
  *	Original block device ID.
  * @snapshot_is_taken:
@@ -48,8 +50,8 @@ struct tracker {
 	struct diff_area *diff_area;
 };
 
-void tracker_lock(void );
-void tracker_unlock(void );
+void tracker_lock(void);
+void tracker_unlock(void);
 
 static inline void tracker_put(struct tracker *tracker)
 {

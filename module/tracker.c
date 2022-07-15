@@ -198,7 +198,6 @@ static void tracker_release_work(struct work_struct *work)
 		container_of(work, struct tracker_release_worker, work);
 
 	do {
-
 		spin_lock(&tracker_release->lock);
 		tracker = list_first_entry_or_null(&tracker_release->list,
 						   struct tracker, link);
@@ -208,7 +207,6 @@ static void tracker_release_work(struct work_struct *work)
 
 		if (tracker)
 			tracker_free(tracker);
-
 	} while (tracker);
 }
 
@@ -426,7 +424,6 @@ int tracker_init(void)
 
 /**
  * tracker_wait_for_release - Waiting for all trackers are released.
- *
  */
 static void tracker_wait_for_release(void)
 {
