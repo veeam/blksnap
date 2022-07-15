@@ -241,10 +241,8 @@ EXPORT_SYMBOL(bdev_filter_get_by_altitude);
 
 static inline bool bdev_filters_apply(struct bio *bio)
 {
-	enum bdev_filter_altitudes altitude;
-	enum bdev_filter_result result;
+	enum bdev_filter_altitudes altitude = 0;
 	struct bdev_extension *ext;
-	struct bdev_filter *flt;
 
 	spin_lock(&bdev_extension_list_lock);
 #if defined(HAVE_BI_BDISK)
@@ -258,6 +256,9 @@ static inline bool bdev_filters_apply(struct bio *bio)
 
 	spin_lock(&ext->bd_filters_lock);
 	while (altitude < bdev_filter_alt_end) {
+		enum bdev_filter_result result;
+		struct bdev_filter *flt;
+
 		flt = ext->bd_filters[altitude];
 		if (!flt) {
 			altitude++;
