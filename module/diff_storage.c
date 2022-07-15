@@ -9,9 +9,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "chunk.h"
 #include "diff_io.h"
@@ -65,9 +63,8 @@ struct diff_storage *diff_storage_new(void)
 	diff_storage = kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
 	if (!diff_storage)
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_storage);
-#endif
+
 	kref_init(&diff_storage->kref);
 	spin_lock_init(&diff_storage->lock);
 	INIT_LIST_HEAD(&diff_storage->storage_bdevs);
@@ -111,37 +108,29 @@ void diff_storage_free(struct kref *kref)
 	while ((blk = first_empty_storage_block(diff_storage))) {
 		list_del(&blk->link);
 		kfree(blk);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_storage_block);
-#endif
 	}
 
 	while ((blk = first_filled_storage_block(diff_storage))) {
 		list_del(&blk->link);
 		kfree(blk);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_storage_block);
-#endif
 	}
 
 	while ((storage_bdev = first_storage_bdev(diff_storage))) {
 		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
 		list_del(&storage_bdev->link);
 		kfree(storage_bdev);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_storage_bdev);
-#endif
 	}
 	event_queue_done(&diff_storage->event_queue);
 
 	kfree(diff_storage);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_storage);
-#endif
 }
 
-struct block_device *diff_storage_bdev_by_id(struct diff_storage *diff_storage,
-					     dev_t dev_id)
+static struct block_device *
+diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
 {
 	struct block_device *bdev = NULL;
 	struct storage_bdev *storage_bdev;
@@ -176,9 +165,8 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 		return ERR_PTR(-ENOMEM);
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_storage_bdev);
-#endif
+
 	storage_bdev->bdev = bdev;
 	storage_bdev->dev_id = dev_id;
 	INIT_LIST_HEAD(&storage_bdev->link);
@@ -202,9 +190,8 @@ static inline int diff_storage_add_range(struct diff_storage *diff_storage,
 	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
 	if (!storage_block)
 		return -ENOMEM;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_storage_block);
-#endif
+
 	INIT_LIST_HEAD(&storage_block->link);
 	storage_block->bdev = bdev;
 	storage_block->sector = sector;
@@ -276,9 +263,8 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 	diff_region = kzalloc(sizeof(struct diff_region), GFP_NOIO);
 	if (!diff_region)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_region);
-#endif
+
 	spin_lock(&diff_storage->lock);
 	do {
 		struct storage_block *storage_block;

@@ -8,9 +8,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "snapimage.h"
 #include "diff_area.h"
 #include "chunk.h"
@@ -161,9 +159,6 @@ static const struct blk_mq_ops mq_ops = {
 
 const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
-	//.open = snapimage_open,
-	//.ioctl = snapimage_ioctl,
-	//.release = snapimage_close,
 };
 
 static inline int snapimage_alloc_tag_set(struct snapimage *snapimage)
@@ -210,9 +205,7 @@ void snapimage_free(struct snapimage *snapimage)
 
 	free_minor(MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
-#endif
 }
 
 struct snapimage *snapimage_create(struct diff_area *diff_area,
@@ -226,16 +219,11 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	struct request_queue *queue;
 #endif
 
-	pr_info("Create snapshot image for device [%u:%u]\n",
-		MAJOR(diff_area->orig_bdev->bd_dev),
-		MINOR(diff_area->orig_bdev->bd_dev));
-
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage);
-#endif
+
 	ret = new_minor(&minor, snapimage);
 	if (ret) {
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
@@ -246,8 +234,11 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	snapimage->is_ready = true;
 	snapimage->capacity = cbt_map->device_capacity;
 	snapimage->image_dev_id = MKDEV(_major, minor);
-	pr_info("Snapshot image device id [%u:%u]\n",
-		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
+	pr_info("Create snapshot image device [%u:%u] for original device [%u:%u]\n",
+		MAJOR(snapimage->image_dev_id),
+		MINOR(snapimage->image_dev_id),
+		MAJOR(diff_area->orig_bdev->bd_dev),
+		MINOR(diff_area->orig_bdev->bd_dev));
 
 	ret = snapimage_prepare_worker(snapimage);
 	if (ret) {
@@ -299,21 +290,17 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		ret = -EINVAL;
 		goto fail_cleanup_disk;
 	}
-	pr_info("Snapshot image disk name [%s]\n", disk->disk_name);
+	pr_debug("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
-	//disk->flags |= GENHD_FL_HIDDEN;
-	//disk->flags |= GENHD_FL_REMOVABLE;
 #ifdef GENHD_FL_NO_PART_SCAN
 	disk->flags |= GENHD_FL_NO_PART_SCAN;
 #else
 	disk->flags |= GENHD_FL_NO_PART;
 #endif
-
-
 	disk->major = _major;
 	disk->first_minor = minor;
-	disk->minors = 1; // One disk has only one partition.
+	disk->minors = 1; /* One disk has only one partition */
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;
@@ -335,11 +322,9 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		       disk->disk_name);
 		goto fail_cleanup_disk;
 	}
-
 #else
 	add_disk(disk);
 #endif
-
 	return snapimage;
 
 fail_cleanup_disk:
@@ -358,9 +343,7 @@ fail_free_minor:
 	free_minor(minor);
 fail_free_image:
 	kfree(snapimage);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapimage);
-#endif
 	return ERR_PTR(ret);
 }
 
@@ -410,7 +393,6 @@ int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
 				       &state->snap_number_curr);
 	if (ret)
 		return ret;
-	//#ifdef BLK_SNAP_DEBUG_CHUNK_IO
 	{
 		char buf[SECTOR_SIZE];
 
@@ -423,7 +405,7 @@ int snapimage_get_chunk_state(struct snapimage *snapimage, sector_t sector,
 		print_hex_dump(KERN_INFO, "data header: ", DUMP_PREFIX_OFFSET,
 			       32, 1, buf, 96, true);
 	}
-	//#endif
+
 	return 0;
 }
 #endif

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_DIFF_BUFFER_H
+#define __BLK_SNAP_DIFF_BUFFER_H
+
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/list.h>
@@ -75,3 +77,4 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area,
 void diff_buffer_release(struct diff_area *diff_area,
 			 struct diff_buffer *diff_buffer);
 void diff_buffer_cleanup(struct diff_area *diff_area);
+#endif /* __BLK_SNAP_DIFF_BUFFER_H */

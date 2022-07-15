@@ -3,9 +3,7 @@
 #include <linux/slab.h>
 #include <linux/dm-io.h>
 #include <linux/sched/mm.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "chunk.h"
 #include "diff_io.h"
@@ -50,7 +48,6 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 {
 	struct diff_area *diff_area = chunk->diff_area;
 
-	//pr_debug("Schedule storing chunk #%ld\n", chunk->number);
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
 		 "The chunk already in the cache"))
 		return -EINVAL;
@@ -86,7 +83,6 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	might_sleep();
 
-	//pr_debug("Add chunk #%ld to cache\n", chunk->number);
 	spin_lock(&diff_area->caches_lock);
 
 	/*
@@ -120,7 +116,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	up(&chunk->lock);
 
-	// Initiate the cache clearing process.
+	/* Initiate the cache clearing process */
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
 	if (atomic_read(&diff_area->write_cache_count) >
 	    chunk_maximum_in_cache) {
@@ -244,9 +240,8 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_chunk);
-#endif
+
 	INIT_LIST_HEAD(&chunk->cache_link);
 	sema_init(&chunk->lock, 1);
 	chunk->diff_area = diff_area;
@@ -268,9 +263,7 @@ void chunk_free(struct chunk *chunk)
 	up(&chunk->lock);
 
 	kfree(chunk);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_chunk);
-#endif
 }
 
 /**
@@ -378,10 +371,7 @@ int chunk_load_orig(struct chunk *chunk)
 			  diff_area_chunk_sectors(chunk->diff_area),
 		.count = chunk->sector_count,
 	};
-#ifdef BLK_SNAP_DEBUG_CHUNK_IO
-	//pr_debug("DEBUG! %s chunk #%ld sector=%llu count=%llu", __FUNCTION__,
-	//	chunk->number, region.sector, region.count);
-#endif
+
 	diff_io = diff_io_new_sync_read();
 	if (unlikely(!diff_io))
 		return -ENOMEM;

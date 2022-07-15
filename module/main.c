@@ -6,9 +6,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "version.h"
 #include "params.h"
 #include "ctrl.h"
@@ -109,11 +107,7 @@ static void __exit blk_snap_exit(void)
 	tracker_done();
 
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	{
-		int not_free = memory_object_print();
-
-		WARN(not_free, "Several objects [%d] were not released", not_free);
-	}
+	WARN(memory_object_print(), "Several objects were not released");
 #endif
 	pr_info("Module was unloaded\n");
 }

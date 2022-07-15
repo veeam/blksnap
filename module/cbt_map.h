@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_CBT_MAP_H
+#define __BLK_SNAP_CBT_MAP_H
+
 #include <linux/kernel.h>
 #include <linux/kref.h>
 #include <linux/uuid.h>
@@ -115,3 +117,4 @@ int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
 			     u8 *snap_number_prev, u8 *snap_number_curr);
 #endif
+#endif /* __BLK_SNAP_CBT_MAP_H */

@@ -5,9 +5,7 @@
 #endif
 #include <linux/blkdev.h>
 #include <linux/slab.h>
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "diff_io.h"
 #include "diff_buffer.h"
 
@@ -69,9 +67,8 @@ static inline struct diff_io *diff_io_new(bool is_write, bool is_nowait)
 	diff_io = kzalloc(sizeof(struct diff_io), gfp_mask);
 	if (unlikely(!diff_io))
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_io);
-#endif
+
 	diff_io->error = 0;
 	diff_io->is_write = is_write;
 	atomic_set(&diff_io->bio_count, 0);
@@ -139,7 +136,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		return -EINVAL;
 	}
 
-	// Append bio with datas to bio_list
+	/* Append bio with datas to bio_list */
 	current_page_ptr = diff_buffer->pages;
 	while (processed < diff_region->count) {
 		sector_t offset = 0;
@@ -208,7 +205,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		processed += offset;
 	}
 
-	// Append last sync bio to bio_list
+	/* Append last sync bio to bio_list */
 	if (is_nowait) {
 		bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, 0,
 				       &diff_io_bioset);
@@ -238,7 +235,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	bio_list_add(&bio_list_head, bio);
 	atomic_inc(&diff_io->bio_count);
 
-	//sumbit all bio
+	/* sumbit all bio */
 	while ((bio = bio_list_pop(&bio_list_head)))
 		submit_bio_noacct(bio);
 
@@ -280,7 +277,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		goto fail;
 	}
 
-	// Allocate both bios
+	/* Allocate both bios */
 #ifdef HAVE_BDEV_BIO_ALLOC
 	opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
 	gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
@@ -337,7 +334,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 #endif
 	atomic_set(&diff_io->bio_count, 2);
 
-	// submit bio with datas
+	/* submit bio with datas */
 #ifndef STANDALONE_BDEVFILTER
 	bio_set_flag(bio, BIO_FILTERED);
 #endif
@@ -369,7 +366,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	}
 	submit_bio_noacct(bio);
 
-	// submit flush bio
+	/* submit flush bio */
 #ifndef STANDALONE_BDEVFILTER
 	bio_set_flag(flush_bio, BIO_FILTERED);
 #endif

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_TRACKER_H
+#define __BLK_SNAP_TRACKER_H
+
 #include <linux/kref.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>
@@ -20,6 +22,8 @@ struct diff_area;
  * @kref:
  *	Protects the structure from being released during processing of
  *	an ioctl.
+ * @link:
+ *	List header.
  * @dev_id:
  *	Original block device ID.
  * @snapshot_is_taken:
@@ -46,8 +50,8 @@ struct tracker {
 	struct diff_area *diff_area;
 };
 
-void tracker_lock(void );
-void tracker_unlock(void );
+void tracker_lock(void);
+void tracker_unlock(void);
 
 static inline void tracker_put(struct tracker *tracker)
 {
@@ -121,3 +125,4 @@ static inline void _thaw_bdev(struct block_device *bdev,
 			 MINOR(bdev->bd_dev));
 }
 #endif
+#endif /* __BLK_SNAP_TRACKER_H */

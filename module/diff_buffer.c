@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "params.h"
 #include "diff_buffer.h"
 #include "diff_area.h"
@@ -28,7 +26,7 @@ static int diff_buffer_take_cnt_get(void)
 
 #endif
 
-void diff_buffer_free(struct diff_buffer *diff_buffer)
+static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	size_t inx = 0;
 	struct page *page;
@@ -40,24 +38,19 @@ void diff_buffer_free(struct diff_buffer *diff_buffer)
 		page = diff_buffer->pages[inx];
 		if (page) {
 			__free_page(page);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 			memory_object_dec(memory_object_page);
-#endif
 		}
 	}
 
 	kfree(diff_buffer);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_diff_buffer);
-#endif
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-	//	pr_debug("Free buffer #%d \n", diff_buffer->number);
 	atomic_dec(&diff_buffer_allocated_counter);
 #endif
 }
 
-struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
-				    gfp_t gfp_mask)
+static struct diff_buffer *
+diff_buffer_new(size_t page_count, size_t buffer_size, gfp_t gfp_mask)
 {
 	struct diff_buffer *diff_buffer;
 	size_t inx = 0;
@@ -75,12 +68,10 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 			      gfp_mask);
 	if (!diff_buffer)
 		return NULL;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_diff_buffer);
-#endif
+
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	diff_buffer->number = atomic_inc_return(&diff_buffer_allocated_counter);
-//	pr_debug("Allocate buffer #%d \n", diff_buffer->number);
 #endif
 	INIT_LIST_HEAD(&diff_buffer->link);
 	diff_buffer->size = buffer_size;
@@ -90,9 +81,8 @@ struct diff_buffer *diff_buffer_new(size_t page_count, size_t buffer_size,
 		page = alloc_page(gfp_mask);
 		if (!page)
 			goto fail;
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_inc(memory_object_page);
-#endif
+
 		diff_buffer->pages[inx] = page;
 	}
 	return diff_buffer;
@@ -121,7 +111,6 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area,
 	/* Return free buffer if it was found in a pool */
 	if (diff_buffer) {
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-		//		pr_debug("Took buffer from pool");
 		atomic_inc(&diff_buffer_take_cnt);
 #endif
 		return diff_buffer;
@@ -154,9 +143,6 @@ void diff_buffer_release(struct diff_area *diff_area,
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 	atomic_dec(&diff_buffer_take_cnt);
 #endif
-	//#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-	//	pr_debug("Release buffer");
-	//#endif
 	if (atomic_read(&diff_area->free_diff_buffers_count) >
 	    free_diff_buffer_pool_size) {
 		diff_buffer_free(diff_buffer);

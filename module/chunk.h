@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#pragma once
+#ifndef __BLK_SNAP_CHUNK_H
+#define __BLK_SNAP_CHUNK_H
+
 #include <linux/blk_types.h>
 #include <linux/blkdev.h>
 #include <linux/rwsem.h>
@@ -134,3 +136,4 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait);
 /* Synchronous operations are used to implement reading and writing to the snapshot image. */
 int chunk_load_orig(struct chunk *chunk);
 int chunk_load_diff(struct chunk *chunk);
+#endif /* __BLK_SNAP_CHUNK_H */

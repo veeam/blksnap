@@ -7,9 +7,7 @@
 #else
 #include <linux/blk_snap.h>
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #include "memory_checker.h"
-#endif
 #include "snapshot.h"
 #include "tracker.h"
 #include "diff_storage.h"
@@ -66,6 +64,9 @@ static void snapshot_release(struct snapshot *snapshot)
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was frozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
 
@@ -101,9 +102,11 @@ static void snapshot_release(struct snapshot *snapshot)
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was unfrozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
-
 
 	/* Destroy diff area for each tracker. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -137,24 +140,19 @@ static void snapshot_free(struct kref *kref)
 		pr_debug("DEBUG! %s snapshot was not taken\n", __FUNCTION__);
 #endif
 	kfree(snapshot->snapimage_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
-#endif
 	kfree(snapshot->tracker_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
-#endif
+
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	if (snapshot->superblock_array) {
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 		pr_debug("DEBUG! %s free superblocks\n", __FUNCTION__);
 #endif
 		kfree(snapshot->superblock_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 		memory_object_dec(memory_object_superblock_array);
-#endif
 	}
 #endif
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -163,9 +161,7 @@ static void snapshot_free(struct kref *kref)
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_dec(memory_object_snapshot);
-#endif
 }
 
 static inline void snapshot_get(struct snapshot *snapshot)
@@ -188,34 +184,29 @@ static struct snapshot *snapshot_new(unsigned int count)
 		ret = -ENOMEM;
 		goto fail;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapshot);
-#endif
+
 	snapshot->tracker_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->tracker_array) {
 		ret = -ENOMEM;
 		goto fail_free_snapshot;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_tracker_array);
-#endif
+
 	snapshot->snapimage_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->snapimage_array) {
 		ret = -ENOMEM;
 		goto fail_free_trackers;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_snapimage_array);
-#endif
+
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	snapshot->superblock_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->superblock_array) {
 		ret = -ENOMEM;
 		goto fail_free_snapimage;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_superblock_array);
-#endif
 #endif
 	snapshot->diff_storage = diff_storage_new();
 	if (!snapshot->diff_storage) {
@@ -232,29 +223,22 @@ static struct snapshot *snapshot_new(unsigned int count)
 
 fail_free_snapimage:
 	kfree(snapshot->snapimage_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_superblock_array);
-#endif
+
 	kfree(snapshot->snapimage_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
-#endif
+
 fail_free_trackers:
 	kfree(snapshot->tracker_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
-#endif
 
 fail_free_snapshot:
 	kfree(snapshot);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (snapshot)
 		memory_object_dec(memory_object_snapshot);
-#endif
-
 fail:
 	return ERR_PTR(ret);
 }
@@ -360,7 +344,7 @@ int snapshot_destroy(uuid_t *id)
 	if (!list_empty(&snapshots)) {
 		struct snapshot *s = NULL;
 
-		list_for_each_entry (s, &snapshots, link) {
+		list_for_each_entry(s, &snapshots, link) {
 			if (uuid_equal(&s->id, id)) {
 				snapshot = s;
 				list_del(&snapshot->link);
@@ -462,6 +446,9 @@ int snapshot_take(uuid_t *id)
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was frozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
 
@@ -524,6 +511,9 @@ int snapshot_take(uuid_t *id)
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was unfrozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
 
@@ -590,7 +580,6 @@ struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms)
 	struct snapshot *snapshot;
 	struct event *event;
 
-	//pr_debug("Wait event\n");
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)
 		return ERR_PTR(-ESRCH);
@@ -690,9 +679,8 @@ int snapshot_collect_images(
 		ret = -ENOMEM;
 		goto out;
 	}
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_inc(memory_object_blk_snap_image_info);
-#endif
+
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (snapshot->tracker_array[inx]) {
 			dev_t orig_dev_id =
@@ -732,10 +720,8 @@ out:
 	*pcount = snapshot->count;
 
 	kfree(image_info_array);
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	if (image_info_array)
 		memory_object_dec(memory_object_blk_snap_image_info);
-#endif
 	snapshot_put(snapshot);
 
 	return ret;
