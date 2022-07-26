@@ -20,7 +20,7 @@ but accesses the kernel to attach and detach the block device filter.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install gcc linux-headers
+sudo apt install gcc linux-headers-$(uname -r)
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -40,9 +40,9 @@ mk.sh install
 ```
 ### How to create deb package
 ``` bash
-sudo apt install debhelper
+sudo apt install debhelper dkms
 cd ./pkg/deb/blksnap-dkms
-build.sh ${VERSION}
+./build.sh ${VERSION}
 ```
 ### How to create rpm package
 There are several variants, look in the ./pkg/rpm directory.
@@ -74,7 +74,7 @@ make
 ``` bash
 sudo apt install debhelper
 cd ./pkg/deb/blksnap-tools
-build.sh ${VERSION}
+./build.sh ${VERSION}
 ```
 
 ## library
@@ -104,7 +104,7 @@ make
 ``` bash
 sudo apt install debhelper
 cd ./pkg/deb/blksnap-dev
-build.sh ${VERSION}
+./build.sh ${VERSION}
 ```
 
 ## tests
@@ -134,5 +134,5 @@ make
 ``` bash
 sudo apt install debhelper
 cd ./pkg/deb/blksnap-tests
-build.sh ${VERSION}
+./build.sh ${VERSION}
 ```
