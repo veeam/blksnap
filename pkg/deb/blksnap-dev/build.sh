@@ -60,7 +60,7 @@ Build-Depends: debhelper (>= 9.0.0), bash,
 Package: ${NAME}
 Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
-Depends: ${misc:Depends}
+Depends: \${misc:Depends}
 Homepage: https://github.org/veeam/blksnap/
 Description: [TBD] The static library and header files for managing the
         blksnap kernel module.
