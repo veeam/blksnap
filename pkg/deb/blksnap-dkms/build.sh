@@ -51,7 +51,7 @@ Build-Depends: debhelper (>= 9.0.0)
 Package: ${NAME}
 Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
-Depends: dkms, ${shlibs:Depends}, ${misc:Depends}
+Depends: dkms, \${shlibs:Depends}, \${misc:Depends}
 Conflicts: veeamsnap
 Replaces: veeamsnap
 Homepage: https://github.org/veeam/blksnap/
