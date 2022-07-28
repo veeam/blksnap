@@ -55,7 +55,7 @@ Source: ${NAME}
 Section: devel
 Priority: standard
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
-Build-Depends: debhelper (>= 9.0.0), bash,
+Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-all-dev
 
 Package: ${NAME}
 Architecture: ${ARCH}
