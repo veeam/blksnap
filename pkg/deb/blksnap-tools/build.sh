@@ -23,7 +23,7 @@ rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR}
 
 SOURCE_DIR="tools/blksnap/bin"
-TARGET_DIR="usr/bin"
+TARGET_DIR="usr/sbin"
 
 # build
 rm -rf ${SOURCE_DIR}/*
