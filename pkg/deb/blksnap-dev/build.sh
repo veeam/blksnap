@@ -7,9 +7,10 @@ then
 else
 	VERSION="1.0.0.0"
 fi
-if [ -n "$2" ]
+
+if [ -n `dpkg-architecture -q DEB_HOST_ARCH` ]
 then
-	ARCH="$2"
+	ARCH=`dpkg-architecture -q DEB_HOST_ARCH`
 else
 	ARCH="amd64"
 fi
@@ -55,7 +56,7 @@ Source: ${NAME}
 Section: devel
 Priority: standard
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
-Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-all-dev
+Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-filesystem-dev
 
 Package: ${NAME}
 Architecture: ${ARCH}
