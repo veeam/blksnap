@@ -5,11 +5,12 @@
 ./build_and_install.sh
 
 echo "Execute all tests"
+echo "Output will be also logged with a .log file for each test script"
 echo "***"
 
 for SCRIPT in $(ls ????-*.sh)
 do
-	. ${SCRIPT}
+	. ${SCRIPT} |& tee -a ${SCRIPT}.log
 done
 
 echo "***"
