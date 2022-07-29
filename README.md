@@ -58,7 +58,7 @@ since it is assumed that it will be called by other applications.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-all-dev
+sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -89,7 +89,7 @@ In the project, the library is used for tests.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-all-dev
+sudo apt install g++ cmake uuid-dev libboost-filesystem-dev
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -119,7 +119,7 @@ build С++ tests.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-all-dev libssl-dev
+sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
 ```
 Or installing the necessary rpm packages.
 ``` bash
