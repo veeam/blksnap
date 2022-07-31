@@ -7,9 +7,9 @@ then
 else
 	VERSION="1.0.0.0"
 fi
-if [ -n `dpkg-architecture -q DEB_HOST_ARCH` ]
+if [ -n "$(dpkg-architecture -q DEB_HOST_ARCH)" ]
 then
-	ARCH=`dpkg-architecture -q DEB_HOST_ARCH`
+	ARCH="$(dpkg-architecture -q DEB_HOST_ARCH)"
 else
 	ARCH="amd64"
 fi
