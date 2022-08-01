@@ -136,3 +136,11 @@ sudo apt install debhelper
 cd ./pkg/deb/blksnap-tests
 ./build.sh ${VERSION}
 ```
+### How to run all usage tests
+``` bash
+./all.sh
+# or if installed with packages
+/opt/blksnap/tests/all.sh
+# or for logging the output to a file
+/opt/blksnap/tests/all.sh | tee -a blksnap_test_$(date -u '+%Y-%m-%d_%H:%M:%S').log
+```
