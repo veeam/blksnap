@@ -1,0 +1,63 @@
+name: Test build
+
+on:
+  push:
+    branches:
+      - "*"
+    paths-ignore:
+      - "README.md"
+      - "doc/**"
+  pull_request:
+    branches:
+      - "*"
+    paths-ignore:
+      - "README.md"
+      - "doc/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install packages required
+        run: |
+         sudo apt-get update
+         sudo apt-get install -y linux-headers-$(uname -r) g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
+
+      - name: Build kernel module
+        run: |
+          cd module
+          ./mk.sh build
+
+      - name: Build blksnap-tools
+        working-directory: tools/blksnap
+        run: |
+          mkdir bin
+          cd bin
+          cmake ..
+          make
+
+      - name: Build blksnap-dev
+        working-directory: lib/blksnap
+        run: |
+          mkdir bin
+          cd bin
+          cmake ..
+          make
+
+      - name: Build blksnap-tests
+        working-directory: tests/cpp
+        run: |
+          mkdir bin
+          cd bin
+          cmake ..
+          make

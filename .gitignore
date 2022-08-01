@@ -1,4 +1,5 @@
 .*
+!.github
 !.gitignore
 !.editorconfig
 !.clang-format
