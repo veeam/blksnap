@@ -41,9 +41,8 @@ enum blk_snap_ioctl {
 	 * Additional controls for any standalone modification
 	 */
 	blk_snap_ioctl_mod = IOCTL_MOD,
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+	blk_snap_ioctl_setlog,
 	blk_snap_ioctl_get_sector_state,
-#endif
 	blk_snap_ioctl_end_mod
 #endif
 };
@@ -77,9 +76,8 @@ struct blk_snap_version {
 #ifdef BLK_SNAP_MODIFICATION
 
 enum blk_snap_compat_flags {
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
 	blk_snap_compat_flag_debug_sector_state,
-#endif
+	blk_snap_compat_flag_setlog,
 	/*
 	 * Reserved for new features
 	 */
@@ -120,6 +118,7 @@ struct blk_snap_mod {
  */
 #define IOCTL_BLK_SNAP_MOD                                                     \
 	_IOW(BLK_SNAP, blk_snap_ioctl_mod, struct blk_snap_mod)
+
 #endif
 
 /*
@@ -523,7 +522,31 @@ struct blk_snap_event_corrupted {
 	__s32 err_code;
 };
 
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+
+#ifdef BLK_SNAP_MODIFICATION
+/**
+ * @level:
+ *	0 - disable logging to file
+ *	3 - only error messages
+ *	4 - log warnings (default)
+ *	6 - log info messages
+ *	7 - log debug messages
+ * @filepath_size:
+ *	Count of bytes in &filepath.
+ * @filename:
+ *	Full path for log file.
+ */
+struct blk_snap_setlog {
+	__u32 level;
+	__u32 filepath_size;
+	__u8 *filepath;
+};
+
+/**
+ *
+ */
+#define IOCTL_BLK_SNAP_SETLOG                                                  \
+	_IOW(BLK_SNAP, blk_snap_ioctl_setlog, struct blk_snap_setlog)
 
 /**
  *
@@ -547,5 +570,6 @@ struct blk_snap_get_sector_state {
 	_IOW(BLK_SNAP, blk_snap_ioctl_get_sector_state,                        \
 	     struct blk_snap_get_sector_state)
 
-#endif
+#endif /* BLK_SNAP_MODIFICATION */
+
 #endif /* __LINUX_BLK_SNAP_H */

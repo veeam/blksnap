@@ -30,6 +30,7 @@ enum memory_object_type {
 	memory_object_snapimage_array,
 	memory_object_superblock_array,
 	memory_object_blk_snap_image_info,
+	memory_object_log_filepath,
 	/*end*/
 	memory_object_count
 };

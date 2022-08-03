@@ -4,10 +4,8 @@
 #include <linux/atomic.h>
 #include <linux/module.h>
 #include "memory_checker.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#ifdef STANDALONE_BDEVFILTER
+#include "log.h"
 #endif
 
 char *memory_object_names[] = {
@@ -38,6 +36,7 @@ char *memory_object_names[] = {
 	"snapimage_array",
 	"superblock_array",
 	"blk_snap_image_info",
+	"log_filepath",
 	/*end*/
 };
 

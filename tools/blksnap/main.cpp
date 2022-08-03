@@ -222,28 +222,47 @@ public:
     {
         m_usage = std::string("[TBD]Print " BLK_SNAP_MODULE_NAME " module version.");
         m_desc.add_options()
-          //"compatibility,c", "[TBD]Print only compatibility flag value in decimal form.")
-          //("modification,m", "[TBD]Print only module modification name.")
+#ifdef BLK_SNAP_MODIFICATION
+          ("modification,m", "[TBD]Print module modification name.")
+          ("compatibility,c", "[TBD]Print compatibility flag value in decimal form.")
+#endif
           ("json,j", "[TBD]Use json format for output.");
     };
 
     void Execute(po::variables_map& vm) override
     {
-        struct blk_snap_version param = {0};
+#ifdef BLK_SNAP_MODIFICATION
+        bool isModification = (vm.count("modification") != 0);
+        bool isCompatibility = (vm.count("compatibility") != 0);
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_VERSION, &param))
-            throw std::system_error(errno, std::generic_category(), "Failed to get version.");
-        /*
-        if (vm.count("compatibility")) {
-            std::cout << param.compatibility_flags << std::endl;
+        if (isModification || isCompatibility)
+        {
+            struct blk_snap_mod param = {0};
+
+            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_MOD, &param))
+                throw std::system_error(errno, std::generic_category(), "Failed to get modification or compatibility information.");
+
+            if (isModification)
+                std::cout << param.name << std::endl;
+
+            if (isCompatibility) {
+                if (param.compatibility_flags & (1ull << blk_snap_compat_flag_debug_sector_state))
+                    std::cout << "debug_sector_state" << std::endl;
+
+                if (param.compatibility_flags & (1ull << blk_snap_compat_flag_setlog))
+                    std::cout << "setlog" << std::endl;
+            }
             return;
         }
-        if (vm.count("modification")) {
-            std::cout << param.name << std::endl;
-            return;
+#endif
+        {
+            struct blk_snap_version param = {0};
+
+            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_VERSION, &param))
+                throw std::system_error(errno, std::generic_category(), "Failed to get version.");
+
+            std::cout << param.major << "." << param.minor << "." << param.revision << "." << param.build << std::endl;
         }
-        */
-        std::cout << param.major << "." << param.minor << "." << param.revision << "." << param.build << std::endl;
     };
 };
 
@@ -849,6 +868,50 @@ public:
     };
 };
 
+#ifdef BLK_SNAP_MODIFICATION
+class SetlogArgsProc : public IArgsProc
+{
+public:
+    SetlogArgsProc()
+        : IArgsProc()
+    {
+        m_usage = std::string("[TBD]Print " BLK_SNAP_MODULE_NAME " set module additional logging.");
+        m_desc.add_options()
+          ("level,l", po::value<int>()->default_value(6), "3 - only errors, 4 - warnings, 5 - notice, 6 - info (default), 7 - debug.")
+          ("path,p", po::value<std::string>(), "Full path for log file.")
+          ("disable", "Disable additional logging.");
+    };
+    void Execute(po::variables_map& vm) override
+    {
+        struct blk_snap_setlog param = {0};
+
+        if (vm.count("disable")) {
+            param.level = -1;
+            param.filepath = NULL;
+            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SETLOG, &param))
+                throw std::system_error(errno, std::generic_category(), "Failed to disable logging.");
+            return;
+        }
+
+        param.level = vm["level"].as<int>();
+
+        if (!vm.count("path"))
+            throw std::invalid_argument("Argument 'path' is missed.");
+
+        std::string path = vm["path"].as<std::string>();
+
+        std::vector<__u8> filepathBuffer(path.size());
+        memcpy(filepathBuffer.data(), path.c_str(), path.size());
+
+        param.filepath = filepathBuffer.data();
+        param.filepath_size = filepathBuffer.size();
+
+        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SETLOG, &param))
+            throw std::system_error(errno, std::generic_category(), "Failed to set logging.");
+    };
+};
+#endif
+
 static std::map<std::string, std::shared_ptr<IArgsProc>> argsProcMap{
   {"version", std::make_shared<VersionArgsProc>()},
   {"tracker_remove", std::make_shared<TrackerRemoveArgsProc>()},
@@ -862,6 +925,9 @@ static std::map<std::string, std::shared_ptr<IArgsProc>> argsProcMap{
   {"snapshot_waitevent", std::make_shared<SnapshotWaitEventArgsProc>()},
   {"snapshot_collect", std::make_shared<SnapshotCollectArgsProc>()},
   {"stretch_snapshot", std::make_shared<StretchSnapshotArgsProc>()},
+#ifdef BLK_SNAP_MODIFICATION
+  {"setlog", std::make_shared<SetlogArgsProc>()},
+#endif
 };
 
 static void printUsage()

@@ -13,10 +13,8 @@
 #include "diff_area.h"
 #include "chunk.h"
 #include "cbt_map.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#ifdef STANDALONE_BDEVFILTER
+#include "log.h"
 #endif
 
 #define SNAPIMAGE_MAX_DEVICES 2048
