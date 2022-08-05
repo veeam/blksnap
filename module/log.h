@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __BLK_SNAP_LOG_H
 #define __BLK_SNAP_LOG_H
-#include <stdarg.h>
+#include <linux/stdarg.h>
 
 #ifdef BLK_SNAP_FILELOG
 
