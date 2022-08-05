@@ -258,10 +258,32 @@ int log_restart(int level, char *filepath)
 {
 	struct task_struct* task;
 
+	if (strcmp(filepath, log_filepath) == 0) {
+		if (level == log_level)
+			/*
+			 * If the request is executed for the same parameters
+			 * that are already set for logging, then logging is
+			 * not restarted and an error code EALREADY is returned.
+			 */
+			return -EALREADY;
+		else if (level >= 0) {
+			/*
+			 * If only the logging level changes, then
+			 * there is no need to restart logging.
+			 */
+			log_level = level;
+			return 0;
+		}
+	}
+
 	log_done();
 
-	if (!filepath)
+	if ((level < 0) || !filepath){
+		/*
+		 * Disable logging
+		 */
 		return 0;
+	}
 
 	log_init();
 
