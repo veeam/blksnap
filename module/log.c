@@ -258,7 +258,16 @@ int log_restart(int level, char *filepath)
 {
 	struct task_struct* task;
 
-	if (strcmp(filepath, log_filepath) == 0) {
+	if ((level < 0) || !filepath){
+		/*
+		 * Disable logging
+		 */
+		log_done();
+		return 0;
+	}
+
+
+	if (log_filepath && (strcmp(filepath, log_filepath) == 0)) {
 		if (level == log_level)
 			/*
 			 * If the request is executed for the same parameters
@@ -277,14 +286,6 @@ int log_restart(int level, char *filepath)
 	}
 
 	log_done();
-
-	if ((level < 0) || !filepath){
-		/*
-		 * Disable logging
-		 */
-		return 0;
-	}
-
 	log_init();
 
 	task = kthread_create(log_processor, filepath, "blksnaplog");
