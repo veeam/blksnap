@@ -281,43 +281,43 @@ def main(params):
 		kver = CKernelVersion(unameKernelVersion)
 
 		#try find direct module
-		strKernelVersion = kver.GetAccurateVersion()
-		kmodPath = "/lib/modules/"+strKernelVersion+"/extra/"
-		print("Accurate kernel version: "+strKernelVersion)
+		strAccurateKernelVersion = kver.GetAccurateVersion()
+		kmodPath = "/lib/modules/"+strAccurateKernelVersion+"/extra/"
+		print("Accurate kernel version: "+strAccurateKernelVersion)
 		try:
 			TryProcess(kmodPath+"bdevfilter.ko", params, isCheck, isModinfo)
 			TryProcess(kmodPath+"blksnap.ko", params, isCheck, isModinfo)
 			return 0
 		except Exception as ex:
-			print("Failed to load module for accurate kernel version [{0}]".format(strKernelVersion) )
+			print("Failed to load module for accurate kernel version [{0}]".format(strAccurateKernelVersion) )
 
 		#try find module with same release
 		if kver.IsUek():
 			print("Skip an attempt to load a same release kernel for UEK")
 		else:
-			strKernelVersion = kver.GetSameReleaseVersion()
-			kmodPath = "/lib/modules/"+strKernelVersion+"/extra/"
-			print("Same release kernel version: "+strKernelVersion)
+			strSameReleaseKernelVersion = kver.GetSameReleaseVersion()
+			kmodPath = "/lib/modules/"+strSameReleaseKernelVersion+"/extra/"
+			print("Same release kernel version: "+strSameReleaseKernelVersion)
 			try:
 				TryProcess(kmodPath+"bdevfilter.ko", params, isCheck, isModinfo)
 				TryProcess(kmodPath+"blksnap.ko", params, isCheck, isModinfo)
 				return 0
 			except Exception as ex:
-				print("Failed to load module for same release kernel version [{0}]".format(strKernelVersion) )
+				print("Failed to load module for same release kernel version [{0}]".format(strSameReleaseKernelVersion) )
 
 		if not isKmodAnyKernel:
 			return -1
 
-		bdevfilterPath = FindSuitableModule(strKernelVersion, "bdevfilter")
+		bdevfilterPath = FindSuitableModule(strAccurateKernelVersion, "bdevfilter")
 		if bdevfilterPath is None:
-			print("Failed to find suitable module {0} for kernel [{1}]".format("bdevfilter", strKernelVersion) )
+			print("Failed to find suitable module {0} for kernel [{1}]".format("bdevfilter", strAccurateKernelVersion) )
 			return -1
 		print("Suitable kernel module path: "+bdevfilterPath)
 
 		#try find module with suitable release
-		blksnapPath = FindSuitableModule(strKernelVersion, "blksnap")
+		blksnapPath = FindSuitableModule(strAccurateKernelVersion, "blksnap")
 		if blksnapPath is None:
-			print("Failed to find suitable module  {0} for kernel [{1}]".format("blksnap", strKernelVersion) )
+			print("Failed to find suitable module  {0} for kernel [{1}]".format("blksnap", strAccurateKernelVersion) )
 			return -1
 		print("Suitable kernel module path: "+blksnapPath)
 
