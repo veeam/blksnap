@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+#define pr_fmt(fmt) KBUILD_MODNAME "-log: " fmt
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/kthread.h>
@@ -185,14 +186,14 @@ static inline void log_request_fill(struct log_request *rq, const int level,
 	rq->header.size = vscnprintf(rq->buffer, LOG_REQUEST_BUFFER_SIZE, fmt, args);
 }
 
-static int log_vprintk_direct(struct file* filp, const int level, const char *fmt, va_list args)
+static inline int log_vprintk_direct(struct file* filp, const int level, const char *fmt, va_list args)
 {
 	log_request_fill(&log_request_direct, level, fmt, args);
 
 	return log_request_write(filp, &log_request_direct);
 }
 
-static int log_printk_direct(struct file* filp, const int level, const char *fmt, ...)
+static inline int log_printk_direct(struct file* filp, const int level, const char *fmt, ...)
 {
 	int ret;
 	va_list args;
@@ -204,61 +205,83 @@ static int log_printk_direct(struct file* filp, const int level, const char *fmt
 	return ret;
 }
 
+static inline struct file* log_reopen(struct file* filp)
+{
+	if (filp)
+		return filp;
+
+	if (!log_filepath)
+		return NULL;
+
+	filp = filp_open(log_filepath, O_WRONLY | O_APPEND | O_CREAT, 0644);
+	if (IS_ERR(filp)) {
+		printk(KERN_ERR pr_fmt("Failed to open file %s\n"), log_filepath);
+		return NULL;
+	}
+	return filp;
+}
+
 int log_processor(void *data)
 {
 	int ret = 0;
 	struct log_request *rq;
-	struct file* filp;
-
-	filp = filp_open(log_filepath, O_WRONLY | O_APPEND | O_CREAT, 0644);
-	if (IS_ERR(filp))
-		return PTR_ERR(filp);
-
-	ret = kernel_write(filp, "\n", 1, &filp->f_pos);
-	if (ret < 0)
-		return ret;
-
-	log_printk_direct(filp, LOGLEVEL_INFO, "Start log for module %s version %s loglevel %d\n",
-		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);
+	struct file* filp = NULL;
 
 	while (!kthread_should_stop()) {
 		int missed;
 
 		missed = atomic_read(&log_missed_counter);
 		if (missed) {
+			filp = log_reopen(filp);
+			if (!filp)
+				break;
 			log_printk_direct(filp, LOGLEVEL_INFO, "Missed %d messages\n", missed);
 			atomic_sub(missed, &log_missed_counter);
 		}
 
 		rq = log_request_get();
 		if (rq) {
+			filp = log_reopen(filp);
+			if (!filp)
+				break;
 			ret = log_request_write(filp, rq);
 			log_request_free(rq);
 			if (ret < 0)
 				break;
-		} else
-			log_waiting();
+		} else {
+			if (log_waiting() != 0) {
+				if (filp) {
+					filp_close(filp, NULL);
+					filp = NULL;
+				}
+			}
+		}
 	}
 
+	filp = log_reopen(filp);
+
 	while ((rq = log_request_get())) {
-		if (!ret)
-			ret = log_request_write(filp, rq);
+		if (filp)
+			log_request_write(filp, rq);
 		log_request_free(rq);
 	}
 
-	log_printk_direct(filp, LOGLEVEL_INFO, "Stop log for module %s\n\n",
-		BLK_SNAP_MODULE_NAME);
-
-	filp_close(filp, NULL);
+	if (filp) {
+		log_printk_direct(filp, LOGLEVEL_INFO,
+			"Stop log for module %s\n\n", BLK_SNAP_MODULE_NAME);
+		filp_close(filp, NULL);
+	}
 
 	return ret;
 }
 
 int log_restart(int level, char *filepath)
 {
+	int ret = 0;
+	struct file* filp;
 	struct task_struct* task;
 
-	if ((level < 0) || !filepath){
+	if ((level < 0) && !filepath){
 		/*
 		 * Disable logging
 		 */
@@ -268,29 +291,51 @@ int log_restart(int level, char *filepath)
 
 
 	if (log_filepath && (strcmp(filepath, log_filepath) == 0)) {
-		if (level == log_level)
+		if (level == log_level) {
 			/*
 			 * If the request is executed for the same parameters
 			 * that are already set for logging, then logging is
 			 * not restarted and an error code EALREADY is returned.
 			 */
-			return -EALREADY;
-		else if (level >= 0) {
+			ret = -EALREADY;
+		} else if (level >= 0) {
 			/*
 			 * If only the logging level changes, then
 			 * there is no need to restart logging.
 			 */
 			log_level = level;
-			return 0;
+			ret = 0;
 		}
+		goto fail;
 	}
 
 	log_done();
 	log_init();
 
+	filp = filp_open(filepath, O_WRONLY | O_APPEND | O_CREAT, 0644);
+	if (IS_ERR(filp)) {
+		printk(KERN_ERR pr_fmt("Failed to open file %s\n"), filepath);
+		ret = PTR_ERR(filp);
+		goto fail;
+	}
+
+	ret = kernel_write(filp, "\n", 1, &filp->f_pos);
+	if (ret < 0) {
+		printk(KERN_ERR pr_fmt("Cannot write file %s\n"), filepath);
+		filp_close(filp, NULL);
+		goto fail;
+	}
+
+	log_printk_direct(filp, LOGLEVEL_INFO, "Start log for module %s version %s loglevel %d\n",
+		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);
+
+	filp_close(filp, NULL);
+
 	task = kthread_create(log_processor, filepath, "blksnaplog");
-	if (IS_ERR(task))
-		return PTR_ERR(task);
+	if (IS_ERR(task)) {
+		ret = PTR_ERR(task);
+		goto fail;
+	}
 
 	log_task = task;
 	log_filepath = filepath;
@@ -298,7 +343,10 @@ int log_restart(int level, char *filepath)
 
 	wake_up_process(log_task);
 
-        return 0;
+	return 0;
+fail:
+	kfree(filepath);
+	return ret;
 }
 
 static void log_vprintk(const int level, const char *fmt, va_list args)
