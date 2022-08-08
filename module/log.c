@@ -146,7 +146,7 @@ static inline int log_request_write(struct file* filp, const struct log_request*
 	struct tm time;
 	char prefix_buf[MAX_PREFIX_SIZE];
 
-	time64_to_tm(rq->header.time.tv_sec, 0, &time);
+	time64_to_tm(rq->header.time.tv_sec, -sys_tz.tz_minuteswest * 60, &time);
 
 	size = snprintf(prefix_buf, MAX_PREFIX_SIZE,
 		"[%02d.%02d.%04ld %02d:%02d:%02d-%06ld] <%d> | %s",
