@@ -46,14 +46,26 @@ class CKernelVersion:
 	def GetAccurateVersion(self):
 		return self._versionString
 
-	def GetSameReleaseVersion(self):
-		result = self._revisionString+"-"+str(self._patchNumbers[0])
-		for flavour in self._flavour:
-			if flavour in ["el6", "el7", "x86_64", "i386", "i686"]:
-				result = result+"."+flavour
-			elif flavour[0:4] in ["el7_", "el8_", "el9_"]:
-				result = result+"."+flavour[0:3]
-		return result
+	def IsSameFlavour(self, other):
+		if len(self._flavour) != len(other._flavour):
+			return False
+
+		inx = 0;
+		while inx < len(self._flavour):
+			if self._flavour[inx][0:3] in ["el6", "el7", "el8", "el9"]:
+				if self._flavour[inx][0:3] != other._flavour[inx][0:3]:
+					return False;
+			else:
+				if self._flavour[inx] != other._flavour[inx]:
+					return False;
+			inx += 1
+		return True;
+
+	def IsSameRelease(self, other):
+		if not isinstance(other,CKernelVersion):
+			return NotImplemented
+
+		return ((self._revisionString == other._revisionString) and (self._patchNumbers[0] == other._patchNumbers[0]) and self.IsSameFlavour(other))
 
 	def IsUek(self):
 		result = self._revisionString+"-"+str(self._patchNumbers[0])
@@ -165,7 +177,33 @@ def ExecuteCommand(cmd):
 	if result != 0:
 		raise RuntimeError("Failed to execute ["+cmd+"]")
 
-def FindSuitableModule(strFoundVersion, mod_name):
+def FindSameReleaseModule(kver, moduleName):
+	if not isinstance(kver, CKernelVersion):
+		return NotImplemented
+
+	modulesList = []
+	path = "/lib/modules"
+	entries = os.listdir(path)
+	for dirName in entries:
+		fullDirPath = os.path.join(path, dirName)
+		if os.path.isdir(fullDirPath):
+			fileFullPath = os.path.join(fullDirPath, "extra/"+moduleName+".ko")
+			if os.path.exists(fileFullPath):
+				modulesList.append(CKernelModule(CKernelVersion(dirName), fileFullPath))
+
+	modulesList = sorted(modulesList, key=lambda CKernelModule: CKernelModule._kernelVersion, reverse=False)
+
+	print("Kmod binaries were found:")
+	for module in modulesList:
+		print("\t"+str(module._modulePath))
+
+	for module in modulesList:
+		if kver.IsSameRelease(module._kernelVersion):
+			return module._modulePath
+
+	return None
+
+def FindSuitableModule(strFoundVersion, moduleName):
 	foundVersion = CKernelVersion(strFoundVersion)
 	print("Linux kernel found:"+str(foundVersion))
 	modulesList = []
@@ -175,7 +213,7 @@ def FindSuitableModule(strFoundVersion, mod_name):
 	for dirName in entries:
 		fullDirPath = os.path.join(path, dirName)
 		if os.path.isdir(fullDirPath):
-			fileFullPath = os.path.join(fullDirPath, "extra/"+mod_name+".ko")
+			fileFullPath = os.path.join(fullDirPath, "extra/"+moduleName+".ko")
 			if os.path.exists(fileFullPath):
 				modulesList.append(CKernelModule(CKernelVersion(dirName), fileFullPath))
 
@@ -295,15 +333,24 @@ def main(params):
 		if kver.IsUek():
 			print("Skip an attempt to load a same release kernel for UEK")
 		else:
-			strSameReleaseKernelVersion = kver.GetSameReleaseVersion()
-			kmodPath = "/lib/modules/"+strSameReleaseKernelVersion+"/extra/"
-			print("Same release kernel version: "+strSameReleaseKernelVersion)
+			bdevfilterPath = FindSameReleaseModule(kver, "bdevfilter")
+			if bdevfilterPath is None:
+				print("Failed to find same release module {0} for kernel [{1}]".format("bdevfilter", strAccurateKernelVersion) )
+				return -1
+			print("Same release kernel module path: "+bdevfilterPath)
+
+			blksnapPath = FindSameReleaseModule(kver, "blksnap")
+			if blksnapPath is None:
+				print("Failed to find same release module  {0} for kernel [{1}]".format("blksnap", strAccurateKernelVersion) )
+				return -1
+			print("Same release kernel module path: "+blksnapPath)
+
 			try:
-				TryProcess(kmodPath+"bdevfilter.ko", params, isCheck, isModinfo)
-				TryProcess(kmodPath+"blksnap.ko", params, isCheck, isModinfo)
-				return 0
+				TryProcess(bdevfilterPath, params, isCheck, isModinfo)
+				TryProcess(blksnapPath, params, isCheck, isModinfo)
+				return 0;
 			except Exception as ex:
-				print("Failed to load module for same release kernel version [{0}]".format(strSameReleaseKernelVersion) )
+				print("Failed to load module for same release kernel version")
 
 		if not isKmodAnyKernel:
 			return -1
@@ -317,17 +364,18 @@ def main(params):
 		#try find module with suitable release
 		blksnapPath = FindSuitableModule(strAccurateKernelVersion, "blksnap")
 		if blksnapPath is None:
-			print("Failed to find suitable module  {0} for kernel [{1}]".format("blksnap", strAccurateKernelVersion) )
+			print("Failed to find suitable module {0} for kernel [{1}]".format("blksnap", strAccurateKernelVersion) )
 			return -1
 		print("Suitable kernel module path: "+blksnapPath)
 
-		TryProcess(bdevfilterPath, params, isCheck, isModinfo)
-		TryProcess(blksnapPath, params, isCheck, isModinfo)
-		return 1 # This mean that the module was loaded, but the system kernel may be incompatible with the module
+		try:
+			TryProcess(bdevfilterPath, params, isCheck, isModinfo)
+			TryProcess(blksnapPath, params, isCheck, isModinfo)
+			return 1 # This mean that the module was loaded, but the system kernel may be incompatible with the module
 
-	except Exception as ex:
-		print("Failed to find suitable blksnap kernel module. {0}".format(ex))
-		return -1
+		except Exception as ex:
+			print("Failed to find suitable kernel module. {0}".format(ex))
+			return -1
 	except:
 		print("Unexpected error:"+sys.exc_info()[0])
 		raise
