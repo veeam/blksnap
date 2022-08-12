@@ -144,3 +144,8 @@ cd ./pkg/deb/blksnap-tests
 # or for logging the output to a file
 /opt/blksnap/tests/all.sh | tee -a blksnap_test_$(date -u '+%Y-%m-%d_%H:%M:%S').log
 ```
+## Compatibility notes
+- blksnap kernel module support kernel versions >= 5.10, support only X86 archs, blksnap for upstream instead can support any arch (other archs need to be tested)
+- all supported debian and ubuntu supported versions are supported but with some notes:
+  - not all have debian/ubuntu versions have official packages of kernel >= 5.10, so an unofficial or custom ones more updated are needed, with blksnap-dkms should be still possible easy/fast build/install blksnap module on them (is also possible build/install it manually without dkms)
+  - debian 8 and ubuntu 14.04 needs to install cmake 3 from backports to build

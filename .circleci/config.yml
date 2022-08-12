@@ -8,8 +8,9 @@ shared: &shared
       - run:
             name: Prepare environment
             command: |
+                echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
                 apt-get update
-                apt-get -y full-upgrade
+                apt-get dist-upgrade -y
       - run:
             name: Install dependencies
             command: |
@@ -40,18 +41,49 @@ shared: &shared
           path: /tmp/artifacts
 
 jobs:
+    debian10:
+        <<: *shared
+        docker:
+            - image: library/debian:buster
     debian11:
         <<: *shared
         docker:
             - image: library/debian:bullseye
-
     debian12:
         <<: *shared
         docker:
             - image: library/debian:bookworm
+    ubuntu1404:
+        <<: *shared
+        docker:
+            - image: library/ubuntu:trusty
+    ubuntu1604:
+        <<: *shared
+        docker:
+            - image: library/ubuntu:xenial
+    ubuntu1804:
+        <<: *shared
+        docker:
+            - image: library/ubuntu:bionic
+    ubuntu2004:
+        <<: *shared
+        docker:
+            - image: library/ubuntu:focal
+    ubuntu2204:
+        <<: *shared
+        docker:
+            - image: library/ubuntu:jammy
+    ubuntu2210:
+        <<: *shared
+        docker:
+            - image: library/ubuntu:kinetic
 
 workflows:
-  build-install:
+  build-deb:
     jobs:
+      - debian10
       - debian11
       - debian12
+      - ubuntu2004
+      - ubuntu2204
+      - ubuntu2210
