@@ -26,7 +26,6 @@ Group: System Environment/Kernel
 Provides: %{name} = %{version}
 Requires: python3
 Conflicts: veeamsnap
-Obsoletes: veeamsnap
 
 %description -n kmod-%{name}
 This package provides the ${kmod_name} kernel modules built for the Linux
