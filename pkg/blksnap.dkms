@@ -11,4 +11,3 @@ STRIP[0]="no"
 
 AUTOINSTALL="yes"
 NO_WEAK_MODULES="yes"
-REMAKE_INITRD="no"
