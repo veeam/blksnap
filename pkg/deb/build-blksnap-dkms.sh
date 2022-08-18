@@ -1,5 +1,4 @@
 #!/bin/bash -e
-NAME=blksnap
 
 VERSION="$1"
 if [ -n "$1" ]
@@ -8,7 +7,6 @@ then
 else
 	VERSION="1.0.0.0"
 fi
-ARCH="all"
 
 CURR_DIR=$(pwd)
 cd "../../"
@@ -30,8 +28,8 @@ generate_version ${BUILD_DIR}/src/version.h ${VERSION}
 mkdir -p ${BUILD_DIR}/debian
 mkdir -p ${BUILD_DIR}/debian/source
 
-cp ./pkg/${NAME}.dkms ${BUILD_DIR}/debian/
-sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/debian/${NAME}.dkms
+cp ./pkg/blksnap.dkms ${BUILD_DIR}/src/dkms.conf
+sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/src/dkms.conf
 
 cat > ${BUILD_DIR}/debian/source/format << EOF
 3.0 (native)
@@ -42,15 +40,14 @@ cat > ${BUILD_DIR}/debian/compat << EOF
 EOF
 
 cat > ${BUILD_DIR}/debian/control << EOF
-Source: ${NAME}
+Source: blksnap-dkms
 Section: admin
 Priority: standard
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
 Build-Depends: debhelper (>= 9.0.0), dh-dkms | dkms
 
-Package: ${NAME}
-Architecture: ${ARCH}
-Provides: ${NAME}, ${NAME}-${VERSION}
+Package: blksnap-dkms
+Architecture: all
 Depends: dkms, \${shlibs:Depends}, \${misc:Depends}
 Conflicts: veeamsnap
 Replaces: veeamsnap
@@ -65,7 +62,7 @@ chmod 0666 ${BUILD_DIR}/debian/control
 
 cat > ${BUILD_DIR}/debian/copyright << EOF
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: ${NAME}
+Upstream-Name: blksnap
 
 Files: debian/*
 Copyright: 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
@@ -73,7 +70,7 @@ License: GNU GPL-2.0
 EOF
 
 cat > ${BUILD_DIR}/debian/changelog << EOF
-${NAME} (${VERSION}) stable; urgency=low
+blksnap-dkms (${VERSION}) stable; urgency=low
 
   * Release.
  -- Veeam Software Group GmbH <https://www.veeam.com/contacts.html>  $(date -R)
@@ -124,10 +121,10 @@ include /usr/share/dpkg/pkg-info.mk
 	dh \$@ --with dkms
 
 override_dh_install:
-	dh_install src/* usr/src/${NAME}-${VERSION}/
+	dh_install src/* usr/src/blksnap-${VERSION}/
 
 override_dh_dkms:
-	dh_dkms -V ${VERSION}
+	dh_dkms -V ${VERSION} -- src/dkms.conf
 
 EOF
 chmod 0766 ${BUILD_DIR}/debian/rules
