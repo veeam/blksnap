@@ -11,7 +11,7 @@ fi
 ARCH="all"
 
 CURR_DIR=$(pwd)
-cd "../../../"
+cd "../../"
 
 . pkg/build_functions.sh
 

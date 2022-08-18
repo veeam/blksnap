@@ -41,8 +41,8 @@ mk.sh install
 ### How to create deb package
 ``` bash
 sudo apt install debhelper dkms
-cd ./pkg/deb/blksnap-dkms
-./build.sh ${VERSION}
+cd ./pkg/deb
+./build-blksnap-dkms.sh ${VERSION}
 ```
 ### How to create rpm package
 There are several variants, look in the ./pkg/rpm directory.
