@@ -34,7 +34,7 @@ cat > ${BUILD_DIR}/debian/changelog << EOF
 blksnap-dkms (${VERSION}) stable; urgency=low
 
   * Release.
- -- Veeam Software Group GmbH <https://www.veeam.com/contacts.html>  $(date -R)
+ -- Veeam Software Group GmbH <veeam_team@veeam.com>  $(date -R)
 EOF
 
 cd ${BUILD_DIR} && dpkg-buildpackage -us -uc -b
