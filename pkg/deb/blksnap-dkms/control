@@ -1,0 +1,17 @@
+Source: blksnap-dkms
+Section: admin
+Priority: standard
+Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
+Build-Depends: debhelper (>= 9.0.0), dh-dkms | dkms
+
+Package: blksnap-dkms
+Architecture: all
+Depends: dkms, ${shlibs:Depends}, ${misc:Depends}
+Conflicts: veeamsnap
+Replaces: veeamsnap
+Homepage: https://github.org/veeam/blksnap/
+Description: Veeam Agent for Linux (kernel module)
+ This kernel module implements snapshot and changed block tracking
+ functionality used by Veeam Agent for Linux - simple and FREE backup agent
+ designed to ensure the Availability of your Linux server instances, whether
+ they reside in the public cloud or on premises.
