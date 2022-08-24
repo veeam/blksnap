@@ -326,12 +326,9 @@ int log_restart(int level, char *filepath)
 		goto fail;
 	}
 
-	log_printk_direct(filp, LOGLEVEL_INFO, "Start log for module %s version %s loglevel %d\n",
-		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);
-
 	filp_close(filp, NULL);
 
-	task = kthread_create(log_processor, filepath, "blksnaplog");
+	task = kthread_create(log_processor, NULL, "blksnaplog");
 	if (IS_ERR(task)) {
 		ret = PTR_ERR(task);
 		goto fail;
@@ -340,6 +337,9 @@ int log_restart(int level, char *filepath)
 	log_task = task;
 	log_filepath = filepath;
 	log_level = level <= LOGLEVEL_DEBUG ? level : LOGLEVEL_DEBUG;
+
+	log_printk_direct(filp, LOGLEVEL_INFO, "Start log for module %s version %s loglevel %d\n",
+		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);
 
 	wake_up_process(log_task);
 

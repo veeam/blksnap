@@ -451,7 +451,6 @@ int ioctl_setlog(unsigned long arg)
 	struct blk_snap_setlog karg;
 	char *filepath = NULL;
 
-	pr_info("DEBUG! %s\n", __func__);
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to get log parameters: invalid user buffer\n");
 		return -ENODATA;

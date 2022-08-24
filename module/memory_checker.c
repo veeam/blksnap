@@ -72,19 +72,19 @@ int memory_object_print(void)
 	int inx;
 	int not_free = 0;
 
-	pr_info("Objects in memory:\n");
+	pr_debug("Objects in memory:\n");
 	for (inx = 0; inx < memory_object_count; inx++) {
 		int count = atomic_read(&memory_counter[inx]);
 
 		if (count) {
 			not_free += count;
-			pr_info("%s: %d\n", memory_object_names[inx], count);
+			pr_debug("%s: %d\n", memory_object_names[inx], count);
 		}
 	}
 	if (not_free)
-		pr_info("Found %d allocated objects\n", not_free);
+		pr_debug("Found %d allocated objects\n", not_free);
 	else
-		pr_info("All objects have been released\n");
+		pr_debug("All objects have been released\n");
 	return not_free;
 }
 
@@ -92,13 +92,13 @@ void memory_object_max_print(void)
 {
 	int inx;
 
-	pr_info("Maximim objects in memory:\n");
+	pr_debug("Maximim objects in memory:\n");
 	for (inx = 0; inx < memory_object_count; inx++) {
 		int count = atomic_read(&memory_counter_max[inx]);
 
 		if (count)
-			pr_info("%s: %d\n", memory_object_names[inx], count);
+			pr_debug("%s: %d\n", memory_object_names[inx], count);
 	}
-	pr_info(".\n");
+	pr_debug(".\n");
 }
 #endif
