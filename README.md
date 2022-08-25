@@ -20,7 +20,7 @@ but accesses the kernel to attach and detach the block device filter.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install gcc linux-headers-$(uname -r)
+sudo apt install gcc linux-headers
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -40,9 +40,9 @@ mk.sh install
 ```
 ### How to create deb package
 ``` bash
-sudo apt install debhelper dkms
-cd ./pkg/deb
-./build-blksnap-dkms.sh ${VERSION}
+sudo apt install debhelper
+cd ./pkg/deb/blksnap-dkms
+build.sh ${VERSION}
 ```
 ### How to create rpm package
 There are several variants, look in the ./pkg/rpm directory.
@@ -55,7 +55,7 @@ since it is assumed that it will be called by other applications.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev
+sudo apt install g++ cmake uuid-dev libboost-all-dev
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -74,7 +74,7 @@ make
 ``` bash
 sudo apt install debhelper
 cd ./pkg/deb/blksnap-tools
-./build.sh ${VERSION}
+build.sh ${VERSION}
 ```
 
 ## library
@@ -86,7 +86,7 @@ In the project, the library is used for tests.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-filesystem-dev
+sudo apt install g++ cmake uuid-dev libboost-all-dev
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -104,7 +104,7 @@ make
 ``` bash
 sudo apt install debhelper
 cd ./pkg/deb/blksnap-dev
-./build.sh ${VERSION}
+build.sh ${VERSION}
 ```
 
 ## tests
@@ -116,7 +116,7 @@ build С++ tests.
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
+sudo apt install g++ cmake uuid-dev libboost-all-dev libssl-dev
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -134,18 +134,5 @@ make
 ``` bash
 sudo apt install debhelper
 cd ./pkg/deb/blksnap-tests
-./build.sh ${VERSION}
+build.sh ${VERSION}
 ```
-### How to run all usage tests
-``` bash
-./all.sh
-# or if installed with packages
-/opt/blksnap/tests/all.sh
-# or for logging the output to a file
-/opt/blksnap/tests/all.sh | tee -a blksnap_test_$(date -u '+%Y-%m-%d_%H:%M:%S').log
-```
-## Compatibility notes
-- blksnap kernel module support kernel versions >= 5.10, support only X86 archs, blksnap for upstream instead can support any arch (other archs need to be tested)
-- all supported debian and ubuntu supported versions are supported but with some notes:
-  - not all have debian/ubuntu versions have official packages of kernel >= 5.10, so an unofficial or custom ones more updated are needed, with blksnap-dkms should be still possible easy/fast build/install blksnap module on them (is also possible build/install it manually without dkms)
-  - debian 8 and ubuntu 14.04 needs to install cmake 3 from backports to build

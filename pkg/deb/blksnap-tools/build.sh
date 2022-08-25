@@ -7,9 +7,9 @@ then
 else
 	VERSION="1.0.0.0"
 fi
-if [ -n "$(dpkg-architecture -q DEB_HOST_ARCH)" ]
+if [ -n "$2" ]
 then
-	ARCH="$(dpkg-architecture -q DEB_HOST_ARCH)"
+	ARCH="$2"
 else
 	ARCH="amd64"
 fi
@@ -23,7 +23,7 @@ rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR}
 
 SOURCE_DIR="tools/blksnap/bin"
-TARGET_DIR="usr/sbin"
+TARGET_DIR="usr/bin"
 
 # build
 rm -rf ${SOURCE_DIR}/*
@@ -56,12 +56,12 @@ Source: ${NAME}
 Section: admin
 Priority: standard
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
-Build-Depends: debhelper (>= 9.0.0), g++, cmake, uuid-dev, libboost-program-options-dev, libboost-filesystem-dev
+Build-Depends: debhelper (>= 9.0.0),
 
 Package: ${NAME}
 Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
-Depends: \${shlibs:Depends}, \${misc:Depends}
+Depends: ${misc:Depends}
 Homepage: https://github.org/veeam/blksnap/
 Description: [TBD] The tools for managing the blksnap kernel module.
 EOF

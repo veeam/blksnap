@@ -528,8 +528,8 @@ struct blk_snap_event_corrupted {
  * @level:
  *	0 - disable logging to file
  *	3 - only error messages
- *	4 - log warnings
- *	6 - log info messages (default)
+ *	4 - log warnings (default)
+ *	6 - log info messages
  *	7 - log debug messages
  * @filepath_size:
  *	Count of bytes in &filepath.

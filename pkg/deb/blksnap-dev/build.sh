@@ -7,10 +7,9 @@ then
 else
 	VERSION="1.0.0.0"
 fi
-
-if [ -n "$(dpkg-architecture -q DEB_HOST_ARCH)" ]
+if [ -n "$2" ]
 then
-	ARCH="$(dpkg-architecture -q DEB_HOST_ARCH)"
+	ARCH="$2"
 else
 	ARCH="amd64"
 fi
@@ -56,12 +55,12 @@ Source: ${NAME}
 Section: devel
 Priority: standard
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
-Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-filesystem-dev
+Build-Depends: debhelper (>= 9.0.0), bash,
 
 Package: ${NAME}
 Architecture: ${ARCH}
 Provides: ${NAME}, ${NAME}-${VERSION}
-Depends: \${misc:Depends}
+Depends: ${misc:Depends}
 Homepage: https://github.org/veeam/blksnap/
 Description: [TBD] The static library and header files for managing the
         blksnap kernel module.

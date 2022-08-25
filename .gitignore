@@ -1,9 +1,7 @@
 .*
-!.github
 !.gitignore
 !.editorconfig
 !.clang-format
-!.circleci
 cmake*
 /build/
 /lib/blksnap/bin/

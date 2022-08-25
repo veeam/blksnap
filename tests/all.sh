@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
+./build_and_install.sh
+
 echo "Execute all tests"
 echo "***"
 
