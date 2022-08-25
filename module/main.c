@@ -15,10 +15,8 @@
 #include "snapshot.h"
 #include "tracker.h"
 #include "diff_io.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#ifdef STANDALONE_BDEVFILTER
+#include "log.h"
 #endif
 
 #ifdef STANDALONE_BDEVFILTER
@@ -61,6 +59,9 @@ static int __init blk_snap_init(void)
 {
 	int result;
 
+#ifdef BLK_SNAP_FILELOG
+	log_init();
+#endif
 	pr_info("Loading\n");
 	pr_debug("Version: %s\n", VERSION_STR);
 	pr_debug("tracking_block_minimum_shift: %d\n",
@@ -106,8 +107,11 @@ static void __exit blk_snap_exit(void)
 	snapimage_done();
 	tracker_done();
 
+#ifdef BLK_SNAP_FILELOG
+	log_done();
+#endif
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	WARN(memory_object_print(), "Several objects were not released");
+	memory_object_print(true);
 #endif
 	pr_info("Module was unloaded\n");
 }

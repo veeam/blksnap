@@ -11,10 +11,8 @@
 #include "memory_checker.h"
 #include "sysfs.h"
 #include "ctrl.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#ifdef STANDALONE_BDEVFILTER
+#include "log.h"
 #endif
 
 static ssize_t major_show(struct class *class, struct class_attribute *attr,

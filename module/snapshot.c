@@ -14,10 +14,8 @@
 #include "diff_area.h"
 #include "snapimage.h"
 #include "cbt_map.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#ifdef STANDALONE_BDEVFILTER
+#include "log.h"
 #endif
 
 #ifdef STANDALONE_BDEVFILTER
@@ -366,7 +364,7 @@ int snapshot_destroy(uuid_t *id)
 	snapshot_put(snapshot);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	pr_debug("blksnap memory consumption:\n");
-	memory_object_print();
+	memory_object_print(false);
 	memory_object_max_print();
 #endif
 	return 0;

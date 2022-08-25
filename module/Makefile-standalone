@@ -50,14 +50,17 @@ EXTRA_CFLAGS += $(shell 							\
 	grep "bio_alloc_bioset" $(srctree)/include/linux/bio.h |		\
 	grep -qw "struct block_device" &&					\
 		echo -DHAVE_BDEV_BIO_ALLOC)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "void put_disk" $(srctree)/include/linux/blkdev.h &&		\
+		echo -DHAVE_PUT_DISK)
 
-# The power of 2 for minimum trackings block size.
+# The power of 2 for minimum tracking block size.
 # The minimum tracking block size by default is 64 KB (shift 16)
 # It's looks good for block device 128 GB or lower.
 # In this case, the block device is divided into 2097152 blocks.
 EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT=16"
 
-# The limit of the maximum number of trackings blocks.
+# The limit of the maximum number of tracking blocks.
 # As the size of the block device grows, the size of the tracking block
 # size should also grow. For this purpose, the limit of the maximum
 # number of block size is set.
@@ -92,8 +95,9 @@ EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM=2097152"
 # EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
 EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK"
 
-# Some specific keys for out-of-tree module configutation
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUGLOG"
+# Some specific keys for out-of-tree module configuration
+EXTRA_CFLAGS += "-DBLK_SNAP_FILELOG"
+#EXTRA_CFLAGS += "-DBLK_SNAP_DEBUGLOG"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_STORAGE_LISTS"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_BUFFER"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_CHUNK_IO"
@@ -101,3 +105,4 @@ EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_SECTOR_STATE"
 # EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_RELEASE_SNAPSHOT"
 
+$(KERNEL_MODULE_NAME)-y += log.o

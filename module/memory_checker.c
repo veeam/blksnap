@@ -4,10 +4,8 @@
 #include <linux/atomic.h>
 #include <linux/module.h>
 #include "memory_checker.h"
-
-#ifdef BLK_SNAP_DEBUGLOG
-#undef pr_debug
-#define pr_debug(fmt, ...) printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#ifdef STANDALONE_BDEVFILTER
+#include "log.h"
 #endif
 
 char *memory_object_names[] = {
@@ -38,6 +36,7 @@ char *memory_object_names[] = {
 	"snapimage_array",
 	"superblock_array",
 	"blk_snap_image_info",
+	"log_filepath",
 	/*end*/
 };
 
@@ -68,24 +67,33 @@ void memory_object_dec(enum memory_object_type type)
 	atomic_dec(&memory_counter[type]);
 }
 
-int memory_object_print(void)
+int memory_object_print(bool is_error)
 {
 	int inx;
 	int not_free = 0;
 
-	pr_info("Objects in memory:\n");
+	pr_debug("Objects in memory:\n");
 	for (inx = 0; inx < memory_object_count; inx++) {
 		int count = atomic_read(&memory_counter[inx]);
 
 		if (count) {
 			not_free += count;
-			pr_info("%s: %d\n", memory_object_names[inx], count);
+			if (is_error) {
+				pr_err("%s: %d\n", memory_object_names[inx],
+					count);
+			} else {
+				pr_debug("%s: %d\n", memory_object_names[inx],
+					count);
+			}
 		}
 	}
 	if (not_free)
-		pr_info("Found %d allocated objects\n", not_free);
+		if (is_error)
+			pr_err("%d not released objects found\n", not_free);
+		else
+			pr_debug("Found %d allocated objects\n", not_free);
 	else
-		pr_info("All objects have been released\n");
+		pr_debug("All objects have been released\n");
 	return not_free;
 }
 
@@ -93,13 +101,13 @@ void memory_object_max_print(void)
 {
 	int inx;
 
-	pr_info("Maximim objects in memory:\n");
+	pr_debug("Maximim objects in memory:\n");
 	for (inx = 0; inx < memory_object_count; inx++) {
 		int count = atomic_read(&memory_counter_max[inx]);
 
 		if (count)
-			pr_info("%s: %d\n", memory_object_names[inx], count);
+			pr_debug("%s: %d\n", memory_object_names[inx], count);
 	}
-	pr_info(".\n");
+	pr_debug(".\n");
 }
 #endif

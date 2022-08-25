@@ -5,4 +5,3 @@ Obsoletes: %{name}-kmp-%1 < %version
 Obsoletes: %{name}-kmp < %version
 Obsoletes: %{name} < %version
 Conflicts: veeamsnap
-Obsoletes: veeamsnap

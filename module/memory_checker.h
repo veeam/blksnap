@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __BLK_SNAP_MEMORY_CHECKER_H
 #define __BLK_SNAP_MEMORY_CHECKER_H
+#include <linux/types.h>
 
 enum memory_object_type {
 	/*alloc_page*/
@@ -30,6 +31,7 @@ enum memory_object_type {
 	memory_object_snapimage_array,
 	memory_object_superblock_array,
 	memory_object_blk_snap_image_info,
+	memory_object_log_filepath,
 	/*end*/
 	memory_object_count
 };
@@ -37,7 +39,7 @@ enum memory_object_type {
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 void memory_object_inc(enum memory_object_type type);
 void memory_object_dec(enum memory_object_type type);
-int  memory_object_print(void);
+int  memory_object_print(bool is_error);
 void memory_object_max_print(void);
 #else
 static inline void memory_object_inc(
