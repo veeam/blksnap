@@ -67,7 +67,7 @@ void memory_object_dec(enum memory_object_type type)
 	atomic_dec(&memory_counter[type]);
 }
 
-int memory_object_print(void)
+int memory_object_print(bool is_error)
 {
 	int inx;
 	int not_free = 0;
@@ -78,11 +78,20 @@ int memory_object_print(void)
 
 		if (count) {
 			not_free += count;
-			pr_debug("%s: %d\n", memory_object_names[inx], count);
+			if (is_error) {
+				pr_err("%s: %d\n", memory_object_names[inx],
+					count);
+			} else {
+				pr_debug("%s: %d\n", memory_object_names[inx],
+					count);
+			}
 		}
 	}
 	if (not_free)
-		pr_debug("Found %d allocated objects\n", not_free);
+		if (is_error)
+			pr_err("%d not released objects found\n", not_free);
+		else
+			pr_debug("Found %d allocated objects\n", not_free);
 	else
 		pr_debug("All objects have been released\n");
 	return not_free;

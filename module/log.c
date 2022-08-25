@@ -346,6 +346,7 @@ int log_restart(int level, char *filepath)
 	return 0;
 fail:
 	kfree(filepath);
+	memory_object_dec(memory_object_log_filepath);
 	return ret;
 }
 

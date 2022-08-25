@@ -364,7 +364,7 @@ int snapshot_destroy(uuid_t *id)
 	snapshot_put(snapshot);
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 	pr_debug("blksnap memory consumption:\n");
-	memory_object_print();
+	memory_object_print(false);
 	memory_object_max_print();
 #endif
 	return 0;

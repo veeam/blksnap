@@ -107,13 +107,13 @@ static void __exit blk_snap_exit(void)
 	snapimage_done();
 	tracker_done();
 
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
-	WARN(memory_object_print(), "Several objects were not released");
-#endif
-	pr_info("Module was unloaded\n");
 #ifdef BLK_SNAP_FILELOG
 	log_done();
 #endif
+#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+	memory_object_print(true);
+#endif
+	pr_info("Module was unloaded\n");
 }
 
 module_init(blk_snap_init);
