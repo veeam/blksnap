@@ -50,6 +50,9 @@ EXTRA_CFLAGS += $(shell 							\
 	grep "bio_alloc_bioset" $(srctree)/include/linux/bio.h |		\
 	grep -qw "struct block_device" &&					\
 		echo -DHAVE_BDEV_BIO_ALLOC)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "void put_disk" $(srctree)/include/linux/blkdev.h &&		\
+		echo -DHAVE_PUT_DISK)
 
 # The power of 2 for minimum tracking block size.
 # The minimum tracking block size by default is 64 KB (shift 16)
