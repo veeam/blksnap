@@ -37,6 +37,7 @@ struct log_request log_request_direct;
 
 static int log_level = -1;
 static char *log_filepath = NULL;
+static int log_tz_minuteswest = 0;
 
 static LIST_HEAD(log_free_requests);
 static DEFINE_SPINLOCK(log_free_requests_lock);
@@ -146,7 +147,7 @@ static inline int log_request_write(struct file* filp, const struct log_request*
 	struct tm time;
 	char prefix_buf[MAX_PREFIX_SIZE];
 
-	time64_to_tm(rq->header.time.tv_sec, -sys_tz.tz_minuteswest * 60, &time);
+	time64_to_tm(rq->header.time.tv_sec, (-sys_tz.tz_minuteswest + log_tz_minuteswest) * 60, &time);
 
 	size = snprintf(prefix_buf, MAX_PREFIX_SIZE,
 		"[%02d.%02d.%04ld %02d:%02d:%02d-%06ld] <%d> | %s",
@@ -275,7 +276,7 @@ int log_processor(void *data)
 	return ret;
 }
 
-int log_restart(int level, char *filepath)
+int log_restart(int level, char *filepath, int tz_minuteswest)
 {
 	int ret = 0;
 	struct file* filp;
@@ -337,6 +338,7 @@ int log_restart(int level, char *filepath)
 	log_task = task;
 	log_filepath = filepath;
 	log_level = level <= LOGLEVEL_DEBUG ? level : LOGLEVEL_DEBUG;
+	log_tz_minuteswest = tz_minuteswest;
 
 	log_printk_direct(filp, LOGLEVEL_INFO, "Start log for module %s version %s loglevel %d\n",
 		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);

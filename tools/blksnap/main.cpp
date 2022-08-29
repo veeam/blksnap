@@ -19,6 +19,7 @@
 #include <uuid/uuid.h>
 #include <vector>
 #include <blksnap/blk_snap.h>
+#include <time.h>
 
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
@@ -66,8 +67,32 @@ namespace
         uuid_t m_id;
     };
 
-    static int blksnap_fd = 0;
-    static const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
+    class CBlksnapFileWrap
+    {
+    public:
+        CBlksnapFileWrap()
+            : m_blksnapFd(0)
+        {
+            const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
+
+            m_blksnapFd = ::open(blksnap_filename, O_RDWR);
+            if (m_blksnapFd < 0)
+                throw std::system_error(errno, std::generic_category(), blksnap_filename);
+        };
+        ~CBlksnapFileWrap()
+        {
+            if (m_blksnapFd > 0)
+                ::close(m_blksnapFd);
+        };
+        int get() const
+        {
+            return m_blksnapFd;
+        };
+
+    private:
+        int m_blksnapFd;
+
+    };
 
     static inline struct blk_snap_dev_t deviceByName(const std::string& name)
     {
@@ -214,6 +239,10 @@ protected:
     std::string m_usage;
 };
 
+#ifdef BLK_SNAP_MODIFICATION
+#pragma message "BLK_SNAP_MODIFICATION defined"
+#endif
+
 class VersionArgsProc : public IArgsProc
 {
 public:
@@ -231,6 +260,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
 #ifdef BLK_SNAP_MODIFICATION
         bool isModification = (vm.count("modification") != 0);
         bool isCompatibility = (vm.count("compatibility") != 0);
@@ -239,7 +269,7 @@ public:
         {
             struct blk_snap_mod param = {0};
 
-            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_MOD, &param))
+            if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_MOD, &param))
                 throw std::system_error(errno, std::generic_category(), "Failed to get modification or compatibility information.");
 
             if (isModification)
@@ -258,7 +288,7 @@ public:
         {
             struct blk_snap_version param = {0};
 
-            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_VERSION, &param))
+            if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_VERSION, &param))
                 throw std::system_error(errno, std::generic_category(), "Failed to get version.");
 
             std::cout << param.major << "." << param.minor << "." << param.revision << "." << param.build << std::endl;
@@ -279,6 +309,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_tracker_remove param;
 
         if (!vm.count("device"))
@@ -286,7 +317,7 @@ public:
 
         param.dev_id = deviceByName(vm["device"].as<std::string>());
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_REMOVE, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_REMOVE, &param))
             throw std::system_error(errno, std::generic_category(),
                                     "Failed to remove block device from change tracking.");
     };
@@ -305,17 +336,18 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_tracker_collect param = {0};
         std::vector<struct blk_snap_cbt_info> cbtInfoVector;
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(),
                                     "[TBD]Failed to collect block devices with change tracking.");
 
         cbtInfoVector.resize(param.count);
         param.cbt_info_array = cbtInfoVector.data();
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(),
                                     "[TBD]Failed to collect block devices with change tracking.");
 
@@ -356,6 +388,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         int ret;
         struct blk_snap_tracker_read_cbt_bitmap param;
         std::vector<unsigned char> cbtmap(1024 * 1024);
@@ -379,7 +412,7 @@ public:
 
         do
         {
-            ret = ::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP, &param);
+            ret = ::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP, &param);
             if (ret < 0)
                 throw std::system_error(errno, std::generic_category(),
                                         "[TBD]Failed to read map of difference from change tracking.");
@@ -409,6 +442,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_tracker_mark_dirty_blocks param;
         std::vector<struct blk_snap_block_range> ranges;
 
@@ -431,7 +465,7 @@ public:
         param.count = ranges.size();
         param.dirty_blocks_array = ranges.data();
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS, &param))
             throw std::system_error(errno, std::generic_category(),
                                     "[TBD]Failed to mark dirty blocks in change tracking map.");
     }
@@ -450,6 +484,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_snapshot_create param = {0};
         std::vector<struct blk_snap_dev_t> devices;
 
@@ -461,7 +496,7 @@ public:
         param.count = devices.size();
         param.dev_id_array = devices.data();
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_CREATE, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_CREATE, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create snapshot object.");
 
         char idStr[64];
@@ -484,6 +519,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_snapshot_destroy param;
 
         if (!vm.count("id"))
@@ -492,7 +528,7 @@ public:
         Uuid id(vm["id"].as<std::string>());
         uuid_copy(param.id, id.Get());
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to destroy snapshot.");
     };
 };
@@ -513,6 +549,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_snapshot_append_storage param;
         std::vector<struct blk_snap_block_range> ranges;
         struct blk_snap_dev_t dev_id = {0};
@@ -539,7 +576,7 @@ public:
         param.dev_id = dev_id;
         param.count = ranges.size();
         param.ranges = ranges.data();
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to append storage for snapshot.");
     };
 };
@@ -557,6 +594,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_snapshot_take param;
 
         if (!vm.count("id"))
@@ -565,7 +603,7 @@ public:
         Uuid id(vm["id"].as<std::string>());
         uuid_copy(param.id, id.Get());
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to take snapshot.");
     };
 };
@@ -585,6 +623,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_snapshot_event param;
 
         if (!vm.count("id"))
@@ -597,7 +636,7 @@ public:
             throw std::invalid_argument("Argument 'timeout' is missed.");
         param.timeout_ms = std::stoi(vm["timeout"].as<std::string>());
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param))
         {
             if (errno == ENOENT)
             {
@@ -643,11 +682,11 @@ public:
 class SnapshotCollectArgsProc : public IArgsProc
 {
 private:
-    void CollectSnapshots(std::vector<Uuid>& ids)
+    void CollectSnapshots(const CBlksnapFileWrap& blksnapFd, std::vector<Uuid>& ids)
     {
         struct blk_snap_snapshot_collect param = {0};
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get list of active snapshots.");
 
         if (param.count == 0)
@@ -656,19 +695,19 @@ private:
         std::vector<uuid_t> id_array(param.count);
         param.ids = id_array.data();
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get list of snapshots.");
 
         for (int inx = 0; inx < param.count; inx++)
             ids.emplace_back(id_array[inx]);
     };
 
-    void CollectImages(const Uuid& id, std::vector<struct blk_snap_image_info>& imageInfoVector)
+    void CollectImages(const CBlksnapFileWrap& blksnapFd, const Uuid& id, std::vector<struct blk_snap_image_info>& imageInfoVector)
     {
         struct blk_snap_snapshot_collect_images param = {0};
 
         uuid_copy(param.id, id.Get());
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
             throw std::system_error(errno, std::generic_category(),
                                     "[TBD]Failed to get device collection for snapshot images.");
 
@@ -678,7 +717,7 @@ private:
         imageInfoVector.resize(param.count);
         param.image_info_array = imageInfoVector.data();
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
             throw std::system_error(errno, std::generic_category(),
                                     "[TBD]Failed to get device collection for snapshot images.");
     };
@@ -695,6 +734,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         std::vector<Uuid> ids;
 
         if (vm.count("json"))
@@ -703,14 +743,14 @@ public:
         if (vm.count("id"))
             ids.emplace_back(vm["id"].as<std::string>());
         else
-            CollectSnapshots(ids);
+            CollectSnapshots(blksnapFd, ids);
 
         for (const Uuid& id : ids)
         {
             std::cout << "snapshot=" << id.ToString() << std::endl;
 
             std::vector<struct blk_snap_image_info> imageInfoVector;
-            CollectImages(id, imageInfoVector);
+            CollectImages(blksnapFd, id, imageInfoVector);
 
             std::cout << "count=" << imageInfoVector.size() << std::endl;
             for (struct blk_snap_image_info& info : imageInfoVector)
@@ -735,7 +775,7 @@ private:
     unsigned long long m_limit_sect;
 
 private:
-    void ProcessLowFreeSpace(unsigned int time_label, struct blk_snap_event_low_free_space* data)
+    void ProcessLowFreeSpace(const CBlksnapFileWrap& blksnapFd, unsigned int time_label, struct blk_snap_event_low_free_space* data)
     {
         std::string filename;
         int fd;
@@ -781,7 +821,7 @@ private:
         param.count = ranges.size();
         param.ranges = ranges.data();
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to append storage for snapshot.");
     };
 
@@ -804,6 +844,7 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         bool terminate = false;
         struct blk_snap_snapshot_event param;
 
@@ -830,7 +871,7 @@ public:
             m_counter = 0;
             while (!terminate)
             {
-                if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param))
+                if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param))
                 {
                     int err = errno;
 
@@ -843,7 +884,7 @@ public:
                 switch (param.code)
                 {
                 case blk_snap_event_code_low_free_space:
-                    ProcessLowFreeSpace(param.time_label, (struct blk_snap_event_low_free_space*)param.data);
+                    ProcessLowFreeSpace(blksnapFd, param.time_label, (struct blk_snap_event_low_free_space*)param.data);
                     break;
                 case blk_snap_event_code_corrupted:
                     ProcessEventCorrupted(param.time_label, (struct blk_snap_event_corrupted*)param.data);
@@ -869,13 +910,34 @@ public:
 };
 
 #ifdef BLK_SNAP_MODIFICATION
+static int CalculateTzMinutesWest()
+{
+    time_t local_time = time(NULL);
+
+    struct tm *gm_tm = gmtime(&local_time);
+    gm_tm->tm_isdst = -1;
+    time_t gm_time = mktime(gm_tm);
+
+    return static_cast<int>(difftime(local_time, gm_time) / 60);
+}
+
+static inline int getTzMinutesWest()
+{
+    static int tzMinutesWest = -1;
+
+    if (tzMinutesWest != -1)
+        return tzMinutesWest;
+    else
+        return (tzMinutesWest = CalculateTzMinutesWest());
+}
+
 class SetlogArgsProc : public IArgsProc
 {
 public:
     SetlogArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Print " BLK_SNAP_MODULE_NAME " set module additional logging.");
+        m_usage = std::string("Set module additional logging.");
         m_desc.add_options()
           ("level,l", po::value<int>()->default_value(6), "3 - only errors, 4 - warnings, 5 - notice, 6 - info (default), 7 - debug.")
           ("path,p", po::value<std::string>(), "Full path for log file.")
@@ -883,16 +945,18 @@ public:
     };
     void Execute(po::variables_map& vm) override
     {
+        CBlksnapFileWrap blksnapFd;
         struct blk_snap_setlog param = {0};
 
         if (vm.count("disable")) {
             param.level = -1;
             param.filepath = NULL;
-            if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SETLOG, &param))
+            if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SETLOG, &param))
                 throw std::system_error(errno, std::generic_category(), "Failed to disable logging.");
             return;
         }
 
+        param.tz_minuteswest = getTzMinutesWest();
         param.level = vm["level"].as<int>();
 
         if (!vm.count("path"))
@@ -906,7 +970,7 @@ public:
         param.filepath = filepathBuffer.data();
         param.filepath_size = filepathBuffer.size();
 
-        if (::ioctl(blksnap_fd, IOCTL_BLK_SNAP_SETLOG, &param))
+        if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SETLOG, &param))
             throw std::system_error(errno, std::generic_category(), "Failed to set logging.");
     };
 };
@@ -952,20 +1016,15 @@ static void process(int argc, char** argv)
         throw std::runtime_error("[TBD]Command not found.");
 
     std::string commandName(argv[1]);
+
     const auto& itArgsProc = argsProcMap.find(commandName);
     if (itArgsProc != argsProcMap.end())
-    {
         itArgsProc->second->Process(--argc, ++argv);
-        return;
-    }
-
-    if ((commandName == "help") || (commandName == "--help") || (commandName == "-h"))
-    {
-        printUsage();
-        return;
-    }
-
-    throw std::runtime_error("Command is not set.");
+    else
+        if ((commandName == "help") || (commandName == "--help") || (commandName == "-h"))
+            printUsage();
+        else
+            throw std::runtime_error("Command is not set.");
 }
 
 int main(int argc, char* argv[])
@@ -974,10 +1033,6 @@ int main(int argc, char* argv[])
 
     try
     {
-        blksnap_fd = ::open(blksnap_filename, O_RDWR);
-        if (blksnap_fd < 0)
-            throw std::system_error(errno, std::generic_category(), blksnap_filename);
-
         process(argc, argv);
     }
     catch (std::exception& ex)
@@ -985,8 +1040,6 @@ int main(int argc, char* argv[])
         std::cerr << ex.what() << std::endl;
         ret = 1;
     }
-    if (blksnap_fd > 0)
-        ::close(blksnap_fd);
 
     return ret;
 }
