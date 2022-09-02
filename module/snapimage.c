@@ -189,7 +189,11 @@ void snapimage_free(struct snapimage *snapimage)
 
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
 	del_gendisk(snapimage->disk);
+#ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(snapimage->disk);
+#else
+	put_disk(snapimage->disk);
+#endif
 	blk_mq_free_tag_set(&snapimage->tag_set);
 #else
 	del_gendisk(snapimage->disk);

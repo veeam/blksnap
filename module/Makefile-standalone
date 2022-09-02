@@ -45,6 +45,12 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "int __must_check add_disk" $(srctree)/include/linux/blkdev.h && \
 		echo -DHAVE_ADD_DISK_RESULT)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+	grep -qw "void blk_cleanup_disk" $(srctree)/include/linux/genhd.h &&	\
+		echo -DHAVE_BLK_CLEANUP_DISK)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "void blk_cleanup_disk" $(srctree)/include/linux/blkdev.h &&	\
+		echo -DHAVE_BLK_CLEANUP_DISK)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 		echo -DHAVE_GENHD_H)
 EXTRA_CFLAGS += $(shell 							\
 	grep "bio_alloc_bioset" $(srctree)/include/linux/bio.h |		\
