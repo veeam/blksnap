@@ -206,7 +206,7 @@ int bdev_filter_attach(struct block_device *bdev, const char *name,
 	spin_unlock(&ext->bd_filters_lock);
 
 	if (!ret)
-		pr_info("block device filter '%s' has been attached to %d:%d",
+		pr_info("Block device filter '%s' has been attached to %d:%d",
 			name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	return ret;
 }
@@ -246,7 +246,7 @@ int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 		return -ENOENT;
 
 	bdev_filter_put(flt);
-	pr_info("block device filter '%s' has been detached from %d:%d",
+	pr_info("Block device filter '%s' has been detached from %d:%d",
 		name, MAJOR(dev_id), MINOR(dev_id));
 	return 0;
 }
