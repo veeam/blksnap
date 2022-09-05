@@ -12,6 +12,14 @@
 #include "bdevfilter.h"
 #include "version.h"
 
+#if defined(BLK_SNAP_DEBUGLOG)
+#undef pr_debug
+#define pr_debug(fmt, ...) \
+({ \
+	printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__); \
+})
+#endif
+
 struct bdev_extension {
 	struct list_head link;
 
@@ -19,6 +27,8 @@ struct bdev_extension {
 #if defined(HAVE_BI_BDISK)
 	struct gendisk *disk;
 	u8 partno;
+#else
+	struct block_device *bdev;
 #endif
 
 	struct bdev_filter *bd_filters[bdev_filter_alt_end];
@@ -60,36 +70,97 @@ static inline struct bdev_extension *bdev_extension_find_part(struct gendisk *di
 
 	return NULL;
 }
+#else
+static inline struct bdev_extension *bdev_extension_find_bdev(struct block_device *bdev)
+{
+	struct bdev_extension *ext;
+
+	if (list_empty(&bdev_extension_list))
+		return NULL;
+
+	list_for_each_entry (ext, &bdev_extension_list, link)
+		if (bdev == ext->bdev)
+			return ext;
+
+	return NULL;
+}
 #endif
 
 static inline struct bdev_extension *bdev_extension_append(struct block_device *bdev)
 {
+	bool recreate = false;
+	struct bdev_extension *result = NULL;
 	struct bdev_extension *ext;
-	struct bdev_extension *ext_new;
+	struct bdev_extension *ext_tmp;
 
-	ext_new = kzalloc(sizeof(struct bdev_extension), GFP_NOIO);
-	if (!ext_new)
+	ext_tmp = kzalloc(sizeof(struct bdev_extension), GFP_NOIO);
+	if (!ext_tmp)
 		return NULL;
 
-	INIT_LIST_HEAD(&ext_new->link);
-	ext_new->dev_id = bdev->bd_dev;
+	INIT_LIST_HEAD(&ext_tmp->link);
+	ext_tmp->dev_id = bdev->bd_dev;
 #if defined(HAVE_BI_BDISK)
-	ext_new->disk = bdev->bd_disk;
-	ext_new->partno = bdev->bd_partno;
+	ext_tmp->disk = bdev->bd_disk;
+	ext_tmp->partno = bdev->bd_partno;
+#else
+	ext_tmp->bdev = bdev;
 #endif
-	spin_lock_init(&ext_new->bd_filters_lock);
+	memset(ext_tmp->bd_filters, 0, sizeof(ext_tmp->bd_filters));
+
+	spin_lock_init(&ext_tmp->bd_filters_lock);
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(bdev->bd_dev);
-	if (!ext)
-		list_add_tail(&ext_new->link, &bdev_extension_list);
+	if (!ext) {
+		/* add new extension */
+		pr_debug("Add new bdev extension");
+		list_add_tail(&ext_tmp->link, &bdev_extension_list);
+		result = ext_tmp;
+		ext_tmp = NULL;
+	} else {
+#if defined(HAVE_BI_BDISK)
+		if ((ext->disk == ext->disk) && (ext->partno == bdev->bd_partno)) {
+#else
+		if (ext->bdev == bdev) {
+#endif
+			/* extension already exist */
+			pr_debug("Bdev extension already exist");
+			result = ext;
+		} else {
+			/* extension should be recreated */
+			pr_debug("Bdev extension should be recreated");
+			list_add_tail(&ext_tmp->link, &bdev_extension_list);
+			result = ext_tmp;
+
+			recreate = true;
+			list_del(&ext->link);
+			ext_tmp = ext;
+		}
+	}
 	spin_unlock(&bdev_extension_list_lock);
 
-	if (!ext)
-		return ext_new;
+	/* Recreated block device found */
+	if (recreate) {
+		enum bdev_filter_altitudes alt;
 
-	kfree(ext_new);
-	return ext;
+		pr_info("Detach all block device filters from %d:%d\n",
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+
+		for (alt = 0; alt < bdev_filter_alt_end; alt++) {
+			struct bdev_filter *flt;
+
+			spin_lock(&ext_tmp->bd_filters_lock);
+			flt = ext_tmp->bd_filters[alt];
+			ext_tmp->bd_filters[alt] = NULL;
+			spin_unlock(&ext_tmp->bd_filters_lock);
+
+			if (flt)
+				bdev_filter_put(flt);
+		}
+	}
+	kfree(ext_tmp);
+
+	return result;
 }
 
 /**
@@ -127,9 +198,10 @@ int bdev_filter_attach(struct block_device *bdev, const char *name,
 		return -ENOMEM;
 
 	spin_lock(&ext->bd_filters_lock);
-	if (ext->bd_filters[altitude])
+	if (ext->bd_filters[altitude]) {
+		pr_debug("filter busy. 0x%p", ext->bd_filters[altitude]);
 		ret = -EBUSY;
-	else
+	} else
 		ext->bd_filters[altitude] = flt;
 	spin_unlock(&ext->bd_filters_lock);
 
@@ -224,7 +296,11 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 		return ERR_PTR(-EINVAL);
 
 	spin_lock(&bdev_extension_list_lock);
-	ext = bdev_extension_find(bdev->bd_dev);
+#if defined(HAVE_BI_BDISK)
+	ext = bdev_extension_find_part(bdev->bd_disk, bdev->bd_partno);
+#else
+	ext = bdev_extension_find_bdev(bdev);
+#endif
 	spin_unlock(&bdev_extension_list_lock);
 	if (!ext)
 		return NULL;
@@ -248,7 +324,7 @@ static inline bool bdev_filters_apply(struct bio *bio)
 #if defined(HAVE_BI_BDISK)
 	ext = bdev_extension_find_part(bio->bi_disk, bio->bi_partno);
 #else
-	ext = bdev_extension_find(bio->bi_bdev->bd_dev);
+	ext = bdev_extension_find_bdev(bio->bi_bdev);
 #endif
 	spin_unlock(&bdev_extension_list_lock);
 	if (!ext)
