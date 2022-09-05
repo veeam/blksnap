@@ -131,12 +131,8 @@ static void snapshot_free(struct kref *kref)
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s releasing snapshot\n", __FUNCTION__);
 #endif
-	if (snapshot->is_taken)
-		snapshot_release(snapshot);
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	else
-		pr_debug("DEBUG! %s snapshot was not taken\n", __FUNCTION__);
-#endif
+	snapshot_release(snapshot);
+
 	kfree(snapshot->snapimage_array);
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
