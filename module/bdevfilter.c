@@ -2,6 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
 #include <linux/livepatch.h>
+#include <linux/sched/task.h>
 #include <linux/bio.h>
 #ifdef HAVE_GENHD_H
 #include <linux/genhd.h>
@@ -119,7 +120,7 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
 		ext_tmp = NULL;
 	} else {
 #if defined(HAVE_BI_BDISK)
-		if ((ext->disk == ext->disk) && (ext->partno == bdev->bd_partno)) {
+		if ((ext->disk == bdev->bd_disk) && (ext->partno == bdev->bd_partno)) {
 #else
 		if (ext->bdev == bdev) {
 #endif

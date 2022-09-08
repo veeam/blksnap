@@ -4,6 +4,7 @@
 #include <linux/fs.h>
 #include <linux/kthread.h>
 #include <linux/slab.h>
+#include <linux/sched/task.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
