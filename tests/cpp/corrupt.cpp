@@ -202,21 +202,28 @@ void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo>& ptrCbtInfoPreviou
 
 void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ranges)
 {
-    std::stringstream ss;
-
-    ss << ranges.size() << " corrupted ranges" << std::endl;
-    ss << "Ranges of corrupted sectors:" << std::endl;
-    for (const SRange& range : ranges)
+    try
     {
-        blksnap::SectorState state = {0};
+        std::stringstream ss;
 
-        ss << range.sector << ":" << range.count << std::endl;
-        blksnap::GetSectorState(image, range.sector << SECTOR_SHIFT, state);
-        ss << "prev= " + std::to_string(state.snapNumberPrevious) + " "
-           << "curr= " + std::to_string(state.snapNumberCurrent) + " "
-           << "state= " + std::to_string(state.chunkState) << std::endl;
+        ss << ranges.size() << " corrupted ranges" << std::endl;
+        ss << "Ranges of corrupted sectors:" << std::endl;
+        for (const SRange& range : ranges)
+        {
+            blksnap::SectorState state = {0};
+
+            ss << range.sector << ":" << range.count << std::endl;
+            blksnap::GetSectorState(image, range.sector << SECTOR_SHIFT, state);
+            ss << "prev= " + std::to_string(state.snapNumberPrevious) + " "
+               << "curr= " + std::to_string(state.snapNumberCurrent) + " "
+               << "state= " + std::to_string(state.chunkState) << std::endl;
+        }
+        logger.Err(ss);
     }
-    logger.Err(ss);
+    catch (std::exception& ex)
+    {
+        logger.Info(ex.what());
+    }
 }
 
 void CheckCorruption(const std::string& origDevName, const std::string& diffStorage, const int durationLimitSec,
