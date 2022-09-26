@@ -4,6 +4,7 @@
 #include <linux/fs.h>
 #include <linux/kthread.h>
 #include <linux/slab.h>
+#include <linux/sched/task.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
@@ -33,10 +34,10 @@ struct log_request {
 
 #define LOG_REQUEST_POOL_SIZE 128
 struct log_request log_requests_pool[LOG_REQUEST_POOL_SIZE];
-struct log_request log_request_direct;
 
 static int log_level = -1;
 static char *log_filepath = NULL;
+static int log_tz_minuteswest = 0;
 
 static LIST_HEAD(log_free_requests);
 static DEFINE_SPINLOCK(log_free_requests_lock);
@@ -61,19 +62,34 @@ void log_init(void)
 	}
 }
 
+static inline void done_task(void)
+{
+	struct task_struct* task = log_task;
+
+	if (!task)
+		return;
+
+	log_task = NULL;
+	kthread_stop(task);
+	put_task_struct(task);
+}
+
+static inline void done_filepath(void)
+{
+	if (!log_filepath)
+		return;
+
+	kfree(log_filepath);
+	memory_object_dec(memory_object_log_filepath);
+	log_filepath = NULL;
+}
+
 void log_done(void)
 {
 	log_level = -1;
 
-	if (log_task) {
-		kthread_stop(log_task);
-		log_task = NULL;
-	}
-	if (log_filepath) {
-		kfree(log_filepath);
-		memory_object_dec(memory_object_log_filepath);
-		log_filepath = NULL;
-	}
+	done_task();
+	done_filepath();
 }
 
 static inline struct log_request *log_request_new(void)
@@ -139,14 +155,18 @@ static inline bool log_request_is_ready(void)
 #define MAX_PREFIX_SIZE 256
 static const char *log_level_text[] = {"EMERG :","ALERT :","CRIT :","ERR :","WRN :","","",""};
 
-static inline int log_request_write(struct file* filp, const struct log_request* rq)
+static inline void log_request_write(struct file* filp, const struct log_request* rq)
 {
-	ssize_t ret;
 	int size;
 	struct tm time;
 	char prefix_buf[MAX_PREFIX_SIZE];
 
-	time64_to_tm(rq->header.time.tv_sec, -sys_tz.tz_minuteswest * 60, &time);
+	if (!filp)
+		return;
+	if (!rq)
+		return;
+
+	time64_to_tm(rq->header.time.tv_sec, (-sys_tz.tz_minuteswest + log_tz_minuteswest) * 60, &time);
 
 	size = snprintf(prefix_buf, MAX_PREFIX_SIZE,
 		"[%02d.%02d.%04ld %02d:%02d:%02d-%06ld] <%d> | %s",
@@ -156,15 +176,8 @@ static inline int log_request_write(struct file* filp, const struct log_request*
         	rq->header.pid, log_level_text[rq->header.level]
         );
 
-	ret = kernel_write(filp, prefix_buf, size, &filp->f_pos);
-	if (ret < 0)
-		return (int)(ret);
-
-	ret = kernel_write(filp, rq->buffer, rq->header.size, &filp->f_pos);
-	if (ret < 0)
-		return (int)(ret);
-
-	return 0;
+	kernel_write(filp, prefix_buf, size, &filp->f_pos);
+	kernel_write(filp, rq->buffer, rq->header.size, &filp->f_pos);
 }
 
 static inline bool log_waiting(void)
@@ -186,23 +199,21 @@ static inline void log_request_fill(struct log_request *rq, const int level,
 	rq->header.size = vscnprintf(rq->buffer, LOG_REQUEST_BUFFER_SIZE, fmt, args);
 }
 
-static inline int log_vprintk_direct(struct file* filp, const int level, const char *fmt, va_list args)
+static inline void log_vprintk_direct(struct file* filp, const int level, const char *fmt, va_list args)
 {
-	log_request_fill(&log_request_direct, level, fmt, args);
+	struct log_request rq = {0};
 
-	return log_request_write(filp, &log_request_direct);
+	log_request_fill(&rq, level, fmt, args);
+	log_request_write(filp, &rq);
 }
 
-static inline int log_printk_direct(struct file* filp, const int level, const char *fmt, ...)
+static inline void log_printk_direct(struct file* filp, const int level, const char *fmt, ...)
 {
-	int ret;
 	va_list args;
 
 	va_start(args, fmt);
-	ret = log_vprintk_direct(filp, level, fmt, args);
+	log_vprintk_direct(filp, level, fmt, args);
 	va_end(args);
-
-	return ret;
 }
 
 static inline struct file* log_reopen(struct file* filp)
@@ -216,8 +227,19 @@ static inline struct file* log_reopen(struct file* filp)
 	filp = filp_open(log_filepath, O_WRONLY | O_APPEND | O_CREAT, 0644);
 	if (IS_ERR(filp)) {
 		printk(KERN_ERR pr_fmt("Failed to open file %s\n"), log_filepath);
+		done_filepath();
 		return NULL;
 	}
+	return filp;
+}
+
+static inline struct file* log_close(struct file* filp)
+{
+	if (filp) {
+		filp_close(filp, NULL);
+		filp = NULL;
+	}
+
 	return filp;
 }
 
@@ -226,56 +248,44 @@ int log_processor(void *data)
 	int ret = 0;
 	struct log_request *rq;
 	struct file* filp = NULL;
+	int missed;
 
 	while (!kthread_should_stop()) {
-		int missed;
-
 		missed = atomic_read(&log_missed_counter);
 		if (missed) {
-			filp = log_reopen(filp);
-			if (!filp)
-				break;
-			log_printk_direct(filp, LOGLEVEL_INFO, "Missed %d messages\n", missed);
 			atomic_sub(missed, &log_missed_counter);
+
+			filp = log_reopen(filp);
+			log_printk_direct(filp, LOGLEVEL_INFO,
+				"Missed %d messages\n", missed);
 		}
 
 		rq = log_request_get();
 		if (rq) {
 			filp = log_reopen(filp);
+			log_request_write(filp, rq);
+			log_request_free(rq);
 			if (!filp)
 				break;
-			ret = log_request_write(filp, rq);
-			log_request_free(rq);
-			if (ret < 0)
-				break;
-		} else {
-			if (log_waiting() != 0) {
-				if (filp) {
-					filp_close(filp, NULL);
-					filp = NULL;
-				}
-			}
-		}
+		} else
+			if (!log_waiting())
+				filp = log_close(filp);
 	}
 
 	filp = log_reopen(filp);
-
 	while ((rq = log_request_get())) {
-		if (filp)
-			log_request_write(filp, rq);
+		log_request_write(filp, rq);
 		log_request_free(rq);
 	}
 
-	if (filp) {
-		log_printk_direct(filp, LOGLEVEL_INFO,
-			"Stop log for module %s\n\n", BLK_SNAP_MODULE_NAME);
-		filp_close(filp, NULL);
-	}
+	log_printk_direct(filp, LOGLEVEL_INFO, "Stop log for module %s\n\n",
+		BLK_SNAP_MODULE_NAME);
+	filp = log_close(filp);
 
 	return ret;
 }
 
-int log_restart(int level, char *filepath)
+int log_restart(int level, char *filepath, int tz_minuteswest)
 {
 	int ret = 0;
 	struct file* filp;
@@ -289,6 +299,8 @@ int log_restart(int level, char *filepath)
 		return 0;
 	}
 
+	if (!filepath)
+		return -EINVAL;
 
 	if (log_filepath && (strcmp(filepath, log_filepath) == 0)) {
 		if (level == log_level) {
@@ -320,13 +332,11 @@ int log_restart(int level, char *filepath)
 	}
 
 	ret = kernel_write(filp, "\n", 1, &filp->f_pos);
+	filp_close(filp, NULL);
 	if (ret < 0) {
 		printk(KERN_ERR pr_fmt("Cannot write file %s\n"), filepath);
-		filp_close(filp, NULL);
 		goto fail;
 	}
-
-	filp_close(filp, NULL);
 
 	task = kthread_create(log_processor, NULL, "blksnaplog");
 	if (IS_ERR(task)) {
@@ -334,11 +344,13 @@ int log_restart(int level, char *filepath)
 		goto fail;
 	}
 
-	log_task = task;
+	log_task = get_task_struct(task);
 	log_filepath = filepath;
 	log_level = level <= LOGLEVEL_DEBUG ? level : LOGLEVEL_DEBUG;
+	log_tz_minuteswest = tz_minuteswest;
 
-	log_printk_direct(filp, LOGLEVEL_INFO, "Start log for module %s version %s loglevel %d\n",
+	log_printk_direct(filp, LOGLEVEL_INFO,
+		"Start log for module %s version %s loglevel %d\n",
 		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);
 
 	wake_up_process(log_task);

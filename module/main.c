@@ -55,6 +55,10 @@
 #ifdef HAVE_BDEV_BIO_ALLOC
 #pragma message("The function bio_alloc_bioset() has a parameter bdev.")
 #endif
+#ifdef HAVE_BLK_CLEANUP_DISK
+#pragma message("The function blk_cleanup_disk() was found.")
+#endif
+
 static int __init blk_snap_init(void)
 {
 	int result;

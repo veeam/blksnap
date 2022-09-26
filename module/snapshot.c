@@ -131,12 +131,8 @@ static void snapshot_free(struct kref *kref)
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s releasing snapshot\n", __FUNCTION__);
 #endif
-	if (snapshot->is_taken)
-		snapshot_release(snapshot);
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	else
-		pr_debug("DEBUG! %s snapshot was not taken\n", __FUNCTION__);
-#endif
+	snapshot_release(snapshot);
+
 	kfree(snapshot->snapimage_array);
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
@@ -258,6 +254,31 @@ void snapshot_done(void)
 	} while (snapshot);
 }
 
+static inline bool blk_snap_dev_is_equal(struct blk_snap_dev_t* first,
+				    struct blk_snap_dev_t* second)
+{
+	return (first->mj == second->mj) && (first->mn == second->mn);
+}
+
+static inline int check_same_devices(struct blk_snap_dev_t *devices,
+				     unsigned int count)
+{
+	struct blk_snap_dev_t *first;
+	struct blk_snap_dev_t *second;
+
+	for (first = devices; first < (devices + (count - 1)); ++first) {
+		for (second = first + 1; second < (devices + count); ++second) {
+			if (blk_snap_dev_is_equal(first, second)) {
+				pr_err("Unable to create snapshot: The same device [%d:%d] was added twice.\n",
+					first->mj, first->mn);
+				return -EINVAL;
+			}
+		}
+	}
+
+	return 0;
+}
+
 int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
 		    uuid_t *id)
 {
@@ -269,6 +290,10 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
 	for (inx = 0; inx < count; ++inx)
 		pr_info("\t%u:%u\n", dev_id_array[inx].mj,
 			dev_id_array[inx].mn);
+
+	ret = check_same_devices(dev_id_array, count);
+	if (ret)
+		return ret;
 
 	snapshot = snapshot_new(count);
 	if (IS_ERR(snapshot)) {

@@ -187,20 +187,18 @@ void snapimage_free(struct snapimage *snapimage)
 
 	snapimage_unprepare_worker(snapimage);
 
+	del_gendisk(snapimage->disk);
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
-	del_gendisk(snapimage->disk);
-#ifdef HAVE_PUT_DISK
-	put_disk(snapimage->disk);
-#else
+#ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(snapimage->disk);
-#endif
-	blk_mq_free_tag_set(&snapimage->tag_set);
 #else
-	del_gendisk(snapimage->disk);
-	blk_cleanup_queue(snapimage->queue);
-	blk_mq_free_tag_set(&snapimage->tag_set);
 	put_disk(snapimage->disk);
 #endif
+#else
+	blk_cleanup_queue(snapimage->queue);
+	put_disk(snapimage->disk);
+#endif
+	blk_mq_free_tag_set(&snapimage->tag_set);
 
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
@@ -330,14 +328,14 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	return snapimage;
 
 fail_cleanup_disk:
-	del_gendisk(disk);
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
-#ifdef HAVE_PUT_DISK
-	put_disk(snapimage->disk);
-#else
+#ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(disk);
+#else
+	put_disk(disk);
 #endif
 #else
+	del_gendisk(disk);
 fail_free_queue:
 	blk_cleanup_queue(queue);
 #endif

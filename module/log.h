@@ -6,7 +6,7 @@
 
 void log_init(void);
 void log_done(void);
-int log_restart(int level, char *filepath);
+int log_restart(int level, char *filepath, int tz_minuteswest);
 void log_printk(const int level, const char *fmt, ...);
 
 

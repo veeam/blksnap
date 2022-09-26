@@ -525,11 +525,15 @@ struct blk_snap_event_corrupted {
 
 #ifdef BLK_SNAP_MODIFICATION
 /**
+ * @tz_minuteswest:
+ *	Time zone offset in minutes.
+ *	The system time is in UTC. In order for the module to write local time
+ *	to the log, its offset should be specified.
  * @level:
  *	0 - disable logging to file
  *	3 - only error messages
  *	4 - log warnings
- *	6 - log info messages (default)
+ *	6 - log info messages
  *	7 - log debug messages
  * @filepath_size:
  *	Count of bytes in &filepath.
@@ -537,6 +541,7 @@ struct blk_snap_event_corrupted {
  *	Full path for log file.
  */
 struct blk_snap_setlog {
+	__s32 tz_minuteswest;
 	__u32 level;
 	__u32 filepath_size;
 	__u8 *filepath;

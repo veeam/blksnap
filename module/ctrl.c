@@ -462,7 +462,7 @@ int ioctl_setlog(unsigned long arg)
 	 * a negative logging level.
 	 */
 	if ((karg.level < 0) || !karg.filepath)
-		return log_restart(-1, NULL);
+		return log_restart(-1, NULL, 0);
 
 	if (karg.filepath_size == 0) {
 		pr_err("Invalid parameters. 'filepath_size' cannot be zero\n");
@@ -481,7 +481,7 @@ int ioctl_setlog(unsigned long arg)
 		return -ENODATA;
 	}
 
-	return log_restart(karg.level, filepath);
+	return log_restart(karg.level, filepath, karg.tz_minuteswest);
 #else
 	return -ENOTTY;
 #endif
