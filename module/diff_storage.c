@@ -230,8 +230,7 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	}
 
 	for (inx = 0; inx < range_count; inx++) {
-		if (unlikely(copy_from_user(&range, ranges+inx, range_size) !=
-			range_size))
+		if (unlikely(copy_from_user(&range, ranges+inx, range_size)))
 			return -EINVAL;
 
 		ret = diff_storage_add_range(diff_storage, bdev,
