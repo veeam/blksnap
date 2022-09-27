@@ -17,7 +17,6 @@ char *memory_object_names[] = {
 	"chunk",
 	"blk_snap_snaphot_event",
 	"diff_area",
-	"big_buffer",
 	"diff_io",
 	"diff_storage",
 	"storage_bdev",

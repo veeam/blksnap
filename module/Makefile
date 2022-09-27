@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 KERNEL_MODULE_NAME := blksnap
 
-$(KERNEL_MODULE_NAME)-y += big_buffer.o
 $(KERNEL_MODULE_NAME)-y += cbt_map.o
 $(KERNEL_MODULE_NAME)-y += chunk.o
 $(KERNEL_MODULE_NAME)-y += ctrl.o

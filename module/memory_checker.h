@@ -12,7 +12,6 @@ enum memory_object_type {
 	memory_object_chunk,
 	memory_object_blk_snap_snapshot_event,
 	memory_object_diff_area,
-	memory_object_big_buffer,
 	memory_object_diff_io,
 	memory_object_diff_storage,
 	memory_object_storage_bdev,
