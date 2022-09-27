@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-cbt_map: " fmt
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blk_snap.h"
 #else
@@ -51,21 +52,29 @@ static void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 
 static int cbt_map_allocate(struct cbt_map *cbt_map)
 {
-	pr_debug("Allocate CBT map of %zu blocks\n", cbt_map->blk_count);
+	unsigned char *read_map = NULL;
+	unsigned char *write_map = NULL;
+	size_t size = cbt_map->blk_count;
 
-	cbt_map->read_map = big_buffer_alloc(cbt_map->blk_count, GFP_KERNEL);
-	if (cbt_map->read_map != NULL)
-		big_buffer_memset(cbt_map->read_map, 0);
+	pr_debug("Allocate CBT map of %zu blocks\n", size);
 
-	cbt_map->write_map = big_buffer_alloc(cbt_map->blk_count, GFP_KERNEL);
-	if (cbt_map->write_map != NULL)
-		big_buffer_memset(cbt_map->write_map, 0);
+	if (cbt_map->read_map || cbt_map->write_map)
+		return -EINVAL;
 
-	if ((cbt_map->read_map == NULL) || (cbt_map->write_map == NULL)) {
-		pr_err("Cannot allocate CBT map. %zu blocks are required.\n",
-		       cbt_map->blk_count);
+	read_map = __vmalloc(size, GFP_NOIO | __GFP_ZERO);
+	if (!read_map)
+		return -ENOMEM;
+
+	write_map = __vmalloc(size, GFP_NOIO | __GFP_ZERO);
+	if (!write_map) {
+		vfree(read_map);
 		return -ENOMEM;
 	}
+
+	cbt_map->read_map = read_map;
+	memory_object_inc(memory_object_cbt_buffer);
+	cbt_map->write_map = write_map;
+	memory_object_inc(memory_object_cbt_buffer);
 
 	cbt_map->snap_number_previous = 0;
 	cbt_map->snap_number_active = 1;
@@ -79,13 +88,15 @@ static void cbt_map_deallocate(struct cbt_map *cbt_map)
 {
 	cbt_map->is_corrupted = false;
 
-	if (cbt_map->read_map != NULL) {
-		big_buffer_free(cbt_map->read_map);
+	if (cbt_map->read_map) {
+		memory_object_dec(memory_object_cbt_buffer);
+		vfree(cbt_map->read_map);
 		cbt_map->read_map = NULL;
 	}
 
-	if (cbt_map->write_map != NULL) {
-		big_buffer_free(cbt_map->write_map);
+	if (cbt_map->write_map) {
+		memory_object_dec(memory_object_cbt_buffer);
+		vfree(cbt_map->write_map);
 		cbt_map->write_map = NULL;
 	}
 }
@@ -96,7 +107,6 @@ int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity)
 
 	cbt_map->device_capacity = device_capacity;
 	cbt_map_calculate_block_size(cbt_map);
-	cbt_map->is_corrupted = false;
 
 	return cbt_map_allocate(cbt_map);
 }
@@ -113,6 +123,7 @@ static inline void cbt_map_destroy(struct cbt_map *cbt_map)
 struct cbt_map *cbt_map_create(struct block_device *bdev)
 {
 	struct cbt_map *cbt_map = NULL;
+	int ret;
 
 	pr_debug("CBT map create\n");
 
@@ -124,7 +135,9 @@ struct cbt_map *cbt_map_create(struct block_device *bdev)
 	cbt_map->device_capacity = bdev_nr_sectors(bdev);
 	cbt_map_calculate_block_size(cbt_map);
 
-	if (cbt_map_allocate(cbt_map)) {
+	ret = cbt_map_allocate(cbt_map);
+	if (ret) {
+		pr_err("Failed to create tracker. errno=%d\n", abs(ret));
 		cbt_map_destroy(cbt_map);
 		return NULL;
 	}
@@ -146,58 +159,46 @@ void cbt_map_switch(struct cbt_map *cbt_map)
 	pr_debug("CBT map switch\n");
 	spin_lock(&cbt_map->locker);
 
-	big_buffer_memcpy(cbt_map->read_map, cbt_map->write_map);
-
 	cbt_map->snap_number_previous = cbt_map->snap_number_active;
 	++cbt_map->snap_number_active;
 	if (cbt_map->snap_number_active == 256) {
 		cbt_map->snap_number_active = 1;
 
-		big_buffer_memset(cbt_map->write_map, 0);
+		memset(cbt_map->write_map, 0, cbt_map->blk_count);
 
 		generate_random_uuid(cbt_map->generation_id.b);
 
 		pr_debug("CBT reset\n");
-	}
+	} else
+		memcpy(cbt_map->read_map, cbt_map->write_map, cbt_map->blk_count);
 	spin_unlock(&cbt_map->locker);
 }
 
 static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
 			       sector_t sector_cnt, u8 snap_number,
-			       struct big_buffer *map)
+			       unsigned char *map)
 {
 	int res = 0;
 	u8 num;
-	size_t cbt_block;
+	size_t inx;
 	size_t cbt_block_first = (size_t)(
 		sector_start >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
-	size_t cbt_block_last =
-		(size_t)((sector_start + sector_cnt - 1) >>
-			 (cbt_map->blk_size_shift - SECTOR_SHIFT));
+	size_t cbt_block_last = (size_t)(
+		(sector_start + sector_cnt - 1) >>
+		(cbt_map->blk_size_shift - SECTOR_SHIFT));
 
-	for (cbt_block = cbt_block_first; cbt_block <= cbt_block_last;
-	     ++cbt_block) {
-		if (unlikely(cbt_block >= cbt_map->blk_count)) {
+	for (inx = cbt_block_first; inx <= cbt_block_last; ++inx) {
+		if (unlikely(inx >= cbt_map->blk_count)) {
 			pr_err("Block index is too large.\n");
 			pr_err("Block #%zu was demanded, map size %zu blocks.\n",
-			       cbt_block, cbt_map->blk_count);
+			       inx, cbt_map->blk_count);
 			res = -EINVAL;
 			break;
 		}
 
-		res = big_buffer_byte_get(map, cbt_block, &num);
-		if (unlikely(res)) {
-			pr_err("CBT table out of range\n");
-			break;
-		}
-
-		if (num < snap_number) {
-			res = big_buffer_byte_set(map, cbt_block, snap_number);
-			if (unlikely(res)) {
-				pr_err("CBT table out of range\n");
-				break;
-			}
-		}
+		num = map[inx];
+		if (num < snap_number)
+			map[inx] = snap_number;
 	}
 	return res;
 }
@@ -255,9 +256,7 @@ size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buff,
 		return -EFAULT;
 	}
 
-	left_size = real_size - big_buffer_copy_to_user(user_buff, offset,
-							cbt_map->read_map,
-							real_size);
+	left_size = copy_to_user(user_buff, cbt_map->read_map, real_size);
 
 	if (left_size == 0)
 		readed = real_size;
@@ -289,22 +288,11 @@ int cbt_map_mark_dirty_blocks(struct cbt_map *cbt_map,
 }
 
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-static inline int _cbt_map_get(struct big_buffer *map, size_t cbt_block,
-			       u8 *snap_number)
-{
-	int ret = 0;
-
-	ret = big_buffer_byte_get(map, cbt_block, snap_number);
-	if (unlikely(ret))
-		pr_err("CBT table out of range\n");
-
-	return ret;
-}
 
 int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
 			     u8 *snap_number_prev, u8 *snap_number_curr)
 {
-	int ret;
+	int ret = 0;
 	size_t cbt_block =
 		(size_t)(sector >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
 
@@ -320,10 +308,8 @@ int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
 		ret = -EINVAL;
 		goto out;
 	}
-	ret = _cbt_map_get(cbt_map->write_map, cbt_block, snap_number_curr);
-	if (!ret)
-		ret = _cbt_map_get(cbt_map->read_map, cbt_block,
-				   snap_number_prev);
+	snap_number_curr = cbt_map->write_map[cbt_block];
+	snap_number_prev = cbt_map->read_map[cbt_block];
 out:
 	spin_unlock(&cbt_map->locker);
 

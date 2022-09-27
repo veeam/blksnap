@@ -13,6 +13,7 @@ char *memory_object_names[] = {
 	"page",
 	/*kzalloc*/
 	"cbt_map",
+	"cbt_buffer",
 	"chunk",
 	"blk_snap_snaphot_event",
 	"diff_area",

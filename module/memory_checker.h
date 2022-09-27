@@ -8,6 +8,7 @@ enum memory_object_type {
 	memory_object_page,
 	/*kzalloc*/
 	memory_object_cbt_map,
+	memory_object_cbt_buffer,
 	memory_object_chunk,
 	memory_object_blk_snap_snapshot_event,
 	memory_object_diff_area,

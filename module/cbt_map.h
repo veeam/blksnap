@@ -8,8 +8,6 @@
 #include <linux/spinlock.h>
 #include <linux/blkdev.h>
 
-#include "big_buffer.h"
-
 struct blk_snap_block_range;
 
 /**
@@ -71,8 +69,8 @@ struct cbt_map {
 	size_t blk_count;
 	sector_t device_capacity;
 
-	struct big_buffer *read_map;
-	struct big_buffer *write_map;
+	unsigned char *read_map;
+	unsigned char *write_map;
 
 	unsigned long snap_number_active;
 	unsigned long snap_number_previous;
