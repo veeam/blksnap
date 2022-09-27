@@ -3,8 +3,8 @@
 #define __BLK_SNAP_DIFF_STORAGE_H
 
 #include "event_queue.h"
-#include "big_buffer.h"
 
+struct blk_snap_block_range;
 struct diff_region;
 
 /**
@@ -85,7 +85,7 @@ static inline void diff_storage_put(struct diff_storage *diff_storage)
 };
 
 int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
-			      struct big_buffer *ranges,
+			      struct blk_snap_block_range __user *ranges,
 			      unsigned int range_count);
 struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 					    sector_t count);

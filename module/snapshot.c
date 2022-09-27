@@ -396,7 +396,8 @@ int snapshot_destroy(uuid_t *id)
 }
 
 int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
-			    struct big_buffer *ranges, unsigned int range_count)
+			    struct blk_snap_block_range __user *ranges,
+			    unsigned int range_count)
 {
 	int ret = 0;
 	struct snapshot *snapshot;

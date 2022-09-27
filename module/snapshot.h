@@ -10,7 +10,6 @@
 #include <linux/spinlock.h>
 #include <linux/rwsem.h>
 #include <linux/fs.h>
-#include "big_buffer.h"
 #include "event_queue.h"
 
 struct tracker;
@@ -68,7 +67,7 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
 		    uuid_t *id);
 int snapshot_destroy(uuid_t *id);
 int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
-			    struct big_buffer *ranges,
+			    struct blk_snap_block_range __user *ranges,
 			    unsigned int range_count);
 int snapshot_take(uuid_t *id);
 struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms);

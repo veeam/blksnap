@@ -17,7 +17,6 @@
 #include "snapshot.h"
 #include "snapimage.h"
 #include "tracker.h"
-#include "big_buffer.h"
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
 #endif
@@ -269,10 +268,7 @@ static int ioctl_snapshot_destroy(unsigned long arg)
 
 static int ioctl_snapshot_append_storage(unsigned long arg)
 {
-	int res = 0;
 	struct blk_snap_snapshot_append_storage karg;
-	struct big_buffer *ranges = NULL;
-	size_t ranges_buffer_size;
 
 	pr_debug("Append difference storage\n");
 
@@ -281,36 +277,8 @@ static int ioctl_snapshot_append_storage(unsigned long arg)
 		return -EINVAL;
 	}
 
-	/*
-	 * Rarely, but there are file systems in which the blocks on the disk
-	 * are significantly fragmented. And the drive for the diff storage can be
-	 * quite large.
-	 * At the same time, an attempt to allocate several pages of continuous
-	 * address space on such systems often causes an ENOMEM error.
-	 * Therefore, an array of pages is used to store an array of ranges of
-	 * available disk space.
-	 */
-	ranges_buffer_size = karg.count * sizeof(struct blk_snap_block_range);
-	ranges = big_buffer_alloc(ranges_buffer_size, GFP_KERNEL);
-	if (!ranges) {
-		pr_err("Unable to append difference storage: cannot allocate [%zu] bytes\n",
-		       ranges_buffer_size);
-		return -ENOMEM;
-	}
-
-	if (big_buffer_copy_from_user((void *)karg.ranges, 0, ranges,
-				      ranges_buffer_size) !=
-	    ranges_buffer_size) {
-		pr_err("Unable to add file to snapstore: invalid user buffer for parameters\n");
-		big_buffer_free(ranges);
-		return -ENODATA;
-	}
-
-	res = snapshot_append_storage(&karg.id, karg.dev_id, ranges,
-				      (size_t)karg.count);
-	big_buffer_free(ranges);
-
-	return res;
+	return snapshot_append_storage(&karg.id, karg.dev_id, karg.ranges,
+				       karg.count);
 }
 
 static int ioctl_snapshot_take(unsigned long arg)

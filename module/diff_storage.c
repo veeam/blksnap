@@ -211,13 +211,14 @@ static inline int diff_storage_add_range(struct diff_storage *diff_storage,
 }
 
 int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
-			      struct big_buffer *ranges,
+			      struct blk_snap_block_range __user *ranges,
 			      unsigned int range_count)
 {
 	int ret;
 	int inx;
 	struct block_device *bdev;
-	struct blk_snap_block_range *range;
+	struct blk_snap_block_range range;
+	const unsigned long range_size = sizeof(struct blk_snap_block_range);
 
 	pr_debug("Append %u blocks\n", range_count);
 
@@ -229,14 +230,13 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	}
 
 	for (inx = 0; inx < range_count; inx++) {
-		range = big_buffer_get_element(
-			ranges, inx, sizeof(struct blk_snap_block_range));
-		if (unlikely(!range))
+		if (unlikely(copy_from_user(&range, ranges+inx, range_size) !=
+			range_size))
 			return -EINVAL;
 
 		ret = diff_storage_add_range(diff_storage, bdev,
-					     range->sector_offset,
-					     range->sector_count);
+					     range.sector_offset,
+					     range.sector_count);
 		if (unlikely(ret))
 			return ret;
 	}
