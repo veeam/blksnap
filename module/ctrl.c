@@ -21,6 +21,9 @@
 #include "log.h"
 #endif
 
+static_assert(sizeof(uuid_t) == sizeof(struct blk_snap_uuid),
+	"Invalid size of struct blk_snap_uuid or uuid_t.");
+
 static int blk_snap_major;
 
 static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
@@ -59,7 +62,7 @@ int ctrl_init(void)
 {
 	int ret;
 
-	ret = register_chrdev(0, BLK_SNAP_MODULE_NAME, &ctrl_fops);
+	ret = register_chrdev(0, THIS_MODULE->name, &ctrl_fops);
 	if (ret < 0) {
 		pr_err("Failed to register a character device. errno=%d\n",
 		       abs(blk_snap_major));
@@ -75,7 +78,7 @@ void ctrl_done(void)
 {
 	pr_info("Unregister control device\n");
 
-	unregister_chrdev(blk_snap_major, BLK_SNAP_MODULE_NAME);
+	unregister_chrdev(blk_snap_major, THIS_MODULE->name);
 }
 
 static int ioctl_version(unsigned long arg)
@@ -217,7 +220,8 @@ static int ioctl_snapshot_create(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_create karg;
-	struct blk_snap_dev_t *dev_id_array = NULL;
+	struct blk_snap_dev *dev_id_array = NULL;
+	uuid_t new_id;
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
@@ -225,50 +229,54 @@ static int ioctl_snapshot_create(unsigned long arg)
 	}
 
 	dev_id_array =
-		kcalloc(karg.count, sizeof(struct blk_snap_dev_t), GFP_KERNEL);
+		kcalloc(karg.count, sizeof(struct blk_snap_dev), GFP_KERNEL);
 	if (dev_id_array == NULL) {
 		pr_err("Unable to create snapshot: too many devices %d\n",
 		       karg.count);
 		return -ENOMEM;
 	}
-	memory_object_inc(memory_object_blk_snap_dev_t);
+	memory_object_inc(memory_object_blk_snap_dev);
 
 	if (copy_from_user(dev_id_array, (void *)karg.dev_id_array,
-			   karg.count * sizeof(struct blk_snap_dev_t))) {
+			   karg.count * sizeof(struct blk_snap_dev))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		ret = -ENODATA;
 		goto out;
 	}
 
-	ret = snapshot_create(dev_id_array, karg.count, &karg.id);
+	ret = snapshot_create(dev_id_array, karg.count, &new_id);
 	if (ret)
 		goto out;
 
+	export_uuid(karg.id.b, &new_id);
 	if (copy_to_user((void *)arg, &karg, sizeof(karg))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		ret = -ENODATA;
 	}
 out:
 	kfree(dev_id_array);
-	memory_object_dec(memory_object_blk_snap_dev_t);
+	memory_object_dec(memory_object_blk_snap_dev);
 	return ret;
 }
 
 static int ioctl_snapshot_destroy(unsigned long arg)
 {
 	struct blk_snap_snapshot_destroy karg;
+	uuid_t id;
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to destroy snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}
 
-	return snapshot_destroy(&karg.id);
+	import_uuid(&id, karg.id.b);
+	return snapshot_destroy(&id);
 }
 
 static int ioctl_snapshot_append_storage(unsigned long arg)
 {
 	struct blk_snap_snapshot_append_storage karg;
+	uuid_t id;
 
 	pr_debug("Append difference storage\n");
 
@@ -277,26 +285,30 @@ static int ioctl_snapshot_append_storage(unsigned long arg)
 		return -EINVAL;
 	}
 
-	return snapshot_append_storage(&karg.id, karg.dev_id, karg.ranges,
+	import_uuid(&id, karg.id.b);
+	return snapshot_append_storage(&id, karg.dev_id, karg.ranges,
 				       karg.count);
 }
 
 static int ioctl_snapshot_take(unsigned long arg)
 {
 	struct blk_snap_snapshot_take karg;
+	uuid_t id;
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to take snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}
 
-	return snapshot_take(&karg.id);
+	import_uuid(&id, karg.id.b);
+	return snapshot_take(&id);
 }
 
 static int ioctl_snapshot_wait_event(unsigned long arg)
 {
 	int ret = 0;
 	struct blk_snap_snapshot_event *karg;
+	uuid_t id;
 	struct event *event;
 
 	karg = kzalloc(sizeof(struct blk_snap_snapshot_event), GFP_KERNEL);
@@ -311,7 +323,8 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 		goto out;
 	}
 
-	event = snapshot_wait_event(&karg->id, karg->timeout_ms);
+	import_uuid(&id, karg->id.b);
+	event = snapshot_wait_event(&id, karg->timeout_ms);
 	if (IS_ERR(event)) {
 		ret = PTR_ERR(event);
 		goto out;
@@ -365,13 +378,15 @@ static int ioctl_snapshot_collect_images(unsigned long arg)
 {
 	int ret;
 	struct blk_snap_snapshot_collect_images karg;
+	uuid_t id;
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to collect snapshot images: invalid user buffer\n");
 		return -ENODATA;
 	}
 
-	ret = snapshot_collect_images(&karg.id, karg.image_info_array,
+	import_uuid(&id, karg.id.b);
+	ret = snapshot_collect_images(&id, karg.image_info_array,
 				      &karg.count);
 
 	if (copy_to_user((void *)arg, &karg, sizeof(karg))) {
@@ -398,7 +413,8 @@ static int (*const blk_snap_ioctl_table[])(unsigned long arg) = {
 };
 
 static_assert(
-	sizeof(blk_snap_ioctl_table) == (blk_snap_ioctl_end * sizeof(void *)),
+	sizeof(blk_snap_ioctl_table) ==
+	((blk_snap_ioctl_snapshot_wait_event + 1) * sizeof(void *)),
 	"The size of table blk_snap_ioctl_table does not match the enum blk_snap_ioctl.");
 
 #ifdef BLK_SNAP_MODIFICATION

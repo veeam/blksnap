@@ -26,14 +26,14 @@
 
 namespace
 {
-    static inline struct blk_snap_dev_t deviceByName(const std::string& name)
+    static inline struct blk_snap_dev deviceByName(const std::string& name)
     {
         struct stat st;
 
         if (::stat(name.c_str(), &st))
             throw std::system_error(errno, std::generic_category(), name);
 
-        struct blk_snap_dev_t device = {
+        struct blk_snap_dev device = {
           .mj = major(st.st_rdev),
           .mn = minor(st.st_rdev),
         };

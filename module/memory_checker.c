@@ -31,7 +31,7 @@ char *memory_object_names[] = {
 	/*kcalloc*/
 	"blk_snap_cbt_info",
 	"blk_snap_block_range",
-	"blk_snap_dev_t",
+	"blk_snap_dev",
 	"tracker_array",
 	"snapimage_array",
 	"superblock_array",

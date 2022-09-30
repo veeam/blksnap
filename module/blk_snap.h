@@ -5,7 +5,7 @@
 #include <linux/types.h>
 #include <linux/uuid.h>
 
-#define BLK_SNAP_MODULE_NAME "blksnap"
+#define BLK_SNAP_CTL "/dev/blksnap"
 #define BLK_SNAP_IMAGE_NAME "blksnap-image"
 #define BLK_SNAP 'V'
 
@@ -35,7 +35,6 @@ enum blk_snap_ioctl {
 	blk_snap_ioctl_snapshot_collect,
 	blk_snap_ioctl_snapshot_collect_images,
 	blk_snap_ioctl_snapshot_wait_event,
-	blk_snap_ioctl_end,
 #ifdef BLK_SNAP_MODIFICATION
 	/*
 	 * Additional controls for any standalone modification
@@ -127,7 +126,7 @@ struct blk_snap_mod {
  */
 
 /**
- * struct blk_snap_dev_t - Block device ID.
+ * struct blk_snap_dev - Block device ID.
  * @mj:
  *	Device ID major part.
  * @mn:
@@ -137,7 +136,7 @@ struct blk_snap_mod {
  * We need to enter our own type to guarantee the correct transmission of the
  * major and minor parts.
  */
-struct blk_snap_dev_t {
+struct blk_snap_dev {
 	__u32 mj;
 	__u32 mn;
 };
@@ -149,7 +148,7 @@ struct blk_snap_dev_t {
  *	Device ID.
  */
 struct blk_snap_tracker_remove {
-	struct blk_snap_dev_t dev_id;
+	struct blk_snap_dev dev_id;
 };
 /**
  * IOCTL_BLK_SNAP_TRACKER_REMOVE - Remove a device from tracking.
@@ -161,6 +160,10 @@ struct blk_snap_tracker_remove {
 #define IOCTL_BLK_SNAP_TRACKER_REMOVE                                          \
 	_IOW(BLK_SNAP, blk_snap_ioctl_tracker_remove,                          \
 	     struct blk_snap_tracker_remove)
+
+struct blk_snap_uuid {
+	__u8 b[16];
+};
 
 /**
  * struct blk_snap_cbt_info - Information about change tracking for a block
@@ -179,11 +182,11 @@ struct blk_snap_tracker_remove {
  *	Current changes number.
  */
 struct blk_snap_cbt_info {
-	struct blk_snap_dev_t dev_id;
+	struct blk_snap_dev dev_id;
 	__u32 blk_size;
 	__u64 device_capacity;
 	__u32 blk_count;
-	uuid_t generation_id;
+	struct blk_snap_uuid generation_id;
 	__u8 snap_number;
 };
 /**
@@ -224,7 +227,7 @@ struct blk_snap_tracker_collect {
  *	Pointer to the buffer for output.
  */
 struct blk_snap_tracker_read_cbt_bitmap {
-	struct blk_snap_dev_t dev_id;
+	struct blk_snap_dev dev_id;
 	__u32 offset;
 	__u32 length;
 	__u8 *buff;
@@ -263,7 +266,7 @@ struct blk_snap_block_range {
  *	Pointer to the array of &struct blk_snap_block_range.
  */
 struct blk_snap_tracker_mark_dirty_blocks {
-	struct blk_snap_dev_t dev_id;
+	struct blk_snap_dev dev_id;
 	__u32 count;
 	struct blk_snap_block_range *dirty_blocks_array;
 };
@@ -286,16 +289,16 @@ struct blk_snap_tracker_mark_dirty_blocks {
  * struct blk_snap_snapshot_create - Argument for the
  *	&IOCTL_BLK_SNAP_SNAPSHOT_CREATE control.
  * @count:
- *	Size of @dev_id_array in the number of &struct blk_snap_dev_t.
+ *	Size of @dev_id_array in the number of &struct blk_snap_dev.
  * @dev_id_array:
- *	Pointer to the array of &struct blk_snap_dev_t.
+ *	Pointer to the array of &struct blk_snap_dev.
  * @id:
  *	Return ID of the created snapshot.
  */
 struct blk_snap_snapshot_create {
 	__u32 count;
-	struct blk_snap_dev_t *dev_id_array;
-	uuid_t id;
+	struct blk_snap_dev *dev_id_array;
+	struct blk_snap_uuid id;
 };
 /**
  * This ioctl creates a snapshot structure in the memory and allocates an
@@ -315,7 +318,7 @@ struct blk_snap_snapshot_create {
  *	Snapshot ID.
  */
 struct blk_snap_snapshot_destroy {
-	uuid_t id;
+	struct blk_snap_uuid id;
 };
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_DESTROY - Release and destroy the snapshot.
@@ -339,8 +342,8 @@ struct blk_snap_snapshot_destroy {
  *	Pointer to the array of &struct blk_snap_block_range.
  */
 struct blk_snap_snapshot_append_storage {
-	uuid_t id;
-	struct blk_snap_dev_t dev_id;
+	struct blk_snap_uuid id;
+	struct blk_snap_dev dev_id;
 	__u32 count;
 	struct blk_snap_block_range *ranges;
 };
@@ -363,7 +366,7 @@ struct blk_snap_snapshot_append_storage {
  *	Snapshot ID.
  */
 struct blk_snap_snapshot_take {
-	uuid_t id;
+	struct blk_snap_uuid id;
 };
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_TAKE - Take snapshot.
@@ -380,7 +383,7 @@ struct blk_snap_snapshot_take {
  * struct blk_snap_snapshot_collect - Argument for the
  *	&IOCTL_BLK_SNAP_SNAPSHOT_COLLECT control.
  * @count:
- *	Size of @ids in the number of &uuid_t.
+ *	Size of @ids in the number of 16-byte UUID.
  *	If @ids has not enough space, it will contain the required
  *      size of the array.
  * @ids:
@@ -390,7 +393,7 @@ struct blk_snap_snapshot_take {
  */
 struct blk_snap_snapshot_collect {
 	__u32 count;
-	uuid_t *ids;
+	struct blk_snap_uuid *ids;
 };
 /**
  * IOCTL_BLK_SNAP_SNAPSHOT_COLLECT - Get collection of created snapshots.
@@ -409,8 +412,8 @@ struct blk_snap_snapshot_collect {
  *	Image ID.
  */
 struct blk_snap_image_info {
-	struct blk_snap_dev_t orig_dev_id;
-	struct blk_snap_dev_t image_dev_id;
+	struct blk_snap_dev orig_dev_id;
+	struct blk_snap_dev image_dev_id;
 };
 /**
  * struct blk_snap_snapshot_collect_images - Argument for the
@@ -425,7 +428,7 @@ struct blk_snap_image_info {
  *	Pointer to the array for output.
  */
 struct blk_snap_snapshot_collect_images {
-	uuid_t id;
+	struct blk_snap_uuid id;
 	__u32 count;
 	struct blk_snap_image_info *image_info_array;
 };
@@ -476,7 +479,7 @@ enum blk_snap_event_codes {
  *	The received event body.
  */
 struct blk_snap_snapshot_event {
-	uuid_t id;
+	struct blk_snap_uuid id;
 	__u32 timeout_ms;
 	__u32 code;
 	__s64 time_label;
@@ -518,7 +521,7 @@ struct blk_snap_event_low_free_space {
  *	Error code.
  */
 struct blk_snap_event_corrupted {
-	struct blk_snap_dev_t orig_dev_id;
+	struct blk_snap_dev orig_dev_id;
 	__s32 err_code;
 };
 
@@ -563,7 +566,7 @@ struct blk_snap_sector_state {
 };
 
 struct blk_snap_get_sector_state {
-	struct blk_snap_dev_t image_dev_id;
+	struct blk_snap_dev image_dev_id;
 	__u64 sector;
 	struct blk_snap_sector_state state;
 };

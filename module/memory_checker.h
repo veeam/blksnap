@@ -26,7 +26,7 @@ enum memory_object_type {
 	/*kcalloc*/
 	memory_object_blk_snap_cbt_info,
 	memory_object_blk_snap_block_range,
-	memory_object_blk_snap_dev_t,
+	memory_object_blk_snap_dev,
 	memory_object_tracker_array,
 	memory_object_snapimage_array,
 	memory_object_superblock_array,

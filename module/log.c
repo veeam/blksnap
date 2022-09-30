@@ -279,7 +279,7 @@ int log_processor(void *data)
 	}
 
 	log_printk_direct(filp, LOGLEVEL_INFO, "Stop log for module %s\n\n",
-		BLK_SNAP_MODULE_NAME);
+		THIS_MODULE->name);
 	filp = log_close(filp);
 
 	return ret;
@@ -351,7 +351,7 @@ int log_restart(int level, char *filepath, int tz_minuteswest)
 
 	log_printk_direct(filp, LOGLEVEL_INFO,
 		"Start log for module %s version %s loglevel %d\n",
-		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);
+		THIS_MODULE->name, VERSION_STR, log_level);
 
 	wake_up_process(log_task);
 

@@ -45,7 +45,7 @@ namespace blksnap
 
     struct SBlksnapEventCorrupted
     {
-        struct blk_snap_dev_t origDevId;
+        struct blk_snap_dev origDevId;
         int errorCode;
     };
 
@@ -68,12 +68,12 @@ namespace blksnap
 
         void Version(struct blk_snap_version& version);
         void CollectTrackers(std::vector<struct blk_snap_cbt_info>& cbtInfoVector);
-        void ReadCbtMap(struct blk_snap_dev_t dev_id, unsigned int offset, unsigned int length, uint8_t* buff);
+        void ReadCbtMap(struct blk_snap_dev dev_id, unsigned int offset, unsigned int length, uint8_t* buff);
 
-        void Create(const std::vector<struct blk_snap_dev_t>& devices, uuid_t& id);
+        void Create(const std::vector<struct blk_snap_dev>& devices, uuid_t& id);
         void Destroy(const uuid_t& id);
         void Collect(const uuid_t& id, std::vector<struct blk_snap_image_info>& images);
-        void AppendDiffStorage(const uuid_t& id, const struct blk_snap_dev_t& dev_id,
+        void AppendDiffStorage(const uuid_t& id, const struct blk_snap_dev& dev_id,
                                const std::vector<struct blk_snap_block_range>& ranges);
         void Take(const uuid_t& id);
         bool WaitEvent(const uuid_t& id, unsigned int timeoutMs, SBlksnapEvent& ev);
@@ -82,7 +82,7 @@ namespace blksnap
         /* Additional functional */
         bool Modification(struct blk_snap_mod& mod);
 #    ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-        void GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset, struct blk_snap_sector_state& state);
+        void GetSectorState(struct blk_snap_dev image_dev_id, off_t offset, struct blk_snap_sector_state& state);
 #    endif
 #endif
     private:

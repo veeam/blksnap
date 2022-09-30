@@ -72,12 +72,12 @@ std::shared_ptr<SCbtInfo> CCbt::GetCbtInfo(const std::string& original)
     const struct blk_snap_cbt_info& cbtInfo = GetCbtInfoInternal(major(st.st_rdev), minor(st.st_rdev));
 
     return std::make_shared<SCbtInfo>(major(st.st_rdev), minor(st.st_rdev), cbtInfo.blk_size, cbtInfo.blk_count,
-                                      cbtInfo.device_capacity, cbtInfo.generation_id, cbtInfo.snap_number);
+                                      cbtInfo.device_capacity, cbtInfo.generation_id.b, cbtInfo.snap_number);
 }
 
 std::shared_ptr<SCbtData> CCbt::GetCbtData(const std::shared_ptr<SCbtInfo>& ptrCbtInfo)
 {
-    struct blk_snap_dev_t originalDevId = {.mj = ptrCbtInfo->originalMajor, .mn = ptrCbtInfo->originalMinor};
+    struct blk_snap_dev originalDevId = {.mj = ptrCbtInfo->originalMajor, .mn = ptrCbtInfo->originalMinor};
     auto ptrCbtMap = std::make_shared<SCbtData>(ptrCbtInfo->blockCount);
 
     m_blksnap.ReadCbtMap(originalDevId, 0, ptrCbtMap->vec.size(), ptrCbtMap->vec.data());

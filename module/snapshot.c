@@ -254,17 +254,17 @@ void snapshot_done(void)
 	} while (snapshot);
 }
 
-static inline bool blk_snap_dev_is_equal(struct blk_snap_dev_t* first,
-				    struct blk_snap_dev_t* second)
+static inline bool blk_snap_dev_is_equal(struct blk_snap_dev* first,
+				    struct blk_snap_dev* second)
 {
 	return (first->mj == second->mj) && (first->mn == second->mn);
 }
 
-static inline int check_same_devices(struct blk_snap_dev_t *devices,
+static inline int check_same_devices(struct blk_snap_dev *devices,
 				     unsigned int count)
 {
-	struct blk_snap_dev_t *first;
-	struct blk_snap_dev_t *second;
+	struct blk_snap_dev *first;
+	struct blk_snap_dev *second;
 
 	for (first = devices; first < (devices + (count - 1)); ++first) {
 		for (second = first + 1; second < (devices + count); ++second) {
@@ -279,7 +279,7 @@ static inline int check_same_devices(struct blk_snap_dev_t *devices,
 	return 0;
 }
 
-int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
+int snapshot_create(struct blk_snap_dev *dev_id_array, unsigned int count,
 		    uuid_t *id)
 {
 	struct snapshot *snapshot = NULL;
@@ -395,7 +395,7 @@ int snapshot_destroy(uuid_t *id)
 	return 0;
 }
 
-int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
+int snapshot_append_storage(uuid_t *id, struct blk_snap_dev dev_id,
 			    struct blk_snap_block_range __user *ranges,
 			    unsigned int range_count)
 {
@@ -614,17 +614,7 @@ struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms)
 	return event;
 }
 
-static inline int uuid_copy_to_user(uuid_t __user *dst, const uuid_t *src)
-{
-	int len;
-
-	len = copy_to_user(dst, src, sizeof(uuid_t));
-	if (len)
-		return -ENODATA;
-	return 0;
-}
-
-int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array)
+int snapshot_collect(unsigned int *pcount, struct blk_snap_uuid __user *id_array)
 {
 	int ret = 0;
 	int inx = 0;
@@ -648,8 +638,7 @@ int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array)
 			goto out;
 		}
 
-		ret = uuid_copy_to_user(&id_array[inx], &s->id);
-		if (ret) {
+		if (copy_to_user(id_array[inx].b, &s->id.b, sizeof(uuid_t))) {
 			pr_err("Unable to collect snapshots: failed to copy data to user buffer\n");
 			goto out;
 		}

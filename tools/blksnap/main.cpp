@@ -41,6 +41,10 @@ namespace
         {
             uuid_copy(m_id, id);
         };
+        Uuid(const __u8 buf[16])
+        {
+            memcpy(m_id, buf, sizeof(uuid_t));
+        };
         Uuid(const std::string& idStr)
         {
             uuid_parse(idStr.c_str(), m_id);
@@ -73,7 +77,7 @@ namespace
         CBlksnapFileWrap()
             : m_blksnapFd(0)
         {
-            const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
+            const char* blksnap_filename = BLK_SNAP_CTL;
 
             m_blksnapFd = ::open(blksnap_filename, O_RDWR);
             if (m_blksnapFd < 0)
@@ -94,14 +98,14 @@ namespace
 
     };
 
-    static inline struct blk_snap_dev_t deviceByName(const std::string& name)
+    static inline struct blk_snap_dev deviceByName(const std::string& name)
     {
         struct stat st;
 
         if (::stat(name.c_str(), &st))
             throw std::system_error(errno, std::generic_category(), name);
 
-        struct blk_snap_dev_t device = {
+        struct blk_snap_dev device = {
           .mj = major(st.st_rdev),
           .mn = minor(st.st_rdev),
         };
@@ -123,7 +127,7 @@ namespace
         return range;
     }
 
-    static void fiemapStorage(const std::string& filename, struct blk_snap_dev_t& dev_id,
+    static void fiemapStorage(const std::string& filename, struct blk_snap_dev& dev_id,
                               std::vector<struct blk_snap_block_range>& ranges)
     {
         int ret = 0;
@@ -249,7 +253,7 @@ public:
     VersionArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Print " BLK_SNAP_MODULE_NAME " module version.");
+        m_usage = std::string("[TBD]Print module version.");
         m_desc.add_options()
 #ifdef BLK_SNAP_MODIFICATION
           ("modification,m", "[TBD]Print module modification name.")
@@ -360,7 +364,7 @@ public:
         {
             struct blk_snap_cbt_info* it = &cbtInfoVector[inx];
 
-            uuid_unparse(it->generation_id, generationIdStr);
+            uuid_unparse(it->generation_id.b, generationIdStr);
             std::cout << "," << std::endl;
             std::cout << "device=" << it->dev_id.mj << ":" << it->dev_id.mn << std::endl;
             std::cout << "blk_size=" << it->blk_size << std::endl;
@@ -486,7 +490,7 @@ public:
     {
         CBlksnapFileWrap blksnapFd;
         struct blk_snap_snapshot_create param = {0};
-        std::vector<struct blk_snap_dev_t> devices;
+        std::vector<struct blk_snap_dev> devices;
 
         if (!vm.count("device"))
             throw std::invalid_argument("Argument 'device' is missed.");
@@ -500,7 +504,7 @@ public:
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create snapshot object.");
 
         char idStr[64];
-        uuid_unparse(param.id, idStr);
+        uuid_unparse(param.id.b, idStr);
 
         std::cout << std::string(idStr) << std::endl;
     };
@@ -526,7 +530,7 @@ public:
             throw std::invalid_argument("Argument 'id' is missed.");
 
         Uuid id(vm["id"].as<std::string>());
-        uuid_copy(param.id, id.Get());
+        uuid_copy(param.id.b, id.Get());
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to destroy snapshot.");
@@ -552,13 +556,13 @@ public:
         CBlksnapFileWrap blksnapFd;
         struct blk_snap_snapshot_append_storage param;
         std::vector<struct blk_snap_block_range> ranges;
-        struct blk_snap_dev_t dev_id = {0};
+        struct blk_snap_dev dev_id = {0};
 
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
         Uuid id(vm["id"].as<std::string>());
-        uuid_copy(param.id, id.Get());
+        uuid_copy(param.id.b, id.Get());
 
         if (vm.count("file"))
             fiemapStorage(vm["file"].as<std::string>(), dev_id, ranges);
@@ -601,7 +605,7 @@ public:
             throw std::invalid_argument("Argument 'id' is missed.");
 
         Uuid id(vm["id"].as<std::string>());
-        uuid_copy(param.id, id.Get());
+        uuid_copy(param.id.b, id.Get());
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to take snapshot.");
@@ -630,7 +634,7 @@ public:
             throw std::invalid_argument("Argument 'id' is missed.");
 
         Uuid id(vm["id"].as<std::string>());
-        uuid_copy(param.id, id.Get());
+        uuid_copy(param.id.b, id.Get());
 
         if (!vm.count("timeout"))
             throw std::invalid_argument("Argument 'timeout' is missed.");
@@ -692,21 +696,21 @@ private:
         if (param.count == 0)
             return;
 
-        std::vector<uuid_t> id_array(param.count);
+        std::vector<struct blk_snap_uuid> id_array(param.count);
         param.ids = id_array.data();
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get list of snapshots.");
 
-        for (int inx = 0; inx < param.count; inx++)
-            ids.emplace_back(id_array[inx]);
+        for (size_t inx = 0; inx < param.count; inx++)
+            ids.emplace_back(id_array[inx].b);
     };
 
     void CollectImages(const CBlksnapFileWrap& blksnapFd, const Uuid& id, std::vector<struct blk_snap_image_info>& imageInfoVector)
     {
         struct blk_snap_snapshot_collect_images param = {0};
 
-        uuid_copy(param.id, id.Get());
+        uuid_copy(param.id.b, id.Get());
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
             throw std::system_error(errno, std::generic_category(),
                                     "[TBD]Failed to get device collection for snapshot images.");
@@ -812,11 +816,11 @@ private:
         m_allocated_sect += data->requested_nr_sect;
 
         std::vector<struct blk_snap_block_range> ranges;
-        struct blk_snap_dev_t dev_id = {0};
+        struct blk_snap_dev dev_id = {0};
         fiemapStorage(filename, dev_id, ranges);
 
         struct blk_snap_snapshot_append_storage param;
-        uuid_copy(param.id, m_id.Get());
+        uuid_copy(param.id.b, m_id.Get());
         param.dev_id = dev_id;
         param.count = ranges.size();
         param.ranges = ranges.data();
@@ -866,7 +870,7 @@ public:
 
         try
         {
-            uuid_copy(param.id, m_id.Get());
+            uuid_copy(param.id.b, m_id.Get());
             param.timeout_ms = 1000;
             m_counter = 0;
             while (!terminate)

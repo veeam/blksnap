@@ -42,8 +42,8 @@ using namespace blksnap;
 
 struct SSessionInfo
 {
-    struct blk_snap_dev_t original;
-    struct blk_snap_dev_t image;
+    struct blk_snap_dev original;
+    struct blk_snap_dev image;
     std::string originalName;
     std::string imageName;
 };
@@ -109,21 +109,21 @@ std::shared_ptr<ISession> ISession::Create(const std::vector<std::string>& devic
 
 namespace
 {
-    static inline struct blk_snap_dev_t deviceByName(const std::string& name)
+    static inline struct blk_snap_dev deviceByName(const std::string& name)
     {
         struct stat st;
 
         if (::stat(name.c_str(), &st))
             throw std::system_error(errno, std::generic_category(), name);
 
-        struct blk_snap_dev_t device = {
+        struct blk_snap_dev device = {
           .mj = major(st.st_rdev),
           .mn = minor(st.st_rdev),
         };
         return device;
     }
 
-    static void FiemapStorage(const std::string& filename, struct blk_snap_dev_t& dev_id,
+    static void FiemapStorage(const std::string& filename, struct blk_snap_dev& dev_id,
                               std::vector<struct blk_snap_block_range>& ranges)
     {
         int ret = 0;
@@ -231,7 +231,7 @@ namespace
     }
 
     static void AllocateDiffStorage(std::shared_ptr<SState> ptrState, sector_t requestedSectors,
-                                    struct blk_snap_dev_t& dev_id, std::vector<struct blk_snap_block_range>& ranges)
+                                    struct blk_snap_dev& dev_id, std::vector<struct blk_snap_block_range>& ranges)
     {
         if (ptrState->diffStorageRanges.size() <= ptrState->diffStoragePosition.rangeInx)
             throw std::runtime_error("Failed to allocate diff storage. Not enough free ranges");
@@ -314,7 +314,7 @@ static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<
             {
             case blk_snap_event_code_low_free_space:
             {
-                struct blk_snap_dev_t dev_id;
+                struct blk_snap_dev dev_id;
                 std::vector<struct blk_snap_block_range> ranges;
 
                 if (!ptrState->diffStorage.empty())
@@ -376,7 +376,7 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
     /*
      * Create snapshot
      */
-    std::vector<struct blk_snap_dev_t> blk_snap_devs;
+    std::vector<struct blk_snap_dev> blk_snap_devs;
     for (const SSessionInfo& info : m_devices)
         blk_snap_devs.push_back(info.original);
     m_ptrBlksnap->Create(blk_snap_devs, m_id);
@@ -404,7 +404,7 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
         {
         case blk_snap_event_code_low_free_space:
         {
-            struct blk_snap_dev_t dev_id;
+            struct blk_snap_dev dev_id;
             std::vector<struct blk_snap_block_range> ranges;
 
             if (!m_ptrState->diffStorage.empty())
@@ -510,7 +510,7 @@ CSession::~CSession()
 
 std::string CSession::GetImageDevice(const std::string& original)
 {
-    struct blk_snap_dev_t devId = deviceByName(original);
+    struct blk_snap_dev devId = deviceByName(original);
 
     for (size_t inx = 0; inx < m_devices.size(); inx++)
     {
@@ -523,7 +523,7 @@ std::string CSession::GetImageDevice(const std::string& original)
 
 std::string CSession::GetOriginalDevice(const std::string& image)
 {
-    struct blk_snap_dev_t devId = deviceByName(image);
+    struct blk_snap_dev devId = deviceByName(image);
 
     for (size_t inx = 0; inx < m_devices.size(); inx++)
     {

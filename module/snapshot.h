@@ -63,15 +63,15 @@ struct snapshot {
 
 void snapshot_done(void);
 
-int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
+int snapshot_create(struct blk_snap_dev *dev_id_array, unsigned int count,
 		    uuid_t *id);
 int snapshot_destroy(uuid_t *id);
-int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
+int snapshot_append_storage(uuid_t *id, struct blk_snap_dev dev_id,
 			    struct blk_snap_block_range __user *ranges,
 			    unsigned int range_count);
 int snapshot_take(uuid_t *id);
 struct event *snapshot_wait_event(uuid_t *id, unsigned long timeout_ms);
-int snapshot_collect(unsigned int *pcount, uuid_t __user *id_array);
+int snapshot_collect(unsigned int *pcount, struct blk_snap_uuid __user *id_array);
 int snapshot_collect_images(uuid_t *id,
 			    struct blk_snap_image_info __user *image_info_array,
 			    unsigned int *pcount);

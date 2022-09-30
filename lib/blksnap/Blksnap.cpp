@@ -26,7 +26,7 @@
 #include <system_error>
 #include <unistd.h>
 
-static const char* blksnap_filename = "/dev/" BLK_SNAP_MODULE_NAME;
+static const char* blksnap_filename = BLK_SNAP_CTL;
 
 using namespace blksnap;
 
@@ -81,7 +81,7 @@ void CBlksnap::CollectTrackers(std::vector<struct blk_snap_cbt_info>& cbtInfoVec
                                 "[TBD]Failed to collect block devices with change tracking.");
 }
 
-void CBlksnap::ReadCbtMap(struct blk_snap_dev_t dev_id, unsigned int offset, unsigned int length, uint8_t* buff)
+void CBlksnap::ReadCbtMap(struct blk_snap_dev dev_id, unsigned int offset, unsigned int length, uint8_t* buff)
 {
     struct blk_snap_tracker_read_cbt_bitmap param
       = {.dev_id = dev_id, .offset = offset, .length = length, .buff = buff};
@@ -94,25 +94,25 @@ void CBlksnap::ReadCbtMap(struct blk_snap_dev_t dev_id, unsigned int offset, uns
         throw std::runtime_error("[TBD]Cannot read required bytes of difference map from change tracking.");
 }
 
-void CBlksnap::Create(const std::vector<struct blk_snap_dev_t>& devices, uuid_t& id)
+void CBlksnap::Create(const std::vector<struct blk_snap_dev>& devices, uuid_t& id)
 {
     struct blk_snap_snapshot_create param = {0};
 
-    std::vector<struct blk_snap_dev_t> localDevices = devices;
+    std::vector<struct blk_snap_dev> localDevices = devices;
     param.count = localDevices.size();
     param.dev_id_array = localDevices.data();
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_CREATE, &param))
         throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create snapshot object.");
 
-    uuid_copy(id, param.id);
+    uuid_copy(id, param.id.b);
 }
 
 void CBlksnap::Destroy(const uuid_t& id)
 {
     struct blk_snap_snapshot_destroy param = {0};
 
-    uuid_copy(param.id, id);
+    uuid_copy(param.id.b, id);
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
         throw std::system_error(errno, std::generic_category(), "[TBD]Failed to destroy snapshot.");
@@ -122,7 +122,7 @@ void CBlksnap::Collect(const uuid_t& id, std::vector<blk_snap_image_info>& image
 {
     struct blk_snap_snapshot_collect_images param = {0};
 
-    uuid_copy(param.id, id);
+    uuid_copy(param.id.b, id);
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
         throw std::system_error(errno, std::generic_category(),
@@ -139,12 +139,12 @@ void CBlksnap::Collect(const uuid_t& id, std::vector<blk_snap_image_info>& image
                                 "[TBD]Failed to get device collection for snapshot images.");
 }
 
-void CBlksnap::AppendDiffStorage(const uuid_t& id, const struct blk_snap_dev_t& dev_id,
+void CBlksnap::AppendDiffStorage(const uuid_t& id, const struct blk_snap_dev& dev_id,
                                  const std::vector<struct blk_snap_block_range>& ranges)
 {
     struct blk_snap_snapshot_append_storage param = {0};
 
-    uuid_copy(param.id, id);
+    uuid_copy(param.id.b, id);
     param.dev_id = dev_id;
     std::vector<struct blk_snap_block_range> localRanges = ranges;
     param.count = localRanges.size();
@@ -158,7 +158,7 @@ void CBlksnap::Take(const uuid_t& id)
 {
     struct blk_snap_snapshot_take param;
 
-    uuid_copy(param.id, id);
+    uuid_copy(param.id.b, id);
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
         throw std::system_error(errno, std::generic_category(), "[TBD]Failed to take snapshot.");
@@ -168,7 +168,7 @@ bool CBlksnap::WaitEvent(const uuid_t& id, unsigned int timeoutMs, SBlksnapEvent
 {
     struct blk_snap_snapshot_event param;
 
-    uuid_copy(param.id, id);
+    uuid_copy(param.id.b, id);
     param.timeout_ms = timeoutMs;
 
     if (::ioctl(m_fd, IOCTL_BLK_SNAP_SNAPSHOT_WAIT_EVENT, &param))
@@ -203,7 +203,7 @@ bool CBlksnap::WaitEvent(const uuid_t& id, unsigned int timeoutMs, SBlksnapEvent
 }
 
 #if defined(BLK_SNAP_MODIFICATION) && defined(BLK_SNAP_DEBUG_SECTOR_STATE)
-void CBlksnap::GetSectorState(struct blk_snap_dev_t image_dev_id, off_t offset, struct blk_snap_sector_state& state)
+void CBlksnap::GetSectorState(struct blk_snap_dev image_dev_id, off_t offset, struct blk_snap_sector_state& state)
 {
     struct blk_snap_get_sector_state param
       = {.image_dev_id = image_dev_id, .sector = static_cast<__u64>(offset >> SECTOR_SHIFT), .state = {0}};
