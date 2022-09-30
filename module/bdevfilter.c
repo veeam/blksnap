@@ -32,8 +32,8 @@ struct bdev_extension {
 	struct block_device *bdev;
 #endif
 
-	struct bdev_filter *bd_filters[bdev_filter_alt_end];
-	spinlock_t bd_filters_lock;
+	struct bdev_filter *bd_filter;
+	spinlock_t bd_filter_lock;
 };
 
 /* The list of extensions for this block device */
@@ -106,9 +106,9 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
 #else
 	ext_tmp->bdev = bdev;
 #endif
-	memset(ext_tmp->bd_filters, 0, sizeof(ext_tmp->bd_filters));
+	ext_tmp->bd_filter = NULL;
 
-	spin_lock_init(&ext_tmp->bd_filters_lock);
+	spin_lock_init(&ext_tmp->bd_filter_lock);
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(bdev->bd_dev);
@@ -142,22 +142,18 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
 
 	/* Recreated block device found */
 	if (recreate) {
-		enum bdev_filter_altitudes alt;
+		struct bdev_filter *flt;
 
 		pr_info("Detach all block device filters from %d:%d\n",
 			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 
-		for (alt = 0; alt < bdev_filter_alt_end; alt++) {
-			struct bdev_filter *flt;
+		spin_lock(&ext_tmp->bd_filter_lock);
+		flt = ext_tmp->bd_filter;
+		ext_tmp->bd_filter = NULL;
+		spin_unlock(&ext_tmp->bd_filter_lock);
 
-			spin_lock(&ext_tmp->bd_filters_lock);
-			flt = ext_tmp->bd_filters[alt];
-			ext_tmp->bd_filters[alt] = NULL;
-			spin_unlock(&ext_tmp->bd_filters_lock);
-
-			if (flt)
-				bdev_filter_put(flt);
-		}
+		if (flt)
+			bdev_filter_put(flt);
 	}
 	kfree(ext_tmp);
 
@@ -170,8 +166,6 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
  * 	block device
  * @name:
  *	Name of the block device filter.
- * @altitude:
- *	Number of the block device filter.
  * @flt:
  *	Pointer to the filter structure.
  *
@@ -180,31 +174,27 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
  *
  * Return:
  * 0 - OK
- * -EBUSY - a filter on this altitude already exists
- * -EINVAL - invalid altitude
+ * -EBUSY - a filter already exists
  */
 int bdev_filter_attach(struct block_device *bdev, const char *name,
-		       const enum bdev_filter_altitudes altitude,
 		       struct bdev_filter *flt)
 {
 	int ret = 0;
 	struct bdev_extension *ext;
 
 	pr_info("Attach block device filter '%s'", name);
-	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
-		return -EINVAL;
 
 	ext = bdev_extension_append(bdev);
 	if (!ext)
 		return -ENOMEM;
 
-	spin_lock(&ext->bd_filters_lock);
-	if (ext->bd_filters[altitude]) {
-		pr_debug("filter busy. 0x%p", ext->bd_filters[altitude]);
+	spin_lock(&ext->bd_filter_lock);
+	if (ext->bd_filter) {
+		pr_debug("filter busy. 0x%p", ext->bd_filter);
 		ret = -EBUSY;
 	} else
-		ext->bd_filters[altitude] = flt;
-	spin_unlock(&ext->bd_filters_lock);
+		ext->bd_filter = flt;
+	spin_unlock(&ext->bd_filter_lock);
 
 	if (!ret)
 		pr_info("Block device filter '%s' has been attached to %d:%d",
@@ -220,16 +210,12 @@ EXPORT_SYMBOL(bdev_filter_attach);
  * was removed from the system. Unlike the upstream version, we have no way
  * to handle device extension.
  */
-int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
-			  const enum bdev_filter_altitudes altitude)
+int lp_bdev_filter_detach(const dev_t dev_id, const char *name)
 {
 	struct bdev_extension *ext;
 	struct bdev_filter *flt;
 
 	pr_info("Detach block device filter '%s'", name);
-
-	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
-		return -EINVAL;
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(dev_id);
@@ -237,11 +223,11 @@ int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 	if (!ext)
 		return -ENOENT;
 
-	spin_lock(&ext->bd_filters_lock);
-	flt = ext->bd_filters[altitude];
+	spin_lock(&ext->bd_filter_lock);
+	flt = ext->bd_filter;
 	if (flt)
-		ext->bd_filters[altitude] = NULL;
-	spin_unlock(&ext->bd_filters_lock);
+		ext->bd_filter = NULL;
+	spin_unlock(&ext->bd_filter_lock);
 
 	if (!flt)
 		return -ENOENT;
@@ -259,42 +245,32 @@ EXPORT_SYMBOL(lp_bdev_filter_detach);
  * 	block device.
  * @name:
  *	Name of the block device filter.
- * @altitude:
- *	Number of the block device filter.
  *
  * The filter should be added using the bdev_filter_attach() function.
  *
  * Return:
  * 0 - OK
  * -ENOENT - the filter was not found in the linked list
- * -EINVAL - invalid altitude
  */
-int bdev_filter_detach(struct block_device *bdev, const char *name,
-		       const enum bdev_filter_altitudes altitude)
+int bdev_filter_detach(struct block_device *bdev, const char *name)
 {
-	return lp_bdev_filter_detach(bdev->bd_dev, name, altitude);
+	return lp_bdev_filter_detach(bdev->bd_dev, name);
 }
 EXPORT_SYMBOL(bdev_filter_detach);
 
 /**
- * bdev_filter_get_by_altitude - Get filters context value.
+ * bdev_filter_get_by_bdev - Get filters context value.
  * @bdev:
  * 	Block device ID.
- * @altitude:
- * 	Number of the block device filter.
  *
  * Return pointer to &struct bdev_filter or NULL if the filter was not found.
  *
  * Necessary to lock list of filters by calling bdev_filter_read_lock().
  */
-struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
-				const enum bdev_filter_altitudes altitude)
+struct bdev_filter *bdev_filter_get_by_bdev(struct block_device *bdev)
 {
 	struct bdev_extension *ext;
 	struct bdev_filter *flt = NULL;
-
-	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
-		return ERR_PTR(-EINVAL);
 
 	spin_lock(&bdev_extension_list_lock);
 #if defined(HAVE_BI_BDISK)
@@ -306,19 +282,20 @@ struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
 	if (!ext)
 		return NULL;
 
-	spin_lock(&ext->bd_filters_lock);
-	flt = ext->bd_filters[altitude];
+	spin_lock(&ext->bd_filter_lock);
+	flt = ext->bd_filter;
 	if (flt)
 		bdev_filter_get(flt);
-	spin_unlock(&ext->bd_filters_lock);
+	spin_unlock(&ext->bd_filter_lock);
 
 	return flt;
 }
-EXPORT_SYMBOL(bdev_filter_get_by_altitude);
+EXPORT_SYMBOL(bdev_filter_get_by_bdev);
 
 static inline bool bdev_filters_apply(struct bio *bio)
 {
-	enum bdev_filter_altitudes altitude = 0;
+	bool pass;
+	struct bdev_filter *flt;
 	struct bdev_extension *ext;
 
 	spin_lock(&bdev_extension_list_lock);
@@ -331,39 +308,25 @@ static inline bool bdev_filters_apply(struct bio *bio)
 	if (!ext)
 		return true;
 
-	spin_lock(&ext->bd_filters_lock);
-	while (altitude < bdev_filter_alt_end) {
-		enum bdev_filter_result result;
-		struct bdev_filter *flt;
-
-		flt = ext->bd_filters[altitude];
-		if (!flt) {
-			altitude++;
-			continue;
-		}
-
+	spin_lock(&ext->bd_filter_lock);
+	flt = ext->bd_filter;
+	if (flt)
 		bdev_filter_get(flt);
-		spin_unlock(&ext->bd_filters_lock);
+	spin_unlock(&ext->bd_filter_lock);
 
-		result = flt->fops->submit_bio_cb(bio, flt);
-		bdev_filter_put(flt);
+	if (!flt)
+		return true;
 
-		if (result != bdev_filter_res_pass)
-			return false;
+	pass = flt->fops->submit_bio_cb(bio, flt);
+	bdev_filter_put(flt);
 
-		altitude++;
-
-		spin_lock(&ext->bd_filters_lock);
-	};
-	spin_unlock(&ext->bd_filters_lock);
-
-	return true;
+	return pass;
 }
 
 #ifdef CONFIG_X86
 #define CALL_INSTRUCTION_LENGTH 5
 #else
-#pragma error "Current CPU is not supported yet"
+#error "Current CPU is not supported yet"
 #endif
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)

@@ -72,7 +72,7 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 {
 	struct bdev_filter *flt;
 
-	flt = bdev_filter_get_by_altitude(bdev, bdev_filter_alt_blksnap);
+	flt = bdev_filter_get_by_bdev(bdev);
 	if (IS_ERR(flt))
 		return ERR_PTR(PTR_ERR(flt));
 	if (!flt)
@@ -84,12 +84,12 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev)
 void diff_io_endio(struct bio *bio);
 #endif
 
-static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
+static bool tracker_submit_bio_cb(struct bio *bio,
 		struct bdev_filter *flt)
 {
 	struct bio_list bio_list_on_stack[2] = { };
 	struct bio *new_bio;
-	enum bdev_filter_result ret = bdev_filter_res_pass;
+	bool ret = true;
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
 	int err;
 	sector_t sector;
@@ -111,7 +111,7 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 	if (bio->bi_opf & REQ_NOWAIT) {
 		if (!percpu_down_read_trylock(&tracker_submit_lock)) {
 			bio_wouldblock_error(bio);
-			return bdev_filter_res_skip;
+			return false;
 		}
 	} else
 		percpu_down_read(&tracker_submit_lock);
@@ -180,7 +180,7 @@ static enum bdev_filter_result tracker_submit_bio_cb(struct bio *bio,
 fail:
 	if (err == -EAGAIN) {
 		bio_wouldblock_error(bio);
-		ret = bdev_filter_res_skip;
+		ret = false;
 	} else
 		pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
 out:
@@ -249,8 +249,7 @@ static int tracker_filter_attach(struct block_device *bdev,
 	}
 #endif
 
-	ret = bdev_filter_attach(bdev, KBUILD_MODNAME, bdev_filter_alt_blksnap,
-				 &tracker->flt);
+	ret = bdev_filter_attach(bdev, KBUILD_MODNAME, &tracker->flt);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -295,7 +294,7 @@ static int tracker_filter_detach(struct block_device *bdev)
 	}
 #endif
 
-	ret = bdev_filter_detach(bdev, KBUILD_MODNAME, bdev_filter_alt_blksnap);
+	ret = bdev_filter_detach(bdev, KBUILD_MODNAME);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -541,7 +540,7 @@ int tracker_remove(dev_t dev_id)
 		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
 #ifdef STANDALONE_BDEVFILTER
-		return lp_bdev_filter_detach(dev_id, KBUILD_MODNAME, bdev_filter_alt_blksnap);
+		return lp_bdev_filter_detach(dev_id, KBUILD_MODNAME);
 #else
 		return PTR_ERR(bdev);
 #endif
