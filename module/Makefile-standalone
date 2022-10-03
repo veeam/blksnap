@@ -57,46 +57,8 @@ EXTRA_CFLAGS += $(shell 							\
 	grep -qw "struct block_device" &&					\
 		echo -DHAVE_BDEV_BIO_ALLOC)
 
-# The power of 2 for minimum tracking block size.
-# The minimum tracking block size by default is 64 KB (shift 16)
-# It's looks good for block device 128 GB or lower.
-# In this case, the block device is divided into 2097152 blocks.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT=16"
-
-# The limit of the maximum number of tracking blocks.
-# As the size of the block device grows, the size of the tracking block
-# size should also grow. For this purpose, the limit of the maximum
-# number of block size is set.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT=2097152"
-
-# The minimum chunk size is 256 KB (shift 18).
-# It's looks good for block device 128 GB or lower.
-# In this case, the block device is divided into 524288 chunks.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT=18"
-
-# As the size of the block device grows, the size of the chunk should also grow.
-# For this purpose, the limit of the maximum number of chunks is set.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT=2097152"
-
-# Since reading and writing to snapshots is performed in large chunks,
-# a cache is implemented to optimize reading small portions of data
-# from the snapshot image. As the number of chunks in the cache
-# increases, memory consumption also increases.
-# The minimum recommended value is four.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE=32"
-
-# A buffer can be allocated for each chunk. After use, this buffer is not
-# released immediately, but is sent to the pool of free buffers.
-# However, if there are too many free buffers in the pool, they are released
-# immediately. The maximum size of the pool is regulated by this define.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE=128"
-
-# The minimum allowable size of the difference storage in sectors.
-# When reached, an event is generated about the lack of free space.
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM=2097152"
-
-# EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
-EXTRA_CFLAGS += "-DCONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK"
+# EXTRA_CFLAGS += "-DBLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
+EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_MEMORY_LEAK"
 
 # Some specific keys for out-of-tree module configuration
 EXTRA_CFLAGS += "-DBLK_SNAP_FILELOG"

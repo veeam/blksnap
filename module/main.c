@@ -114,7 +114,7 @@ static void __exit blk_snap_exit(void)
 #ifdef BLK_SNAP_FILELOG
 	log_done();
 #endif
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_print(true);
 #endif
 	pr_info("Module was unloaded\n");
@@ -123,13 +123,57 @@ static void __exit blk_snap_exit(void)
 module_init(blk_snap_init);
 module_exit(blk_snap_exit);
 
-int tracking_block_minimum_shift = CONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT;
-int tracking_block_maximum_count = CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT;
-int chunk_minimum_shift = CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT;
-int chunk_maximum_count = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT;
-int chunk_maximum_in_cache = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE;
-int free_diff_buffer_pool_size = CONFIG_BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE;
-int diff_storage_minimum = CONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM;
+/*
+ * The power of 2 for minimum tracking block size.
+ * The minimum tracking block size by default is 64 KB (shift 16)
+ * It's looks good for block device 128 GB or lower.
+ * In this case, the block device is divided into 2097152 blocks.
+ */
+int tracking_block_minimum_shift = 16;
+
+/*
+ * The limit of the maximum number of tracking blocks.
+ * As the size of the block device grows, the size of the tracking block
+ * size should also grow. For this purpose, the limit of the maximum
+ * number of block size is set.
+ */
+int tracking_block_maximum_count = 2097152;
+
+/*
+ * The minimum chunk size is 256 KB (shift 18).
+ * It's looks good for block device 128 GB or lower.
+ * In this case, the block device is divided into 524288 chunks.
+ */
+int chunk_minimum_shift = 18;
+
+/*
+ * As the size of the block device grows, the size of the chunk should also
+ * grow. For this purpose, the limit of the maximum number of chunks is set.
+ */
+int chunk_maximum_count = 2097152;
+
+/*
+ * Since reading and writing to snapshots is performed in large chunks,
+ * a cache is implemented to optimize reading small portions of data
+ * from the snapshot image. As the number of chunks in the cache
+ * increases, memory consumption also increases.
+ * The minimum recommended value is four.
+ */
+int chunk_maximum_in_cache = 32;
+
+/*
+ * A buffer can be allocated for each chunk. After use, this buffer is not
+ * released immediately, but is sent to the pool of free buffers.
+ * However, if there are too many free buffers in the pool, they are released
+ * immediately. The maximum size of the pool is regulated by this define.
+ */
+int free_diff_buffer_pool_size = 128;
+
+/*
+ * The minimum allowable size of the difference storage in sectors.
+ * When reached, an event is generated about the lack of free space.
+ */
+int diff_storage_minimum = 2097152;
 
 module_param_named(tracking_block_minimum_shift, tracking_block_minimum_shift,
 		   int, 0644);

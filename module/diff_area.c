@@ -296,7 +296,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	xa_init(&diff_area->chunk_map);
 
 	if (!diff_storage->capacity) {
-#ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
+#ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 		diff_area->in_memory = true;
 		pr_debug("Difference storage is empty.\n");
 		pr_debug("Only the memory cache will be used to store the snapshots difference.\n");

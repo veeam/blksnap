@@ -104,7 +104,7 @@ struct diff_area {
 	unsigned long long chunk_shift;
 	unsigned long chunk_count;
 	struct xarray chunk_map;
-#ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
+#ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	bool in_memory;
 #endif
 	spinlock_t caches_lock;

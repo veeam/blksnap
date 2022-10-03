@@ -36,7 +36,7 @@ enum memory_object_type {
 	memory_object_count
 };
 
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 void memory_object_inc(enum memory_object_type type);
 void memory_object_dec(enum memory_object_type type);
 int  memory_object_print(bool is_error);

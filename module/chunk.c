@@ -50,7 +50,7 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 		 "The chunk already in the cache"))
 		return -EINVAL;
 
-#ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
+#ifdef BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	if (diff_area->in_memory) {
 		up(&chunk->lock);
 		return 0;
