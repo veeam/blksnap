@@ -1,23 +1,20 @@
 # SPDX-License-Identifier: GPL-2.0
-KERNEL_MODULE_NAME := blksnap
-
-$(KERNEL_MODULE_NAME)-y += cbt_map.o
-$(KERNEL_MODULE_NAME)-y += chunk.o
-$(KERNEL_MODULE_NAME)-y += ctrl.o
-$(KERNEL_MODULE_NAME)-y += diff_io.o
-$(KERNEL_MODULE_NAME)-y += diff_area.o
-$(KERNEL_MODULE_NAME)-y += diff_buffer.o
-$(KERNEL_MODULE_NAME)-y += diff_storage.o
-$(KERNEL_MODULE_NAME)-y += event_queue.o
-$(KERNEL_MODULE_NAME)-y += main.o
-$(KERNEL_MODULE_NAME)-y += snapimage.o
-$(KERNEL_MODULE_NAME)-y += snapshot.o
-$(KERNEL_MODULE_NAME)-y += sysfs.o
-$(KERNEL_MODULE_NAME)-y += tracker.o
-$(KERNEL_MODULE_NAME)-y += memory_checker.o
-
 # for upstream, we don't need any addition makefiles,
 # but for a standalone module the configuration is necessary
 include ${M}/Makefile-*
 
-obj-m	 += $(KERNEL_MODULE_NAME).o
+blksnap-$(CONFIG_BLK_SNAP) += cbt_map.o
+blksnap-$(CONFIG_BLK_SNAP) += chunk.o
+blksnap-$(CONFIG_BLK_SNAP) += ctrl.o
+blksnap-$(CONFIG_BLK_SNAP) += diff_io.o
+blksnap-$(CONFIG_BLK_SNAP) += diff_area.o
+blksnap-$(CONFIG_BLK_SNAP) += diff_buffer.o
+blksnap-$(CONFIG_BLK_SNAP) += diff_storage.o
+blksnap-$(CONFIG_BLK_SNAP) += event_queue.o
+blksnap-$(CONFIG_BLK_SNAP) += main.o
+blksnap-$(CONFIG_BLK_SNAP) += snapimage.o
+blksnap-$(CONFIG_BLK_SNAP) += snapshot.o
+blksnap-$(CONFIG_BLK_SNAP) += sysfs.o
+blksnap-$(CONFIG_BLK_SNAP) += tracker.o
+
+obj-$(CONFIG_BLK_SNAP)	 += blksnap.o
