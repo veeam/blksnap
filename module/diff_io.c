@@ -236,12 +236,13 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	int ret = 0;
 	struct bio *bio = NULL;
 	struct page **current_page_ptr;
-#ifdef HAVE_BDEV_BIO_ALLOC
-	unsigned int opf;
-	gfp_t gfp;
-#endif
 	unsigned short nr_iovecs;
 	sector_t processed = 0;
+#ifdef HAVE_BDEV_BIO_ALLOC
+	unsigned int opf = REQ_SYNC |
+		(diff_io->is_write ? REQ_OP_WRITE | REQ_FUA : REQ_OP_READ);
+	gfp_t gfp_mask = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
+#endif
 
 	if (unlikely(!check_page_aligned(diff_region->sector))) {
 		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
@@ -256,14 +257,9 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		goto fail;
 	}
 
-	/* Allocate both bios */
 #ifdef HAVE_BDEV_BIO_ALLOC
-	opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
-	gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
-
-	bio = bio_alloc_bioset(diff_region->bdev, nr_iovecs,
-			       opf | REQ_SYNC | REQ_IDLE | REQ_FUA,
-			       gfp, &diff_io_bioset);
+	bio = bio_alloc_bioset(diff_region->bdev, nr_iovecs, opf, gfp_mask,
+			       &diff_io_bioset);
 	if (unlikely(!bio)) {
 		if (is_nowait)
 			ret = -EAGAIN;
