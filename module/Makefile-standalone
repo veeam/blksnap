@@ -3,73 +3,90 @@
 CONFIG_BLK_SNAP := m
 
 
-EXTRA_CFLAGS += "-DBLK_SNAP_MODIFICATION"
-EXTRA_CFLAGS += "-DMOD_NAME=\"standalone\" "
+ccflags-y += "-D BLK_SNAP_MODIFICATION"
+ccflags-y += "-D MOD_NAME=\"standalone\" "
 
-EXTRA_CFLAGS += $(shell 							\
+ccflags-y += $(shell 								\
 	grep -qw "blk_qc_t submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&& \
-		echo -DHAVE_QC_SUBMIT_BIO_NOACCT)
-EXTRA_CFLAGS += $(shell 							\
+		echo -D HAVE_QC_SUBMIT_BIO_NOACCT)
+ccflags-y += $(shell 								\
 	grep -qw "void submit_bio_noacct" $(srctree)/include/linux/blkdev.h &&	\
-		echo -DHAVE_VOID_SUBMIT_BIO_NOACCT)
-EXTRA_CFLAGS += $(shell 							\
+		echo -D HAVE_VOID_SUBMIT_BIO_NOACCT)
+
+ccflags-y += $(shell 								\
 	grep -qw "struct super_block \*freeze_bdev"				\
 		$(srctree)/include/linux/blkdev.h &&				\
-		echo -DHAVE_SUPER_BLOCK_FREEZE)
-EXTRA_CFLAGS += $(shell 							\
+		echo -D HAVE_SUPER_BLOCK_FREEZE)
+
+ccflags-y += $(shell 								\
 	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -DHAVE_BI_BDEV)
-EXTRA_CFLAGS += $(shell 							\
+		echo -D HAVE_BI_BDEV)
+ccflags-y += $(shell 								\
 	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -DHAVE_BI_BDISK)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+		echo -D HAVE_BI_BDISK)
+
+ccflags-y += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
-		echo -DHAVE_BDEV_NR_SECTORS)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+		echo -D HAVE_BDEV_NR_SECTORS)
+
+ccflags-y += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/blkdev.h && \
-		echo -DHAVE_BDEV_NR_SECTORS)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
-		echo -DHAVE_BLK_MQ_ALLOC_DISK)
-EXTRA_CFLAGS += $(shell 							\
+		echo -D HAVE_BDEV_NR_SECTORS)
+
+ccflags-y += $(shell 								\
+	grep -qw "blk_qc_t submit_bio" $(srctree)/include/linux/bio.h &&	\
+		echo -D HAVE_QC_SUBMIT_BIO)
+
+ccflags-y += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+	grep -qw "define blk_alloc_disk" $(srctree)/include/linux/genhd.h &&	\
+	echo -D HAVE_BLK_ALLOC_DISK)
+ccflags-y += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "define blk_alloc_disk" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_BLK_ALLOC_DISK)
+
+ccflags-y += $(shell 								\
 	grep -qw "BIO_MAX_PAGES" $(srctree)/include/linux/bio.h &&		\
-		echo -DHAVE_BIO_MAX_PAGES)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+		echo -D HAVE_BIO_MAX_PAGES)
+
+ccflags-y += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "int add_disk" $(srctree)/include/linux/genhd.h &&		\
-		echo -DHAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+		echo -D HAVE_ADD_DISK_RESULT)
+ccflags-y += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "int add_disk" $(srctree)/include/linux/blkdev.h &&		\
-		echo -DHAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+		echo -D HAVE_ADD_DISK_RESULT)
+ccflags-y += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "int __must_check add_disk" $(srctree)/include/linux/genhd.h && \
-		echo -DHAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+		echo -D HAVE_ADD_DISK_RESULT)
+ccflags-y += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "int __must_check add_disk" $(srctree)/include/linux/blkdev.h && \
-		echo -DHAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+		echo -D HAVE_ADD_DISK_RESULT)
+
+ccflags-y += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "void blk_cleanup_disk" $(srctree)/include/linux/genhd.h &&	\
-		echo -DHAVE_BLK_CLEANUP_DISK)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+		echo -D HAVE_BLK_CLEANUP_DISK)
+ccflags-y += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "void blk_cleanup_disk" $(srctree)/include/linux/blkdev.h &&	\
-		echo -DHAVE_BLK_CLEANUP_DISK)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
-		echo -DHAVE_GENHD_H)
-EXTRA_CFLAGS += $(shell 							\
+		echo -D HAVE_BLK_CLEANUP_DISK)
+
+ccflags-y += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+		echo -D HAVE_GENHD_H)
+
+ccflags-y += $(shell 								\
 	grep "bio_alloc_bioset" $(srctree)/include/linux/bio.h |		\
 	grep -qw "struct block_device" &&					\
-		echo -DHAVE_BDEV_BIO_ALLOC)
+		echo -D HAVE_BDEV_BIO_ALLOC)
 
 # Specific options for standalone module configuration
-EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_MEMORY_LEAK"
-EXTRA_CFLAGS += "-DBLK_SNAP_FILELOG"
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUGLOG"
-# EXTRA_CFLAGS += "-DBLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_STORAGE_LISTS"
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_DIFF_BUFFER"
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_CHUNK_IO"
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_IMAGE_WRITE"
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_SECTOR_STATE"
-# EXTRA_CFLAGS += "-DBLK_SNAP_DEBUG_RELEASE_SNAPSHOT"
+ccflags-y += "-D BLK_SNAP_DEBUG_MEMORY_LEAK"
+ccflags-y += "-D BLK_SNAP_FILELOG"
+# ccflags-y += "-D BLK_SNAP_DEBUGLOG"
+# ccflags-y += "-D BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
+# ccflags-y += "-D BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS"
+# ccflags-y += "-D BLK_SNAP_DEBUG_DIFF_BUFFER"
+# ccflags-y += "-D BLK_SNAP_DEBUG_CHUNK_IO"
+# ccflags-y += "-D BLK_SNAP_DEBUG_IMAGE_WRITE"
+# ccflags-y += "-D BLK_SNAP_DEBUG_SECTOR_STATE"
+# ccflags-y += "-D BLK_SNAP_DEBUG_RELEASE_SNAPSHOT"
 
 blksnap-$(CONFIG_BLK_SNAP) += memory_checker.o
 blksnap-$(CONFIG_BLK_SNAP) += log.o

@@ -28,8 +28,6 @@ struct cbt_map;
  *	The worker thread for processing I/O requests.
  * @worker_task:
  *	A pointer to the &struct task of the worker thread.
- * @tag_set:
- *	Area to keep a shared tag map.
  * @disk:
  *	A pointer to the &struct gendisk for the image block device.
  * @diff_area:
@@ -54,11 +52,7 @@ struct snapimage {
 	struct kthread_worker worker;
 	struct task_struct *worker_task;
 
-	struct blk_mq_tag_set tag_set;
 	struct gendisk *disk;
-#ifndef HAVE_BLK_MQ_ALLOC_DISK
-	struct request_queue *queue;
-#endif
 
 	struct diff_area *diff_area;
 	struct cbt_map *cbt_map;

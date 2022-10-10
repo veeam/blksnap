@@ -40,8 +40,8 @@
 #ifdef HAVE_BDEV_NR_SECTORS
 #pragma message("The bdev_nr_sectors() function was found.")
 #endif
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-#pragma message("The blk_mq_alloc_disk() function was found.")
+#ifdef HAVE_BLK_ALLOC_DISK
+#pragma message("The blk_alloc_disk() function was found.")
 #endif
 #ifdef HAVE_BIO_MAX_PAGES
 #pragma message("The BIO_MAX_PAGES define was found.")

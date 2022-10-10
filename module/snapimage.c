@@ -19,9 +19,17 @@
 
 #define SNAPIMAGE_MAX_DEVICES 2048
 
+struct snapimage_bio_prefix
+{
+	struct kthread_work work;
+	struct bio bio[0];
+};
+
 static unsigned int _major;
 static DEFINE_IDR(_minor_idr);
 static DEFINE_SPINLOCK(_minor_lock);
+
+struct bio_set snapimage_bioset;
 
 static void free_minor(int minor)
 {
@@ -79,102 +87,67 @@ static inline int snapimage_prepare_worker(struct snapimage *snapimage)
 	return 0;
 }
 
-struct snapimage_cmd {
-	struct kthread_work work;
-};
-
-static void snapimage_queue_work(struct kthread_work *work)
+static void snapimage_process_bio(struct kthread_work *work)
 {
-	struct snapimage_cmd *cmd =
-		container_of(work, struct snapimage_cmd, work);
-	struct request *rq = blk_mq_rq_from_pdu(cmd);
-	struct snapimage *snapimage = rq->q->queuedata;
-	blk_status_t status = BLK_STS_OK;
-	struct bio_vec bvec;
-	struct req_iterator iter;
+	struct snapimage_bio_prefix *pfx =
+		container_of(work, struct snapimage_bio_prefix, work);
+	struct bio *bio = pfx->bio;
+#ifdef HAVE_BI_BDEV
+	struct snapimage *snapimage = bio->bi_bdev->bd_disk->private_data;
+#endif
+#ifdef HAVE_BI_BDISK
+	struct snapimage *snapimage = bio->bi_disk->private_data;
+#endif
 	struct diff_area_image_ctx io_ctx;
-	sector_t pos = blk_rq_pos(rq);
+	struct bio_vec bvec;
+	struct bvec_iter iter;
+	sector_t pos = bio->bi_iter.bi_sector;
 
 	diff_area_throttling_io(snapimage->diff_area);
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
-				 op_is_write(req_op(rq)));
-	rq_for_each_segment(bvec, rq, iter) {
-		status = diff_area_image_io(&io_ctx, &bvec, &pos);
-		if (unlikely(status != BLK_STS_OK))
+				 op_is_write(bio_op(bio)));
+	bio_for_each_segment(bvec, bio, iter) {
+		blk_status_t st;
+
+		st = diff_area_image_io(&io_ctx, &bvec, &pos);
+		if (unlikely(st != BLK_STS_OK))
 			break;
 	}
 	diff_area_image_ctx_done(&io_ctx);
-
-	blk_mq_end_request(rq, status);
+	bio_endio(bio);
 }
 
-static int snapimage_init_request(struct blk_mq_tag_set *set,
-				  struct request *rq, unsigned int hctx_idx,
-				  unsigned int numa_node)
+#ifdef HAVE_QC_SUBMIT_BIO
+static blk_qc_t snapimage_submit_bio(struct bio *bio)
 {
-	struct snapimage_cmd *cmd = blk_mq_rq_to_pdu(rq);
-
-	kthread_init_work(&cmd->work, snapimage_queue_work);
-	return 0;
-}
-
-/*
- * Cannot fall asleep in the context of this function, as we are under
- * rwsem lockdown.
- */
-static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
-				       const struct blk_mq_queue_data *bd)
+	blk_qc_t ret = BLK_QC_T_NONE;
+#else
+static void snapimage_submit_bio(struct bio *bio)
 {
-	int ret;
-	struct request *rq = bd->rq;
-	struct snapimage *snapimage = rq->q->queuedata;
-	struct snapimage_cmd *cmd = blk_mq_rq_to_pdu(rq);
+#endif
+#ifdef HAVE_BI_BDEV
+	struct snapimage *snapimage = bio->bi_bdev->bd_disk->private_data;
+#endif
+#ifdef HAVE_BI_BDISK
+	struct snapimage *snapimage = bio->bi_disk->private_data;
+#endif
+	struct snapimage_bio_prefix *pfx =
+		container_of(bio, struct snapimage_bio_prefix, bio[0]);
 
-	blk_mq_start_request(rq);
+	kthread_init_work(&pfx->work, snapimage_process_bio);
+	kthread_queue_work(&snapimage->worker, &pfx->work);
 
-	if (unlikely(!snapimage->is_ready)) {
-		blk_mq_end_request(rq, BLK_STS_NOSPC);
-		return BLK_STS_NOSPC;
-	}
-
-	if (op_is_write(req_op(rq))) {
-		ret = cbt_map_set_both(snapimage->cbt_map, blk_rq_pos(rq),
-				       blk_rq_sectors(rq));
-		if (unlikely(ret)) {
-			blk_mq_end_request(rq, BLK_STS_IOERR);
-			return BLK_STS_IOERR;
-		}
-	}
-
-	kthread_queue_work(&snapimage->worker, &cmd->work);
-	return BLK_STS_OK;
+#ifdef HAVE_QC_SUBMIT_BIO
+	return ret;
 }
-
-static const struct blk_mq_ops mq_ops = {
-	.queue_rq = snapimage_queue_rq,
-	.init_request = snapimage_init_request,
-};
+#else
+}
+#endif
 
 const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
+	.submit_bio = snapimage_submit_bio
 };
-
-static inline int snapimage_alloc_tag_set(struct snapimage *snapimage)
-{
-	struct blk_mq_tag_set *set = &snapimage->tag_set;
-
-	set->ops = &mq_ops;
-	set->nr_hw_queues = 1;
-	set->nr_maps = 1;
-	set->queue_depth = 128;
-	set->numa_node = NUMA_NO_NODE;
-	set->flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;
-
-	set->cmd_size = sizeof(struct snapimage_cmd);
-	set->driver_data = snapimage;
-
-	return blk_mq_alloc_tag_set(set);
-}
 
 void snapimage_free(struct snapimage *snapimage)
 {
@@ -188,18 +161,16 @@ void snapimage_free(struct snapimage *snapimage)
 	snapimage_unprepare_worker(snapimage);
 
 	del_gendisk(snapimage->disk);
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
+#ifdef HAVE_BLK_ALLOC_DISK
 #ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(snapimage->disk);
 #else
 	put_disk(snapimage->disk);
 #endif
 #else
-	blk_cleanup_queue(snapimage->queue);
+	blk_cleanup_queue(snapimage->disk->queue);
 	put_disk(snapimage->disk);
 #endif
-	blk_mq_free_tag_set(&snapimage->tag_set);
-
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
 
@@ -208,6 +179,27 @@ void snapimage_free(struct snapimage *snapimage)
 	memory_object_dec(memory_object_snapimage);
 }
 
+#ifndef HAVE_BLK_ALLOC_DISK
+static inline struct gendisk *blk_alloc_disk(int node)
+{
+	struct request_queue *q;
+	struct gendisk *disk;
+
+	q = blk_alloc_queue(node);
+	if (!q)
+		return NULL;
+
+	disk = __alloc_disk_node(0, node);
+	if (!disk) {
+		blk_cleanup_queue(q);
+		return NULL;
+	}
+	disk->queue = q;
+
+	return disk;
+}
+#endif
+
 struct snapimage *snapimage_create(struct diff_area *diff_area,
 				   struct cbt_map *cbt_map)
 {
@@ -215,9 +207,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	int minor;
 	struct snapimage *snapimage = NULL;
 	struct gendisk *disk;
-#ifndef HAVE_BLK_MQ_ALLOC_DISK
-	struct request_queue *queue;
-#endif
 
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
@@ -246,39 +235,13 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		goto fail_free_minor;
 	}
 
-	ret = snapimage_alloc_tag_set(snapimage);
-	if (ret) {
-		pr_err("Failed to allocate tag set. errno=%d\n", abs(ret));
-		goto fail_free_worker;
-	}
-
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-	disk = blk_mq_alloc_disk(&snapimage->tag_set, snapimage);
-	if (IS_ERR(disk)) {
-		ret = PTR_ERR(disk);
-		pr_err("Failed to allocate disk. errno=%d\n", abs(ret));
-		goto fail_free_tagset;
-	}
-#else
-	queue = blk_mq_init_queue(&snapimage->tag_set);
-	if (IS_ERR(queue)) {
-		ret = PTR_ERR(queue);
-		pr_err("Failed to allocate queue. errno=%d\n", abs(ret));
-		goto fail_free_tagset;
-	}
-
-	disk = alloc_disk(1);
+	disk = blk_alloc_disk(NUMA_NO_NODE);
 	if (!disk) {
 		pr_err("Failed to allocate disk\n");
-		goto fail_free_queue;
+		ret = -ENOMEM;
+		goto fail_free_worker;
 	}
-	disk->queue = queue;
-
-	snapimage->queue = queue;
-	snapimage->queue->queuedata = snapimage;
-
-	blk_queue_bounce_limit(snapimage->queue, BLK_BOUNCE_HIGH);
-#endif
+	snapimage->disk = disk;
 
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
@@ -304,7 +267,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;
-	snapimage->disk = disk;
 
 	set_capacity(disk, snapimage->capacity);
 	pr_debug("Snapshot image device capacity %lld bytes\n",
@@ -328,7 +290,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	return snapimage;
 
 fail_cleanup_disk:
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
+#ifdef HAVE_BLK_ALLOC_DISK
 #ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(disk);
 #else
@@ -336,11 +298,7 @@ fail_cleanup_disk:
 #endif
 #else
 	del_gendisk(disk);
-fail_free_queue:
-	blk_cleanup_queue(queue);
 #endif
-fail_free_tagset:
-	blk_mq_free_tag_set(&snapimage->tag_set);
 fail_free_worker:
 	snapimage_unprepare_worker(snapimage);
 fail_free_minor:
@@ -353,23 +311,33 @@ fail_free_image:
 
 int snapimage_init(void)
 {
-	int mj = 0;
+	int ret = 0;
 
-	mj = register_blkdev(mj, BLK_SNAP_IMAGE_NAME);
-	if (mj < 0) {
-		pr_err("Failed to register snapshot image block device. errno=%d\n",
-		       abs(mj));
-		return mj;
+	ret = register_blkdev(0, BLK_SNAP_IMAGE_NAME);
+	if (ret < 0) {
+		pr_err("Failed to register snapshot image block device\n");
+		return ret;
 	}
-	_major = mj;
+
+	_major = ret;
 	pr_info("Snapshot image block device major %d was registered\n",
 		_major);
 
-	return 0;
+	ret = bioset_init(&snapimage_bioset, 64,
+			  sizeof(struct snapimage_bio_prefix),
+			  BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
+	if (ret) {
+		pr_err("Failed to initialize bioset\n");
+		unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
+	}
+
+	return ret;
 }
 
 void snapimage_done(void)
 {
+	bioset_exit(&snapimage_bioset);
+
 	unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
 	pr_info("Snapshot image block device [%d] was unregistered\n", _major);
 
