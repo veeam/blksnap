@@ -41,6 +41,7 @@ static const struct blk_snap_version version = {
 	.build = VERSION_BUILD,
 };
 
+#ifdef BLK_SNAP_MODIFICATION
 static const struct blk_snap_mod modification = {
 	.name = MOD_NAME,
 	.compatibility_flags =
@@ -52,6 +53,7 @@ static const struct blk_snap_mod modification = {
 #endif
 	0
 };
+#endif
 
 int get_blk_snap_major(void)
 {
