@@ -216,10 +216,11 @@ static struct snapshot *snapshot_new(unsigned int count)
 	return snapshot;
 
 fail_free_snapimage:
-	kfree(snapshot->snapimage_array);
-	if (snapshot->snapimage_array)
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	kfree(snapshot->superblock_array);
+	if (snapshot->superblock_array)
 		memory_object_dec(memory_object_superblock_array);
-
+#endif
 	kfree(snapshot->snapimage_array);
 	if (snapshot->snapimage_array)
 		memory_object_dec(memory_object_snapimage_array);
