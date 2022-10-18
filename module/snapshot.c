@@ -45,9 +45,7 @@ static void snapshot_release(struct snapshot *snapshot)
 
 	/* Flush and freeze fs on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug(
-		"DEBUG! %s - flush and freeze fs on each original block device\n",
-		__FUNCTION__);
+	pr_debug("Flush and freeze fs on each original block device\n");
 #endif
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
@@ -453,9 +451,7 @@ int snapshot_take(uuid_t *id)
 
 	/* Try to flush and freeze file system on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug(
-		"DEBUG! %s - try to flush and freeze file system on each original block device\n",
-		__FUNCTION__);
+	pr_debug("Try to flush and freeze file system on each original block device\n");
 #endif
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
