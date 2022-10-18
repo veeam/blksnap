@@ -25,23 +25,78 @@
 LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
 
-static void snapshot_release(struct snapshot *snapshot)
+#if defined(BLK_SNAP_SEQUENTALFREEZE)
+/**
+ * snapshot_release_trackers - Releases snapshots trackers
+ *
+ * The sequential algorithm allows to freeze block devices one at a time.
+ */
+static void snapshot_release_trackers(struct snapshot *snapshot)
+{
+	int inx;
+
+	pr_info("Sequentially release snapshots trackers\n");
+
+	for (inx = 0; inx < snapshot->count; ++inx) {
+		struct tracker *tracker = snapshot->tracker_array[inx];
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		struct super_block *sb = NULL;
+#else
+		bool is_frozen = false;
+#endif
+		if (!tracker || !tracker->diff_area)
+			continue;
+
+#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
+		pr_debug("\tfor device [%u:%u]\n",
+			MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
+		/* Flush and freeze fs */
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_freeze_bdev(tracker->diff_area->orig_bdev, &sb);
+#else
+		if (freeze_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to freeze device [%u:%u]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else {
+			is_frozen = true;
+			pr_debug("Device [%u:%u] was frozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		}
+#endif
+
+		/* Set tracker as available for new snapshots. */
+		tracker_lock();
+		tracker_release_snapshot(tracker);
+		tracker_unlock();
+
+		/* Thaw fs */
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_thaw_bdev(tracker->diff_area->orig_bdev, sb);
+#else
+		if (!is_frozen)
+			continue;
+		if (thaw_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to thaw device [%u:%u]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was unfrozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
+	}
+}
+
+#else /* BLK_SNAP_SEQUENTALFREEZE */
+
+/**
+ * snapshot_release_trackers - Releases snapshots trackers
+ *
+ * The simultaneous algorithm allows to freeze all the snapshot block devices.
+ */
+static void snapshot_release_trackers(struct snapshot *snapshot)
 {
 	int inx;
 	unsigned int current_flag;
-
-	pr_info("Release snapshot %pUb\n", &snapshot->id);
-
-	/* Destroy all snapshot images. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - destroy all snapshot images\n", __FUNCTION__);
-#endif
-	for (inx = 0; inx < snapshot->count; ++inx) {
-		struct snapimage *snapimage = snapshot->snapimage_array[inx];
-
-		if (snapimage)
-			snapimage_free(snapimage);
-	}
 
 	/* Flush and freeze fs on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -71,8 +126,7 @@ static void snapshot_release(struct snapshot *snapshot)
 
 	/* Set tracker as available for new snapshots. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - Set tracker as available for new snapshots",
-		 __FUNCTION__);
+	pr_debug("Set tracker as available for new snapshots");
 #endif
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
@@ -82,8 +136,7 @@ static void snapshot_release(struct snapshot *snapshot)
 
 	/* Thaw fs on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - thaw fs on each original block device",
-		 __FUNCTION__);
+	pr_debug("Thaw fs on each original block device");
 #endif
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
@@ -103,11 +156,32 @@ static void snapshot_release(struct snapshot *snapshot)
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 	}
+}
+
+#endif /* BLK_SNAP_SEQUENTALFREEZE */
+
+static void snapshot_release(struct snapshot *snapshot)
+{
+	int inx;
+
+	pr_info("Release snapshot %pUb\n", &snapshot->id);
+
+	/* Destroy all snapshot images. */
+#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
+	pr_debug("Destroy all snapshot images\n");
+#endif
+	for (inx = 0; inx < snapshot->count; ++inx) {
+		struct snapimage *snapimage = snapshot->snapimage_array[inx];
+
+		if (snapimage)
+			snapimage_free(snapimage);
+	}
+
+	snapshot_release_trackers(snapshot);
 
 	/* Destroy diff area for each tracker. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - destroy diff area for each tracker",
-		 __FUNCTION__);
+	pr_debug("Destroy diff area for each tracker");
 #endif
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
@@ -138,7 +212,7 @@ static void snapshot_free(struct kref *kref)
 	if (snapshot->tracker_array)
 		memory_object_dec(memory_object_tracker_array);
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
+#if defined(HAVE_SUPER_BLOCK_FREEZE) && !defined(BLK_SNAP_SEQUENTALFREEZE)
 	if (snapshot->superblock_array) {
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 		pr_debug("DEBUG! %s free superblocks\n", __FUNCTION__);
@@ -192,7 +266,7 @@ static struct snapshot *snapshot_new(unsigned int count)
 	}
 	memory_object_inc(memory_object_snapimage_array);
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
+#if defined(HAVE_SUPER_BLOCK_FREEZE) && !defined(BLK_SNAP_SEQUENTALFREEZE)
 	snapshot->superblock_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!snapshot->superblock_array) {
 		ret = -ENOMEM;
@@ -214,7 +288,7 @@ static struct snapshot *snapshot_new(unsigned int count)
 	return snapshot;
 
 fail_free_snapimage:
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
+#if defined(HAVE_SUPER_BLOCK_FREEZE) && !defined(BLK_SNAP_SEQUENTALFREEZE)
 	kfree(snapshot->superblock_array);
 	if (snapshot->superblock_array)
 		memory_object_dec(memory_object_superblock_array);
@@ -411,43 +485,149 @@ int snapshot_append_storage(uuid_t *id, struct blk_snap_dev_t dev_id,
 	return ret;
 }
 
-int snapshot_take(uuid_t *id)
+#if defined(BLK_SNAP_SEQUENTALFREEZE)
+
+/**
+ * snapshot_take_trackers - Take tracker for snapshot
+ *
+ * The sequential algorithm allows to freeze block devices one at a time.
+ */
+static int snapshot_take_trackers(struct snapshot *snapshot)
 {
 	int ret = 0;
-	struct snapshot *snapshot;
 	int inx;
 	unsigned int current_flag;
 
-	snapshot = snapshot_get_by_id(id);
-	if (!snapshot)
-		return -ESRCH;
-
-	if (snapshot->is_taken) {
-		ret = -EALREADY;
-		goto out;
-	}
-
-	if (!snapshot->count) {
-		ret = -ENODEV;
-		goto out;
-	}
-
-	/* Allocate diff area for each device in the snapshot. */
+	/* Try to flush and freeze file system on each original block device. */
+#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
+	pr_debug("Try to flush and freeze file system on each original block device\n");
+#endif
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
-		struct diff_area *diff_area;
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		struct super_block *sb;
+#else
+		bool is_frozen = false;
+#endif
+		struct block_device *orig_bdev;
 
 		if (!tracker)
 			continue;
 
-		diff_area =
-			diff_area_new(tracker->dev_id, snapshot->diff_storage);
-		if (IS_ERR(diff_area)) {
-			ret = PTR_ERR(diff_area);
-			goto fail;
+		orig_bdev = tracker->diff_area->orig_bdev;
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_freeze_bdev(orig_bdev, &sb);
+#else
+		if (freeze_bdev(orig_bdev))
+			pr_err("Failed to freeze device [%u:%u]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else {
+			is_frozen = true;
+			pr_debug("Device [%u:%u] was frozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		}
-		tracker->diff_area = diff_area;
+#endif
+
+		current_flag = memalloc_noio_save();
+		tracker_lock();
+
+		/*
+		 * Take snapshot - switch CBT tables and enable COW logic
+		 * for each tracker.
+		 */
+#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
+		pr_debug("Switch CBT tables and enable COW logic for each tracker\n");
+#endif
+		ret = tracker_take_snapshot(tracker);
+		if (ret) {
+			pr_err("Unable to take snapshot: failed to capture snapshot %pUb\n",
+			       &snapshot->id);
+			break;
+		}
+
+		tracker_unlock();
+		memalloc_noio_restore(current_flag);
+
+		/* Thaw file systems on original block devices. */
+#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
+		pr_debug("Thaw file systems on original block devices\n");
+#endif
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_thaw_bdev(orig_bdev, sb);
+#else
+		if (!is_frozen)
+			continue;
+		if (thaw_bdev(orig_bdev))
+			pr_err("Failed to thaw device [%u:%u]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was unfrozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
 	}
+
+	if (!ret) {
+		snapshot->is_taken = true;
+		return 0;
+	}
+
+#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
+	pr_debug("Release taked trackers\n");
+#endif
+	while (inx--) {
+		struct tracker *tracker = snapshot->tracker_array[inx];
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		struct super_block *sb;
+#endif
+
+		if (!tracker)
+			continue;
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_freeze_bdev(tracker->diff_area->orig_bdev, &sb);
+#else
+		if (freeze_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to freeze device [%u:%u]\n",
+			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was frozen\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
+
+		tracker_lock();
+		tracker_release_snapshot(tracker);
+		tracker_unlock();
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_thaw_bdev(tracker->diff_area->orig_bdev, sb);
+#else
+		if (thaw_bdev(tracker->diff_area->orig_bdev))
+			pr_err("Failed to thaw device [%u:%u]\n",
+			       MAJOR(tracker->dev_id),
+			       MINOR(tracker->dev_id));
+		else
+			pr_debug("Device [%u:%u] was unfrozen\n",
+				MAJOR(tracker->dev_id),
+				MINOR(tracker->dev_id));
+#endif
+	}
+
+	return ret;
+}
+#else /* BLK_SNAP_SEQUENTALFREEZE */
+
+/**
+ * snapshot_take_trackers - Take tracker for snapshot
+ *
+ * The simultaneous algorithm allows to freeze all the snapshot block devices.
+ */
+
+static int snapshot_take_trackers(struct snapshot *snapshot)
+{
+	int ret = 0;
+	int inx;
+	unsigned int current_flag;
 
 	/* Try to flush and freeze file system on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -480,26 +660,23 @@ int snapshot_take(uuid_t *id)
 	 * for each tracker.
 	 */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug(
-		"DEBUG! %s - switch CBT tables and enable COW logic for each tracker\n",
-		__FUNCTION__);
+	pr_debug("Switch CBT tables and enable COW logic for each tracker\n");
 #endif
-
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (!snapshot->tracker_array[inx])
 			continue;
+
 		ret = tracker_take_snapshot(snapshot->tracker_array[inx]);
 		if (ret) {
 			pr_err("Unable to take snapshot: failed to capture snapshot %pUb\n",
 			       &snapshot->id);
-
 			break;
 		}
 	}
 
 	if (ret) {
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-		pr_debug("DEBUG! %s - release taked snapshots\n", __FUNCTION__);
+		pr_debug("Release taked snapshots\n");
 #endif
 		while (inx--) {
 			struct tracker *tracker = snapshot->tracker_array[inx];
@@ -515,8 +692,7 @@ int snapshot_take(uuid_t *id)
 
 	/* Thaw file systems on original block devices. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - thaw file systems on original block devices\n",
-		 __FUNCTION__);
+	pr_debug("Thaw file systems on original block devices\n");
 #endif
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
@@ -537,6 +713,48 @@ int snapshot_take(uuid_t *id)
 #endif
 	}
 
+	return ret;
+}
+#endif /* BLK_SNAP_SEQUENTALFREEZE */
+
+int snapshot_take(uuid_t *id)
+{
+	int ret = 0;
+	struct snapshot *snapshot;
+	int inx;
+
+	snapshot = snapshot_get_by_id(id);
+	if (!snapshot)
+		return -ESRCH;
+
+	if (snapshot->is_taken) {
+		ret = -EALREADY;
+		goto out;
+	}
+
+	if (!snapshot->count) {
+		ret = -ENODEV;
+		goto out;
+	}
+
+	/* Allocate diff area for each device in the snapshot. */
+	for (inx = 0; inx < snapshot->count; inx++) {
+		struct tracker *tracker = snapshot->tracker_array[inx];
+		struct diff_area *diff_area;
+
+		if (!tracker)
+			continue;
+
+		diff_area =
+			diff_area_new(tracker->dev_id, snapshot->diff_storage);
+		if (IS_ERR(diff_area)) {
+			ret = PTR_ERR(diff_area);
+			goto fail;
+		}
+		tracker->diff_area = diff_area;
+	}
+
+	ret = snapshot_take_trackers(snapshot);
 	if (ret)
 		goto fail;
 
