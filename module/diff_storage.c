@@ -19,6 +19,10 @@
 #include "log.h"
 #endif
 
+#ifndef PAGE_SECTORS
+#define PAGE_SECTORS	(1 << (PAGE_SHIFT - SECTOR_SHIFT))
+#endif
+
 /**
  * struct storage_bdev - Information about the opened block device.
  */
@@ -47,8 +51,7 @@ static inline void diff_storage_event_low(struct diff_storage *diff_storage)
 	};
 
 	diff_storage->requested += data.requested_nr_sect;
-	pr_debug(
-		"Diff storage low free space. Portion: %llu sectors, requested: %llu\n",
+	pr_debug("Diff storage low free space. Portion: %llu sectors, requested: %llu\n",
 		data.requested_nr_sect, diff_storage->requested);
 	event_gen(&diff_storage->event_queue, GFP_NOIO,
 		  blk_snap_event_code_low_free_space, &data, sizeof(data));
@@ -248,6 +251,11 @@ int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
 	return 0;
 }
 
+static inline bool is_halffull(const sector_t sectors_left)
+{
+	return sectors_left <= ((diff_storage_minimum >> 1) & ~(PAGE_SECTORS - 1));
+}
+
 struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 					   sector_t count)
 {
@@ -319,7 +327,7 @@ struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
 		return ERR_PTR(ret);
 	}
 
-	if ((sectors_left <= diff_storage_minimum) &&
+	if (is_halffull(sectors_left) &&
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1))
 		diff_storage_event_low(diff_storage);
 
