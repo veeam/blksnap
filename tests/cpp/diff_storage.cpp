@@ -21,6 +21,14 @@ using blksnap::SRange;
 
 int g_blksz = 512;
 
+//#define PAGE_SECTORS_SHIFT  (PAGE_SHIFT - SECTOR_SHIFT)
+//#define PAGE_SECTORS        (1 << PAGE_SECTORS_SHIFT)
+sector_t page_sectors = 4096 / 512;
+
+//#define SECTOR_MASK     (PAGE_SECTORS - 1)
+sector_t sector_mask = (4096 / 512) - 1;
+
+
 void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>& diffStorageRanges,
     const int granularity, const sector_t deviceSize)
 {
@@ -29,7 +37,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
 
     for (int inx=0; inx<granularity; inx++)
     {
-        sector_t sector = static_cast<sector_t>(std::rand() * scaling) & ~7ull;
+        sector_t sector = static_cast<sector_t>(std::rand() * scaling) & ~sector_mask;
 
         if ((sector == 0) || (sector > deviceSize))
             continue;
@@ -48,7 +56,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
         if (clipSize <= 16)
             continue;
 
-        int diffStoreRangeSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 1))) & ~7ull;
+        int diffStoreRangeSize = (page_sectors + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 1))) & ~sector_mask;
 
         availableRanges.emplace_back(prevOffset, clipSize - diffStoreRangeSize);
         diffStorageRanges.emplace_back(currentOffset - diffStoreRangeSize, diffStoreRangeSize);
@@ -195,7 +203,7 @@ static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
         SRange rg;
 
         rg.sector = static_cast<sector_t>(std::rand() * offsetScaling) & blockSizeMask;
-        rg.count = (8 + std::rand() / blockSizeScaling) & blockSizeMask;
+        rg.count = (page_sectors + std::rand() / blockSizeScaling) & blockSizeMask;
 
         if (!NormalizeRange(availableRanges, rg))
             continue;
@@ -396,6 +404,12 @@ void Main(int argc, char* argv[])
 
     g_blksz = vm["blksz"].as<int>();
     logger.Info("blksz: " + std::to_string(g_blksz));
+
+    if (g_blksz < getpagesize())
+        throw std::invalid_argument("Block size cannot be less than page size '"+std::to_string(getpagesize())+"'.");
+
+    page_sectors = getpagesize() / 512;
+    sector_mask = page_sectors - 1;
 
     std::srand(std::time(0));
     CheckDiffStorage(origDevName, duration * 60, isSync);
