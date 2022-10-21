@@ -365,6 +365,7 @@ void Main(int argc, char* argv[])
             "Directory name for allocating diff storage files.")
         ("duration,u", po::value<int>(), "The test duration limit in minutes.")
         ("sync", "Use O_SYNC for access to original device.")
+        ("blksz", po::value<int>()->default_value(512), "Align reads and writes to the block size.")
         ("chunksize", po::value<int>(), "The size of chunks buffer.")
         ;
     po::variables_map vm;
@@ -404,6 +405,9 @@ void Main(int argc, char* argv[])
     int chunkSize = 256*1024;
     if (vm.count("chunksize"))
         chunkSize = vm["chunksize"].as<int>();
+
+    g_blksz = vm["blksz"].as<int>();
+    logger.Info("blksz: " + std::to_string(g_blksz));
 
     try
     {
