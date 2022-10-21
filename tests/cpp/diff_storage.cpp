@@ -360,11 +360,11 @@ void Main(int argc, char* argv[])
 
     desc.add_options()
         ("help,h", "Show usage information.")
-        ("log,l", po::value<std::string>(),"Detailed log of all transactions.")
+        ("log,l", po::value<std::string>()->default_value("/var/log/blksnap_diff_storage.log"), "Detailed log of all transactions.")
         ("device,d", po::value<std::string>(), "Device name. ")
-        ("duration,u", po::value<int>(), "The test duration limit in minutes.")
+        ("duration,u", po::value<int>()->default_value(5), "The test duration limit in minutes.")
         ("sync", "Use O_SYNC for access to original device.")
-        ("blksz", po::value<int>(), "Align reads and writes to the block size.");
+        ("blksz", po::value<int>()->default_value(512), "Align reads and writes to the block size.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
@@ -377,26 +377,25 @@ void Main(int argc, char* argv[])
         return;
     }
 
-    if (vm.count("log"))
-    {
-        std::string filename = vm["log"].as<std::string>();
-        logger.Open(filename);
-    }
+    logger.Info("Parameters:");
+
+    std::string log = vm["log"].as<std::string>();
+    logger.Info("log: " + log);
+    logger.Open(log);
 
     if (!vm.count("device"))
         throw std::invalid_argument("Argument 'device' is missed.");
     std::string origDevName = vm["device"].as<std::string>();
+    logger.Info("device: " + origDevName);
 
-    int duration = 5;
-    if (vm.count("duration"))
-        duration = vm["duration"].as<int>();
+    int duration = vm["duration"].as<int>();
+    logger.Info("duration: " + std::to_string(duration));
 
-    bool isSync = false;
-    if (vm.count("sync"))
-        isSync = true;
+    bool isSync = !!(vm.count("sync"));
+    logger.Info("sync: " + std::to_string(isSync));
 
-    if (vm.count("blksz"))
-        g_blksz = vm["duration"].as<int>();
+    g_blksz = vm["blksz"].as<int>();
+    logger.Info("blksz: " + std::to_string(g_blksz));
 
     std::srand(std::time(0));
     CheckDiffStorage(origDevName, duration * 60, isSync);
