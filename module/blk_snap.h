@@ -3,7 +3,6 @@
 #define __LINUX_BLK_SNAP_H
 
 #include <linux/types.h>
-#include <linux/uuid.h>
 
 #define BLK_SNAP_CTL "/dev/blksnap"
 #define BLK_SNAP_IMAGE_NAME "blksnap-image"
