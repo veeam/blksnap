@@ -116,7 +116,7 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area,
 
 	/* Allocate new buffer */
 	chunk_sectors = diff_area_chunk_sectors(diff_area);
-	page_count = round_up(chunk_sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
+	page_count = round_up(chunk_sectors, PAGE_SECTORS) / PAGE_SECTORS;
 	buffer_size = chunk_sectors << SECTOR_SHIFT;
 
 	diff_buffer =

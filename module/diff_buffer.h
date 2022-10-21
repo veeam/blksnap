@@ -49,7 +49,9 @@ struct diff_buffer_iter {
 	size_t bytes;
 };
 
-#define SECTOR_IN_PAGE (1 << (PAGE_SHIFT - SECTOR_SHIFT))
+#ifndef PAGE_SECTORS
+#define PAGE_SECTORS (1 << (PAGE_SHIFT - SECTOR_SHIFT))
+#endif
 
 static inline bool diff_buffer_iter_get(struct diff_buffer *diff_buffer,
 					size_t buff_offset,

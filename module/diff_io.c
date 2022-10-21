@@ -121,7 +121,7 @@ static inline bool check_page_aligned(sector_t sector)
 
 static inline unsigned short calc_page_count(sector_t sectors)
 {
-	return round_up(sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
+	return round_up(sectors, PAGE_SECTORS) / PAGE_SECTORS;
 }
 
 #ifdef HAVE_BIO_MAX_PAGES
