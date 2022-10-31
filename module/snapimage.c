@@ -17,7 +17,7 @@
 #include "log.h"
 #endif
 
-#define SNAPIMAGE_MAX_DEVICES 2048
+#define NR_SNAPIMAGE_DEVT	(1 << MINORBITS)
 
 struct snapimage_bio_prefix
 {
@@ -26,36 +26,9 @@ struct snapimage_bio_prefix
 };
 
 static unsigned int _major;
-static DEFINE_IDR(_minor_idr);
-static DEFINE_SPINLOCK(_minor_lock);
+static DEFINE_IDA(snapimage_devt_ida);
 
 struct bio_set snapimage_bioset;
-
-static void free_minor(int minor)
-{
-	spin_lock(&_minor_lock);
-	idr_remove(&_minor_idr, minor);
-	spin_unlock(&_minor_lock);
-}
-
-static int new_minor(int *minor, void *ptr)
-{
-	int ret;
-
-	idr_preload(GFP_KERNEL);
-	spin_lock(&_minor_lock);
-
-	ret = idr_alloc(&_minor_idr, ptr, 0, 1 << MINORBITS, GFP_NOWAIT);
-
-	spin_unlock(&_minor_lock);
-	idr_preload_end();
-
-	if (ret < 0)
-		return ret;
-
-	*minor = ret;
-	return 0;
-}
 
 static inline void snapimage_unprepare_worker(struct snapimage *snapimage)
 {
@@ -174,7 +147,7 @@ void snapimage_free(struct snapimage *snapimage)
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
 
-	free_minor(MINOR(snapimage->image_dev_id));
+	ida_free(&snapimage_devt_ida, MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
 	memory_object_dec(memory_object_snapimage);
 }
@@ -213,8 +186,10 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		return ERR_PTR(-ENOMEM);
 	memory_object_inc(memory_object_snapimage);
 
-	ret = new_minor(&minor, snapimage);
-	if (ret) {
+	minor = ida_alloc_range(&snapimage_devt_ida, 0, NR_SNAPIMAGE_DEVT - 1,
+				GFP_KERNEL);
+	if (minor < 0) {
+		ret = minor;
 		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
 		       abs(ret));
 		goto fail_free_image;
@@ -302,7 +277,7 @@ fail_cleanup_disk:
 fail_free_worker:
 	snapimage_unprepare_worker(snapimage);
 fail_free_minor:
-	free_minor(minor);
+	ida_free(&snapimage_devt_ida, minor);
 fail_free_image:
 	kfree(snapimage);
 	memory_object_dec(memory_object_snapimage);
@@ -340,8 +315,6 @@ void snapimage_done(void)
 
 	unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
 	pr_info("Snapshot image block device [%d] was unregistered\n", _major);
-
-	idr_destroy(&_minor_idr);
 }
 
 int snapimage_major(void)
