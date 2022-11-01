@@ -125,14 +125,17 @@ module_exit(blk_snap_exit);
 
 /*
  * The power of 2 for minimum tracking block size.
- * The minimum tracking block size by default is 64 KB (shift 16)
- * It's looks good for block device 128 GB or lower.
- * In this case, the block device is divided into 2097152 blocks.
+ * If we make the tracking block size small, we will get detailed information
+ * about the changes, but the size of the change tracker table will be too
+ * large, which will lead to inefficient memory usage.
  */
 int tracking_block_minimum_shift = 16;
 
 /*
- * The limit of the maximum number of tracking blocks.
+ * The maximum number of tracking blocks.
+ * A table is created to store information about the status of all tracking
+ * blocks in RAM. So, if the size of the tracking block is small, then the size
+ * of the table turns out to be large and memory is consumed inefficiently.
  * As the size of the block device grows, the size of the tracking block
  * size should also grow. For this purpose, the limit of the maximum
  * number of block size is set.
@@ -140,19 +143,27 @@ int tracking_block_minimum_shift = 16;
 int tracking_block_maximum_count = 2097152;
 
 /*
- * The minimum chunk size is 256 KB (shift 18).
- * It's looks good for block device 128 GB or lower.
- * In this case, the block device is divided into 524288 chunks.
+ * The power of 2 for minimum chunk size.
+ * The size of the chunk depends on how much data will be copied to the
+ * difference storage when at least one sector of the block device is changed.
+ * If the size is small, then small I/O units will be generated, which will
+ * reduce performance. Too large a chunk size will lead to inefficient use of
+ * the difference storage.
  */
 int chunk_minimum_shift = 18;
 
 /*
+ * The maximum number of chunks.
+ * To store information about the state of all the chunks, a table is created
+ * in RAM. So, if the size of the chunk is small, then the size of the table
+ * turns out to be large and memory is consumed inefficiently.
  * As the size of the block device grows, the size of the chunk should also
- * grow. For this purpose, the limit of the maximum number of chunks is set.
+ * grow. For this purpose, the maximum number of chunks is set.
  */
 int chunk_maximum_count = 2097152;
 
 /*
+ * The maximum number of chunks in memory cache.
  * Since reading and writing to snapshots is performed in large chunks,
  * a cache is implemented to optimize reading small portions of data
  * from the snapshot image. As the number of chunks in the cache
@@ -162,43 +173,45 @@ int chunk_maximum_count = 2097152;
 int chunk_maximum_in_cache = 32;
 
 /*
+ * The size of the pool of preallocated difference buffers.
  * A buffer can be allocated for each chunk. After use, this buffer is not
  * released immediately, but is sent to the pool of free buffers.
- * However, if there are too many free buffers in the pool, they are released
- * immediately. The maximum size of the pool is regulated by this define.
+ * However, if there are too many free buffers in the pool, then these free
+ * buffers will be released immediately.
  */
 int free_diff_buffer_pool_size = 128;
 
 /*
  * The minimum allowable size of the difference storage in sectors.
- * When reached, an event is generated about the lack of free space.
+ * The difference storage is a part of the disk space allocated for storing
+ * snapshot data. If there is less free space in the storage than the minimum,
+ * an event is generated about the lack of free space.
  */
 int diff_storage_minimum = 2097152;
 
 module_param_named(tracking_block_minimum_shift, tracking_block_minimum_shift,
 		   int, 0644);
 MODULE_PARM_DESC(tracking_block_minimum_shift,
-		 "The power of 2 for minimum trackings block size");
+		 "The power of 2 for minimum tracking block size");
 module_param_named(tracking_block_maximum_count, tracking_block_maximum_count,
 		   int, 0644);
 MODULE_PARM_DESC(tracking_block_maximum_count,
-		 "The limit of the maximum number of trackings blocks");
+		 "The maximum number of tracking blocks");
 module_param_named(chunk_minimum_shift, chunk_minimum_shift, int, 0644);
 MODULE_PARM_DESC(chunk_minimum_shift,
-		 "The power of 2 for minimum snapshots chunk size");
+		 "The power of 2 for minimum chunk size");
 module_param_named(chunk_maximum_count, chunk_maximum_count, int, 0644);
 MODULE_PARM_DESC(chunk_maximum_count,
-		 "The limit of the maximum number of snapshots chunks");
+		 "The maximum number of chunks");
 module_param_named(chunk_maximum_in_cache, chunk_maximum_in_cache, int, 0644);
 MODULE_PARM_DESC(chunk_maximum_in_cache,
-		 "The limit of the maximum chunks in memory cache");
+		 "The maximum number of chunks in memory cache");
 module_param_named(free_diff_buffer_pool_size, free_diff_buffer_pool_size, int,
 		   0644);
 MODULE_PARM_DESC(free_diff_buffer_pool_size,
-		 "The maximum size of the free buffers pool");
+		 "The size of the pool of preallocated difference buffers");
 module_param_named(diff_storage_minimum, diff_storage_minimum, int, 0644);
-MODULE_PARM_DESC(
-	diff_storage_minimum,
+MODULE_PARM_DESC(diff_storage_minimum,
 	"The minimum allowable size of the difference storage in sectors");
 
 MODULE_DESCRIPTION("Block Layer Snapshot Kernel Module");
