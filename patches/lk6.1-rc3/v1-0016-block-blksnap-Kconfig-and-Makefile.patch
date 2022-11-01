@@ -1,0 +1,60 @@
+From a4bf4a1e0fdf20db275e7ee8f4e6c2c6837b9c26 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Tue, 1 Nov 2022 14:31:50 +0100
+Subject: [PATCH v1 16/17] block, blksnap: Kconfig and Makefile
+
+Allows to build a module.
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/blksnap/Kconfig  | 12 ++++++++++++
+ drivers/block/blksnap/Makefile | 18 ++++++++++++++++++
+ 2 files changed, 30 insertions(+)
+ create mode 100644 drivers/block/blksnap/Kconfig
+ create mode 100644 drivers/block/blksnap/Makefile
+
+diff --git a/drivers/block/blksnap/Kconfig b/drivers/block/blksnap/Kconfig
+new file mode 100644
+index 000000000000..3a6ecb5fc13d
+--- /dev/null
++++ b/drivers/block/blksnap/Kconfig
+@@ -0,0 +1,12 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Block device snapshot module configuration
++#
++
++config BLK_SNAP
++	tristate "Module for snapshots of block devices."
++	help
++	  Allow to create snapshots and track block changes for block devices.
++	  Designed for creating backups for a simple block devices. Snapshots
++	  are temporary and are released then backup is completed. Change block
++	  tracking allows to create incremental or differential backups.
+diff --git a/drivers/block/blksnap/Makefile b/drivers/block/blksnap/Makefile
+new file mode 100644
+index 000000000000..b196b17f9d9d
+--- /dev/null
++++ b/drivers/block/blksnap/Makefile
+@@ -0,0 +1,18 @@
++# SPDX-License-Identifier: GPL-2.0
++
++blksnap-y := 		\
++	cbt_map.o	\
++	chunk.o		\
++	ctrl.o		\
++	diff_io.o	\
++	diff_area.o	\
++	diff_buffer.o	\
++	diff_storage.o	\
++	event_queue.o	\
++	main.o		\
++	snapimage.o	\
++	snapshot.o	\
++	sysfs.o		\
++	tracker.o
++
++obj-$(CONFIG_BLK_SNAP)	 += blksnap.o
+-- 
+2.20.1
+
