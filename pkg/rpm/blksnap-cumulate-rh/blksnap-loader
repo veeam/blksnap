@@ -10,6 +10,7 @@ __license__ = "GPL-2"
 
 import os
 import sys
+import time
 import platform
 
 
@@ -177,20 +178,38 @@ def ExecuteCommand(cmd):
 	if result != 0:
 		raise RuntimeError("Failed to execute ["+cmd+"]")
 
-def FindSameReleaseModule(kver, moduleName):
-	if not isinstance(kver, CKernelVersion):
-		return NotImplemented
+def TryExecuteCommand(cmd):
+	print("Try execute ["+cmd+"]")
+	sys.stdout.flush()
+	result = os.system(cmd)
 
+def EnumerateAvaildableKernels(moduleNames):
 	modulesList = []
+
 	path = "/lib/modules"
 	entries = os.listdir(path)
 	for dirName in entries:
-		fullDirPath = os.path.join(path, dirName)
-		if os.path.isdir(fullDirPath):
-			fileFullPath = os.path.join(fullDirPath, "extra/"+moduleName+".ko")
-			if os.path.exists(fileFullPath):
-				modulesList.append(CKernelModule(CKernelVersion(dirName), fileFullPath))
+		fullDirPath = os.path.join(os.path.join(path, dirName), "extra")
 
+		if not os.path.isdir(fullDirPath):
+			continue
+
+		found = True
+		for moduleName in moduleNames:
+			if not os.path.exists(os.path.join(fullDirPath, moduleName+".ko")):
+				found = False
+				break
+
+		if found:
+			modulesList.append(CKernelModule(CKernelVersion(dirName), fullDirPath))
+
+	return modulesList;
+
+def FindSameReleaseModule(kver, moduleNames):
+	if not isinstance(kver, CKernelVersion):
+		return NotImplemented
+
+	modulesList = EnumerateAvaildableKernels(moduleNames)
 	modulesList = sorted(modulesList, key=lambda CKernelModule: CKernelModule._kernelVersion, reverse=False)
 
 	print("Kmod binaries were found:")
@@ -203,20 +222,11 @@ def FindSameReleaseModule(kver, moduleName):
 
 	return None
 
-def FindSuitableModule(strFoundVersion, moduleName):
+def FindSuitableModule(strFoundVersion, moduleNames):
 	foundVersion = CKernelVersion(strFoundVersion)
 	print("Linux kernel found:"+str(foundVersion))
-	modulesList = []
 
-	path = "/lib/modules"
-	entries = os.listdir(path)
-	for dirName in entries:
-		fullDirPath = os.path.join(path, dirName)
-		if os.path.isdir(fullDirPath):
-			fileFullPath = os.path.join(fullDirPath, "extra/"+moduleName+".ko")
-			if os.path.exists(fileFullPath):
-				modulesList.append(CKernelModule(CKernelVersion(dirName), fileFullPath))
-
+	modulesList = EnumerateAvaildableKernels(moduleNames)
 	modulesList = sorted(modulesList, key=lambda CKernelModule: CKernelModule._kernelVersion, reverse=True)
 
 	print("Blksnap kmod binaries were found:")
@@ -233,7 +243,51 @@ def CheckModuleExist(modulePath):
 	if not os.path.isfile(modulePath):
 		raise RuntimeError("Module [{0}] is not exist".format(modulePath))
 
-def TryLoadModule(modulePath, params):
+def TryUnloadModules():
+	if os.path.exists("/sys/class/blksnap"):
+		try:
+			ExecuteCommand("rmmod blksnap")
+		except Exception as ex:
+			print("Failed to unload blksnap. {0}".format(ex))
+			return False
+
+	if os.path.exists("/sys/kernel/livepatch/bdevfilter"):
+		try:
+			ExecuteCommand("echo 0 > /sys/kernel/livepatch/bdevfilter/enabled")
+		except Exception as ex:
+			print("Failed to disable bdevfilter. {0}".format(ex))
+			return False
+
+	cnt = 0
+	while os.path.exists("/sys/kernel/livepatch/bdevfilter"):
+		time.sleep(1)
+		cnt+=1
+		if cnt > 10:
+			print("bdevfilter cannot be disabled.")
+			return False
+
+	TryExecuteCommand("rmmod bdevfilter")
+
+	return True
+
+def TryLoadBdevFilter(modulePath):
+	modulePath = modulePath+'/'+"bdevfilter.ko"
+
+	CheckModuleExist(modulePath)
+
+	if os.path.isfile("/sys/kernel/livepatch/bdevfilter/enabled"):
+		UnloadModule();
+
+	cmd = "insmod " + modulePath
+	for param in params:
+		cmd += " "
+		cmd += param
+
+	ExecuteCommand(cmd)
+
+def TryLoadBlksnap(modulePath, params):
+	modulePath = modulePath+'/'+"blksnap.ko"
+
 	CheckModuleExist(modulePath)
 
 	cmd = "insmod " + modulePath
@@ -251,11 +305,13 @@ def ModInfo(modulePath):
 
 def TryProcess(modulePath, params, isCheck, isModinfo):
 	if isCheck:
-		CheckModuleExist(modulePath)
+		CheckModuleExist(modulePath+'/'+"blksnap.ko")
 	elif isModinfo:
-		ModInfo(modulePath)
+		ModInfo(modulePath+'/'+"blksnap.ko")
 	else:
-		TryLoadModule(modulePath, params )
+		TryUnloadModules()
+		TryLoadBdevFilter(modulePath)
+		TryLoadBlksnap(modulePath, params)
 
 def dist_os_release():
 	d = {}
@@ -275,6 +331,7 @@ def Usage():
 	usageText += "\t--check - Checks the existence of a compatible kernel module for the current kernel.\n"
 	usageText += "\t--modinfo - Call 'modinfo' for a compatible kernel module.\n"
 	usageText += "\t--kmodAnyKernel - Try to find a module with a suitable release. In this case the system kernel may be incompatible with the module.\n"
+	usageText += "\t--unload - Try to unload kernel module.\n"
 	print(usageText);
 
 def main(params):
@@ -297,6 +354,9 @@ def main(params):
 				isKmodAnyKernel = True;
 			elif params[0] == "--kmodAnyKernel":
 				isKmodAnyKernel = True;
+			elif params[0] == "--unload":
+				TryUnloadModules()
+				return 0
 			else:
 				isParameter = False;
 
@@ -320,11 +380,10 @@ def main(params):
 
 		#try find direct module
 		strAccurateKernelVersion = kver.GetAccurateVersion()
-		kmodPath = "/lib/modules/"+strAccurateKernelVersion+"/extra/"
+		kmodPath = "/lib/modules/"+strAccurateKernelVersion+"/extra"
 		print("Accurate kernel version: "+strAccurateKernelVersion)
 		try:
-			TryProcess(kmodPath+"bdevfilter.ko", params, isCheck, isModinfo)
-			TryProcess(kmodPath+"blksnap.ko", params, isCheck, isModinfo)
+			TryProcess(kmodPath, params, isCheck, isModinfo)
 			return 0
 		except Exception as ex:
 			print("Failed to load module for accurate kernel version [{0}]".format(strAccurateKernelVersion) )
@@ -333,21 +392,13 @@ def main(params):
 		if kver.IsUek():
 			print("Skip an attempt to load a same release kernel for UEK")
 		else:
-			bdevfilterPath = FindSameReleaseModule(kver, "bdevfilter")
-			if bdevfilterPath is None:
-				print("Failed to find same release module {0} for kernel [{1}]".format("bdevfilter", strAccurateKernelVersion) )
+			kmodPath = FindSameReleaseModule(kver, ["blksnap", "bdevfilter"])
+			if kmodPath is None:
+				print("Failed to find same release modules for kernel [{1}]".format(strAccurateKernelVersion) )
 				return -1
-			print("Same release kernel module path: "+bdevfilterPath)
-
-			blksnapPath = FindSameReleaseModule(kver, "blksnap")
-			if blksnapPath is None:
-				print("Failed to find same release module  {0} for kernel [{1}]".format("blksnap", strAccurateKernelVersion) )
-				return -1
-			print("Same release kernel module path: "+blksnapPath)
-
+			print("Same release kernel module path: "+kmodPath)
 			try:
-				TryProcess(bdevfilterPath, params, isCheck, isModinfo)
-				TryProcess(blksnapPath, params, isCheck, isModinfo)
+				TryProcess(kmodPath, params, isCheck, isModinfo)
 				return 0;
 			except Exception as ex:
 				print("Failed to load module for same release kernel version")
@@ -355,22 +406,13 @@ def main(params):
 		if not isKmodAnyKernel:
 			return -1
 
-		bdevfilterPath = FindSuitableModule(strAccurateKernelVersion, "bdevfilter")
-		if bdevfilterPath is None:
-			print("Failed to find suitable module {0} for kernel [{1}]".format("bdevfilter", strAccurateKernelVersion) )
+		kmodPath = FindSuitableModule(strAccurateKernelVersion, ["blksnap", "bdevfilter"])
+		if kmodPath is None:
+			print("Failed to find suitable module for kernel [{1}]".format(strAccurateKernelVersion) )
 			return -1
-		print("Suitable kernel module path: "+bdevfilterPath)
-
-		#try find module with suitable release
-		blksnapPath = FindSuitableModule(strAccurateKernelVersion, "blksnap")
-		if blksnapPath is None:
-			print("Failed to find suitable module {0} for kernel [{1}]".format("blksnap", strAccurateKernelVersion) )
-			return -1
-		print("Suitable kernel module path: "+blksnapPath)
-
+		print("Suitable kernel module path: "+kmodPath)
 		try:
-			TryProcess(bdevfilterPath, params, isCheck, isModinfo)
-			TryProcess(blksnapPath, params, isCheck, isModinfo)
+			TryProcess(kmodPath, params, isCheck, isModinfo)
 			return 1 # This mean that the module was loaded, but the system kernel may be incompatible with the module
 
 		except Exception as ex:
