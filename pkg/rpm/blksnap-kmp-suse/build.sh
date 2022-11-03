@@ -39,6 +39,12 @@ done
 rm -rf ${BUILD_DIR}/SOURCES/*
 # copy '-preamble' file
 cp ${PROJECT_DIR}/${PACKAGE_NAME}-preamble ${BUILD_DIR}/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}-preamble
+# Generate own kernel-module-subpackage
+# The package build system for SUSE does not allow to add own scriptlets for
+# the kmp package uninstall script. So, I have to patch an existing one.
+# If you know a better way, let me know.
+cp /usr/lib/rpm/kernel-module-subpackage ${BUILD_DIR}/SOURCES/kernel-module-subpackage
+cat ${PROJECT_DIR}/${PACKAGE_NAME}-unload.sh | sed -i '/^%preun/ r /dev/stdin' ${BUILD_DIR}/SOURCES/kernel-module-subpackage
 # generate module sources tarbal
 SRC_DIR=${BUILD_DIR}/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}/source
 mkdir -p ${SRC_DIR}

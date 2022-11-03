@@ -50,10 +50,22 @@ checkModule()
   return 0
 }
 
-if checkModule %{name} ; then
-  echo 0 > /sys/kernel/livepatch/blksnap/enabled || true
-  sleep 2s
-  rmmod %{name} 2>/dev/null || true
+if checkModule %{name}
+then
+  modprobe -r %{name} 2>/dev/null || true
+fi
+
+if checkModule bdevfilter
+then
+  if [ -e /sys/kernel/livepatch/bdevfilter/enabled ]
+  then
+    echo 0 > /sys/kernel/livepatch/bdevfilter/enabled || true
+    while [ -e /sys/kernel/livepatch/bdevfilter/enabled ]
+    do
+      sleep 1s
+    done
+  fi
+  modprobe -r bdevfilter 2>/dev/null || true
 fi
 exit 0
 
