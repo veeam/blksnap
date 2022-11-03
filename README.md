@@ -27,14 +27,14 @@ Or installing the necessary rpm packages.
 sudo yum install gcc kernel-devel
 ```
 ``` bash
-cd ./mobule
+cd ./module
 mk.sh build
 ```
 In directory current directory you can found bdevfilter.ko and blksnap.ko.
 
 ### How to install
 ``` bash
-cd ./mobule
+cd ./module
 mk.sh install-flt
 mk.sh install
 ```
@@ -48,8 +48,8 @@ cd ./pkg/deb
 There are several variants, look in the ./pkg/rpm directory.
 
 ## blksnap tool
-The blksnap tool allows to manage the module from the command line.
-The program allows to execute individual ioctls of the blksnap module.
+The blksnap tool allows you to manage the module from the command line.
+The program allows for execution of individual ioctls of the blksnap module.
 The interface of the program may seem inconvenient to the user,
 since it is assumed that it will be called by other applications.
 ### How to build
