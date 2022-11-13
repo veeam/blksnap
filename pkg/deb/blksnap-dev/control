@@ -1,0 +1,12 @@
+Source: blksnap-dev
+Section: devel
+Priority: optional
+Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
+Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-filesystem-dev
+Homepage: https://github.org/veeam/blksnap
+
+Package: blksnap-dev
+Architecture: linux-any
+Depends: ${misc:Depends}
+Description: [TBD] The static library and header files for managing the
+        blksnap kernel module.
