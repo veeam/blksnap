@@ -53,32 +53,48 @@ EOF
 cat > ${BUILD_DIR}/debian/control << EOF
 Source: blksnap-tests
 Section: utils
-Priority: standard
+Priority: optional
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
 Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-program-options-dev, libboost-filesystem-dev, libssl-dev
+Homepage: https://github.org/veeam/blksnap
 
 Package: blksnap-tests
 Architecture: linux-any
 Depends: blksnap-tools (= ${VERSION}), bash, \${shlibs:Depends}, \${misc:Depends}
-Homepage: https://github.org/veeam/blksnap/
 Description: [TBD] The tests for checking the blksnap kernel module.
 EOF
 chmod 0666 ${BUILD_DIR}/debian/control
 
 cat > ${BUILD_DIR}/debian/copyright << EOF
-Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: blksnap
+Source: https://github.org/veeam/blksnap
 
-Files: debian/*
-Copyright: 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
-License: GNU GPL-2.0
+Files: *
+Copyright: 2022 Veeam Software Group GmbH <veeam_team@veeam.com>
+License: GPL-2+
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in \`/usr/share/common-licenses/GPL-2'.
 EOF
 
 cat > ${BUILD_DIR}/debian/changelog << EOF
 blksnap-tests (${VERSION}) stable; urgency=low
 
   * Release.
- -- Veeam Software Group GmbH <https://www.veeam.com/contacts.html>  $(date -R)
+ -- Veeam Software Group GmbH <veeam_team@veeam.com>  $(date -R)
 EOF
 
 cat > ${BUILD_DIR}/debian/rules << EOF
