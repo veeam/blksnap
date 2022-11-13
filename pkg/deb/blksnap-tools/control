@@ -1,0 +1,11 @@
+Source: blksnap-tools
+Section: admin
+Priority: optional
+Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
+Build-Depends: debhelper (>= 9.0.0), g++, cmake, uuid-dev, libboost-program-options-dev, libboost-filesystem-dev
+Homepage: https://github.org/veeam/blksnap
+
+Package: blksnap-tools
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: [TBD] The tools for managing the blksnap kernel module.
