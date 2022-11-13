@@ -8,27 +8,33 @@ else
 fi
 
 CURR_DIR=$(pwd)
-cd "../../../"
+cd "../../"
 ROOT_DIR=$(pwd)
 
 BUILD_DIR="build/pkg"
 rm -rf ${BUILD_DIR}
 mkdir -p ${BUILD_DIR}
 
-SOURCE_DIR="tools/blksnap/bin"
-TARGET_DIR="usr/sbin"
+SOURCE_DIR="tests"
+TARGET_DIR="opt/blksnap/tests"
 
 # build
-rm -rf ${SOURCE_DIR}/*
-mkdir -p ${SOURCE_DIR}
-cd ${SOURCE_DIR}
+rm -rf ${SOURCE_DIR}/cpp/bin/*
+mkdir -p ${SOURCE_DIR}/cpp/bin/*
+cd ${SOURCE_DIR}/cpp/bin
 cmake ../
 make
 cd ${ROOT_DIR}
 
-# copy binaries
+# copy binaries and scripts
 mkdir -p ${BUILD_DIR}/${TARGET_DIR}
-cp ${SOURCE_DIR}/blksnap ${BUILD_DIR}/${TARGET_DIR}/
+for FILE in ${SOURCE_DIR}/*
+do
+	if [ -f "${FILE}" ]
+	then
+		cp ${FILE} ${BUILD_DIR}/${TARGET_DIR}/
+	fi
+done
 chmod +x ${BUILD_DIR}/${TARGET_DIR}/*
 INSTALL_FILES+=(${TARGET_DIR}/*)
 
@@ -45,17 +51,17 @@ cat > ${BUILD_DIR}/debian/compat << EOF
 EOF
 
 cat > ${BUILD_DIR}/debian/control << EOF
-Source: blksnap-tools
-Section: admin
+Source: blksnap-tests
+Section: utils
 Priority: optional
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
-Build-Depends: debhelper (>= 9.0.0), g++, cmake, uuid-dev, libboost-program-options-dev, libboost-filesystem-dev
+Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-program-options-dev, libboost-filesystem-dev, libssl-dev
 Homepage: https://github.org/veeam/blksnap
 
-Package: blksnap-tools
+Package: blksnap-tests
 Architecture: linux-any
-Depends: \${shlibs:Depends}, \${misc:Depends}
-Description: [TBD] The tools for managing the blksnap kernel module.
+Depends: blksnap-tools (= ${VERSION}), bash, \${shlibs:Depends}, \${misc:Depends}
+Description: [TBD] The tests for checking the blksnap kernel module.
 EOF
 chmod 0666 ${BUILD_DIR}/debian/control
 
@@ -85,7 +91,7 @@ License: GPL-2+
 EOF
 
 cat > ${BUILD_DIR}/debian/changelog << EOF
-blksnap-tools (${VERSION}) stable; urgency=low
+blksnap-tests (${VERSION}) stable; urgency=low
 
   * Release.
  -- Veeam Software Group GmbH <veeam_team@veeam.com>  $(date -R)
