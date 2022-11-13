@@ -1,18 +1,10 @@
 #!/bin/bash -e
-NAME=blksnap-dev
 
 if [ -n "$1" ]
 then
 	VERSION="$1"
 else
 	VERSION="1.0.0.0"
-fi
-
-if [ -n "$(dpkg-architecture -q DEB_HOST_ARCH)" ]
-then
-	ARCH="$(dpkg-architecture -q DEB_HOST_ARCH)"
-else
-	ARCH="amd64"
 fi
 
 CURR_DIR=$(pwd)
@@ -52,15 +44,14 @@ cat > ${BUILD_DIR}/debian/compat << EOF
 EOF
 
 cat > ${BUILD_DIR}/debian/control << EOF
-Source: ${NAME}
+Source: blksnap-dev
 Section: devel
 Priority: standard
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
 Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-filesystem-dev
 
-Package: ${NAME}
-Architecture: ${ARCH}
-Provides: ${NAME}, ${NAME}-${VERSION}
+Package: blksnap-dev
+Architecture: linux-any
 Depends: \${misc:Depends}
 Homepage: https://github.org/veeam/blksnap/
 Description: [TBD] The static library and header files for managing the
@@ -70,7 +61,7 @@ chmod 0666 ${BUILD_DIR}/debian/control
 
 cat > ${BUILD_DIR}/debian/copyright << EOF
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: ${NAME}
+Upstream-Name: blksnap
 
 Files: debian/*
 Copyright: 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
@@ -78,7 +69,7 @@ License: GNU LGPL-3.0
 EOF
 
 cat > ${BUILD_DIR}/debian/changelog << EOF
-${NAME} (${VERSION}) stable; urgency=low
+blksnap-dev (${VERSION}) stable; urgency=low
 
   * Release.
  -- Veeam Software Group GmbH <https://www.veeam.com/contacts.html>  $(date -R)
