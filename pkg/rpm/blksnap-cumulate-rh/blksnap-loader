@@ -394,21 +394,21 @@ def main(params):
 		else:
 			kmodPath = FindSameReleaseModule(kver, ["blksnap", "bdevfilter"])
 			if kmodPath is None:
-				print("Failed to find same release modules for kernel [{1}]".format(strAccurateKernelVersion) )
-				return -1
-			print("Same release kernel module path: "+kmodPath)
-			try:
-				TryProcess(kmodPath, params, isCheck, isModinfo)
-				return 0;
-			except Exception as ex:
-				print("Failed to load module for same release kernel version")
+				print("Failed to find same release modules for kernel [{0}]".format(strAccurateKernelVersion) )
+			else:
+				print("Same release kernel module path: "+kmodPath)
+				try:
+					TryProcess(kmodPath, params, isCheck, isModinfo)
+					return 0;
+				except Exception as ex:
+					print("Failed to load module for same release kernel version")
 
 		if not isKmodAnyKernel:
 			return -1
 
 		kmodPath = FindSuitableModule(strAccurateKernelVersion, ["blksnap", "bdevfilter"])
 		if kmodPath is None:
-			print("Failed to find suitable module for kernel [{1}]".format(strAccurateKernelVersion) )
+			print("Failed to find suitable module for kernel [{0}]".format(strAccurateKernelVersion) )
 			return -1
 		print("Suitable kernel module path: "+kmodPath)
 		try:
