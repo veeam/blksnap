@@ -73,8 +73,8 @@ make
 ### How to create deb package
 ``` bash
 sudo apt install debhelper
-cd ./pkg/deb/blksnap-tools
-./build.sh ${VERSION}
+cd ./pkg/deb
+./build-blksnap-tools.sh ${VERSION}
 ```
 
 ## library
@@ -103,8 +103,8 @@ make
 ### How to create deb package
 ``` bash
 sudo apt install debhelper
-cd ./pkg/deb/blksnap-dev
-./build.sh ${VERSION}
+cd ./pkg/deb
+./build-blksnap-dev.sh ${VERSION}
 ```
 
 ## tests
@@ -133,8 +133,8 @@ make
 ### How to create deb package
 ``` bash
 sudo apt install debhelper
-cd ./pkg/deb/blksnap-tests
-./build.sh ${VERSION}
+cd ./pkg/deb
+./build-blksnap-tests.sh ${VERSION}
 ```
 ### How to run all usage tests
 ``` bash

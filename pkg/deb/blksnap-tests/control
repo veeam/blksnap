@@ -1,0 +1,11 @@
+Source: blksnap-tests
+Section: utils
+Priority: optional
+Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
+Build-Depends: debhelper (>= 9.0.0), bash, g++, cmake, uuid-dev, libboost-program-options-dev, libboost-filesystem-dev, libssl-dev
+Homepage: https://github.org/veeam/blksnap
+
+Package: blksnap-tests
+Architecture: linux-any
+Depends: blksnap-tools, bash, ${shlibs:Depends}, ${misc:Depends}
+Description: [TBD] The tests for checking the blksnap kernel module.

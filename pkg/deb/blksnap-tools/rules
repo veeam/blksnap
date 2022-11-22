@@ -1,0 +1,6 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@
