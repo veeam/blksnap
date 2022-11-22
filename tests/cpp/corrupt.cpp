@@ -712,7 +712,7 @@ void Main(int argc, char* argv[])
         ("duration,u", po::value<int>()->default_value(5), "The test duration limit in minutes.")
         ("sync", "Use O_SYNC for access to original device.")
         ("blksz", po::value<int>()->default_value(512), "Align reads and writes to the block size.")
-        ("blocks", po::value<int>()->default_value(4096), "The maximum limit of writting blocks.")
+        ("blocks", po::value<int>()->default_value(4096), "The maximum limit of writing blocks.")
         ;
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
