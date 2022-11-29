@@ -138,11 +138,12 @@ cd ./pkg/deb
 ```
 ### How to run all usage tests
 ``` bash
-./all.sh
-# or if installed with packages
-/opt/blksnap/tests/all.sh
+# change working directory to the tests one, for example for debian package is /opt/blksnap/tests
+cd /opt/blksnap/tests
+# execute all tests script
+sudo ./all.sh
 # or for logging the output to a file
-/opt/blksnap/tests/all.sh | tee -a blksnap_test_$(date -u '+%Y-%m-%d_%H:%M:%S').log
+sudo ./all.sh | tee -a /tmp/blksnap_test_$(date -u '+%Y-%m-%d_%H:%M:%S').log
 ```
 ## Compatibility notes
 - blksnap kernel module support kernel versions >= 5.10, support only X86 archs, blksnap for upstream instead can support any arch (other archs need to be tested)
