@@ -14,6 +14,18 @@ struct diff_area;
 struct cbt_map;
 
 /**
+ * struct snapimage_bio_link -
+ * @link:
+ *
+ * @bio:
+ *
+ */
+struct snapimage_bio_link {
+        struct list_head link;
+        struct bio *bio;
+};
+
+/**
  * struct snapimage - Snapshot image block device.
  *
  * @image_dev_id:
@@ -25,8 +37,6 @@ struct cbt_map;
  *	The flag means that the snapshot image is ready for processing
  *	I/O requests.
  * @worker:
- *	The worker thread for processing I/O requests.
- * @worker_task:
  *	A pointer to the &struct task of the worker thread.
  * @disk:
  *	A pointer to the &struct gendisk for the image block device.
@@ -49,8 +59,12 @@ struct snapimage {
 	sector_t capacity;
 	bool is_ready;
 
-	struct kthread_worker worker;
-	struct task_struct *worker_task;
+	struct task_struct *worker;
+
+        spinlock_t queue_lock;
+        struct list_head todo_queue;
+        struct list_head free_queue;
+        unsigned int free_queue_count;
 
 	struct gendisk *disk;
 

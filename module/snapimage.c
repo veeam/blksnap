@@ -19,58 +19,78 @@
 
 #define NR_SNAPIMAGE_DEVT	(1 << MINORBITS)
 
-struct snapimage_bio_prefix
-{
-	struct kthread_work work;
-	struct bio bio[0];
-};
-
 static unsigned int _major;
 static DEFINE_IDA(snapimage_devt_ida);
 
-struct bio_set snapimage_bioset;
+static int snapimage_kthread_worker_fn(void* param);
 
-static inline void snapimage_unprepare_worker(struct snapimage *snapimage)
+static inline struct snapimage_bio_link *get_bio_link_from_queue(
+	spinlock_t *lock, struct list_head *queue)
 {
-	kthread_flush_worker(&snapimage->worker);
-	kthread_stop(snapimage->worker_task);
+	struct snapimage_bio_link *bio_link;
+
+	spin_lock(lock);
+	bio_link = list_first_entry_or_null(queue, struct snapimage_bio_link,
+					    link);
+	if (bio_link)
+		list_del_init(&bio_link->link);
+	spin_unlock(lock);
+
+	return bio_link;
 }
 
-static int snapimage_kthread_worker_fn(void *worker_ptr)
+static inline struct snapimage_bio_link *get_bio_link_from_free_queue(
+	struct snapimage *snapimage)
 {
-	current->flags |= PF_LOCAL_THROTTLE | PF_MEMALLOC_NOIO;
-	return kthread_worker_fn(worker_ptr);
+	return get_bio_link_from_queue(&snapimage->queue_lock,
+				       &snapimage->free_queue);
 }
 
-static inline int snapimage_prepare_worker(struct snapimage *snapimage)
+static inline struct snapimage_bio_link *get_bio_link_from_todo_queue(
+	struct snapimage *snapimage)
+{
+	return get_bio_link_from_queue(&snapimage->queue_lock,
+				       &snapimage->todo_queue);
+}
+
+static inline void snapimage_stop_worker(struct snapimage *snapimage)
+{
+	struct snapimage_bio_link *bio_link;
+
+	kthread_stop(snapimage->worker);
+	put_task_struct(snapimage->worker);
+
+	while ((bio_link = get_bio_link_from_free_queue(snapimage)))
+		kfree(bio_link);
+}
+
+static inline int snapimage_start_worker(struct snapimage *snapimage)
 {
 	struct task_struct *task;
 
-	kthread_init_worker(&snapimage->worker);
+	spin_lock_init(&snapimage->queue_lock);
+	INIT_LIST_HEAD(&snapimage->todo_queue);
+	INIT_LIST_HEAD(&snapimage->free_queue);
+	snapimage->free_queue_count = 0;
 
-	task = kthread_run(snapimage_kthread_worker_fn, &snapimage->worker,
-			   BLK_SNAP_IMAGE_NAME "%d",
-			   MINOR(snapimage->image_dev_id));
+	task = kthread_create(snapimage_kthread_worker_fn,
+			      snapimage,
+			      BLK_SNAP_IMAGE_NAME "%d",
+			      MINOR(snapimage->image_dev_id));
 	if (IS_ERR(task))
 		return -ENOMEM;
 
-	set_user_nice(task, MIN_NICE);
+	snapimage->worker = get_task_struct(task);
+	set_user_nice(task, MAX_NICE);
+	task->flags |= PF_LOCAL_THROTTLE | PF_MEMALLOC_NOIO;
+	wake_up_process(task);
 
-	snapimage->worker_task = task;
 	return 0;
 }
 
-static void snapimage_process_bio(struct kthread_work *work)
+static void snapimage_process_bio(struct snapimage *snapimage, struct bio *bio)
 {
-	struct snapimage_bio_prefix *pfx =
-		container_of(work, struct snapimage_bio_prefix, work);
-	struct bio *bio = pfx->bio;
-#ifdef HAVE_BI_BDEV
-	struct snapimage *snapimage = bio->bi_bdev->bd_disk->private_data;
-#endif
-#ifdef HAVE_BI_BDISK
-	struct snapimage *snapimage = bio->bi_disk->private_data;
-#endif
+
 	struct diff_area_image_ctx io_ctx;
 	struct bio_vec bvec;
 	struct bvec_iter iter;
@@ -90,6 +110,41 @@ static void snapimage_process_bio(struct kthread_work *work)
 	bio_endio(bio);
 }
 
+static int snapimage_kthread_worker_fn(void* param)
+{
+	struct snapimage *snapimage = param;
+	struct snapimage_bio_link *bio_link;
+	int ret = 0;
+
+	while (!kthread_should_stop()) {
+		bio_link = get_bio_link_from_todo_queue(snapimage);
+		if (!bio_link) {
+			schedule_timeout_interruptible(HZ / 100);
+			continue;
+		}
+
+		snapimage_process_bio(snapimage, bio_link->bio);
+
+		spin_lock(&snapimage->queue_lock);
+		if (snapimage->free_queue_count < 64) {
+			bio_link->bio = NULL;
+			list_add_tail(&bio_link->link, &snapimage->free_queue);
+			snapimage->free_queue_count++;
+			bio_link = NULL;
+		}
+		spin_unlock(&snapimage->queue_lock);
+
+		if (bio_link)
+			kfree(bio_link);
+	}
+
+	while ((bio_link = get_bio_link_from_todo_queue(snapimage))) {
+		snapimage_process_bio(snapimage, bio_link->bio);
+		kfree(bio_link);
+	}
+	return ret;
+}
+
 #ifdef HAVE_QC_SUBMIT_BIO
 static blk_qc_t snapimage_submit_bio(struct bio *bio)
 {
@@ -104,11 +159,36 @@ static void snapimage_submit_bio(struct bio *bio)
 #ifdef HAVE_BI_BDISK
 	struct snapimage *snapimage = bio->bi_disk->private_data;
 #endif
-	struct snapimage_bio_prefix *pfx =
-		container_of(bio, struct snapimage_bio_prefix, bio[0]);
+	struct snapimage_bio_link *bio_link;
 
-	kthread_init_work(&pfx->work, snapimage_process_bio);
-	kthread_queue_work(&snapimage->worker, &pfx->work);
+	if (!snapimage->is_ready) {
+		bio_io_error(bio);
+		return ret;
+	}
+
+	spin_lock(&snapimage->queue_lock);
+	bio_link = list_first_entry_or_null(&snapimage->free_queue,
+					    struct snapimage_bio_link, link);
+	if (bio_link) {
+		list_del_init(&bio_link->link);
+		snapimage->free_queue_count--;
+	} else {
+		spin_unlock(&snapimage->queue_lock);
+		bio_link = kzalloc(sizeof(struct snapimage_bio_link), GFP_NOIO);
+		INIT_LIST_HEAD(&bio_link->link);
+		spin_lock(&snapimage->queue_lock);
+	}
+
+	if (bio_link) {
+		bio_link->bio = bio;
+		list_add_tail(&bio_link->link, &snapimage->todo_queue);
+	}
+	spin_unlock(&snapimage->queue_lock);
+
+	if (bio_link)
+		wake_up_process(snapimage->worker);
+	else
+		bio_io_error(bio);
 
 #ifdef HAVE_QC_SUBMIT_BIO
 	return ret;
@@ -131,7 +211,7 @@ void snapimage_free(struct snapimage *snapimage)
 	snapimage->is_ready = false;
 	blk_mq_unfreeze_queue(snapimage->disk->queue);
 
-	snapimage_unprepare_worker(snapimage);
+	snapimage_stop_worker(snapimage);
 
 	del_gendisk(snapimage->disk);
 #ifdef HAVE_BLK_ALLOC_DISK
@@ -204,9 +284,9 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		MAJOR(diff_area->orig_bdev->bd_dev),
 		MINOR(diff_area->orig_bdev->bd_dev));
 
-	ret = snapimage_prepare_worker(snapimage);
+	ret = snapimage_start_worker(snapimage);
 	if (ret) {
-		pr_err("Failed to prepare worker thread. errno=%d\n", abs(ret));
+		pr_err("Failed to start worker thread. errno=%d\n", abs(ret));
 		goto fail_free_minor;
 	}
 
@@ -275,7 +355,7 @@ fail_cleanup_disk:
 	del_gendisk(disk);
 #endif
 fail_free_worker:
-	snapimage_unprepare_worker(snapimage);
+	snapimage_stop_worker(snapimage);
 fail_free_minor:
 	ida_free(&snapimage_devt_ida, minor);
 fail_free_image:
@@ -298,20 +378,11 @@ int snapimage_init(void)
 	pr_info("Snapshot image block device major %d was registered\n",
 		_major);
 
-	ret = bioset_init(&snapimage_bioset, 64,
-			  sizeof(struct snapimage_bio_prefix),
-			  BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
-	if (ret) {
-		pr_err("Failed to initialize bioset\n");
-		unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
-	}
-
-	return ret;
+	return 0;
 }
 
 void snapimage_done(void)
 {
-	bioset_exit(&snapimage_bioset);
 
 	unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
 	pr_info("Snapshot image block device [%d] was unregistered\n", _major);
