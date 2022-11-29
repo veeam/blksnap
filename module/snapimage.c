@@ -19,6 +19,11 @@
 
 #define NR_SNAPIMAGE_DEVT	(1 << MINORBITS)
 
+struct snapimage_bio_link {
+        struct list_head link;
+        struct bio *bio;
+};
+
 static unsigned int _major;
 static DEFINE_IDA(snapimage_devt_ida);
 

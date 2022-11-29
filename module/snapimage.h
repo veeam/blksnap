@@ -14,18 +14,6 @@ struct diff_area;
 struct cbt_map;
 
 /**
- * struct snapimage_bio_link -
- * @link:
- *
- * @bio:
- *
- */
-struct snapimage_bio_link {
-        struct list_head link;
-        struct bio *bio;
-};
-
-/**
  * struct snapimage - Snapshot image block device.
  *
  * @image_dev_id:
