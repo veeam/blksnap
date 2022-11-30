@@ -204,7 +204,8 @@ How to use
  4. ``blk_snap_ioctl_snapshot_collect`` и ``blk_snap_ioctl_snapshot_collect_images`` позволяют сопоставить оригинальные блочные устройтсва и соответсвующие им образы снапшотов.
  5. Выполняется чтение образов снапшотов с блочных устройтсв, номера которых были получены при вызове ``blk_snap_ioctl_snapshot_collect_images``. Образы снапшотов поддерживают и операцию записи, поэтому перед резервным копированием можно монтировать файловую систему на образе снапшота и проводить необходимый препроцессинг.
  6. ``blk_snap_ioctl_tracker_collect`` и ``blk_snap_ioctl_tracker_read_cbt_map`` позволяют получить данные трекера изменений. Если в образ снапшота производилась запись, то трекер изменений учитывает это. Поэтому получать данные трекера необходимо после того, как операции записи были завершены.
- 7. ``blk_snap_ioctl_snapshot_wait_event``позволяет отслеживать состояние снапшотов и получать нотификацию о требовании расширения хранилища изменений или переполнении снапшота. 8. Расширение производится с помощью ``blk_snap_ioctl_snapshot_append_storage``.
+ 7. ``blk_snap_ioctl_snapshot_wait_event`` позволяет отслеживать состояние снапшотов и получать нотификацию о требовании расширения хранилища изменений или переполнении снапшота.
+ 8. Расширение производится с помощью ``blk_snap_ioctl_snapshot_append_storage`` .
  9. ``blk_snap_ioctl_snapshot_destroy`` освобождает снапшот.
  10. Если после создания резервной копии с данными в бэкапе выполняется постпроцессинг, изменяющий блоки резервной копии, неободимо помечать такие блоки как грязные в таблице трекера изменений. Для этого может быть использован ``blk_snap_ioctl_tracker_mark_dirty_blocks``.
  11. Есть возможность отключить трекер изменений от какого-либо блочного устройтсва. Для этого применяется ``blk_snap_ioctl_tracker_remove``.
@@ -233,18 +234,18 @@ How to use
 Для проведения регрессионного тестирования был создан набор тестов [#userspace_tests]_.
 На bash написаны тесты с простыми алгоритмами, которые используют консольный инструмент ``blksnap`` для упралвения модулем.
 Более сложные алгоритмы тестирования реализованы на С++.
-Документацию о них можно найти тут [userspace_tests_doc]_.
+Документацию [#userspace_tests_doc]_ о них можно найти на репозитории проекта.
 
 References
 ==========
 
-.. [#userspace_tools] https://github.com/veeam/blksnap/tools/
+.. [#userspace_tools] https://github.com/veeam/blksnap/tree/master/tools/blksnap
 
-.. [#userspace_libs] https://github.com/veeam/blksnap/libs/
+.. [#userspace_libs] https://github.com/veeam/blksnap/tree/master/lib/blksnap
 
-.. [#userspace_tests] https://github.com/veeam/blksnap/tests/
+.. [#userspace_tests] https://github.com/veeam/blksnap/tree/master/tests
 
-.. [userspace_tests_doc] https://github.com/veeam/doc/tests/
+.. [#userspace_tests_doc] https://github.com/veeam/blksnap/tree/master/doc
 
 Source code documentation
 =========================
