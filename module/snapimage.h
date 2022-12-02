@@ -28,13 +28,9 @@ struct cbt_map;
  *	A pointer to the &struct task of the worker thread that process I/O
  *      units.
  * queue_lock:
- *      Lock for queues &todo_queue and &free_queue.
- * todo_queue:
+ *      Lock for &queue.
+ * queue:
  *	A queue of I/O units waiting to be processed.
- * free_queue:
- *	A queue of free slots for I/O units.
- * free_queue_count:
- *	The number or free slots in &free_queue.
  * @disk:
  *	A pointer to the &struct gendisk for the image block device.
  * @diff_area:
@@ -58,9 +54,7 @@ struct snapimage {
 
 	struct task_struct *worker;
 	spinlock_t queue_lock;
-	struct list_head todo_queue;
-	struct list_head free_queue;
-	unsigned int free_queue_count;
+	struct bio_list queue;
 
 	struct gendisk *disk;
 

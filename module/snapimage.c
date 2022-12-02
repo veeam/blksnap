@@ -19,54 +19,15 @@
 
 #define NR_SNAPIMAGE_DEVT	(1 << MINORBITS)
 
-struct snapimage_bio_link {
-        struct list_head link;
-        struct bio *bio;
-};
-
 static unsigned int _major;
 static DEFINE_IDA(snapimage_devt_ida);
 
 static int snapimage_kthread_worker_fn(void* param);
 
-static inline struct snapimage_bio_link *get_bio_link_from_queue(
-	spinlock_t *lock, struct list_head *queue)
-{
-	struct snapimage_bio_link *bio_link;
-
-	spin_lock(lock);
-	bio_link = list_first_entry_or_null(queue, struct snapimage_bio_link,
-					    link);
-	if (bio_link)
-		list_del_init(&bio_link->link);
-	spin_unlock(lock);
-
-	return bio_link;
-}
-
-static inline struct snapimage_bio_link *get_bio_link_from_free_queue(
-	struct snapimage *snapimage)
-{
-	return get_bio_link_from_queue(&snapimage->queue_lock,
-				       &snapimage->free_queue);
-}
-
-static inline struct snapimage_bio_link *get_bio_link_from_todo_queue(
-	struct snapimage *snapimage)
-{
-	return get_bio_link_from_queue(&snapimage->queue_lock,
-				       &snapimage->todo_queue);
-}
-
 static inline void snapimage_stop_worker(struct snapimage *snapimage)
 {
-	struct snapimage_bio_link *bio_link;
-
 	kthread_stop(snapimage->worker);
 	put_task_struct(snapimage->worker);
-
-	while ((bio_link = get_bio_link_from_free_queue(snapimage)))
-		kfree(bio_link);
 }
 
 static inline int snapimage_start_worker(struct snapimage *snapimage)
@@ -74,9 +35,7 @@ static inline int snapimage_start_worker(struct snapimage *snapimage)
 	struct task_struct *task;
 
 	spin_lock_init(&snapimage->queue_lock);
-	INIT_LIST_HEAD(&snapimage->todo_queue);
-	INIT_LIST_HEAD(&snapimage->free_queue);
-	snapimage->free_queue_count = 0;
+	bio_list_init(&snapimage->queue);
 
 	task = kthread_create(snapimage_kthread_worker_fn,
 			      snapimage,
@@ -115,38 +74,36 @@ static void snapimage_process_bio(struct snapimage *snapimage, struct bio *bio)
 	bio_endio(bio);
 }
 
+static inline struct bio *get_bio_from_queue(struct snapimage *snapimage)
+{
+	struct bio *bio;
+
+	spin_lock(&snapimage->queue_lock);
+	bio = bio_list_pop(&snapimage->queue);
+	spin_unlock(&snapimage->queue_lock);
+
+	return bio;
+}
+
 static int snapimage_kthread_worker_fn(void* param)
 {
 	struct snapimage *snapimage = param;
-	struct snapimage_bio_link *bio_link;
+	struct bio *bio;
 	int ret = 0;
 
 	while (!kthread_should_stop()) {
-		bio_link = get_bio_link_from_todo_queue(snapimage);
-		if (!bio_link) {
+		bio = get_bio_from_queue(snapimage);
+		if (!bio) {
 			schedule_timeout_interruptible(HZ / 100);
 			continue;
 		}
 
-		snapimage_process_bio(snapimage, bio_link->bio);
-
-		spin_lock(&snapimage->queue_lock);
-		if (snapimage->free_queue_count < 64) {
-			bio_link->bio = NULL;
-			list_add_tail(&bio_link->link, &snapimage->free_queue);
-			snapimage->free_queue_count++;
-			bio_link = NULL;
-		}
-		spin_unlock(&snapimage->queue_lock);
-
-		if (bio_link)
-			kfree(bio_link);
+		snapimage_process_bio(snapimage, bio);
 	}
 
-	while ((bio_link = get_bio_link_from_todo_queue(snapimage))) {
-		snapimage_process_bio(snapimage, bio_link->bio);
-		kfree(bio_link);
-	}
+	while ((bio = get_bio_from_queue(snapimage)))
+		snapimage_process_bio(snapimage, bio);
+
 	return ret;
 }
 
@@ -164,35 +121,13 @@ static void snapimage_submit_bio(struct bio *bio)
 #ifdef HAVE_BI_BDISK
 	struct snapimage *snapimage = bio->bi_disk->private_data;
 #endif
-	struct snapimage_bio_link *bio_link;
-
-	if (!snapimage->is_ready) {
-		bio_io_error(bio);
-		return ret;
-	}
-
-	spin_lock(&snapimage->queue_lock);
-	bio_link = list_first_entry_or_null(&snapimage->free_queue,
-					    struct snapimage_bio_link, link);
-	if (bio_link) {
-		list_del_init(&bio_link->link);
-		snapimage->free_queue_count--;
-	} else {
-		spin_unlock(&snapimage->queue_lock);
-		bio_link = kzalloc(sizeof(struct snapimage_bio_link), GFP_NOIO);
-		INIT_LIST_HEAD(&bio_link->link);
+	if (snapimage->is_ready) {
 		spin_lock(&snapimage->queue_lock);
-	}
+		bio_list_add(&snapimage->queue, bio);
+		spin_unlock(&snapimage->queue_lock);
 
-	if (bio_link) {
-		bio_link->bio = bio;
-		list_add_tail(&bio_link->link, &snapimage->todo_queue);
-	}
-	spin_unlock(&snapimage->queue_lock);
-
-	if (bio_link)
 		wake_up_process(snapimage->worker);
-	else
+	} else
 		bio_io_error(bio);
 
 #ifdef HAVE_QC_SUBMIT_BIO
