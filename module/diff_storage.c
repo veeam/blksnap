@@ -21,6 +21,13 @@
 
 /**
  * struct storage_bdev - Information about the opened block device.
+ *
+ * @link:
+ *	Allows to combine structures into a linked list.
+ * @dev_id:
+ *	ID of the block device.
+ * @bdev:
+ *	A pointer to an open block device.
  */
 struct storage_bdev {
 	struct list_head link;
@@ -31,6 +38,19 @@ struct storage_bdev {
 /**
  * struct storage_block - A storage unit reserved for storing differences.
  *
+ * @link:
+ *	Allows to combine structures into a linked list.
+ * @bdev:
+ *	A pointer to a block device.
+ * @sector:
+ *	The number of the first sector of the range of allocated space for
+ *	storing the difference.
+ * @count:
+ *	The count of sectors in the range of allocated space for storing the
+ *	difference.
+ * @used:
+ *	The count of used sectors in the range of allocated space for storing
+ *	the difference.
  */
 struct storage_block {
 	struct list_head link;

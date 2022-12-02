@@ -19,22 +19,23 @@ struct diff_area;
 /**
  * struct tracker - Tracker for a block device.
  *
- * @kref:
- *	Protects the structure from being released during processing of
- *	an ioctl.
+ * @flt:
+ *	The block device filter structure.
  * @link:
- *	List header.
+ *	List header. Tracker release cannot be performed in the detach_cb()
+ *	filters callback function. Therefore, the trackers are queued for
+ *	release in the worker thread.
  * @dev_id:
  *	Original block device ID.
  * @snapshot_is_taken:
- *	Indicates that a snapshot was taken for the device whose bios are
+ *	Indicates that a snapshot was taken for the device whose I/O unit are
  *	handled by this tracker.
  * @cbt_map:
  *	Pointer to a change block tracker map.
  * @diff_area:
  *	Pointer to a difference area.
  *
- * The main goal of the tracker is to handle bios. The tracker detectes
+ * The goal of the tracker is to handle I/O unit. The tracker detectes
  * the range of sectors that will change and transmits them to the CBT map
  * and to the difference area.
  */
@@ -43,7 +44,6 @@ struct tracker {
 	struct list_head link;
 	dev_t dev_id;
 
-	struct percpu_rw_semaphore submit_lock;
 	atomic_t snapshot_is_taken;
 
 	struct cbt_map *cbt_map;

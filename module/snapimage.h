@@ -23,9 +23,18 @@ struct cbt_map;
  *	of the original device at the time of taking the snapshot.
  * @is_ready:
  *	The flag means that the snapshot image is ready for processing
- *	I/O requests.
+ *	I/O units.
  * @worker:
- *	A pointer to the &struct task of the worker thread.
+ *	A pointer to the &struct task of the worker thread that process I/O
+ *      units.
+ * queue_lock:
+ *      Lock for queues &todo_queue and &free_queue.
+ * todo_queue:
+ *	A queue of I/O units waiting to be processed.
+ * free_queue:
+ *	A queue of free slots for I/O units.
+ * free_queue_count:
+ *	The number or free slots in &free_queue.
  * @disk:
  *	A pointer to the &struct gendisk for the image block device.
  * @diff_area:
@@ -48,11 +57,10 @@ struct snapimage {
 	bool is_ready;
 
 	struct task_struct *worker;
-
-        spinlock_t queue_lock;
-        struct list_head todo_queue;
-        struct list_head free_queue;
-        unsigned int free_queue_count;
+	spinlock_t queue_lock;
+	struct list_head todo_queue;
+	struct list_head free_queue;
+	unsigned int free_queue_count;
 
 	struct gendisk *disk;
 

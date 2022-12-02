@@ -547,7 +547,7 @@ int snapshot_take(uuid_t *id)
 
 	pr_info("Snapshot was taken successfully\n");
 
-	/**
+	/*
 	 * Sometimes a snapshot is in the state of corrupt immediately
 	 * after it is taken.
 	 */

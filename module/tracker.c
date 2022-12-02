@@ -171,7 +171,7 @@ static bool tracker_submit_bio_cb(struct bio *bio,
 	 * be sent and returned to complete the processing of the original bio.
 	 * Unfortunately, this has to be done for any bio, regardless of their
 	 * flags and options.
-	 * Otherwise, write requests confidently overtake read requests.
+	 * Otherwise, write I/O units may overtake read I/O units.
 	 */
 	err = diff_area_wait(tracker->diff_area, sector, count,
 			     !!(bio->bi_opf & REQ_NOWAIT));
@@ -353,10 +353,6 @@ static struct tracker *tracker_new(struct block_device *bdev)
 		pr_err("Failed to attach tracker. errno=%d\n", abs(ret));
 		goto fail;
 	}
-	/*
-	 * The filter stores a pointer to the tracker.
-	 * The tracker will not be released until its filter is released.
-	 */
 
 	pr_debug("New tracker for device [%u:%u] was created.\n",
 		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
@@ -421,6 +417,9 @@ int tracker_init(void)
 
 /**
  * tracker_wait_for_release - Waiting for all trackers are released.
+ *
+ * Trackers are released in the worker thread. So, this function allows to wait
+ * for the end of the process of releasing trackers.
  */
 static void tracker_wait_for_release(void)
 {
