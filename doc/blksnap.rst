@@ -79,7 +79,6 @@ Snapshot overflow resistance
 ----------------------------
 
 To create images of snapshots of block devices, the module stores blocks of the original block device that have been changed since the snapshot was taken.
-Для этого модуль перехватывает запросы на запись и считывает блоки, которые должны быть перезаписаны.
 To do this, the module handle write requests and reads blocks that need to be overwritten.
 This algorithm guarantees the safety of the data of the original block device in the event of an overflow of the snapshot, and even in the case of unpredictable critical errors.
 If a problem occurs during backup, the difference storage is released, the snapshot is closed, no backup is created, but the server continues to work.
