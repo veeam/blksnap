@@ -273,9 +273,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 	if (IS_ERR(bdev)) {
-		pr_err("Failed to open device. errno=%d\n",
-		       abs((int)PTR_ERR(bdev)));
-		return ERR_PTR(PTR_ERR(bdev));
+		int err = PTR_ERR(bdev);
+
+		pr_err("Failed to open device. errno=%d\n", abs(err));
+		return ERR_PTR(err);
 	}
 
 	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);

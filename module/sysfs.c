@@ -30,7 +30,7 @@ static struct class *blk_snap_class;
 
 static struct device *blk_snap_device;
 
-int sysfs_init(void)
+int sysfs_initialize(void)
 {
 	struct device *dev;
 	int res;
@@ -70,7 +70,7 @@ int sysfs_init(void)
 	return res;
 }
 
-void sysfs_done(void)
+void sysfs_finalize(void)
 {
 	pr_info("Cleanup sysfs\n");
 

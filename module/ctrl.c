@@ -318,9 +318,11 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 		return -ENOMEM;
 	memory_object_inc(memory_object_blk_snap_snapshot_event);
 
-	if (copy_from_user(karg, (void *)arg,
-			   sizeof(struct blk_snap_snapshot_event))) {
-		pr_err("Unable failed to get snapstore error code: invalid user buffer\n");
+	/* Copy only snapshot ID */
+	if (copy_from_user(&karg->id,
+			   &((struct blk_snap_snapshot_event *)arg)->id,
+			   sizeof(struct blk_snap_uuid))) {
+		pr_err("Unable to get snapshot event. Invalid user buffer\n");
 		ret = -EINVAL;
 		goto out;
 	}
@@ -347,7 +349,7 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 
 	if (copy_to_user((void *)arg, karg,
 			 sizeof(struct blk_snap_snapshot_event))) {
-		pr_err("Unable to get snapstore error code: invalid user buffer\n");
+		pr_err("Unable to get snapshot event. Invalid user buffer\n");
 		ret = -EINVAL;
 	}
 out:

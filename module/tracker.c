@@ -472,9 +472,11 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
 	if (IS_ERR(bdev)) {
+		int err = PTR_ERR(bdev);
+
 		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
-		return ERR_PTR(PTR_ERR(bdev));
+		return ERR_PTR(err);
 	}
 
 	tracker = tracker_get_by_dev(bdev);
