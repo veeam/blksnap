@@ -83,6 +83,9 @@ static inline int _freeze_bdev(struct block_device *bdev,
 {
 	struct super_block *superblock;
 
+	pr_debug("Freezing device [%u:%u]\n", MAJOR(bdev->bd_dev),
+		 MINOR(bdev->bd_dev));
+
 	if (bdev->bd_super == NULL) {
 		pr_warn("Unable to freeze device [%u:%u]: no superblock was found\n",
 			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));

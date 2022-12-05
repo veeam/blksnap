@@ -79,6 +79,7 @@ ccflags-y += $(shell 								\
 # Specific options for standalone module configuration
 ccflags-y += "-D BLK_SNAP_DEBUG_MEMORY_LEAK"
 ccflags-y += "-D BLK_SNAP_FILELOG"
+ccflags-y += "-D BLK_SNAP_SEQUENTALFREEZE"
 # ccflags-y += "-D BLK_SNAP_DEBUGLOG"
 # ccflags-y += "-D BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
 # ccflags-y += "-D BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS"

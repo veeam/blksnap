@@ -84,10 +84,10 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	diff_area->chunk_shift = shift;
 	diff_area->chunk_count = count;
 
-	pr_info("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
-		(1ull << diff_area->chunk_shift),
-		MAJOR(diff_area->orig_bdev->bd_dev),
-		MINOR(diff_area->orig_bdev->bd_dev));
+	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
+		 (1ull << diff_area->chunk_shift),
+		 MAJOR(diff_area->orig_bdev->bd_dev),
+		 MINOR(diff_area->orig_bdev->bd_dev));
 }
 
 void diff_area_free(struct kref *kref)

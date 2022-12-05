@@ -56,7 +56,7 @@ struct snapshot {
 	int count;
 	struct tracker **tracker_array;
 	struct snapimage **snapimage_array;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
+#if defined(HAVE_SUPER_BLOCK_FREEZE) && !defined(BLK_SNAP_SEQUENTALFREEZE)
 	struct super_block **superblock_array;
 #endif
 };
