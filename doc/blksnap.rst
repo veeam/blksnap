@@ -9,7 +9,7 @@ Introduction
 
 At first glance, there is no novelty in the idea of creating snapshots for block devices.
 The Linux kernel already has mechanisms for creating snapshots.
-The Device Mapper includes dm-snap, which allows you to create snapshots of block devices.
+The Device Mapper includes dm-snap, which allows to create snapshots of block devices.
 BTRFS supports snapshots at the file system level.
 Both of these options have flaws that do not allow them to be used as a universal tool for creating backups.
 
@@ -19,24 +19,22 @@ Device Mappers flaws:
  * To store snapshot differences of one logical volume, it is necessary to reserve a fixed range of sectors on a reserved empty logical volume.
    Firstly, it is required that the system has enough space unoccupied by the file system, which rarely occurs on real servers.
    Secondly, as a rule, it is necessary to create snapshots for all logical volumes at once, which requires dividing this reserved space between several logical volumes.
-   We can divide this space equally or proportionally to the size. But the load on different disks is usually uneven.
+   This space can be divided equally or proportionally to the size. But the load on different disks is usually uneven.
    As a result, a snapshot overflow may occur for one of the block devices, while for others all the reserved space may remain free.
-   This complicates the management of the difference storage and makes it almost impossible to create a consistent snapshot of multiple logical volumes.
+   This complicates the management of the difference storage and makes it almost impossible to create a coherent snapshot of multiple logical volumes.
 
 BTRFS flaws:
- * Obviously cannot be applied to other file systems.
- * Snapshots create an immutable image of the file system, not a block device.
-   Such a snapshot is only applicable for a file backup.
-   When synchronizing the snapshot subvolume with the backup subvolume, reading the differences leads to random access to the block device, which leads to a decrease in efficiency compared to direct copying of the block device.
- * It is possible to get an incremental backup when synchronizing subvolumes, but for this it is necessary to keep a snapshot of the previous backup cycle on the system, which leads to excessive consumption of disk space.
+ * Snapshots create an immutable image of the file system, not a block device. Such a snapshot is only applicable for a file backup.
+ * When synchronizing the snapshot subvolume with the backup subvolume, reading the differences leads to random access to the block device, which leads to a decrease in efficiency compared to direct copying of the block device.
+ * BTRFS allows to get an incremental backup [#btrfs_increment]_, but it's necessary to keep a snapshot of the previous backup cycle on the system, which leads to excessive consumption of disk space.
  * If there is not enough free space on the file system while holding the snapshot, new data cannot be saved, which leads to a server malfunction.
 
 Features of the blksnap module:
  * Availability of a change tracker.
- * Creating snapshots at the block device level.
+ * Snapshots at the block device level.
  * Dynamic allocation of space for storing differences.
  * Snapshot overflow resistance.
- * A consistent snapshot of multiple block devices.
+ * A coherent snapshot of multiple block devices.
 
 For a more detailed description of the features, see the Features section.
 
@@ -45,8 +43,6 @@ The listed set of features allows to achieve the key goals of the backup tool:
  * Reliability.
  * Minimal consumption of system resources during backup.
  * Minimum recovery or replication time of the entire system.
-
-Thus, the blksnap module is the best way to create snapshots for backup tools.
 
 Features
 ========
@@ -88,10 +84,10 @@ To do this, the module handle write requests and reads blocks that need to be ov
 This algorithm guarantees the safety of the data of the original block device in the event of an overflow of the snapshot, and even in the case of unpredictable critical errors.
 If a problem occurs during backup, the difference storage is released, the snapshot is closed, no backup is created, but the server continues to work.
 
-Consistent snapshot of multiple block devices
+Coherent snapshot of multiple block devices
 ---------------------------------------------
 
-A snapshot is created simultaneously for all block devices for which a backup is being created, ensuring their consistent state.
+A snapshot is created simultaneously for all block devices for which a backup is being created, ensuring their coherent state.
 
 
 Algoritms
@@ -238,6 +234,8 @@ Documentation [#userspace_tests_doc]_ about them can be found on the project rep
 
 References
 ==========
+
+.. [#btrfs_increment] https://btrfs.wiki.kernel.org/index.php/Incremental_Backup
 
 .. [#userspace_libs] https://github.com/veeam/blksnap/tree/master/lib/blksnap
 
