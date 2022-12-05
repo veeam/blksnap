@@ -464,7 +464,7 @@ fail_unlock_chunk:
 }
 
 int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
-                   const bool is_nowait)
+		   const bool is_nowait)
 {
 	int ret = 0;
 	sector_t offset;
@@ -491,7 +491,7 @@ int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
 				return ret;
 		}
 
-		if (chunk_state_check(chunk, CHUNK_ST_FAILED )) {
+		if (chunk_state_check(chunk, CHUNK_ST_FAILED)) {
 			/*
 			 * The chunk has already been:
 			 * - Failed, when the snapshot is corrupted

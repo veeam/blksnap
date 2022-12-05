@@ -41,12 +41,12 @@ struct tracker_release_worker {
 };
 static struct tracker_release_worker tracker_release_worker;
 
-void tracker_lock(void )
+void tracker_lock(void)
 {
 	pr_debug("Lock trackers\n");
 	percpu_down_write(&tracker_submit_lock);
 };
-void tracker_unlock(void )
+void tracker_unlock(void)
 {
 	percpu_up_write(&tracker_submit_lock);
 	pr_debug("Trackers have been unlocked\n");
@@ -68,7 +68,7 @@ static void tracker_free(struct tracker *tracker)
 	refcount_dec(&trackers_counter);
 }
 
-struct tracker *tracker_get_by_dev(struct block_device *bdev)
+static inline struct tracker *tracker_get_by_dev(struct block_device *bdev)
 {
 	struct bdev_filter *flt;
 
@@ -119,12 +119,13 @@ static bool tracker_submit_bio_cb(struct bio *bio,
 	if (!op_is_write(bio_op(bio)))
 		goto out;
 
-	if (!bio->bi_iter.bi_size)
+	count = bio_sectors(bio);
+	if (!count)
 		goto out;
 
 	sector = bio->bi_iter.bi_sector;
-	count = (sector_t)(round_up(bio->bi_iter.bi_size, SECTOR_SIZE) >>
-			   SECTOR_SHIFT);
+	if (bio_flagged(bio, BIO_REMAPPED))
+		sector -= bio->bi_bdev->bd_start_sect;
 
 	current_flag = memalloc_noio_save();
 	err = cbt_map_set(tracker->cbt_map, sector, count);

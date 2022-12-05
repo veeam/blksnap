@@ -59,8 +59,6 @@ static inline void tracker_put(struct tracker *tracker)
 		bdev_filter_put(&tracker->flt);
 };
 
-struct tracker *tracker_get_by_dev(struct block_device *bdev);
-
 int tracker_init(void);
 void tracker_done(void);
 

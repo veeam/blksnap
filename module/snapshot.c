@@ -327,8 +327,8 @@ void snapshot_done(void)
 	} while (snapshot);
 }
 
-static inline bool blk_snap_dev_is_equal(struct blk_snap_dev* first,
-				    struct blk_snap_dev* second)
+static inline bool blk_snap_dev_is_equal(struct blk_snap_dev *first,
+				    struct blk_snap_dev *second)
 {
 	return (first->mj == second->mj) && (first->mn == second->mn);
 }
