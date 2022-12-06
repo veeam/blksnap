@@ -87,7 +87,7 @@ This algorithm guarantees safety of the data of the original block device in the
 If a problem occurs during backup, the difference storage is released, the snapshot is closed, no backup is created, but the server continues to work.
 
 Coherent snapshot of multiple block devices
----------------------------------------------
+-------------------------------------------
 
 A snapshot is created simultaneously for all block devices for which a backup is being created, ensuring their coherent state.
 
@@ -187,7 +187,7 @@ Depending on the needs and the selected license, you can choose different option
 
 - Using ioctl directly
 - Using a static C++ library
-- Using the bl
+- Using the blksnap console tool
 
 Using ioctl
 -----------
@@ -210,14 +210,14 @@ The general algorithm for calling control requests is approximately the followin
 11. It is possible to disable the change tracker from any block device using ``blk_snap_ioctl_tracker_remove``.
 
 Static C++ library
---------------------------
+------------------
 
 The [#userspace_libs]_ library was created primarily to simplify creation of tests in C++, and it is also a good example of using the module interface.
 When creating applications, direct use of control calls is preferable.
 However, the library can be used in an application with a GPL-2+ license, or a library with an LGPL-2+ license can be created, with which even a proprietary application can be dynamically linked.
 
 blksnap console tool
------------------------------
+--------------------
 
 The blksnap [#userspace_tools]_ console tool allows to control the module from the command line.
 The tool contains detailed built-in help.
