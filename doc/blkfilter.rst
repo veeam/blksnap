@@ -12,7 +12,7 @@ Introduction
 
 The idea of handling I/O units on block devices is not new.
 Back in the 2.6 kernel, there was an undocumented possibility of handling I/O units by substituting the make_request_fn() function, which belonged to the request_queue structure.
-But no kernel module used this feature and it was eliminated in kernel 5.10.
+But no kernel module used this feature, and it was eliminated in the 5.10 kernel.
 
 The block device filtering mechanism returns the ability to handle I/O units.
 It is possible to safely attach one filter to a block device "on the fly" without changing the structure of block devices.
