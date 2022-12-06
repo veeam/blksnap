@@ -14,35 +14,39 @@ BTRFS supports snapshots at the file system level.
 Both of these options have flaws that do not allow them to be used as a universal tool for creating backups.
 
 Device Mappers flaws:
- * Block devices must have LVM markup.
-   If no logical volumes were created during system installation, then dm-snap cannot be applied.
- * To store snapshot differences of one logical volume, it is necessary to reserve a fixed range of sectors on a reserved empty logical volume.
-   Firstly, it is required that the system has enough space unoccupied by the file system, which rarely occurs on real servers.
-   Secondly, as a rule, it is necessary to create snapshots for all logical volumes at once, which requires dividing this reserved space between several logical volumes.
-   This space can be divided equally or proportionally to the size. But the load on different disks is usually uneven.
-   As a result, a snapshot overflow may occur for one of the block devices, while for others all the reserved space may remain free.
-   This complicates the management of the difference storage and makes it almost impossible to create a coherent snapshot of multiple logical volumes.
+
+- Block devices must have LVM markup.
+  If no logical volumes were created during system installation, then dm-snap cannot be applied.
+- To store snapshot differences of one logical volume, it is necessary to reserve a fixed range of sectors on a reserved empty logical volume.
+  Firstly, it is required that the system has enough space unoccupied by the file system, which rarely occurs on real servers.
+  Secondly, as a rule, it is necessary to create snapshots for all logical volumes at once, which requires dividing this reserved space between several logical volumes.
+  This space can be divided equally or proportionally to the size. But the load on different disks is usually uneven.
+  As a result, a snapshot overflow may occur for one of the block devices, while for others all the reserved space may remain free.
+  This complicates the management of the difference storage and makes it almost impossible to create a coherent snapshot of multiple logical volumes.
 
 BTRFS flaws:
- * Snapshots create an immutable image of the file system, not a block device. Such a snapshot is only applicable for a file backup.
- * When synchronizing the snapshot subvolume with the backup subvolume, reading the differences leads to random access to the block device, which leads to a decrease in efficiency compared to direct copying of the block device.
- * BTRFS allows to get an incremental backup [#btrfs_increment]_, but it's necessary to keep a snapshot of the previous backup cycle on the system, which leads to excessive consumption of disk space.
- * If there is not enough free space on the file system while holding the snapshot, new data cannot be saved, which leads to a server malfunction.
+
+- Snapshots create an immutable image of the file system, not a block device. Such a snapshot is only applicable for a file backup.
+- When synchronizing the snapshot subvolume with the backup subvolume, reading the differences leads to random access to the block device, which leads to a decrease in efficiency compared to direct copying of the block device.
+- BTRFS allows to get an incremental backup [#btrfs_increment]_, but it's necessary to keep a snapshot of the previous backup cycle on the system, which leads to excessive consumption of disk space.
+- If there is not enough free space on the file system while holding the snapshot, new data cannot be saved, which leads to a server malfunction.
 
 Features of the blksnap module:
- * Availability of a change tracker.
- * Snapshots at the block device level.
- * Dynamic allocation of space for storing differences.
- * Snapshot overflow resistance.
- * A coherent snapshot of multiple block devices.
+
+- Availability of a change tracker.
+- Snapshots at the block device level.
+- Dynamic allocation of space for storing differences.
+- Snapshot overflow resistance.
+- A coherent snapshot of multiple block devices.
 
 For a more detailed description of the features, see the Features section.
 
 The listed set of features allows to achieve the key goals of the backup tool:
- * Simplicity and versatility of use.
- * Reliability.
- * Minimal consumption of system resources during backup.
- * Minimum recovery or replication time of the entire system.
+
+- Simplicity and versatility of use.
+- Reliability.
+- Minimal consumption of system resources during backup.
+- Minimum recovery or replication time of the entire system.
 
 Features
 ========
@@ -179,9 +183,10 @@ How to use
 ==========
 
 Depending on the needs and the selected license, you can choose different options for managing the module:
- * Using ioctl directly.
- * Using a static C++ library.
- * Using the blksnap console tool.
+
+- Using ioctl directly.
+- Using a static C++ library.
+- Using the blksnap console tool.
 
 Using ioctl
 -----------
@@ -189,19 +194,19 @@ Using ioctl
 The module provides a header file ``include/uapi/blksnap.h``.
 It describes all the available ioctl and structures for interacting with the module.
 Each ioctl and structure is documented in detail.
-The general algorithm for calling control requests is approximately the following.
- 1. The ``blk_snap_ioctl_snapshot_create`` initiates the snapshot creation process.
- 2. The ``blk_snap_ioctl_snapshot_append_storage`` allows to add the first range of blocks to store changes.
- 3. The ``blk_snap_ioctl_snapshot_take`` creates block devices of snapshot images of block devices.
- 4. The ``blk_snap_ioctl_snapshot_collect`` and ``blk_snap_ioctl_snapshot_collect_images`` queries allow to match the original block devices and their corresponding snapshot images.
- 5. Snapshot images are being read from block devices whose numbers were received when calling ``blk_snap_ioctl_snapshot_collect_images``. Snapshot images also support the write operation. So, the file system on the snapshot image can be mounted before backup, which allows to perform the necessary preprocessing.
+The general algorithm for calling control requests is approximately the following:
 
- 6. The ``blk_snap_ioctl_tracker_collect`` and ``blk_snap_ioctl_tracker_read_cbt_map`` allow to get the data of the change tracker. If a write operation was performed for the snapshot, then the change tracker takes this into account. Therefore, it is necessary to receive tracker data after the writing operations have been completed.
- 7. The ``blk_snap_ioctl_snapshot_wait_event`` allows to track the status of snapshots and receive an events about the requirement to expand the difference storage or snapshot overflow.
- 8. The difference storage is expanded using a ``blk_snap_ioctl_snapshot_append_storage``.
- 9. The ``blk_snap_ioctl_snapshot_destroy`` releases the snapshot.
- 10. If, after creating a backup copy, postprocessing is performed that changes the backup blocks, it is necessary to mark such blocks as dirty in the change tracker table. The ``blk_snap_ioctl_tracker_mark_dirty_blocks`` is used for this.
- 11. It is possible to disable the change tracker from any block device using ``blk_snap_ioctl_tracker_remove``.
+1. The ``blk_snap_ioctl_snapshot_create`` initiates the snapshot creation process.
+2. The ``blk_snap_ioctl_snapshot_append_storage`` allows to add the first range of blocks to store changes.
+3. The ``blk_snap_ioctl_snapshot_take`` creates block devices of snapshot images of block devices.
+4. The ``blk_snap_ioctl_snapshot_collect`` and ``blk_snap_ioctl_snapshot_collect_images`` queries allow to match the original block devices and their corresponding snapshot images.
+5. Snapshot images are being read from block devices whose numbers were received when calling ``blk_snap_ioctl_snapshot_collect_images``. Snapshot images also support the write operation. So, the file system on the snapshot image can be mounted before backup, which allows to perform the necessary preprocessing.
+6. The ``blk_snap_ioctl_tracker_collect`` and ``blk_snap_ioctl_tracker_read_cbt_map`` allow to get the data of the change tracker. If a write operation was performed for the snapshot, then the change tracker takes this into account. Therefore, it is necessary to receive tracker data after the writing operations have been completed.
+7. The ``blk_snap_ioctl_snapshot_wait_event`` allows to track the status of snapshots and receive an events about the requirement to expand the difference storage or snapshot overflow.
+8. The difference storage is expanded using a ``blk_snap_ioctl_snapshot_append_storage``.
+9. The ``blk_snap_ioctl_snapshot_destroy`` releases the snapshot.
+10. If, after creating a backup copy, postprocessing is performed that changes the backup blocks, it is necessary to mark such blocks as dirty in the change tracker table. The ``blk_snap_ioctl_tracker_mark_dirty_blocks`` is used for this.
+11. It is possible to disable the change tracker from any block device using ``blk_snap_ioctl_tracker_remove``.
 
 Static C++ Library
 --------------------------
@@ -225,7 +230,7 @@ Tests
 -----
 
 A set of tests was created for regression testing [#userspace_tests]_.
-Bash has written tests with simple algorithms that use the console tool ``blksnap`` to control the module.
+Tests with simple algorithms that use the console tool ``blksnap`` to control the module are written in bash.
 More complex testing algorithms are implemented in C++.
 Documentation [#userspace_tests_doc]_ about them can be found on the project repository.
 
