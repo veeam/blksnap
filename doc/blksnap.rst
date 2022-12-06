@@ -68,12 +68,10 @@ Dynamic allocation of storage space for differences
 ---------------------------------------------------
 
 To store differences, the module does not require a pre-reserved block device range.
-An arbitrary range of sectors on any block device can be used to store snapshot differences.
-The size of the difference storage can be increased after the snapshot is created by adding new ranges of sectors, including on new block devices.
-This allows to create a difference storage in individual files on the file system and increase the difference storage as needed.
+A range of sectors can be allocated on any block device immediately before creating a snapshot in individual files on the file system.
+In addition, the size of the difference storage can be increased after the snapshot is created by adding new sector ranges on block devices.
+Sector ranges can be allocated on any block devices of the system, including those on which the snapshot was created.
 A shared difference storage for all images of snapshot block devices allows to optimize the use of disk space.
-At the same time, it is possible to reserve a difference storage of the required size before creating a snapshot.
-This possibility may be applicable for highly loaded systems for which the allocation time of new sector ranges may be too long.
 
 Snapshot overflow resistance
 ----------------------------
