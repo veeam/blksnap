@@ -22,7 +22,7 @@
 static unsigned int _major;
 static DEFINE_IDA(snapimage_devt_ida);
 
-static int snapimage_kthread_worker_fn(void* param);
+static int snapimage_kthread_worker_fn(void *param);
 
 static inline void snapimage_stop_worker(struct snapimage *snapimage)
 {
@@ -85,7 +85,7 @@ static inline struct bio *get_bio_from_queue(struct snapimage *snapimage)
 	return bio;
 }
 
-static int snapimage_kthread_worker_fn(void* param)
+static int snapimage_kthread_worker_fn(void *param)
 {
 	struct snapimage *snapimage = param;
 	struct bio *bio;
