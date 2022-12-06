@@ -84,10 +84,10 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	diff_area->chunk_shift = shift;
 	diff_area->chunk_count = count;
 
-	pr_info("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
-		(1ull << diff_area->chunk_shift),
-		MAJOR(diff_area->orig_bdev->bd_dev),
-		MINOR(diff_area->orig_bdev->bd_dev));
+	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
+		 (1ull << diff_area->chunk_shift),
+		 MAJOR(diff_area->orig_bdev->bd_dev),
+		 MINOR(diff_area->orig_bdev->bd_dev));
 }
 
 void diff_area_free(struct kref *kref)
@@ -273,9 +273,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 	if (IS_ERR(bdev)) {
-		pr_err("Failed to open device. errno=%d\n",
-		       abs((int)PTR_ERR(bdev)));
-		return ERR_PTR(PTR_ERR(bdev));
+		int err = PTR_ERR(bdev);
+
+		pr_err("Failed to open device. errno=%d\n", abs(err));
+		return ERR_PTR(err);
 	}
 
 	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
@@ -463,7 +464,7 @@ fail_unlock_chunk:
 }
 
 int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
-                   const bool is_nowait)
+		   const bool is_nowait)
 {
 	int ret = 0;
 	sector_t offset;
@@ -490,7 +491,7 @@ int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
 				return ret;
 		}
 
-		if (chunk_state_check(chunk, CHUNK_ST_FAILED )) {
+		if (chunk_state_check(chunk, CHUNK_ST_FAILED)) {
 			/*
 			 * The chunk has already been:
 			 * - Failed, when the snapshot is corrupted

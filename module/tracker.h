@@ -59,8 +59,6 @@ static inline void tracker_put(struct tracker *tracker)
 		bdev_filter_put(&tracker->flt);
 };
 
-struct tracker *tracker_get_by_dev(struct block_device *bdev);
-
 int tracker_init(void);
 void tracker_done(void);
 
@@ -82,6 +80,9 @@ static inline int _freeze_bdev(struct block_device *bdev,
 			       struct super_block **psuperblock)
 {
 	struct super_block *superblock;
+
+	pr_debug("Freezing device [%u:%u]\n", MAJOR(bdev->bd_dev),
+		 MINOR(bdev->bd_dev));
 
 	if (bdev->bd_super == NULL) {
 		pr_warn("Unable to freeze device [%u:%u]: no superblock was found\n",

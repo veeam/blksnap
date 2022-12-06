@@ -323,7 +323,6 @@ int snapimage_init(void)
 
 void snapimage_done(void)
 {
-
 	unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
 	pr_info("Snapshot image block device [%d] was unregistered\n", _major);
 }

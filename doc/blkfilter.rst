@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: GPL-2.0
 
-================================================
-Block device filtering mechanism
-================================================
+================================
+Block Device Filtering Mechanism
+================================
 
 The block device filtering mechanism is an API that allows to attach block device filters.
 Block device filters allow perform additional processing for I/O units.

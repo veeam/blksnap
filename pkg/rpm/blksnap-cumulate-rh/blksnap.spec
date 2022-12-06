@@ -69,9 +69,6 @@ done
 %{__rm} -rf %{buildroot}
 
 %preun -n kmod-%{name}
-if lsmod | grep %{name} > /dev/null; then
-	echo "Unload module %{name}"
-	rmmod %{name}
-fi
+/usr/sbin/%{name}-loader --unload
 
 %changelog

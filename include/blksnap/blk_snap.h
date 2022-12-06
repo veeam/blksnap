@@ -501,8 +501,7 @@ struct blk_snap_snapshot_event {
 	__s64 time_label;
 	__u8 data[4096 - 32];
 };
-static_assert(
-	sizeof(struct blk_snap_snapshot_event) == 4096,
+static_assert(sizeof(struct blk_snap_snapshot_event) == 4096,
 	"The size struct blk_snap_snapshot_event should be equal to the size of the page.");
 
 /**
