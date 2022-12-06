@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: GPL-2.0
 
-==============================================
-Module for creating snapshots of block devices
-==============================================
+========================================
+Block Devices Snapshots Module (blksnap)
+========================================
 
 Introduction
 ============
