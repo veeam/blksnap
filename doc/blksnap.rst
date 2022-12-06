@@ -92,8 +92,8 @@ Coherent snapshot of multiple block devices
 A snapshot is created simultaneously for all block devices for which a backup is being created, ensuring their coherent state.
 
 
-Algoritms
-=========
+Algorithms
+==========
 
 Overview
 --------
