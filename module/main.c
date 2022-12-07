@@ -214,7 +214,7 @@ module_param_named(diff_storage_minimum, diff_storage_minimum, int, 0644);
 MODULE_PARM_DESC(diff_storage_minimum,
 	"The minimum allowable size of the difference storage in sectors");
 
-MODULE_DESCRIPTION("Block Layer Snapshot Kernel Module");
+MODULE_DESCRIPTION("Block Device Snapshots Module");
 MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
