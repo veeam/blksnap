@@ -248,7 +248,7 @@ References
 
 .. [#userspace_tests_doc] https://github.com/veeam/blksnap/tree/master/doc
 
-Source code documentation
-=========================
+Module interface description
+============================
 
 .. kernel-doc:: include/uapi/linux/blksnap.h
