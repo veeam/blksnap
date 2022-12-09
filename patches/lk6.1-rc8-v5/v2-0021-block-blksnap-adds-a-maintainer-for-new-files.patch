@@ -1,0 +1,38 @@
+From f9d7e1235e8e2e1823f740a9db024bd25b0d3a77 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Fri, 9 Dec 2022 15:19:32 +0100
+Subject: [PATCH v2 21/21] block, blksnap: adds a maintainer for new files
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ MAINTAINERS | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 1daadaa4d48b..d54c6e59a965 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -3655,6 +3655,20 @@ M:	Jan-Simon Moeller <jansimon.moeller@gmx.de>
+ S:	Maintained
+ F:	drivers/leds/leds-blinkm.c
+ 
++BLOCK DEVICE FILTERING MECHANISM
++M:	sergei.shtepa@veeam.com
++L:	linux-block@vger.kernel.org
++S:	Supported
++F:	Documentation/block/blkfilter.rst
++
++BLOCK DEVICE SNAPSHOTS MODULE
++M:	sergei.shtepa@veeam.com
++L:	linux-block@vger.kernel.org
++S:	Supported
++F:	Documentation/block/blksnap.rst
++F:	drivers/block/blksnap/*
++F:	include/uapi/linux/blksnap.h
++
+ BLOCK LAYER
+ M:	Jens Axboe <axboe@kernel.dk>
+ L:	linux-block@vger.kernel.org
+-- 
+2.20.1
+
