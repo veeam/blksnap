@@ -20,10 +20,12 @@ Other improvements was done and a documentation was added as pointed out by answ
 outside of the patch posted the integrated documentation is very important
 and the comments included in the code were not enough.
 
-The next version of the patch that will be posted is a work in progress but
-seems near ready and is available [here](https://github.com/veeam/blksnap/tree/master/patches/lk6.1-rc8-v5)
+Thanks to Fabio Fantoni for his for his participation in the "blksnap" project on github
+and Jonathan Corbet for his [article](https://lwn.net/Articles/914031/).
 
-Is also possible use the [latest branch on Sergei Shtepa linux git](https://github.com/SergeiShtepa/linux/commits/blksnap_lk6.1-rc8_v5)
+A "v2" patch on [patchwork](https://patchwork.kernel.org./project/linux-block/list/?series=703315) or [lore](https://lore.kernel.org/linux-block/20221209142331.26395-1-sergei.shtepa@veeam.com/) was posted at 9 December 2022.
+
+Is also possible use the [branch on linux fork](https://github.com/SergeiShtepa/linux/commits/blksnap_lk6.1-rc8_v5).
 
 Latest news is also visible from [here](https://github.com/veeam/blksnap/issues/2)
 
