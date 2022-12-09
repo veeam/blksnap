@@ -15,4 +15,3 @@ cmake*
 *.a
 *.so
 *.ko
-sync.sh
