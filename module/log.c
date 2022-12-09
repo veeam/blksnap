@@ -6,9 +6,9 @@
 #include <linux/slab.h>
 #include <linux/sched/task.h>
 #ifdef STANDALONE_BDEVFILTER
-#include "blk_snap.h"
+#include "blksnap.h"
 #else
-#include <linux/blk_snap.h>
+#include <linux/blksnap.h>
 #endif
 #include "version.h"
 #include "memory_checker.h"

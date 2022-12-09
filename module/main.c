@@ -2,9 +2,9 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
 #ifdef STANDALONE_BDEVFILTER
-#include "blk_snap.h"
+#include "blksnap.h"
 #else
-#include <linux/blk_snap.h>
+#include <linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "version.h"

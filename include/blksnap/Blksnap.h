@@ -34,7 +34,7 @@
 #    define BLK_SNAP_DEBUG_SECTOR_STATE
 #endif
 #include "Sector.h"
-#include "blk_snap.h"
+#include "blksnap.h"
 
 namespace blksnap
 {

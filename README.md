@@ -79,7 +79,7 @@ cd ./pkg/deb
 
 ## library
 The dynamic C library is not needed to work with blksnap. File
-./include/blksnap/blk_snap.h contains everything you need to work with blksnap.
+./include/blksnap/blksnap.h contains everything you need to work with blksnap.
 But to demonstrate how to call the ioctl, a static c++ library was created.
 The library can also help you quickly create a working prototype.
 In the project, the library is used for tests.

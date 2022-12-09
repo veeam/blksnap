@@ -74,7 +74,7 @@ Depending on the needs and the selected license, you can choose different option
 3. Using the blksnap console tool
 
 ### Using ioctl
-The kernel module provides the blk_snap.h header file. It describes all available ioctls and structures for interacting with the module. Each ioctl and structure is documented in detail. This should be enough to understand the interface. If you think that something is missing, I suggest expanding the description in the header file.
+The kernel module provides the blksnap.h header file. It describes all available ioctls and structures for interacting with the module. Each ioctl and structure is documented in detail. This should be enough to understand the interface. If you think that something is missing, I suggest expanding the description in the header file.
 In addition, the libblksnap library and the blksnap tool use this interface, so in case of difficulty, you can use their source code as an example.
 
 ### Static C++ library
