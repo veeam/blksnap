@@ -17,6 +17,8 @@ bdevfilter provides the ability to intercept I/O units (bio). The main logic
 is concentrated in blksnap. The upstream variant does not contain a bdevfilter,
 but accesses the kernel to attach and detach the block device filter.
 
+Relating the work in progress for integration in upstream kernel see the specific [README](../blob/master/doc/README-upstream-kernel.md)
+
 ### How to build
 Installing the necessary deb packages.
 ``` bash
