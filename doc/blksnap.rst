@@ -26,7 +26,7 @@ Device Mapper flaws:
 
 BTRFS flaws:
 
-- Snapshots create an immutable image of the file system, not a block device. Such a snapshot is only applicable for a file backup.
+- Snapshots create a persistent image of the file system, not a block device. Such a snapshot is only applicable for a file backup.
 - When synchronizing the snapshot subvolume with the backup subvolume, reading the differences leads to random access to the block device, which leads to decrease in efficiency compared to direct copying of the block device.
 - BTRFS allows to get an incremental backup [#btrfs_increment]_, but it is necessary to keep a snapshot of the previous backup cycle on the system, which leads to excessive consumption of disk space.
 - If there is not enough free space on the file system while holding the snapshot, new data cannot be saved, which leads to a server malfunction.
@@ -40,7 +40,7 @@ Features of the blksnap module:
 - Coherent snapshot of multiple block devices
 
 
-For a more detailed description of the features, see the Features section.
+For a more detailed description of the features, see the `Features`_ section.
 
 The listed set of features allows to achieve the key goals of the backup tool:
 
@@ -105,8 +105,8 @@ Information about the history of changes on the block device is available while 
 The module reads the blocks that need to be overwritten and stores them in the difference storage.
 When reading from a snapshot image, reading is performed either from the original device or from the difference storage.
 
-Change tracker
---------------
+Change tracking
+---------------
 
 A change tracker map is created for each block device.
 One byte of this map corresponds to one block.
@@ -121,7 +121,7 @@ Each time a snapshot is created, the number of the current snapshot is increased
 This number is written to the cell of the change map when writing to the block.
 Thus, knowing the number of one of the previous snapshots and the number of the last snapshot, one can determine from the change map which blocks have been changed.
 When the number of the current change reaches the maximum allowed value for the map of 255, at the time when the next snapshot is created, the map of changes is reset to zero, and the number of the current snapshot is assigned the value 1.
-The change tracker is reset, and a new UUID is generated — a unique identifier of the snapshot generation.
+The change tracker is reset, and a new UUID is generated - a unique identifier of the snapshot generation.
 The snapshot generation identifier allows to identify that a change tracking reset has been performed.
 
 The change map has two copies. One copy is active, it tracks the current changes on the block device.
@@ -221,8 +221,8 @@ blksnap console tool
 
 The blksnap [#userspace_tools]_ console tool allows to control the module from the command line.
 The tool contains detailed built-in help.
-To get the list of commands, enter the ``blksnap --help`` command. The
-``blksnap <command name> --help`` command allows to get detailed information about the parameters of each command call.
+To get the list of commands, enter the ``blksnap --help`` command.
+The ``blksnap <command name> --help`` command allows to get detailed information about the parameters of each command call.
 This option may be convenient when creating proprietary software, as it allows not to compile with the open source code.
 At the same time, the blksnap tool can be used for creating backup scripts.
 For example, rsync can be called to synchronize files on the file system of the mounted snapshot image and files in the archive on a file system that supports compression.
