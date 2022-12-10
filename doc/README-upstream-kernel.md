@@ -1,5 +1,13 @@
 # Integration in upstream kernel
 
+* [Introduction](#introduction)
+* [Patches submitted](#patches-submitted)
+* [Documentation](#documentation)
+* [Build](#build)
+* [Contributing](#contributing)
+
+## Introduction
+
 Work for submit patches to upstream it's a lot (see [1](https://docs.kernel.org/process/5.Posting.html "Posting patches") [2](https://docs.kernel.org/process/submitting-patches.html "Submitting patches: the essential guide to getting your code into the kernel") [3](https://docs.kernel.org/process/submit-checklist.html "Linux Kernel patch submission checklist") )
 but once completed and integrated upstream it allows to get great results,
 like better source code, possible out-of-the-box support, better performance,
