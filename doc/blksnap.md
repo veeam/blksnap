@@ -1,11 +1,23 @@
-# blksnap - module for snapshots of block devices
+# BLKSNAP - module for snapshots of block devices
+
+* [Introduction](#introduction)
+* [How it works](#how-it-works)
+* [Features](#features)
+  - [Change tracking](#change-tracking)
+  - [Copy-on-write](#copy-on-write)
+  - [Difference storage](#difference-storage)
+* [How to use it](#how-to-use-it)
+  - [Using ioctl](#using-ioctl)
+  - [Static C++ library](#static-c-library)
+  - [Blksnap console tool](#blksnap-console-tool)
+* [What's next](#whats-next)
 
 ## Introduction
 There is no novelty in the idea of snapshots for block devices. Even the Linux kernel already has mechanisms for creating snapshots of block devices. First of all, this is Device Mapper which allows you to create persistent and non-persistent snapshots of block devices. There are file systems that support snapshots, such as BTRFS. There are others, but they all have their own features. These features do not allow them to be used as a universal tool for creating backups. That is why different backup vendors offer their own kernel modules for creating snapshots. Unfortunately, none of these modules meet the upstream requirements of the Linux kernel.
 
 The blksnap module was created precisely for the purpose of offering it to the upstream. It provides the ability to create non-persistent snapshots on most modern systems without the requirement to change their configuration.
 
-## Features of the blksnap module
+## Features
 A change tracker is implemented in the module. It allows to determine which blocks were changed during the time between the last snapshot created and any of the previous snapshots of the same generation. This allows to implement the logic of both incremental and differential backups.
 
 An arbitrary range of sectors on any block device can be used to store snapshot changes. The size of the change store can be increased after the snapshot is created by adding new sector ranges. This allows to create storage of differences in individual files on a file system that can occupy the entire space of a block device and increase the storage of differences as needed.
@@ -86,7 +98,7 @@ The library interface is quite simple and intuitive. There are tests that apply 
 * The blksnap::ICbt (include/blksnap/Cbt.h) interface allows to access the change tracker data.
 * The include/blksnap/Service.h file contains the function of getting the kernel module version and may contain other functionality for debugging the module.
 
-### blksnap console tool
+### Blksnap console tool
 In accordance with the "the best documentation is code" paradigm, the tool contains a detailed built-in help. Calling "blksnap --help" allows to get a list of commands. When requesting "blksnap \<command name\> --help", a description of the command is output. If you think that this documentation is not enough, I suggest adding the necessary information to the built-in help system of the tool.
 
 If you still have questions about how to use the tool, then you can use tests written in bash as an example.
