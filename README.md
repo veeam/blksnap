@@ -7,6 +7,10 @@
 * [Tools](#tools)
 * [Library](#library)
 * [Tests](#tests)
+  - Details:
+    * [Boundary](doc/tests/boundary.md)
+    * [Corrupt](doc/tests/corrupt.md)
+    * [Diff storage](doc/tests/diff_storage.md)
 * [Compatibility notes](#compatibility-notes)
 
 ## Repository structure
