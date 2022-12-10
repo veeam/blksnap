@@ -1,4 +1,15 @@
-# blksnap
+# BLKSNAP - Block Devices Snapshots Module
+
+* [Extended description and features](doc/blksnap.md)
+* [Repository structure](#repository-structure)
+* [Kernel module](#kernel-module)
+* [Upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
+* [Tools](#tools)
+* [Library](#library)
+* [Tests](#tests)
+* [Compatibility notes](#compatibility-notes)
+
+## Repository structure
 
 * doc/ - documentation
 * include/ - libraries public headers
@@ -9,7 +20,7 @@
 * tests/ - Test scripts and test source codes.
 * tools/ - source files of tools for working with blksnap
 
-## kernel module blksnap
+## Kernel module
 This kernel module implements snapshot and changed block tracking functionality.
 The module is developed with the condition of simply adding it to the upstream.
 Therefore, the module is divided into two parts: bdevfilter and blksnap.
@@ -49,8 +60,8 @@ cd ./pkg/deb
 ### How to create rpm package
 There are several variants, look in the ./pkg/rpm directory.
 
-## blksnap tool
-The blksnap tool allows you to manage the module from the command line.
+## Tools
+The blksnap tools allows you to manage the module from the command line.
 The program allows for execution of individual ioctls of the blksnap module.
 The interface of the program may seem inconvenient to the user,
 since it is assumed that it will be called by other applications.
@@ -79,7 +90,7 @@ cd ./pkg/deb
 ./build-blksnap-tools.sh ${VERSION}
 ```
 
-## library
+## Library
 The dynamic C library is not needed to work with blksnap. File
 ./include/blksnap/blk_snap.h contains everything you need to work with blksnap.
 But to demonstrate how to call the ioctl, a static c++ library was created.
@@ -109,7 +120,7 @@ cd ./pkg/deb
 ./build-blksnap-dev.sh ${VERSION}
 ```
 
-## tests
+## Tests
 The test scripts are written in bash and use the blksnap tool to control
 the blksnap module. The test scripts allow to check the main functions of
 the module. To implement complex test algorithms, С++ tests are implemented.
