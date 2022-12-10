@@ -15,14 +15,14 @@
 
 ## Repository structure
 
-* doc/ - documentation
-* include/ - libraries public headers
-* lib/ - libraries sources
-* module/ - blksnap kernel module sources
-* patches/ - patches for thelinux kernel
-* pkg/ - scripts for building packages
-* tests/ - Test scripts and test source codes.
-* tools/ - source files of tools for working with blksnap
+* doc/ - Documentation
+* include/ - Libraries public headers
+* lib/ - Libraries sources
+* module/ - Sources of kernel module
+* patches/ - Patches for the upstream linux kernel
+* pkg/ - Scripts for building deb and rpm packages
+* tests/ - Test scripts and tests source code
+* tools/ - Source files of tools for working with blksnap
 
 ## Kernel module
 This kernel module implements snapshot and changed block tracking functionality.
