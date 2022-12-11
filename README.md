@@ -2,6 +2,7 @@
 
 * [Extended description and features](doc/blksnap.md)
 * [Repository structure](#repository-structure)
+* [Licensing](#licensing)
 * [Kernel module](#kernel-module)
 * [Upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
 * [Tools](#tools)
@@ -23,6 +24,15 @@
 * pkg/ - Scripts for building deb and rpm packages
 * tests/ - Test scripts and tests source code
 * tools/ - Source files of tools for working with blksnap
+
+## Licensing
+
+Kernel module is GPL-2 only, tools and tests are GPL-2+, library and include are LGPL-3+.
+
+Copyright (C) 2022 Veeam Software Group GmbH
+
+This project use [SPDX License Identifier](https://spdx.dev/ids/) in source files header.
+
 
 ## Kernel module
 This kernel module implements snapshot and changed block tracking functionality.
