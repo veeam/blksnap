@@ -1,13 +1,3 @@
-This license applies to all files in this repository except files in
-directories lib and include, which are licensed under separate license
-available directly at these directories.
-
-Valid-License-Identifier: GPL-2.0 <br>
-Valid-License-Identifier: GPL-2.0-only <br>
-Valid-License-Identifier: GPL-2.0+ <br>
-Valid-License-Identifier: GPL-2.0-or-later <br>
-SPDX-URL: https://spdx.org/licenses/GPL-2.0.html <br>
-
 ### GNU GENERAL PUBLIC LICENSE
 
 Version 2, June 1991
