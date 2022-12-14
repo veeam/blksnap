@@ -17,7 +17,7 @@ struct bdev_filter_operations {
 			      sector_t sector, struct page *page,
 			      struct bdev_filter *flt);
 	*/
-	void (*detach_cb)(struct kref *kref);
+	void (*release_cb)(struct kref *kref);
 };
 
 /**
@@ -39,9 +39,8 @@ static inline void bdev_filter_init(struct bdev_filter *flt,
 	flt->fops = fops;
 };
 
-int bdev_filter_attach(struct block_device *bdev, const char *name,
-		       struct bdev_filter *flt);
-int bdev_filter_detach(struct block_device *bdev, const char *name);
+int bdev_filter_attach(struct block_device *bdev, struct bdev_filter *flt);
+int bdev_filter_detach(struct block_device *bdev);
 struct bdev_filter *bdev_filter_get_by_bdev(struct block_device *bdev);
 static inline void bdev_filter_get(struct bdev_filter *flt)
 {
@@ -50,11 +49,11 @@ static inline void bdev_filter_get(struct bdev_filter *flt)
 static inline void bdev_filter_put(struct bdev_filter *flt)
 {
 	if (likely(flt))
-		kref_put(&flt->kref, flt->fops->detach_cb);
+		kref_put(&flt->kref, flt->fops->release_cb);
 };
 
 /* Only for livepatch version */
-int lp_bdev_filter_detach(const dev_t dev_id, const char *name);
+int lp_bdev_filter_detach(const dev_t dev_id);
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 extern blk_qc_t (*submit_bio_noacct_notrace)(struct bio *);

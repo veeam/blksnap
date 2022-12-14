@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/module.h>
 #include <linux/livepatch.h>
 #include <linux/sched/task.h>
@@ -164,8 +165,6 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
  * bdev_filter_attach - Attach a filter to original block device.
  * @bdev:
  * 	block device
- * @name:
- *	Name of the block device filter.
  * @flt:
  *	Pointer to the filter structure.
  *
@@ -176,13 +175,13 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
  * 0 - OK
  * -EBUSY - a filter already exists
  */
-int bdev_filter_attach(struct block_device *bdev, const char *name,
-		       struct bdev_filter *flt)
+int bdev_filter_attach(struct block_device *bdev, struct bdev_filter *flt)
 {
 	int ret = 0;
 	struct bdev_extension *ext;
 
-	pr_info("Attach block device filter '%s'", name);
+	pr_info("Attach block device filter %d:%d",
+		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 
 	ext = bdev_extension_append(bdev);
 	if (!ext)
@@ -197,8 +196,8 @@ int bdev_filter_attach(struct block_device *bdev, const char *name,
 	spin_unlock(&ext->bd_filter_lock);
 
 	if (!ret)
-		pr_info("Block device filter '%s' has been attached to %d:%d",
-			name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+		pr_info("Block device filter has been attached to %d:%d",
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	return ret;
 }
 EXPORT_SYMBOL(bdev_filter_attach);
@@ -210,12 +209,13 @@ EXPORT_SYMBOL(bdev_filter_attach);
  * was removed from the system. Unlike the upstream version, we have no way
  * to handle device extension.
  */
-int lp_bdev_filter_detach(const dev_t dev_id, const char *name)
+int lp_bdev_filter_detach(const dev_t dev_id)
 {
 	struct bdev_extension *ext;
 	struct bdev_filter *flt;
 
-	pr_info("Detach block device filter '%s'", name);
+	pr_info("Detach block device filter from %d:%d",
+		MAJOR(dev_id), MINOR(dev_id));
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(dev_id);
@@ -233,8 +233,8 @@ int lp_bdev_filter_detach(const dev_t dev_id, const char *name)
 		return -ENOENT;
 
 	bdev_filter_put(flt);
-	pr_info("Block device filter '%s' has been detached from %d:%d",
-		name, MAJOR(dev_id), MINOR(dev_id));
+	pr_info("Block device filter has been detached from %d:%d",
+		MAJOR(dev_id), MINOR(dev_id));
 	return 0;
 }
 EXPORT_SYMBOL(lp_bdev_filter_detach);
@@ -243,8 +243,6 @@ EXPORT_SYMBOL(lp_bdev_filter_detach);
  * bdev_filter_detach - Detach a filter from the block device.
  * @bdev:
  * 	block device.
- * @name:
- *	Name of the block device filter.
  *
  * The filter should be added using the bdev_filter_attach() function.
  *
@@ -252,9 +250,9 @@ EXPORT_SYMBOL(lp_bdev_filter_detach);
  * 0 - OK
  * -ENOENT - the filter was not found in the linked list
  */
-int bdev_filter_detach(struct block_device *bdev, const char *name)
+int bdev_filter_detach(struct block_device *bdev)
 {
-	return lp_bdev_filter_detach(bdev->bd_dev, name);
+	return lp_bdev_filter_detach(bdev->bd_dev);
 }
 EXPORT_SYMBOL(bdev_filter_detach);
 

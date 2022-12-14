@@ -562,7 +562,7 @@ int tracker_remove(dev_t dev_id)
 		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
 #ifdef STANDALONE_BDEVFILTER
-		return lp_bdev_filter_detach(dev_id, KBUILD_MODNAME);
+		return lp_bdev_filter_detach(dev_id);
 #else
 		return PTR_ERR(bdev);
 #endif
