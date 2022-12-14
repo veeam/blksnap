@@ -27,9 +27,9 @@ struct cbt_map;
  * @worker:
  *	A pointer to the &struct task of the worker thread that process I/O
  *      units.
- * queue_lock:
+ * @queue_lock:
  *      Lock for &queue.
- * queue:
+ * @queue:
  *	A queue of I/O units waiting to be processed.
  * @disk:
  *	A pointer to the &struct gendisk for the image block device.

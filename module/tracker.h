@@ -22,7 +22,7 @@ struct diff_area;
  * @flt:
  *	The block device filter structure.
  * @link:
- *	List header. Tracker release cannot be performed in the detach_cb()
+ *	List header. Tracker release cannot be performed in the release_cb()
  *	filters callback function. Therefore, the trackers are queued for
  *	release in the worker thread.
  * @dev_id:

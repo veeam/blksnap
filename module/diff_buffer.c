@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
+
 #include "memory_checker.h"
 #include "params.h"
 #include "diff_buffer.h"
@@ -27,13 +28,13 @@ static int diff_buffer_take_cnt_get(void)
 static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	size_t inx = 0;
-	struct page *page;
 
 	if (unlikely(!diff_buffer))
 		return;
 
 	for (inx = 0; inx < diff_buffer->page_count; inx++) {
-		page = diff_buffer->pages[inx];
+		struct page *page = diff_buffer->pages[inx];
+
 		if (page) {
 			__free_page(page);
 			memory_object_dec(memory_object_page);

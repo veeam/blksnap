@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-cbt_map: " fmt
+
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
-#include <linux/blksnap.h>
+#include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "cbt_map.h"
@@ -34,7 +35,7 @@ static void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 	unsigned long long shift;
 	unsigned long long count;
 
-	/**
+	/*
 	 * The size of the tracking block is calculated based on the size of the disk
 	 * so that the CBT table does not exceed a reasonable size.
 	 */

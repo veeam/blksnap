@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-io: " fmt
+
 #ifdef HAVE_GENHD_H
 #include <linux/genhd.h>
 #endif

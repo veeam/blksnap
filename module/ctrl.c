@@ -8,7 +8,7 @@
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
-#include <linux/blksnap.h>
+#include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "ctrl.h"
@@ -163,6 +163,7 @@ static int ioctl_tracker_collect(unsigned long arg)
 fail:
 	kfree(cbt_info);
 	memory_object_dec(memory_object_blk_snap_cbt_info);
+
 	return res;
 }
 
@@ -258,6 +259,7 @@ static int ioctl_snapshot_create(unsigned long arg)
 out:
 	kfree(dev_id_array);
 	memory_object_dec(memory_object_blk_snap_dev);
+
 	return ret;
 }
 
@@ -355,6 +357,7 @@ static int ioctl_snapshot_wait_event(unsigned long arg)
 out:
 	kfree(karg);
 	memory_object_dec(memory_object_blk_snap_snapshot_event);
+
 	return ret;
 }
 

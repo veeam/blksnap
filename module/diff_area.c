@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-area: " fmt
+
 #ifdef HAVE_GENHD_H
 #include <linux/genhd.h>
 #endif
@@ -8,7 +9,7 @@
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
-#include <linux/blksnap.h>
+#include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "params.h"
@@ -173,9 +174,11 @@ get_chunk_from_cache_and_write_lock(spinlock_t *caches_lock,
 static struct chunk *
 diff_area_get_chunk_from_cache_and_write_lock(struct diff_area *diff_area)
 {
+	struct chunk *chunk;
+
 	if (atomic_read(&diff_area->read_cache_count) >
 	    chunk_maximum_in_cache) {
-		struct chunk *chunk = get_chunk_from_cache_and_write_lock(
+		chunk = get_chunk_from_cache_and_write_lock(
 			&diff_area->caches_lock, &diff_area->read_cache_queue,
 			&diff_area->read_cache_count);
 		if (chunk) {
@@ -190,7 +193,7 @@ diff_area_get_chunk_from_cache_and_write_lock(struct diff_area *diff_area)
 
 	if (atomic_read(&diff_area->write_cache_count) >
 	    chunk_maximum_in_cache) {
-		struct chunk *chunk = get_chunk_from_cache_and_write_lock(
+		chunk = get_chunk_from_cache_and_write_lock(
 			&diff_area->caches_lock, &diff_area->write_cache_queue,
 			&diff_area->write_cache_count);
 		if (chunk) {
@@ -378,10 +381,8 @@ static void diff_area_take_chunk_from_cache(struct diff_area *diff_area,
 	spin_unlock(&diff_area->caches_lock);
 }
 
-/**
- * diff_area_copy() - Implements the copy-on-write mechanism.
- *
- *
+/*
+ * Implements the copy-on-write mechanism.
  */
 int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		   const bool is_nowait)
@@ -433,7 +434,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 
 		if (chunk_state_check(chunk, CHUNK_ST_BUFFER_READY)) {
 			diff_area_take_chunk_from_cache(diff_area, chunk);
-			/**
+			/*
 			 * The chunk has already been read, but now we need
 			 * to store it to diff_storage.
 			 */
@@ -639,9 +640,9 @@ static inline sector_t diff_area_chunk_start(struct diff_area *diff_area,
 	return (sector_t)(chunk->number) << diff_area->chunk_shift;
 }
 
-/**
- * diff_area_image_io - Implements copying data from the chunk to bio_vec when
- *	reading or from bio_vec to the chunk when writing.
+/*
+ * Implements copying data from the chunk to bio_vec when reading or from
+ * bio_vec to the chunk when writing.
  */
 blk_status_t diff_area_image_io(struct diff_area_image_ctx *io_ctx,
 				const struct bio_vec *bvec, sector_t *pos)

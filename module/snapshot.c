@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapshot: " fmt
+
 #include <linux/slab.h>
 #include <linux/sched/mm.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
-#include <linux/blksnap.h>
+#include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "snapshot.h"
@@ -26,7 +27,7 @@ LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
 
 #if defined(BLK_SNAP_SEQUENTALFREEZE)
-/**
+/*
  * snapshot_release_trackers - Releases snapshots trackers
  *
  * The sequential algorithm allows to freeze block devices one at a time.
@@ -88,7 +89,7 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 
 #else /* BLK_SNAP_SEQUENTALFREEZE */
 
-/**
+/*
  * snapshot_release_trackers - Releases snapshots trackers
  *
  * The simultaneous algorithm allows to freeze all the snapshot block devices.
@@ -488,7 +489,7 @@ int snapshot_append_storage(uuid_t *id, struct blk_snap_dev dev_id,
 
 #if defined(BLK_SNAP_SEQUENTALFREEZE)
 
-/**
+/*
  * snapshot_take_trackers - Take tracker for snapshot
  *
  * The sequential algorithm allows to freeze block devices one at a time.
@@ -618,7 +619,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 }
 #else /* BLK_SNAP_SEQUENTALFREEZE */
 
-/**
+/*
  * snapshot_take_trackers - Take tracker for snapshot
  *
  * The simultaneous algorithm allows to freeze all the snapshot block devices.

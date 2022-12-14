@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-snapimage: " fmt
+
 #include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
-#include <linux/blksnap.h>
+#include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "snapimage.h"
@@ -121,6 +122,7 @@ static void snapimage_submit_bio(struct bio *bio)
 #ifdef HAVE_BI_BDISK
 	struct snapimage *snapimage = bio->bi_disk->private_data;
 #endif
+
 	if (snapimage->is_ready) {
 		spin_lock(&snapimage->queue_lock);
 		bio_list_add(&snapimage->queue, bio);
@@ -272,6 +274,8 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	cbt_map_get(cbt_map);
 	snapimage->cbt_map = cbt_map;
 
+	pr_debug("Add device [%d:%d]",
+		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 #ifdef HAVE_ADD_DISK_RESULT
 	ret = add_disk(disk);
 	if (ret) {
@@ -282,6 +286,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 #else
 	add_disk(disk);
 #endif
+
 	return snapimage;
 
 fail_cleanup_disk:

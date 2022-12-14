@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-sysfs: " fmt
+
 #include <linux/module.h>
 #include <linux/blkdev.h>
 #include <linux/sysfs.h>
@@ -7,7 +8,7 @@
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
-#include <linux/blksnap.h>
+#include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "sysfs.h"

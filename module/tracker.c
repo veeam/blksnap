@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME "-tracker: " fmt
+
 #include <linux/slab.h>
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
-#include <linux/blksnap.h>
+#include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
 #include "params.h"
@@ -70,6 +71,7 @@ static void tracker_free(struct tracker *tracker)
 
 static inline struct tracker *tracker_get_by_dev(struct block_device *bdev)
 {
+#ifdef STANDALONE_BDEVFILTER
 	struct bdev_filter *flt;
 
 	flt = bdev_filter_get_by_bdev(bdev);
@@ -77,6 +79,14 @@ static inline struct tracker *tracker_get_by_dev(struct block_device *bdev)
 		return ERR_PTR(PTR_ERR(flt));
 	if (!flt)
 		return NULL;
+#else
+	struct bdev_filter *flt = bdev->bd_filter;
+
+	if (!flt)
+		return NULL;
+
+	bdev_filter_get(flt);
+#endif
 	return container_of(flt, struct tracker, flt);
 }
 
@@ -84,9 +94,15 @@ static inline struct tracker *tracker_get_by_dev(struct block_device *bdev)
 void diff_io_endio(struct bio *bio);
 #endif
 
+#ifdef STANDALONE_BDEVFILTER
 static bool tracker_submit_bio_cb(struct bio *bio,
-		struct bdev_filter *flt)
+	struct bdev_filter *flt)
 {
+#else
+static bool tracker_submit_bio_cb(struct bio *bio)
+{
+	struct bdev_filter *flt = bio->bi_bdev->bd_filter;
+#endif
 	struct bio_list bio_list_on_stack[2] = { };
 	struct bio *new_bio;
 	bool ret = true;
@@ -97,7 +113,7 @@ static bool tracker_submit_bio_cb(struct bio *bio,
 	unsigned int current_flag;
 
 #ifdef STANDALONE_BDEVFILTER
-	/**
+	/*
 	 * For the upstream version of the module, the definition of bio that
 	 * does not need to be intercepted is performed using the flag
 	 * BIO_FILTERED.
@@ -106,6 +122,10 @@ static bool tracker_submit_bio_cb(struct bio *bio,
 	 */
 	if (bio->bi_end_io == diff_io_endio)
 		return ret;
+#else
+	WARN_ON_ONCE(!flt);
+	if (unlikely(!flt))
+		return true;
 #endif
 
 	if (bio->bi_opf & REQ_NOWAIT) {
@@ -163,7 +183,7 @@ static bool tracker_submit_bio_cb(struct bio *bio,
 #ifdef STANDALONE_BDEVFILTER
 		submit_bio_noacct_notrace(new_bio);
 #else
-		io_set_flag(new_bio, BIO_FILTERED);
+		bio_set_flag(new_bio, BIO_FILTERED);
 		submit_bio_noacct(new_bio);
 #endif
 	}
@@ -209,7 +229,7 @@ static void tracker_release_work(struct work_struct *work)
 	} while (tracker);
 }
 
-static void tracker_detach_cb(struct kref *kref)
+static void tracker_release_cb(struct kref *kref)
 {
 	struct bdev_filter *flt = container_of(kref, struct bdev_filter, kref);
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
@@ -223,7 +243,7 @@ static void tracker_detach_cb(struct kref *kref)
 
 static const struct bdev_filter_operations tracker_fops = {
 	.submit_bio_cb = tracker_submit_bio_cb,
-	.detach_cb = tracker_detach_cb
+	.release_cb = tracker_release_cb
 };
 
 static int tracker_filter_attach(struct block_device *bdev,
@@ -250,7 +270,7 @@ static int tracker_filter_attach(struct block_device *bdev,
 	}
 #endif
 
-	ret = bdev_filter_attach(bdev, KBUILD_MODNAME, &tracker->flt);
+	ret = bdev_filter_attach(bdev, &tracker->flt);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -295,7 +315,7 @@ static int tracker_filter_detach(struct block_device *bdev)
 	}
 #endif
 
-	ret = bdev_filter_detach(bdev, KBUILD_MODNAME);
+	ret = bdev_filter_detach(bdev);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -416,7 +436,7 @@ int tracker_init(void)
 	return 0;
 }
 
-/**
+/*
  * tracker_wait_for_release - Waiting for all trackers are released.
  *
  * Trackers are released in the worker thread. So, this function allows to wait
@@ -517,7 +537,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		 * a ref counter value of 2. This allows not to detach
 		 * the filter when the snapshot is released.
 		 */
-	        bdev_filter_get(&tracker->flt);
+		bdev_filter_get(&tracker->flt);
 
 		spin_lock(&tracked_device_lock);
 		list_add_tail(&tr_dev->link, &tracked_device_list);
@@ -549,6 +569,7 @@ int tracker_remove(dev_t dev_id)
 	}
 
 	tracker = tracker_get_by_dev(bdev);
+#ifdef STANDALONE_BDEVFILTER
 	if (IS_ERR(tracker)) {
 		ret = PTR_ERR(tracker);
 
@@ -556,6 +577,7 @@ int tracker_remove(dev_t dev_id)
 			 MAJOR(dev_id), MINOR(dev_id), abs(ret));
 		goto put_bdev;
 	}
+#endif
 	if (!tracker) {
 		pr_info("Unable to remove device [%u:%u] from tracking: ",
 		       MAJOR(dev_id), MINOR(dev_id));
@@ -686,7 +708,7 @@ int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
 	struct tracked_device *tr_dev;
 
 	if (!cbt_info) {
-		/**
+		/*
 		 * Just calculate trackers list length.
 		 */
 		spin_lock(&tracked_device_lock);
