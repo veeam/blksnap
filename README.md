@@ -171,7 +171,7 @@ cd /opt/blksnap/tests
 # execute all tests script
 sudo ./all.sh
 # or for logging the output to a file
-sudo ./all.sh 2>&1 | tee -a /tmp/blksnap_test_$(date -u '+%Y-%m-%d_%H:%M:%S').log
+sudo ./all.sh 2>&1 | tee -a /tmp/blksnap_test_$(date -u '+%Y-%m-%d_%H-%M-%S').log
 ```
 ## Compatibility notes
 - blksnap kernel module support kernel versions >= 5.10, support only X86 archs, blksnap for upstream instead can support any arch (other archs need to be tested)

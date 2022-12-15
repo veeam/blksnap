@@ -66,6 +66,9 @@ make olddefconfig
 make menuconfig
 # and finally build it and make deb packages for easy/fast install it
 make deb-pkg
+# install the generated packages (value inside < > need to be replaced)
+sudo dpkg -i linux-image-<version>_<arch>.deb
+# for debug is needed also "linux-image-" with "-dbg" and others where needed
 ```
 
 **Notes:**
@@ -79,3 +82,4 @@ make deb-pkg
 Any contribution is appreciated and useful, is possible contribute in many ways,
 not only by reviewing patches and contributing with code improvements and fixes,
 but also with documentation, testing and report, etc...
+See also [CONTRIBUTING](../CONTRIBUTING.md)
