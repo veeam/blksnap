@@ -20,17 +20,9 @@ shared: &shared
             working_directory: pkg/deb
             command: ./build-blksnap-dkms.sh
       - run:
-            name: Build blksnap-tools package
+            name: Build dev, tools and tests packages
             working_directory: pkg/deb
-            command: ./build-blksnap-tools.sh
-      - run:
-            name: Build blksnap-dev package
-            working_directory: pkg/deb
-            command: ./build-blksnap-dev.sh
-      - run:
-            name: Build blksnap-tests package
-            working_directory: pkg/deb
-            command: ./build-blksnap-tests.sh
+            command: ./build-blksnap.sh
       - run:
             name: Save generate packages as artifacts
             working_directory: build

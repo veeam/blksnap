@@ -98,12 +98,7 @@ cmake ..
 make
 ```
 
-### How to create deb package
-``` bash
-sudo apt install debhelper
-cd ./pkg/deb
-./build-blksnap-tools.sh ${VERSION}
-```
+For deb packages see [how to create dev, tools and tests deb packages](#how-to-create-dev-tools-and-tests-deb-packages)
 
 ## Library
 The dynamic C library is not needed to work with blksnap. File
@@ -128,12 +123,8 @@ cd bin
 cmake ..
 make
 ```
-### How to create deb package
-``` bash
-sudo apt install debhelper
-cd ./pkg/deb
-./build-blksnap-dev.sh ${VERSION}
-```
+
+For deb packages see [how to create dev, tools and tests deb packages](#how-to-create-dev-tools-and-tests-deb-packages)
 
 ## Tests
 The test scripts are written in bash and use the blksnap tool to control
@@ -158,12 +149,9 @@ cd bin
 cmake ..
 make
 ```
-### How to create deb package
-``` bash
-sudo apt install debhelper
-cd ./pkg/deb
-./build-blksnap-tests.sh ${VERSION}
-```
+
+For deb packages see [how to create dev, tools and tests deb packages](#how-to-create-dev-tools-and-tests-deb-packages)
+
 ### How to run all usage tests
 ``` bash
 # change working directory to the tests one, for example for debian package is /opt/blksnap/tests
@@ -173,6 +161,14 @@ sudo ./all.sh
 # or for logging the output to a file
 sudo ./all.sh 2>&1 | tee -a /tmp/blksnap_test_$(date -u '+%Y-%m-%d_%H-%M-%S').log
 ```
+
+## How to create dev, tools and tests deb packages
+``` bash
+sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev debhelper
+cd ./pkg/deb
+./build-blksnap.sh ${VERSION}
+```
+
 ## Compatibility notes
 - blksnap kernel module support kernel versions >= 5.10, support only X86 archs, blksnap for upstream instead can support any arch (other archs need to be tested)
 - all supported debian and ubuntu supported versions are supported but with some notes:
