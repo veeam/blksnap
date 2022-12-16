@@ -124,8 +124,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 			chunk_maximum_in_cache);
 	}
 #endif
-	if ((in_cache_count > chunk_maximum_in_cache) &&
-	    !diff_area_is_corrupted(diff_area))
+	if ((in_cache_count > chunk_maximum_in_cache))
 		queue_work(system_wq, &diff_area->cache_release_work);
 }
 

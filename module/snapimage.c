@@ -132,7 +132,7 @@ static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 
 	blk_mq_start_request(rq);
 
-	if (unlikely(!snapimage->is_ready)) {
+	if (unlikely(!snapimage->is_ready || diff_area_is_corrupted(snapimage->diff_area))) {
 		blk_mq_end_request(rq, BLK_STS_NOSPC);
 		return BLK_STS_NOSPC;
 	}
