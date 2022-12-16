@@ -123,7 +123,7 @@ static void snapimage_submit_bio(struct bio *bio)
 	struct snapimage *snapimage = bio->bi_disk->private_data;
 #endif
 
-	if (snapimage->is_ready) {
+	if (snapimage->is_ready && !diff_area_is_corrupted(snapimage->diff_area)) {
 		spin_lock(&snapimage->queue_lock);
 		bio_list_add(&snapimage->queue, bio);
 		spin_unlock(&snapimage->queue_lock);
