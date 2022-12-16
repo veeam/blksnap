@@ -250,9 +250,12 @@ EXPORT_SYMBOL(lp_bdev_filter_detach);
  * 0 - OK
  * -ENOENT - the filter was not found in the linked list
  */
-int bdev_filter_detach(struct block_device *bdev)
+void bdev_filter_detach(struct block_device *bdev)
 {
-	return lp_bdev_filter_detach(bdev->bd_dev);
+	int ret = lp_bdev_filter_detach(bdev->bd_dev);
+
+	WARN_ON(!ret, "When trying to detach the filter from the block \
+		device, the filter was not found.");
 }
 EXPORT_SYMBOL(bdev_filter_detach);
 
@@ -292,7 +295,7 @@ EXPORT_SYMBOL(bdev_filter_get_by_bdev);
 
 static inline bool bdev_filters_apply(struct bio *bio)
 {
-	bool pass;
+	bool completed;
 	struct bdev_filter *flt;
 	struct bdev_extension *ext;
 
@@ -304,7 +307,7 @@ static inline bool bdev_filters_apply(struct bio *bio)
 #endif
 	spin_unlock(&bdev_extension_list_lock);
 	if (!ext)
-		return true;
+		return false;
 
 	spin_lock(&ext->bd_filter_lock);
 	flt = ext->bd_filter;
@@ -313,12 +316,12 @@ static inline bool bdev_filters_apply(struct bio *bio)
 	spin_unlock(&ext->bd_filter_lock);
 
 	if (!flt)
-		return true;
+		return false;
 
-	pass = flt->fops->submit_bio_cb(bio, flt);
+	completed = flt->fops->submit_bio(bio, flt);
 	bdev_filter_put(flt);
 
-	return pass;
+	return completed;
 }
 
 #ifdef CONFIG_X86
@@ -347,7 +350,7 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
 	if (!current->bio_list) {
-		if (!bdev_filters_apply(bio)) {
+		if (bdev_filters_apply(bio)) {
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 			return BLK_QC_T_NONE;
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)

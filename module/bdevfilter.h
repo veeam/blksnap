@@ -8,7 +8,7 @@
 
 struct bdev_filter;
 struct bdev_filter_operations {
-	bool (*submit_bio_cb)(struct bio *bio, struct bdev_filter *flt);
+	bool (*submit_bio)(struct bio *bio, struct bdev_filter *flt);
 	/*
 	bool (*read_page_cb)(struct block_device *bdev,
 			     sector_t sector, struct page *page,
@@ -17,7 +17,7 @@ struct bdev_filter_operations {
 			      sector_t sector, struct page *page,
 			      struct bdev_filter *flt);
 	*/
-	void (*release_cb)(struct kref *kref);
+	void (*release)(struct kref *kref);
 };
 
 /**
@@ -40,7 +40,7 @@ static inline void bdev_filter_init(struct bdev_filter *flt,
 };
 
 int bdev_filter_attach(struct block_device *bdev, struct bdev_filter *flt);
-int bdev_filter_detach(struct block_device *bdev);
+void bdev_filter_detach(struct block_device *bdev);
 struct bdev_filter *bdev_filter_get_by_bdev(struct block_device *bdev);
 static inline void bdev_filter_get(struct bdev_filter *flt)
 {
@@ -49,7 +49,7 @@ static inline void bdev_filter_get(struct bdev_filter *flt)
 static inline void bdev_filter_put(struct bdev_filter *flt)
 {
 	if (likely(flt))
-		kref_put(&flt->kref, flt->fops->release_cb);
+		kref_put(&flt->kref, flt->fops->release);
 };
 
 /* Only for livepatch version */
