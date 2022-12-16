@@ -434,6 +434,9 @@ int snapshot_destroy(uuid_t *id)
 	struct snapshot *snapshot = NULL;
 
 	pr_info("Destroy snapshot %pUb\n", id);
+#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
+	memory_object_print(false);
+#endif
 	down_write(&snapshots_lock);
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("DEBUG! %s try to find snapshot\n", __FUNCTION__);
@@ -462,7 +465,6 @@ int snapshot_destroy(uuid_t *id)
 #endif
 	snapshot_put(snapshot);
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
-	pr_debug("blksnap memory consumption:\n");
 	memory_object_print(false);
 	memory_object_max_print();
 #endif
