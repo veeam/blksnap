@@ -156,7 +156,7 @@ static bool tracker_submit_bio_cb(struct bio *bio)
 	if (!atomic_read(&tracker->snapshot_is_taken))
 		goto out;
 
-	if (diff_area_is_corrupted(tracker->diff_area))
+	if (unlikely(diff_area_is_corrupted(tracker->diff_area)))
 		goto out;
 
 	current_flag = memalloc_noio_save();

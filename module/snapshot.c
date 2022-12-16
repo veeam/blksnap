@@ -772,7 +772,7 @@ int snapshot_take(uuid_t *id)
 		if (!tracker)
 			continue;
 
-		if (diff_area_is_corrupted(tracker->diff_area)) {
+		if (unlikely(diff_area_is_corrupted(tracker->diff_area))) {
 			pr_err("Unable to freeze devices [%u:%u]: diff area is corrupted\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 			ret = -EFAULT;
@@ -900,9 +900,9 @@ int snapshot_collect_images(
 		goto out;
 	}
 
-	image_info_array =
-		kcalloc(snapshot->count, sizeof(struct blk_snap_image_info),
-			GFP_KERNEL);
+	image_info_array = kcalloc(snapshot->count,
+				   sizeof(struct blk_snap_image_info),
+				   GFP_KERNEL);
 	if (!image_info_array) {
 		pr_err("Unable to collect snapshot images: not enough memory.\n");
 		ret = -ENOMEM;

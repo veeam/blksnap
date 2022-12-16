@@ -137,7 +137,7 @@ static int ioctl_tracker_collect(unsigned long arg)
 
 	cbt_info = kcalloc(karg.count, sizeof(struct blk_snap_cbt_info),
 			   GFP_KERNEL);
-	if (cbt_info == NULL)
+	if (!cbt_info)
 		return -ENOMEM;
 	memory_object_inc(memory_object_blk_snap_cbt_info);
 
