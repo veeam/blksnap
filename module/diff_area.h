@@ -118,7 +118,7 @@ struct diff_area {
 	struct list_head free_diff_buffers;
 	atomic_t free_diff_buffers_count;
 
-	atomic_t corrupt_flag;
+	unsigned long corrupt_flag;
 	atomic_t pending_io_count;
 };
 
@@ -137,7 +137,7 @@ static inline void diff_area_put(struct diff_area *diff_area)
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code);
 static inline bool diff_area_is_corrupted(struct diff_area *diff_area)
 {
-	return !!atomic_read(&diff_area->corrupt_flag);
+	return !!diff_area->corrupt_flag;
 };
 static inline sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
 {

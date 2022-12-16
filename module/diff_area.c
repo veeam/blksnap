@@ -114,7 +114,6 @@ void diff_area_free(struct kref *kref)
 		}
 	}
 
-	atomic_set(&diff_area->corrupt_flag, 1);
 	flush_work(&diff_area->cache_release_work);
 	xa_for_each(&diff_area->chunk_map, inx, chunk)
 		chunk_free(chunk);
@@ -322,10 +321,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	INIT_LIST_HEAD(&diff_area->free_diff_buffers);
 	atomic_set(&diff_area->free_diff_buffers_count, 0);
 
-	atomic_set(&diff_area->corrupt_flag, 0);
+	diff_area->corrupt_flag = 0;
 	atomic_set(&diff_area->pending_io_count, 0);
 
-	/**
+	/*
 	 * Allocating all chunks in advance allows to avoid doing this in
 	 * the process of filtering bio.
 	 * In addition, the chunk structure has an rw semaphore that allows
@@ -356,8 +355,6 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	}
 
 	recalculate_last_chunk_size(chunk);
-
-	atomic_set(&diff_area->corrupt_flag, 0);
 
 	return diff_area;
 }
@@ -708,7 +705,7 @@ static inline void diff_area_event_corrupted(struct diff_area *diff_area,
 
 void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
 {
-	if (atomic_inc_return(&diff_area->corrupt_flag) != 1)
+	if (test_and_set_bit(0, &diff_area->corrupt_flag))
 		return;
 
 	diff_area_event_corrupted(diff_area, err_code);
