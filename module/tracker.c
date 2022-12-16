@@ -95,17 +95,17 @@ void diff_io_endio(struct bio *bio);
 #endif
 
 #ifdef STANDALONE_BDEVFILTER
-static bool tracker_submit_bio_cb(struct bio *bio,
+static bool tracker_submit_bio(struct bio *bio,
 	struct bdev_filter *flt)
 {
 #else
-static bool tracker_submit_bio_cb(struct bio *bio)
+static bool tracker_submit_bio(struct bio *bio)
 {
 	struct bdev_filter *flt = bio->bi_bdev->bd_filter;
 #endif
 	struct bio_list bio_list_on_stack[2] = { };
 	struct bio *new_bio;
-	bool ret = true;
+	bool completed = false;
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
 	int err;
 	sector_t sector;
@@ -125,13 +125,13 @@ static bool tracker_submit_bio_cb(struct bio *bio)
 #else
 	WARN_ON_ONCE(!flt);
 	if (unlikely(!flt))
-		return true;
+		return false;
 #endif
 
 	if (bio->bi_opf & REQ_NOWAIT) {
 		if (!percpu_down_read_trylock(&tracker_submit_lock)) {
 			bio_wouldblock_error(bio);
-			return false;
+			return true;
 		}
 	} else
 		percpu_down_read(&tracker_submit_lock);
@@ -201,12 +201,12 @@ static bool tracker_submit_bio_cb(struct bio *bio)
 fail:
 	if (err == -EAGAIN) {
 		bio_wouldblock_error(bio);
-		ret = false;
+		completed = true;
 	} else
 		pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
 out:
 	percpu_up_read(&tracker_submit_lock);
-	return ret;
+	return completed;
 }
 
 
@@ -229,7 +229,7 @@ static void tracker_release_work(struct work_struct *work)
 	} while (tracker);
 }
 
-static void tracker_release_cb(struct kref *kref)
+static void tracker_release(struct kref *kref)
 {
 	struct bdev_filter *flt = container_of(kref, struct bdev_filter, kref);
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
@@ -242,8 +242,8 @@ static void tracker_release_cb(struct kref *kref)
 }
 
 static const struct bdev_filter_operations tracker_fops = {
-	.submit_bio_cb = tracker_submit_bio_cb,
-	.release_cb = tracker_release_cb
+	.submit_bio = tracker_submit_bio,
+	.release = tracker_release
 };
 
 static int tracker_filter_attach(struct block_device *bdev,
