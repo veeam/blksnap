@@ -26,7 +26,7 @@
 #include <system_error>
 #include <unistd.h>
 
-static const char* blksnap_filename = BLK_SNAP_CTL;
+static const char* blksnap_filename = "/dev/" BLK_SNAP_CTL;
 
 using namespace blksnap;
 

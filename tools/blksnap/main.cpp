@@ -77,7 +77,7 @@ namespace
         CBlksnapFileWrap()
             : m_blksnapFd(0)
         {
-            const char* blksnap_filename = BLK_SNAP_CTL;
+            const char* blksnap_filename = "/dev/" BLK_SNAP_CTL;
 
             m_blksnapFd = ::open(blksnap_filename, O_RDWR);
             if (m_blksnapFd < 0)
