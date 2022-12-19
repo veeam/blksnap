@@ -103,9 +103,22 @@ static void snapimage_submit_bio(struct bio *bio)
 }
 #endif
 
+static void snapimage_free_disk(struct gendisk *disk)
+{
+	struct snapimage *snapimage = disk->private_data;
+
+	diff_area_put(snapimage->diff_area);
+	cbt_map_put(snapimage->cbt_map);
+
+	ida_free(&snapimage_devt_ida, MINOR(snapimage->image_dev_id));
+	kfree(snapimage);
+	memory_object_dec(memory_object_snapimage);
+}
+
 const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
-	.submit_bio = snapimage_submit_bio
+	.submit_bio = snapimage_submit_bio,
+	.free_disk = snapimage_free_disk,
 };
 
 void snapimage_free(struct snapimage *snapimage)
@@ -126,12 +139,6 @@ void snapimage_free(struct snapimage *snapimage)
 	blk_cleanup_queue(snapimage->disk->queue);
 	put_disk(snapimage->disk);
 #endif
-	diff_area_put(snapimage->diff_area);
-	cbt_map_put(snapimage->cbt_map);
-
-	ida_free(&snapimage_devt_ida, MINOR(snapimage->image_dev_id));
-	kfree(snapimage);
-	memory_object_dec(memory_object_snapimage);
 }
 
 #ifndef HAVE_BLK_ALLOC_DISK
