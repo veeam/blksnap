@@ -23,36 +23,6 @@
 static unsigned int _major;
 static DEFINE_IDA(snapimage_devt_ida);
 
-static int snapimage_kthread_worker_fn(void *param);
-
-static inline void snapimage_stop_worker(struct snapimage *snapimage)
-{
-	kthread_stop(snapimage->worker);
-	put_task_struct(snapimage->worker);
-}
-
-static inline int snapimage_start_worker(struct snapimage *snapimage)
-{
-	struct task_struct *task;
-
-	spin_lock_init(&snapimage->queue_lock);
-	bio_list_init(&snapimage->queue);
-
-	task = kthread_create(snapimage_kthread_worker_fn,
-			      snapimage,
-			      BLK_SNAP_IMAGE_NAME "%d",
-			      MINOR(snapimage->image_dev_id));
-	if (IS_ERR(task))
-		return -ENOMEM;
-
-	snapimage->worker = get_task_struct(task);
-	set_user_nice(task, MAX_NICE);
-	task->flags |= PF_LOCAL_THROTTLE | PF_MEMALLOC_NOIO;
-	wake_up_process(task);
-
-	return 0;
-}
-
 static void snapimage_process_bio(struct snapimage *snapimage, struct bio *bio)
 {
 
@@ -123,8 +93,7 @@ static void snapimage_submit_bio(struct bio *bio)
 	struct snapimage *snapimage = bio->bi_disk->private_data;
 #endif
 
-	if (likely(snapimage->is_ready &&
-		   !diff_area_is_corrupted(snapimage->diff_area))) {
+	if (!diff_area_is_corrupted(snapimage->diff_area)) {
 		spin_lock(&snapimage->queue_lock);
 		bio_list_add(&snapimage->queue, bio);
 		spin_unlock(&snapimage->queue_lock);
@@ -150,13 +119,9 @@ void snapimage_free(struct snapimage *snapimage)
 	pr_info("Snapshot image disk [%u:%u] delete\n",
 		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 
-	blk_mq_freeze_queue(snapimage->disk->queue);
-	snapimage->is_ready = false;
-	blk_mq_unfreeze_queue(snapimage->disk->queue);
-
-	snapimage_stop_worker(snapimage);
-
 	del_gendisk(snapimage->disk);
+
+	kthread_stop(snapimage->worker);
 #ifdef HAVE_BLK_ALLOC_DISK
 #ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(snapimage->disk);
@@ -203,6 +168,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	int minor;
 	struct snapimage *snapimage = NULL;
 	struct gendisk *disk;
+	struct task_struct *task;
 
 	snapimage = kzalloc(sizeof(struct snapimage), GFP_KERNEL);
 	if (snapimage == NULL)
@@ -218,7 +184,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		goto fail_free_image;
 	}
 
-	snapimage->is_ready = true;
 	snapimage->capacity = cbt_map->device_capacity;
 	snapimage->image_dev_id = MKDEV(_major, minor);
 	pr_info("Create snapshot image device [%u:%u] for original device [%u:%u]\n",
@@ -227,11 +192,22 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		MAJOR(diff_area->orig_bdev->bd_dev),
 		MINOR(diff_area->orig_bdev->bd_dev));
 
-	ret = snapimage_start_worker(snapimage);
-	if (ret) {
+	spin_lock_init(&snapimage->queue_lock);
+	bio_list_init(&snapimage->queue);
+
+	task = kthread_create(snapimage_kthread_worker_fn,
+			      snapimage,
+			      BLK_SNAP_IMAGE_NAME "%d",
+			      MINOR(snapimage->image_dev_id));
+	if (IS_ERR(task)) {
+		ret = PTR_ERR(task);
 		pr_err("Failed to start worker thread. errno=%d\n", abs(ret));
 		goto fail_free_minor;
 	}
+
+	snapimage->worker = task;
+	set_user_nice(task, MAX_NICE);
+	task->flags |= PF_LOCAL_THROTTLE | PF_MEMALLOC_NOIO;
 
 	disk = blk_alloc_disk(NUMA_NO_NODE);
 	if (!disk) {
@@ -301,7 +277,7 @@ fail_cleanup_disk:
 	del_gendisk(disk);
 #endif
 fail_free_worker:
-	snapimage_stop_worker(snapimage);
+	kthread_stop(snapimage->worker);
 fail_free_minor:
 	ida_free(&snapimage_devt_ida, minor);
 fail_free_image:
