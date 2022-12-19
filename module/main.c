@@ -96,7 +96,6 @@ static int __init blk_snap_init(void)
 	if (result)
 		return result;
 
-	result = sysfs_initialize();
 	return result;
 }
 
@@ -104,7 +103,6 @@ static void __exit blk_snap_exit(void)
 {
 	pr_info("Unloading module\n");
 
-	sysfs_finalize();
 	ctrl_done();
 
 	diff_io_done();

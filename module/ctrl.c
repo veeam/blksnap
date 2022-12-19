@@ -5,6 +5,7 @@
 #include <linux/poll.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
+#include <linux/miscdevice.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
 #else
@@ -24,64 +25,12 @@
 static_assert(sizeof(uuid_t) == sizeof(struct blk_snap_uuid),
 	"Invalid size of struct blk_snap_uuid or uuid_t.");
 
-static int blk_snap_major;
-
-static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
-				unsigned long arg);
-
-static const struct file_operations ctrl_fops = {
-	.owner = THIS_MODULE,
-	.unlocked_ioctl = ctrl_unlocked_ioctl,
-};
-
 static const struct blk_snap_version version = {
 	.major = VERSION_MAJOR,
 	.minor = VERSION_MINOR,
 	.revision = VERSION_REVISION,
 	.build = VERSION_BUILD,
 };
-
-#ifdef BLK_SNAP_MODIFICATION
-static const struct blk_snap_mod modification = {
-	.name = MOD_NAME,
-	.compatibility_flags =
-#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-	(1ull << blk_snap_compat_flag_debug_sector_state) |
-#endif
-#ifdef BLK_SNAP_FILELOG
-	(1ull << blk_snap_compat_flag_setlog) |
-#endif
-	0
-};
-#endif
-
-int get_blk_snap_major(void)
-{
-	return blk_snap_major;
-}
-
-int ctrl_init(void)
-{
-	int ret;
-
-	ret = register_chrdev(0, THIS_MODULE->name, &ctrl_fops);
-	if (ret < 0) {
-		pr_err("Failed to register a character device. errno=%d\n",
-		       abs(blk_snap_major));
-		return ret;
-	}
-
-	blk_snap_major = ret;
-	pr_info("Register control device [%d:0].\n", blk_snap_major);
-	return 0;
-}
-
-void ctrl_done(void)
-{
-	pr_info("Unregister control device\n");
-
-	unregister_chrdev(blk_snap_major, THIS_MODULE->name);
-}
 
 static int ioctl_version(unsigned long arg)
 {
@@ -426,6 +375,18 @@ static_assert(
 
 #ifdef BLK_SNAP_MODIFICATION
 
+static const struct blk_snap_mod modification = {
+	.name = MOD_NAME,
+	.compatibility_flags =
+#ifdef BLK_SNAP_DEBUG_SECTOR_STATE
+	(1ull << blk_snap_compat_flag_debug_sector_state) |
+#endif
+#ifdef BLK_SNAP_FILELOG
+	(1ull << blk_snap_compat_flag_setlog) |
+#endif
+	0
+};
+
 int ioctl_mod(unsigned long arg)
 {
 	if (copy_to_user((void *)arg, &modification, sizeof(modification))) {
@@ -517,7 +478,7 @@ static_assert(
 	sizeof(blk_snap_ioctl_table_mod) ==
 		((blk_snap_ioctl_end_mod - IOCTL_MOD) * sizeof(void *)),
 	"The size of table blk_snap_ioctl_table_mod does not match the enum blk_snap_ioctl.");
-#endif
+#endif /*BLK_SNAP_MODIFICATION*/
 
 static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg)
@@ -542,3 +503,25 @@ static long ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 
 	return blk_snap_ioctl_table[nr](arg);
 }
+
+static const struct file_operations blksnap_ctrl_fops = {
+	.owner		= THIS_MODULE,
+	.unlocked_ioctl	= ctrl_unlocked_ioctl,
+};
+
+static struct miscdevice blksnap_ctrl_misc = {
+	.minor		= MISC_DYNAMIC_MINOR,
+	.name		= "blksnap-control",
+	.fops		= &blksnap_ctrl_fops,
+};
+
+int ctrl_init(void)
+{
+	return misc_register(&blksnap_ctrl_misc);
+}
+
+void ctrl_done(void)
+{
+	misc_deregister(&blksnap_ctrl_misc);
+}
+

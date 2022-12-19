@@ -15,7 +15,6 @@ blksnap-y := 		\
 	main.o		\
 	snapimage.o	\
 	snapshot.o	\
-	sysfs.o		\
 	tracker.o
 
 obj-$(CONFIG_BLK_SNAP)	 += blksnap.o
