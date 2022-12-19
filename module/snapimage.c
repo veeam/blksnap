@@ -230,8 +230,12 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	pr_debug("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
+#ifdef STANDALONE_BDEVFILTER
 #ifdef GENHD_FL_NO_PART_SCAN
 	disk->flags |= GENHD_FL_NO_PART_SCAN;
+#else
+	disk->flags |= GENHD_FL_NO_PART;
+#endif
 #else
 	disk->flags |= GENHD_FL_NO_PART;
 #endif
