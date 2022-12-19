@@ -2,8 +2,6 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-ctrl: " fmt
 
 #include <linux/module.h>
-#include <linux/poll.h>
-#include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/miscdevice.h>
 #ifdef STANDALONE_BDEVFILTER

@@ -62,12 +62,14 @@
 
 static int __init blk_snap_init(void)
 {
-	int result;
+	int ret;
 
 #ifdef BLK_SNAP_FILELOG
 	log_init();
-#endif
 	pr_info("Loading\n");
+#else
+	pr_debug("Loading\n");
+#endif
 	pr_debug("Version: %s\n", VERSION_STR);
 	pr_debug("tracking_block_minimum_shift: %d\n",
 		 tracking_block_minimum_shift);
@@ -80,29 +82,45 @@ static int __init blk_snap_init(void)
 		 free_diff_buffer_pool_size);
 	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
 
-	result = diff_io_init();
-	if (result)
-		return result;
+	ret = diff_io_init();
+	if (ret)
+		goto fail_diff_io_init;
 
-	result = snapimage_init();
-	if (result)
-		return result;
+	ret = snapimage_init();
+	if (ret)
+		goto fail_snapimage_init;
 
-	result = tracker_init();
-	if (result)
-		return result;
+	ret = tracker_init();
+	if (ret)
+		goto fail_tracker_init;
 
-	result = ctrl_init();
-	if (result)
-		return result;
+	ret = ctrl_init();
+	if (ret)
+		goto fail_ctrl_init;
 
-	return result;
+	return 0;
+
+fail_ctrl_init:
+	tracker_done();
+fail_tracker_init:
+	snapimage_done();
+fail_snapimage_init:
+	diff_io_done();
+fail_diff_io_init:
+#ifdef BLK_SNAP_FILELOG
+	log_done();
+#endif
+
+	return ret;
 }
 
 static void __exit blk_snap_exit(void)
 {
+#ifdef BLK_SNAP_FILELOG
 	pr_info("Unloading module\n");
-
+#else
+	pr_debug("Unloading module\n");
+#endif
 	ctrl_done();
 
 	diff_io_done();
@@ -116,7 +134,7 @@ static void __exit blk_snap_exit(void)
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_print(true);
 #endif
-	pr_info("Module was unloaded\n");
+	pr_debug("Module was unloaded\n");
 }
 
 module_init(blk_snap_init);
