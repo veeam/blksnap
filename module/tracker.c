@@ -121,7 +121,7 @@ static bool tracker_submit_bio(struct bio *bio)
 	 * context of bio.
 	 */
 	if (bio->bi_end_io == diff_io_endio)
-		return ret;
+		return false;
 #else
 	WARN_ON_ONCE(!flt);
 	if (unlikely(!flt))
@@ -292,9 +292,8 @@ static int tracker_filter_attach(struct block_device *bdev,
 	return ret;
 }
 
-static int tracker_filter_detach(struct block_device *bdev)
+static void tracker_filter_detach(struct block_device *bdev)
 {
-	int ret;
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *superblock = NULL;
 #else
@@ -315,7 +314,7 @@ static int tracker_filter_detach(struct block_device *bdev)
 	}
 #endif
 
-	ret = bdev_filter_detach(bdev);
+	bdev_filter_detach(bdev);
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
@@ -329,11 +328,6 @@ static int tracker_filter_detach(struct block_device *bdev)
 				 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
 #endif
-
-	if (ret)
-		pr_err("Failed to detach filter from device [%u:%u]\n",
-		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	return ret;
 }
 
 static struct tracker *tracker_new(struct block_device *bdev)
@@ -553,6 +547,8 @@ int tracker_remove(dev_t dev_id)
 	int ret;
 	struct tracker *tracker;
 	struct block_device *bdev;
+	struct tracked_device *tr_dev = NULL;
+	struct tracked_device *iter_tr_dev;
 
 	pr_info("Removing device [%u:%u] from tracking\n", MAJOR(dev_id),
 		MINOR(dev_id));
@@ -593,28 +589,22 @@ int tracker_remove(dev_t dev_id)
 		goto put_tracker;
 	}
 
-	ret = tracker_filter_detach(bdev);
-	if (ret)
-		pr_err("Failed to remove tracker from device [%u:%u]\n",
-		       MAJOR(dev_id), MINOR(dev_id));
-	else {
-		struct tracked_device *tr_dev = NULL;
-		struct tracked_device *iter_tr_dev;
+	tracker_filter_detach(bdev);
 
-		spin_lock(&tracked_device_lock);
-		list_for_each_entry(iter_tr_dev, &tracked_device_list, link) {
-			if (iter_tr_dev->dev_id == dev_id) {
-				list_del(&iter_tr_dev->link);
-				tr_dev = iter_tr_dev;
-				break;
-			}
+	spin_lock(&tracked_device_lock);
+	list_for_each_entry(iter_tr_dev, &tracked_device_list, link) {
+		if (iter_tr_dev->dev_id == dev_id) {
+			list_del(&iter_tr_dev->link);
+			tr_dev = iter_tr_dev;
+			break;
 		}
-		spin_unlock(&tracked_device_lock);
-
-		kfree(tr_dev);
-		if (tr_dev)
-			memory_object_dec(memory_object_tracked_device);
 	}
+	spin_unlock(&tracked_device_lock);
+
+	kfree(tr_dev);
+	if (tr_dev)
+		memory_object_dec(memory_object_tracked_device);
+
 put_tracker:
 	tracker_put(tracker);
 put_bdev:
