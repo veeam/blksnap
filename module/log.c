@@ -73,14 +73,11 @@ void log_init(void)
 
 static inline void done_task(void)
 {
-	struct task_struct* task = log_task;
-
-	if (!task)
+	if (!log_task)
 		return;
 
+	kthread_stop(log_task);
 	log_task = NULL;
-	kthread_stop(task);
-	put_task_struct(task);
 }
 
 static inline void done_filepath(void)
@@ -353,7 +350,7 @@ int log_restart(int level, char *filepath, int tz_minuteswest)
 		goto fail;
 	}
 
-	log_task = get_task_struct(task);
+	log_task = task;
 	log_filepath = filepath;
 	log_level = level <= LOGLEVEL_DEBUG ? level : LOGLEVEL_DEBUG;
 	log_tz_minuteswest = tz_minuteswest;
