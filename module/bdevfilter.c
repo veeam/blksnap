@@ -254,8 +254,7 @@ void bdev_filter_detach(struct block_device *bdev)
 {
 	int ret = lp_bdev_filter_detach(bdev->bd_dev);
 
-	WARN(!ret, "When trying to detach the filter from the block \
-		device, the filter was not found.");
+	WARN(ret != 0, "When trying to detach the filter from the block device, the filter was not found.");
 }
 EXPORT_SYMBOL(bdev_filter_detach);
 
