@@ -49,6 +49,15 @@ static DECLARE_WAIT_QUEUE_HEAD(log_request_event_add);
 static struct task_struct* log_task = NULL;
 static atomic_t log_missed_counter = {0};
 
+static inline const char* get_module_name(void)
+{
+#ifdef MODULE
+	return THIS_MODULE->name;
+#else
+	return "kernel";
+#endif
+}
+
 void log_init(void)
 {
 	size_t inx;
@@ -279,7 +288,7 @@ int log_processor(void *data)
 	}
 
 	log_printk_direct(filp, LOGLEVEL_INFO, "Stop log for module %s\n\n",
-		THIS_MODULE->name);
+		get_module_name());
 	filp = log_close(filp);
 
 	return ret;
@@ -351,7 +360,7 @@ int log_restart(int level, char *filepath, int tz_minuteswest)
 
 	log_printk_direct(filp, LOGLEVEL_INFO,
 		"Start log for module %s version %s loglevel %d\n",
-		THIS_MODULE->name, VERSION_STR, log_level);
+		get_module_name(), VERSION_STR, log_level);
 
 	wake_up_process(log_task);
 
