@@ -10,10 +10,12 @@
 #endif
 #include "memory_checker.h"
 #include "cbt_map.h"
-#include "params.h"
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
 #endif
+
+extern int tracking_block_minimum_shift;
+extern int tracking_block_maximum_count;
 
 #ifndef HAVE_BDEV_NR_SECTORS
 static inline sector_t bdev_nr_sectors(struct block_device *bdev)

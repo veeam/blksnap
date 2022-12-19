@@ -10,7 +10,6 @@
 #include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
-#include "params.h"
 #include "tracker.h"
 #include "cbt_map.h"
 #include "diff_area.h"

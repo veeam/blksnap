@@ -2,12 +2,13 @@
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
 
 #include "memory_checker.h"
-#include "params.h"
 #include "diff_buffer.h"
 #include "diff_area.h"
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
 #endif
+
+extern int free_diff_buffer_pool_size;
 
 #ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
 static atomic_t diff_buffer_allocated_counter;

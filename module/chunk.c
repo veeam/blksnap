@@ -5,7 +5,6 @@
 #include <linux/dm-io.h>
 #include <linux/sched/mm.h>
 #include "memory_checker.h"
-#include "params.h"
 #include "chunk.h"
 #include "diff_io.h"
 #include "diff_buffer.h"
@@ -14,6 +13,8 @@
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
 #endif
+
+extern int chunk_maximum_in_cache;
 
 #ifdef BLK_SNAP_DEBUG_CHUNK_IO
 DEFINE_MUTEX(logging_lock);
