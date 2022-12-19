@@ -511,7 +511,7 @@ static const struct file_operations blksnap_ctrl_fops = {
 
 static struct miscdevice blksnap_ctrl_misc = {
 	.minor		= MISC_DYNAMIC_MINOR,
-	.name		= "blksnap-control",
+	.name		= BLK_SNAP_CTL,
 	.fops		= &blksnap_ctrl_fops,
 };
 

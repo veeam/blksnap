@@ -4,7 +4,7 @@
 
 #include <linux/types.h>
 
-#define BLK_SNAP_CTL "/dev/blksnap"
+#define BLK_SNAP_CTL "blksnap-control"
 #define BLK_SNAP_IMAGE_NAME "blksnap-image"
 #define BLK_SNAP 'V'
 
