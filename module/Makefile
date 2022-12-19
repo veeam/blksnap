@@ -6,7 +6,6 @@ include ${M}/Makefile-*
 blksnap-y := 		\
 	cbt_map.o	\
 	chunk.o		\
-	ctrl.o		\
 	diff_io.o	\
 	diff_area.o	\
 	diff_buffer.o	\

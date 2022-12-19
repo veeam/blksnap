@@ -12,7 +12,6 @@
 #include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
-#include "params.h"
 #include "chunk.h"
 #include "diff_area.h"
 #include "diff_buffer.h"
@@ -21,6 +20,10 @@
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
 #endif
+
+extern int chunk_minimum_shift;
+extern int chunk_maximum_count;
+extern int chunk_maximum_in_cache;
 
 #ifndef HAVE_BDEV_NR_SECTORS
 static inline sector_t bdev_nr_sectors(struct block_device *bdev)

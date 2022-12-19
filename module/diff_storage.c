@@ -11,7 +11,6 @@
 #include <uapi/linux/blksnap.h>
 #endif
 #include "memory_checker.h"
-#include "params.h"
 #include "chunk.h"
 #include "diff_io.h"
 #include "diff_buffer.h"
@@ -19,6 +18,8 @@
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
 #endif
+
+extern int diff_storage_minimum;
 
 #ifndef PAGE_SECTORS
 #define PAGE_SECTORS	(1 << (PAGE_SHIFT - SECTOR_SHIFT))
