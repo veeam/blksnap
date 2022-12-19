@@ -60,22 +60,16 @@ static int snapimage_kthread_worker_fn(void *param)
 {
 	struct snapimage *snapimage = param;
 	struct bio *bio;
-	int ret = 0;
 
-	while (!kthread_should_stop()) {
-		bio = get_bio_from_queue(snapimage);
-		if (!bio) {
-			schedule_timeout_interruptible(HZ / 100);
-			continue;
-		}
-
-		snapimage_process_bio(snapimage, bio);
+	for (;;) {
+		while ((bio = get_bio_from_queue(snapimage)))
+			snapimage_process_bio(snapimage, bio);
+		if (kthread_should_stop())
+			break;
+		schedule();
 	}
 
-	while ((bio = get_bio_from_queue(snapimage)))
-		snapimage_process_bio(snapimage, bio);
-
-	return ret;
+	return 0;
 }
 
 #ifdef HAVE_QC_SUBMIT_BIO
