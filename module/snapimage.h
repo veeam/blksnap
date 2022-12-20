@@ -2,11 +2,9 @@
 #ifndef __BLK_SNAP_SNAPIMAGE_H
 #define __BLK_SNAP_SNAPIMAGE_H
 
-#include <linux/blk_types.h>
 #ifdef HAVE_GENHD_H
 #include <linux/genhd.h>
 #endif
-#include <linux/blkdev.h>
 #include <linux/blk-mq.h>
 #include <linux/kthread.h>
 
@@ -16,8 +14,6 @@ struct cbt_map;
 /**
  * struct snapimage - Snapshot image block device.
  *
- * @image_dev_id:
- *	ID of the snapshot image block device.
  * @capacity:
  *	The size of the snapshot image in sectors must be equal to the size
  *	of the original device at the time of taking the snapshot.
@@ -45,7 +41,6 @@ struct cbt_map;
  * FMODE_EXCL parameter.
  */
 struct snapimage {
-	dev_t image_dev_id;
 	sector_t capacity;
 
 	struct task_struct *worker;
@@ -57,10 +52,6 @@ struct snapimage {
 	struct diff_area *diff_area;
 	struct cbt_map *cbt_map;
 };
-
-int snapimage_init(void);
-void snapimage_done(void);
-int snapimage_major(void);
 
 void snapimage_free(struct snapimage *snapimage);
 struct snapimage *snapimage_create(struct diff_area *diff_area,

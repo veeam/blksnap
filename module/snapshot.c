@@ -927,16 +927,16 @@ int snapshot_collect_images(
 		}
 
 		if (snapshot->snapimage_array[inx]) {
-			dev_t image_dev_id =
-				snapshot->snapimage_array[inx]->image_dev_id;
+			struct block_device *bdev =
+				snapshot->snapimage_array[inx]->disk->part0;
 
 			pr_debug("Image [%u:%u]\n",
-				 MAJOR(image_dev_id),
-				 MINOR(image_dev_id));
+				 MAJOR(bdev->bd_dev),
+				 MINOR(bdev->bd_dev));
 			image_info_array[inx].image_dev_id.mj =
-				MAJOR(image_dev_id);
+				MAJOR(bdev->bd_dev);
 			image_info_array[inx].image_dev_id.mn =
-				MINOR(image_dev_id);
+				MINOR(bdev->bd_dev);
 		}
 	}
 
@@ -976,9 +976,10 @@ int snapshot_mark_dirty_blocks(dev_t image_dev_id,
 
 	list_for_each_entry(s, &snapshots, link) {
 		for (inx = 0; inx < s->count; inx++) {
-			if (s->snapimage_array[inx]->image_dev_id ==
-			    image_dev_id) {
-				cbt_map = s->snapimage_array[inx]->cbt_map;
+			struct snapimage *image = s->snapimage_array[inx];
+
+			if (image->disk->part0->bd_dev == image_dev_id) {
+				cbt_map = image->cbt_map;
 				break;
 			}
 		}
@@ -986,7 +987,7 @@ int snapshot_mark_dirty_blocks(dev_t image_dev_id,
 		inx++;
 	}
 	if (!cbt_map) {
-		pr_err("Cannot find snapshot image device [%u:%u]\n",
+		pr_debug("Cannot find snapshot image device [%u:%u]\n",
 		       MAJOR(image_dev_id), MINOR(image_dev_id));
 		ret = -ENODEV;
 		goto out;
@@ -1007,8 +1008,9 @@ int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
 {
 	int ret = 0;
 	int inx = 0;
+	bool found = false;
 	struct snapshot *s;
-	struct snapimage *image = NULL;
+	struct snapimage *image;
 
 	down_read(&snapshots_lock);
 	if (list_empty(&snapshots))
@@ -1016,16 +1018,16 @@ int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
 
 	list_for_each_entry (s, &snapshots, link) {
 		for (inx = 0; inx < s->count; inx++) {
-			if (s->snapimage_array[inx]->image_dev_id ==
-			    image_dev_id) {
-				image = s->snapimage_array[inx];
+			image = s->snapimage_array[inx];
+			if (image->disk->part0->bd_dev == image_dev_id) {
+				found = true;
 				break;
 			}
 		}
 
 		inx++;
 	}
-	if (!image) {
+	if (!found) {
 		pr_err("Cannot find snapshot image device [%u:%u]\n",
 		       MAJOR(image_dev_id), MINOR(image_dev_id));
 		ret = -ENODEV;
