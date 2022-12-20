@@ -62,9 +62,10 @@ echo "Check snapshot before overflow."
 echo "press..."
 read -n 1
 
+DEVICE_IMAGE_1=$(blksnap_get_image ${DEVICE_1})
 IMAGE_1=${MPDIR}/image0
 mkdir -p ${IMAGE_1}
-mount /dev/blksnap-image0 ${IMAGE_1}
+mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Try to make snapshot overflow."

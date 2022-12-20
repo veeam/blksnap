@@ -55,7 +55,8 @@ IMAGE=${MP_DIR}/image0
 mkdir -p ${IMAGE}
 
 echo "Mount image"
-mount /dev/blksnap-image0 ${IMAGE}
+DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
+mount ${DEVICE_IMAGE} ${IMAGE}
 # for XFS filesystem nouuid option needed
 #mount -o nouuid /dev/blksnap-image0 ${IMAGE}
 
