@@ -242,39 +242,45 @@ static int ioctl_tracker_read_cbt_map(unsigned long arg)
 				       (char __user *)karg.buff);
 }
 
+static inline int mark_dirty_blocks(dev_t dev_id,
+	struct blk_snap_block_range *dirty_blks, unsigned int count)
+{
+	int ret;
+
+	ret = snapshot_mark_dirty_blocks(dev_id, dirty_blks, count);
+	if (ret == -ENODEV)
+		ret = tracker_mark_dirty_blocks(dev_id, dirty_blks, count);
+
+	return ret;
+}
+
 static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 {
 	int ret = 0;
 	struct blk_snap_tracker_mark_dirty_blocks karg;
-	struct blk_snap_block_range *dirty_blocks_array;
+	struct blk_snap_block_range *dirty_blks;
 
 	if (copy_from_user(&karg, (void *)arg, sizeof(karg))) {
 		pr_err("Unable to mark dirty blocks: invalid user buffer\n");
 		return -ENODATA;
 	}
 
-	dirty_blocks_array = kcalloc(
-		karg.count, sizeof(struct blk_snap_block_range), GFP_KERNEL);
-	if (!dirty_blocks_array)
+	dirty_blks = kcalloc(karg.count, sizeof(struct blk_snap_block_range),
+			     GFP_KERNEL);
+	if (!dirty_blks)
 		return -ENOMEM;
 	memory_object_inc(memory_object_blk_snap_block_range);
 
-	if (copy_from_user(dirty_blocks_array, (void *)karg.dirty_blocks_array,
-			   karg.count * sizeof(struct blk_snap_block_range))) {
+	if (!copy_from_user(dirty_blks, (void *)karg.dirty_blocks_array,
+			   karg.count * sizeof(struct blk_snap_block_range)))
+		ret = mark_dirty_blocks(MKDEV(karg.dev_id.mj, karg.dev_id.mn),
+					dirty_blks, karg.count);
+	else {
 		pr_err("Unable to mark dirty blocks: invalid user buffer\n");
 		ret = -ENODATA;
-	} else {
-		if (karg.dev_id.mj == snapimage_major())
-			ret = snapshot_mark_dirty_blocks(
-				MKDEV(karg.dev_id.mj, karg.dev_id.mn),
-				dirty_blocks_array, karg.count);
-		else
-			ret = tracker_mark_dirty_blocks(
-				MKDEV(karg.dev_id.mj, karg.dev_id.mn),
-				dirty_blocks_array, karg.count);
 	}
 
-	kfree(dirty_blocks_array);
+	kfree(dirty_blks);
 	memory_object_dec(memory_object_blk_snap_block_range);
 
 	return ret;
@@ -653,10 +659,6 @@ static int __init blk_snap_init(void)
 	if (ret)
 		goto fail_diff_io_init;
 
-	ret = snapimage_init();
-	if (ret)
-		goto fail_snapimage_init;
-
 	ret = tracker_init();
 	if (ret)
 		goto fail_tracker_init;
@@ -670,8 +672,6 @@ static int __init blk_snap_init(void)
 fail_misc_register:
 	tracker_done();
 fail_tracker_init:
-	snapimage_done();
-fail_snapimage_init:
 	diff_io_done();
 fail_diff_io_init:
 #ifdef BLK_SNAP_FILELOG
@@ -692,7 +692,6 @@ static void __exit blk_snap_exit(void)
 
 	diff_io_done();
 	snapshot_done();
-	snapimage_done();
 	tracker_done();
 
 #ifdef BLK_SNAP_FILELOG

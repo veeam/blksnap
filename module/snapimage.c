@@ -18,11 +18,6 @@
 #include "log.h"
 #endif
 
-#define NR_SNAPIMAGE_DEVT	(1 << MINORBITS)
-
-static unsigned int _major;
-static DEFINE_IDA(snapimage_devt_ida);
-
 static void snapimage_process_bio(struct snapimage *snapimage, struct bio *bio)
 {
 
@@ -60,7 +55,21 @@ static int snapimage_kthread_worker_fn(void *param)
 {
 	struct snapimage *snapimage = param;
 	struct bio *bio;
-
+#if 0
+	/*
+	 * Old implementation should be removed. TODO
+	 */
+	while (!kthread_should_stop()) {
+		bio = get_bio_from_queue(snapimage);
+		if (!bio) {
+			schedule_timeout_interruptible(HZ / 100);
+			continue;
+		}
+		snapimage_process_bio(snapimage, bio);
+	}
+	while ((bio = get_bio_from_queue(snapimage)))
+		snapimage_process_bio(snapimage, bio);
+#else
 	for (;;) {
 		while ((bio = get_bio_from_queue(snapimage)))
 			snapimage_process_bio(snapimage, bio);
@@ -68,7 +77,7 @@ static int snapimage_kthread_worker_fn(void *param)
 			break;
 		schedule();
 	}
-
+#endif
 	return 0;
 }
 
@@ -110,7 +119,6 @@ static void snapimage_free_disk(struct gendisk *disk)
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
 
-	ida_free(&snapimage_devt_ida, MINOR(snapimage->image_dev_id));
 	kfree(snapimage);
 	memory_object_dec(memory_object_snapimage);
 }
@@ -123,8 +131,7 @@ const struct block_device_operations bd_ops = {
 
 void snapimage_free(struct snapimage *snapimage)
 {
-	pr_info("Snapshot image disk [%u:%u] delete\n",
-		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
+	pr_info("Snapshot image disk %s delete\n", snapimage->disk->disk_name);
 
 	del_gendisk(snapimage->disk);
 
@@ -166,7 +173,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 				   struct cbt_map *cbt_map)
 {
 	int ret = 0;
-	int minor;
+	dev_t dev_id = diff_area->orig_bdev->bd_dev;
 	struct snapimage *snapimage = NULL;
 	struct gendisk *disk;
 	struct task_struct *task;
@@ -176,34 +183,20 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		return ERR_PTR(-ENOMEM);
 	memory_object_inc(memory_object_snapimage);
 
-	minor = ida_alloc_range(&snapimage_devt_ida, 0, NR_SNAPIMAGE_DEVT - 1,
-				GFP_KERNEL);
-	if (minor < 0) {
-		ret = minor;
-		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
-		       abs(ret));
-		goto fail_free_image;
-	}
-
 	snapimage->capacity = cbt_map->device_capacity;
-	snapimage->image_dev_id = MKDEV(_major, minor);
-	pr_info("Create snapshot image device [%u:%u] for original device [%u:%u]\n",
-		MAJOR(snapimage->image_dev_id),
-		MINOR(snapimage->image_dev_id),
-		MAJOR(diff_area->orig_bdev->bd_dev),
-		MINOR(diff_area->orig_bdev->bd_dev));
+	pr_info("Create snapshot image devicefor original device [%u:%u]\n",
+		MAJOR(dev_id), MINOR(dev_id));
 
 	spin_lock_init(&snapimage->queue_lock);
 	bio_list_init(&snapimage->queue);
 
-	task = kthread_create(snapimage_kthread_worker_fn,
-			      snapimage,
-			      BLK_SNAP_IMAGE_NAME "%d",
-			      MINOR(snapimage->image_dev_id));
+	task = kthread_create(snapimage_kthread_worker_fn, snapimage,
+			      "blksnap_%d_%d",
+			      MAJOR(dev_id), MINOR(dev_id));
 	if (IS_ERR(task)) {
 		ret = PTR_ERR(task);
 		pr_err("Failed to start worker thread. errno=%d\n", abs(ret));
-		goto fail_free_minor;
+		goto fail_free_image;
 	}
 
 	snapimage->worker = task;
@@ -221,10 +214,11 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
 
-	if (snprintf(disk->disk_name, DISK_NAME_LEN, "%s%d",
-		     BLK_SNAP_IMAGE_NAME, minor) < 0) {
-		pr_err("Unable to set disk name for snapshot image device: invalid minor %u\n",
-		       minor);
+	ret = snprintf(disk->disk_name, DISK_NAME_LEN, "%s_%d:%d",
+		       BLK_SNAP_IMAGE_NAME, MAJOR(dev_id), MINOR(dev_id));
+	if (ret < 0) {
+		pr_err("Unable to set disk name for snapshot image device: invalid device id [%d:%d]\n",
+		       MAJOR(dev_id),MINOR(dev_id));
 		ret = -EINVAL;
 		goto fail_cleanup_disk;
 	}
@@ -240,9 +234,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 #else
 	disk->flags |= GENHD_FL_NO_PART;
 #endif
-	disk->major = _major;
-	disk->first_minor = minor;
-	disk->minors = 1; /* One disk has only one partition */
 
 	disk->fops = &bd_ops;
 	disk->private_data = snapimage;
@@ -256,8 +247,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	cbt_map_get(cbt_map);
 	snapimage->cbt_map = cbt_map;
 
-	pr_debug("Add device [%d:%d]",
-		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 #ifdef HAVE_ADD_DISK_RESULT
 	ret = add_disk(disk);
 	if (ret) {
@@ -283,40 +272,10 @@ fail_cleanup_disk:
 #endif
 fail_free_worker:
 	kthread_stop(snapimage->worker);
-fail_free_minor:
-	ida_free(&snapimage_devt_ida, minor);
 fail_free_image:
 	kfree(snapimage);
 	memory_object_dec(memory_object_snapimage);
 	return ERR_PTR(ret);
-}
-
-int snapimage_init(void)
-{
-	int ret = 0;
-
-	ret = register_blkdev(0, BLK_SNAP_IMAGE_NAME);
-	if (ret < 0) {
-		pr_err("Failed to register snapshot image block device\n");
-		return ret;
-	}
-
-	_major = ret;
-	pr_info("Snapshot image block device major %d was registered\n",
-		_major);
-
-	return 0;
-}
-
-void snapimage_done(void)
-{
-	unregister_blkdev(_major, BLK_SNAP_IMAGE_NAME);
-	pr_info("Snapshot image block device [%d] was unregistered\n", _major);
-}
-
-int snapimage_major(void)
-{
-	return _major;
 }
 
 #ifdef BLK_SNAP_DEBUG_SECTOR_STATE
