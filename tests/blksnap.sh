@@ -104,3 +104,8 @@ blksnap_stretch_snapshot()
 
 	${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE_PATH} --limit=${LIMIT_MB} &
 }
+
+blksnap_get_image()
+{
+	echo "/dev/blksnap-image_"$(stat -c %t $1)":"$(stat -c %T $1)
+}

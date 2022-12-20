@@ -72,17 +72,18 @@ drop_cache
 check_files ${MOUNTPOINT_1}
 
 echo "Check snapshots"
+DEVICE_IMAGE_1=$(blksnap_get_image ${DEVICE_1})
 IMAGE_1=${TESTDIR}/image0
 mkdir -p ${IMAGE_1}
-mount /dev/blksnap-image0 ${IMAGE_1}
+mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Write to snapshot"
 generate_files ${IMAGE_1} "snapshot" 3
 
 drop_cache
-umount /dev/blksnap-image0
-mount /dev/blksnap-image0 ${IMAGE_1}
+umount ${DEVICE_IMAGE_1}
+mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 
 check_files ${IMAGE_1}
 
