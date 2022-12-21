@@ -29,7 +29,6 @@ struct tracked_device {
 	dev_t dev_id;
 };
 
-DEFINE_PERCPU_RWSEM(tracker_submit_lock);
 LIST_HEAD(tracked_device_list);
 DEFINE_SPINLOCK(tracked_device_lock);
 static refcount_t trackers_counter = REFCOUNT_INIT(1);
@@ -40,17 +39,6 @@ struct tracker_release_worker {
 	spinlock_t lock;
 };
 static struct tracker_release_worker tracker_release_worker;
-
-void tracker_lock(void)
-{
-	pr_debug("Lock trackers\n");
-	percpu_down_write(&tracker_submit_lock);
-};
-void tracker_unlock(void)
-{
-	percpu_up_write(&tracker_submit_lock);
-	pr_debug("Trackers have been unlocked\n");
-};
 
 static void tracker_free(struct tracker *tracker)
 {
@@ -121,19 +109,7 @@ static bool tracker_submit_bio(struct bio *bio)
 	 */
 	if (bio->bi_end_io == diff_io_endio)
 		return false;
-#else
-	WARN_ON_ONCE(!flt);
-	if (unlikely(!flt))
-		return false;
 #endif
-
-	if (bio->bi_opf & REQ_NOWAIT) {
-		if (!percpu_down_read_trylock(&tracker_submit_lock)) {
-			bio_wouldblock_error(bio);
-			return true;
-		}
-	} else
-		percpu_down_read(&tracker_submit_lock);
 
 	if (!op_is_write(bio_op(bio)))
 		goto out;
@@ -204,7 +180,7 @@ fail:
 	} else
 		pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
 out:
-	percpu_up_read(&tracker_submit_lock);
+
 	return completed;
 }
 
@@ -228,9 +204,8 @@ static void tracker_release_work(struct work_struct *work)
 	} while (tracker);
 }
 
-static void tracker_release(struct kref *kref)
+static void tracker_release(struct bdev_filter *flt)
 {
-	struct bdev_filter *flt = container_of(kref, struct bdev_filter, kref);
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
 
 	spin_lock(&tracker_release_worker.lock);
@@ -381,14 +356,24 @@ int tracker_take_snapshot(struct tracker *tracker)
 {
 	int ret = 0;
 	bool cbt_reset_needed = false;
+	struct block_device *orig_bdev = tracker->diff_area->orig_bdev;
 	sector_t capacity;
+	unsigned int current_flag;
+
+#ifdef STANDALONE_BDEVFILTER
+	bdevfilter_freeze_queue(&tracker->flt);
+#else
+	blk_mq_freeze_queue(orig_bdev->bd_queue);
+#endif
+
+	current_flag = memalloc_noio_save();
 
 	if (tracker->cbt_map->is_corrupted) {
 		cbt_reset_needed = true;
 		pr_warn("Corrupted CBT table detected. CBT fault\n");
 	}
 
-	capacity = bdev_nr_sectors(tracker->diff_area->orig_bdev);
+	capacity = bdev_nr_sectors(orig_bdev);
 	if (tracker->cbt_map->device_capacity != capacity) {
 		cbt_reset_needed = true;
 		pr_warn("Device resize detected. CBT fault\n");
@@ -406,18 +391,34 @@ int tracker_take_snapshot(struct tracker *tracker)
 	cbt_map_switch(tracker->cbt_map);
 	atomic_set(&tracker->snapshot_is_taken, true);
 
+	memalloc_noio_restore(current_flag);
+
+#ifdef STANDALONE_BDEVFILTER
+	bdevfilter_unfreeze_queue(&tracker->flt);
+#else
+	blk_mq_unfreeze_queue(orig_bdev->bd_queue);
+#endif
 	return 0;
 }
 
 void tracker_release_snapshot(struct tracker *tracker)
 {
-	if (!tracker)
-		return;
+#ifdef STANDALONE_BDEVFILTER
+	bdevfilter_freeze_queue(&tracker->flt);
+#else
+	blk_mq_freeze_queue(tracker->diff_area->orig_bdev->bd_queue);
+#endif
 
 	pr_debug("Tracker for device [%u:%u] release snapshot\n",
 		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
 	atomic_set(&tracker->snapshot_is_taken, false);
+
+#ifdef STANDALONE_BDEVFILTER
+	bdevfilter_unfreeze_queue(&tracker->flt);
+#else
+	blk_mq_unfreeze_queue(tracker->diff_area->orig_bdev->bd_queue);
+#endif
 }
 
 int tracker_init(void)
