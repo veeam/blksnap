@@ -233,9 +233,19 @@ static int tracker_filter_attach(struct block_device *bdev,
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_freeze_bdev(bdev, &superblock);
 #else
-	if (freeze_bdev(bdev))
-		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
-		       MINOR(bdev->bd_dev));
+	if (freeze_bdev(bdev)) {
+		/*
+		 * If the file system has not been frozen, we have to attach a
+		 * filter. This means that when the filter was attached, the
+		 * state of the file system was not consistent.
+		 * If the file system cannot be frozen, it is possible that it
+		 * is damaged and requires repair. For such a file system, we
+		 * still need to create a snapshot and perform a backup for
+		 * subsequent repair during recovery.
+		 */
+		pr_warn("Failed to freeze device [%u:%u]\n",
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	}
 	else {
 		is_frozen = true;
 		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
@@ -277,9 +287,15 @@ static void tracker_filter_detach(struct block_device *bdev)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_freeze_bdev(bdev, &superblock);
 #else
-	if (freeze_bdev(bdev))
-		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
-		       MINOR(bdev->bd_dev));
+	if (freeze_bdev(bdev)) {
+		/*
+		 * It is assumed that if the filter no longer wants to filter
+		 * I/O units on a block device, then it does not matter at all
+		 * what state the file system is in.
+		 */
+		pr_warn("Failed to freeze device [%u:%u]\n",
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	}
 	else {
 		is_frozen = true;
 		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
