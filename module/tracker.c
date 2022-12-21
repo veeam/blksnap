@@ -92,12 +92,12 @@ static bool tracker_submit_bio(struct bio *bio)
 #endif
 	struct bio_list bio_list_on_stack[2] = { };
 	struct bio *new_bio;
-	bool completed = false;
 	struct tracker *tracker = container_of(flt, struct tracker, flt);
 	int err;
 	sector_t sector;
 	sector_t count;
 	unsigned int current_flag;
+	bool is_nowait = !!(bio->bi_opf & REQ_NOWAIT);
 
 #ifdef STANDALONE_BDEVFILTER
 	/*
@@ -112,11 +112,11 @@ static bool tracker_submit_bio(struct bio *bio)
 #endif
 
 	if (!op_is_write(bio_op(bio)))
-		goto out;
+		return false;
 
 	count = bio_sectors(bio);
 	if (!count)
-		goto out;
+		return false;
 
 	sector = bio->bi_iter.bi_sector;
 	if (bio_flagged(bio, BIO_REMAPPED))
@@ -126,28 +126,31 @@ static bool tracker_submit_bio(struct bio *bio)
 	err = cbt_map_set(tracker->cbt_map, sector, count);
 	memalloc_noio_restore(current_flag);
 	if (unlikely(err))
-		goto out;
+		return false;
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
-		goto out;
+		return false;
 
 	if (unlikely(diff_area_is_corrupted(tracker->diff_area)))
-		goto out;
+		return false;
 
 	current_flag = memalloc_noio_save();
 	bio_list_init(&bio_list_on_stack[0]);
 	current->bio_list = bio_list_on_stack;
-	barrier();
 
-	err = diff_area_copy(tracker->diff_area, sector, count,
-			     !!(bio->bi_opf & REQ_NOWAIT));
+	err = diff_area_copy(tracker->diff_area, sector, count, is_nowait);
 
 	current->bio_list = NULL;
-	barrier();
 	memalloc_noio_restore(current_flag);
 
-	if (unlikely(err))
-		goto fail;
+	if (unlikely(err)) {
+		if (err == -EAGAIN) {
+			bio_wouldblock_error(bio);
+			return true;
+		}
+		pr_err("Failed to copy data to diff storage with error %d.\n", abs(err));
+		return false;
+	}
 
 	while ((new_bio = bio_list_pop(&bio_list_on_stack[0]))) {
 		/*
@@ -169,19 +172,15 @@ static bool tracker_submit_bio(struct bio *bio)
 	 * flags and options.
 	 * Otherwise, write I/O units may overtake read I/O units.
 	 */
-	err = diff_area_wait(tracker->diff_area, sector, count,
-			     !!(bio->bi_opf & REQ_NOWAIT));
-	if (likely(err == 0))
-		goto out;
-fail:
-	if (err == -EAGAIN) {
-		bio_wouldblock_error(bio);
-		completed = true;
-	} else
-		pr_err("Failed to copy data to diff storage with error %d\n", abs(err));
-out:
-
-	return completed;
+	err = diff_area_wait(tracker->diff_area, sector, count, is_nowait);
+	if (unlikely(err)) {
+		if (err == -EAGAIN) {
+			bio_wouldblock_error(bio);
+			return true;
+		}
+		pr_err("Failed to wait for available data in diff storage with error %d.\n", abs(err));
+	}
+	return false;
 }
 
 
