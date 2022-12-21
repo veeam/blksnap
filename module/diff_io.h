@@ -60,6 +60,8 @@ struct diff_io_async {
  * struct diff_io - Structure for I/O maintenance.
  * @error:
  *	Zero if the I/O operation is successful, or an error code if it fails.
+ * @bio_count:
+ *      The count of I/O units in request.
  * @is_write:
  *	Indicates that a write operation is being performed.
  * @is_sync_io:
@@ -74,9 +76,7 @@ struct diff_io_async {
  */
 struct diff_io {
 	int error;
-#ifdef HAVE_BIO_MAX_PAGES
 	atomic_t bio_count;
-#endif
 	bool is_write;
 	bool is_sync_io;
 	union {
