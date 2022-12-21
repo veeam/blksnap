@@ -114,6 +114,12 @@ static inline unsigned short calc_page_count(sector_t sectors)
 }
 
 #ifdef HAVE_BIO_MAX_PAGES
+static inline unsigned int bio_max_segs(unsigned int nr_segs)
+{
+	return min(nr_segs, (unsigned int)BIO_MAX_PAGES);
+}
+#endif
+
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	       struct diff_buffer *diff_buffer, const bool is_nowait)
 {
@@ -122,6 +128,9 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	struct bio_list bio_list_head = BIO_EMPTY_LIST;
 	struct page **current_page_ptr;
 	sector_t processed = 0;
+	gfp_t gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
+	unsigned int opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
+	unsigned op_flags = REQ_SYNC | REQ_IDLE | REQ_FUA;
 
 	if (unlikely(!check_page_aligned(diff_region->sector))) {
 		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
@@ -143,26 +152,20 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 		portion = diff_region->count - processed;
 		nr_iovecs = calc_page_count(portion);
-
-		if (nr_iovecs > BIO_MAX_PAGES) {
-			nr_iovecs = BIO_MAX_PAGES;
-			portion = BIO_MAX_PAGES * SECTORS_IN_PAGE;
+		if (nr_iovecs > bio_max_segs(nr_iovecs)) {
+			nr_iovecs = bio_max_segs(nr_iovecs);
+			portion = nr_iovecs * SECTORS_IN_PAGE;
 		}
 
-		if (is_nowait) {
-			bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, nr_iovecs,
-					       &diff_io_bioset);
-			if (unlikely(!bio)) {
-				ret = -EAGAIN;
-				goto fail;
-			}
-		} else {
-			bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs,
-					       &diff_io_bioset);
-			if (unlikely(!bio)) {
-				ret = -ENOMEM;
-				goto fail;
-			}
+#ifdef HAVE_BDEV_BIO_ALLOC
+		bio = bio_alloc_bioset(diff_region->bdev, nr_iovecs,
+				       opf | op_flags,  gfp, &diff_io_bioset);
+#else
+		bio = bio_alloc_bioset(gfp, nr_iovecs, &diff_io_bioset);
+#endif
+		if (unlikely(!bio)) {
+			ret = is_nowait ? -EAGAIN : -ENOMEM;
+			goto fail;
 		}
 
 #ifndef STANDALONE_BDEVFILTER
@@ -172,10 +175,9 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		bio->bi_private = diff_io;
 		bio_set_dev(bio, diff_region->bdev);
 		bio->bi_iter.bi_sector = diff_region->sector + processed;
-
-		bio_set_op_attrs(bio,
-				 diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ,
-				 REQ_SYNC | REQ_IDLE | REQ_FUA);
+#ifndef HAVE_BDEV_BIO_ALLOC
+		bio_set_op_attrs(bio, opf, op_flags);
+#endif
 
 		while (offset < portion) {
 			sector_t bvec_len_sect;
@@ -186,10 +188,6 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			bvec_len =
 				(unsigned int)(bvec_len_sect << SECTOR_SHIFT);
 
-			if (unlikely(bio_full(bio, bvec_len))) {
-				ret = -EFAULT;
-				goto fail;
-			}
 			/* All pages offset aligned to PAGE_SIZE */
 			__bio_add_page(bio, *current_page_ptr, bvec_len, 0);
 
@@ -204,19 +202,18 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	}
 
 	/* Append last sync bio to bio_list */
-	if (is_nowait) {
-		bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, 0,
-				       &diff_io_bioset);
-		if (unlikely(!bio)) {
-			ret = -EAGAIN;
-			goto fail;
-		}
-	} else {
-		bio = bio_alloc_bioset(GFP_NOIO, 0, &diff_io_bioset);
-		if (unlikely(!bio)) {
-			ret = -ENOMEM;
-			goto fail;
-		}
+	op_flags = REQ_SYNC | REQ_PREFLUSH;
+#ifdef HAVE_BDEV_BIO_ALLOC
+	bio = bio_alloc_bioset(diff_region->bdev, 0, opf | op_flags, gfp,
+			       &diff_io_bioset);
+#else
+	bio = bio_alloc_bioset(gfp, 0, &diff_io_bioset);
+
+#endif
+	if (unlikely(!bio)) {
+		ret = is_nowait ? -EAGAIN : -ENOMEM;
+		goto fail;
+
 	}
 
 #ifndef STANDALONE_BDEVFILTER
@@ -226,10 +223,9 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	bio->bi_private = diff_io;
 	bio_set_dev(bio, diff_region->bdev);
 	bio->bi_iter.bi_sector = 0;
-
-	bio_set_op_attrs(bio,
-			 diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ,
-			 REQ_SYNC | REQ_PREFLUSH);
+#ifndef HAVE_BDEV_BIO_ALLOC
+	bio_set_op_attrs(bio, opf, op_flags);
+#endif
 	bio_list_add(&bio_list_head, bio);
 	atomic_inc(&diff_io->bio_count);
 
@@ -247,147 +243,3 @@ fail:
 		bio_put(bio);
 	return ret;
 }
-#else
-int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
-	       struct diff_buffer *diff_buffer, const bool is_nowait)
-{
-	int ret = 0;
-	struct bio *bio = NULL;
-	struct bio *flush_bio = NULL;
-	struct page **current_page_ptr;
-#ifdef HAVE_BDEV_BIO_ALLOC
-	unsigned int opf;
-	gfp_t gfp;
-#endif
-	unsigned short nr_iovecs;
-	sector_t processed = 0;
-
-	if (unlikely(!check_page_aligned(diff_region->sector))) {
-		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
-		ret = -EINVAL;
-		goto fail;
-	}
-
-	nr_iovecs = calc_page_count(diff_region->count);
-	if (unlikely(nr_iovecs > diff_buffer->page_count)) {
-		pr_err("The difference storage block is larger than the buffer size\n");
-		ret = -EINVAL;
-		goto fail;
-	}
-
-	/* Allocate both bios */
-#ifdef HAVE_BDEV_BIO_ALLOC
-	opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
-	gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
-
-	bio = bio_alloc_bioset(diff_region->bdev, nr_iovecs,
-			       opf | REQ_SYNC | REQ_IDLE | REQ_FUA,
-			       gfp, &diff_io_bioset);
-	if (unlikely(!bio)) {
-		if (is_nowait)
-			ret = -EAGAIN;
-		else
-			ret = -ENOMEM;
-		goto fail;
-	}
-
-	flush_bio = bio_alloc_bioset(diff_region->bdev, 0,
-				     opf | REQ_SYNC | REQ_PREFLUSH,
-				     gfp, &diff_io_bioset);
-	if (unlikely(!flush_bio)) {
-		if (is_nowait)
-			ret = -EAGAIN;
-		else
-			ret = -ENOMEM;
-		goto fail;
-	}
-#else
-	if (is_nowait) {
-		bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, nr_iovecs,
-				       &diff_io_bioset);
-		if (unlikely(!bio)) {
-			ret = -EAGAIN;
-			goto fail;
-		}
-
-		flush_bio = bio_alloc_bioset(GFP_NOIO | GFP_NOWAIT, 0,
-					     &diff_io_bioset);
-		if (unlikely(!flush_bio)) {
-			ret = -EAGAIN;
-			goto fail;
-		}
-	} else {
-		bio = bio_alloc_bioset(GFP_NOIO, nr_iovecs, &diff_io_bioset);
-		if (unlikely(!bio)) {
-			ret = -ENOMEM;
-			goto fail;
-		}
-
-		flush_bio = bio_alloc_bioset(GFP_NOIO, 0, &diff_io_bioset);
-		if (unlikely(!flush_bio)) {
-			ret = -ENOMEM;
-			goto fail;
-		}
-	}
-#endif
-	atomic_set(&diff_io->bio_count, 2);
-
-	/* submit bio with datas */
-#ifndef STANDALONE_BDEVFILTER
-	bio_set_flag(bio, BIO_FILTERED);
-#endif
-	bio->bi_end_io = diff_io_endio;
-	bio->bi_private = diff_io;
-	bio->bi_iter.bi_sector = diff_region->sector;
-#ifndef HAVE_BDEV_BIO_ALLOC
-	bio_set_dev(bio, diff_region->bdev);
-	bio_set_op_attrs(bio,
-			 diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ,
-			 REQ_SYNC | REQ_IDLE | REQ_FUA);
-#endif
-	current_page_ptr = diff_buffer->pages;
-	while (processed < diff_region->count) {
-		sector_t bvec_len_sect;
-		unsigned int bvec_len;
-
-		bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE,
-				      diff_region->count - processed);
-		bvec_len = (unsigned int)(bvec_len_sect << SECTOR_SHIFT);
-
-		if (bio_add_page(bio, *current_page_ptr, bvec_len, 0) == 0) {
-			bio_put(bio);
-			return -EFAULT;
-		}
-
-		current_page_ptr++;
-		processed += bvec_len_sect;
-	}
-	submit_bio_noacct(bio);
-
-	/* submit flush bio */
-#ifndef STANDALONE_BDEVFILTER
-	bio_set_flag(flush_bio, BIO_FILTERED);
-#endif
-	flush_bio->bi_end_io = diff_io_endio;
-	flush_bio->bi_private = diff_io;
-	flush_bio->bi_iter.bi_sector = 0;
-#ifndef HAVE_BDEV_BIO_ALLOC
-	bio_set_dev(flush_bio, diff_region->bdev);
-	bio_set_op_attrs(flush_bio,
-			 diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ,
-			 REQ_SYNC | REQ_PREFLUSH);
-#endif
-	submit_bio_noacct(flush_bio);
-
-	if (diff_io->is_sync_io)
-		wait_for_completion_io(&diff_io->notify.sync.completion);
-
-	return 0;
-fail:
-	if (bio)
-		bio_put(bio);
-	if (flush_bio)
-		bio_put(flush_bio);
-	return ret;
-}
-#endif
