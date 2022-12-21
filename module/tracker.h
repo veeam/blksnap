@@ -50,9 +50,6 @@ struct tracker {
 	struct diff_area *diff_area;
 };
 
-void tracker_lock(void);
-void tracker_unlock(void);
-
 static inline void tracker_put(struct tracker *tracker)
 {
 	if (likely(tracker))

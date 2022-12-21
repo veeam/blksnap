@@ -17,7 +17,7 @@ struct bdev_filter_operations {
 			      sector_t sector, struct page *page,
 			      struct bdev_filter *flt);
 	*/
-	void (*release)(struct kref *kref);
+	void (*release)(struct bdev_filter *flt);
 };
 
 /**
@@ -30,6 +30,7 @@ struct bdev_filter_operations {
 struct bdev_filter {
 	struct kref kref;
 	const struct bdev_filter_operations *fops;
+	struct percpu_rw_semaphore submit_lock;
 };
 
 static inline void bdev_filter_init(struct bdev_filter *flt,
@@ -37,7 +38,9 @@ static inline void bdev_filter_init(struct bdev_filter *flt,
 {
 	kref_init(&flt->kref);
 	flt->fops = fops;
+	percpu_init_rwsem(&flt->submit_lock);
 };
+void bdev_filter_free(struct kref *kref);
 
 int bdev_filter_attach(struct block_device *bdev, struct bdev_filter *flt);
 void bdev_filter_detach(struct block_device *bdev);
@@ -49,7 +52,7 @@ static inline void bdev_filter_get(struct bdev_filter *flt)
 static inline void bdev_filter_put(struct bdev_filter *flt)
 {
 	if (likely(flt))
-		kref_put(&flt->kref, flt->fops->release);
+		kref_put(&flt->kref, bdev_filter_free);
 };
 
 /* Only for livepatch version */
@@ -61,4 +64,17 @@ extern blk_qc_t (*submit_bio_noacct_notrace)(struct bio *);
 extern void (*submit_bio_noacct_notrace)(struct bio *);
 #endif
 
+
+static inline
+void bdevfilter_freeze_queue(struct bdev_filter *flt)
+{
+	pr_debug("Freeze filtered queue.\n");
+	percpu_down_write(&flt->submit_lock);
+};
+static inline
+void bdevfilter_unfreeze_queue(struct bdev_filter *flt)
+{
+	percpu_up_write(&flt->submit_lock);
+	pr_debug("Filtered queue was unfrozen.\n");
+};
 #endif /* __LINUX_BDEVFILTER_H */

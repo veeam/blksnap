@@ -67,9 +67,7 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 #endif
 
 		/* Set tracker as available for new snapshots. */
-		tracker_lock();
 		tracker_release_snapshot(tracker);
-		tracker_unlock();
 
 		/* Thaw fs */
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -97,7 +95,6 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 static void snapshot_release_trackers(struct snapshot *snapshot)
 {
 	int inx;
-	unsigned int current_flag;
 
 	/* Flush and freeze fs on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -122,18 +119,12 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 #endif
 	}
 
-	current_flag = memalloc_noio_save();
-	tracker_lock();
-
 	/* Set tracker as available for new snapshots. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
 	pr_debug("Set tracker as available for new snapshots");
 #endif
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
-
-	tracker_unlock();
-	memalloc_noio_restore(current_flag);
 
 	/* Thaw fs on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -500,7 +491,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 {
 	int ret = 0;
 	int inx;
-	unsigned int current_flag;
 
 	/* Try to flush and freeze file system on each original block device. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -532,8 +522,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		}
 #endif
 
-		current_flag = memalloc_noio_save();
-		tracker_lock();
 
 		/*
 		 * Take snapshot - switch CBT tables and enable COW logic
@@ -548,9 +536,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 			       &snapshot->id);
 			break;
 		}
-
-		tracker_unlock();
-		memalloc_noio_restore(current_flag);
 
 		/* Thaw file systems on original block devices. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -599,9 +584,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
 
-		tracker_lock();
 		tracker_release_snapshot(tracker);
-		tracker_unlock();
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(tracker->diff_area->orig_bdev, sb);
@@ -656,9 +639,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #endif
 	}
 
-	current_flag = memalloc_noio_save();
-	tracker_lock();
-
 	/*
 	 * Take snapshot - switch CBT tables and enable COW logic
 	 * for each tracker.
@@ -690,9 +670,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		}
 	} else
 		snapshot->is_taken = true;
-
-	tracker_unlock();
-	memalloc_noio_restore(current_flag);
 
 	/* Thaw file systems on original block devices. */
 #ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
@@ -805,8 +782,7 @@ int snapshot_take(uuid_t *id)
 
 	goto out;
 fail:
-	pr_err("Unable to take snapshot: failed to capture snapshot %pUb\n",
-	       &snapshot->id);
+	pr_err("Unable to take snapshot %pUb.\n", &snapshot->id);
 
 	down_write(&snapshots_lock);
 	list_del(&snapshot->link);

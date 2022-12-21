@@ -161,6 +161,15 @@ static inline struct bdev_extension *bdev_extension_append(struct block_device *
 	return result;
 }
 
+void bdev_filter_free(struct kref *kref)
+{
+	struct bdev_filter *flt = container_of(kref, struct bdev_filter, kref);
+
+	flt->fops->release(flt);
+	percpu_free_rwsem(&flt->submit_lock);
+};
+EXPORT_SYMBOL(bdev_filter_free);
+
 /**
  * bdev_filter_attach - Attach a filter to original block device.
  * @bdev:
@@ -317,7 +326,19 @@ static inline bool bdev_filters_apply(struct bio *bio)
 	if (!flt)
 		return false;
 
+	if (bio->bi_opf & REQ_NOWAIT) {
+		if (!percpu_down_read_trylock(&flt->submit_lock)) {
+			bio_wouldblock_error(bio);
+			completed = true;
+			goto out;
+		}
+	} else
+		percpu_down_read(&flt->submit_lock);
+
 	completed = flt->fops->submit_bio(bio, flt);
+
+	percpu_up_read(&flt->submit_lock);
+out:
 	bdev_filter_put(flt);
 
 	return completed;
