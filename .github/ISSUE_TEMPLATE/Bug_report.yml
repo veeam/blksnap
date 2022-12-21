@@ -1,4 +1,4 @@
-name: "Bug report"
+name: "Report bug"
 description: "Create a bug report to help this project improve"
 labels: ["bug"]
 body:
