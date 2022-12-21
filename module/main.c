@@ -126,6 +126,7 @@ module_exit(blk_snap_exit);
 int tracking_block_minimum_shift = CONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT;
 int tracking_block_maximum_count = CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT;
 int chunk_minimum_shift = CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT;
+int chunk_maximum_shift = 26; /* 2^26=64MiB - upper limit for a chunk size */
 int chunk_maximum_count = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT;
 int chunk_maximum_in_cache = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE;
 int free_diff_buffer_pool_size = CONFIG_BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE;
@@ -142,6 +143,9 @@ MODULE_PARM_DESC(tracking_block_maximum_count,
 module_param_named(chunk_minimum_shift, chunk_minimum_shift, int, 0644);
 MODULE_PARM_DESC(chunk_minimum_shift,
 		 "The power of 2 for minimum snapshots chunk size");
+module_param_named(chunk_maximum_shift, chunk_maximum_shift, int, 0644);
+MODULE_PARM_DESC(chunk_maximum_shift,
+		 "The power of 2 for maximum snapshots chunk size");
 module_param_named(chunk_maximum_count, chunk_maximum_count, int, 0644);
 MODULE_PARM_DESC(chunk_maximum_count,
 		 "The limit of the maximum number of snapshots chunks");
