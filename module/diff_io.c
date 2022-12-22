@@ -49,20 +49,12 @@ static void diff_io_endio(struct bio *bio)
 	if (bio->bi_status != BLK_STS_OK)
 		diff_io->error = -EIO;
 
-#ifdef HAVE_BIO_MAX_PAGES
 	if (atomic_dec_and_test(&diff_io->bio_count)) {
 		if (diff_io->is_sync_io)
 			complete(&diff_io->notify.sync.completion);
 		else
 			queue_work(system_wq, &diff_io->notify.async.work);
 	}
-#else
-	if (diff_io->is_sync_io)
-		complete(&diff_io->notify.sync.completion);
-	else
-		queue_work(system_wq, &diff_io->notify.async.work);
-#endif
-
 
 	bio_put(bio);
 }
@@ -79,9 +71,7 @@ static inline struct diff_io *diff_io_new(bool is_write, bool is_nowait)
 
 	diff_io->error = 0;
 	diff_io->is_write = is_write;
-#ifdef HAVE_BIO_MAX_PAGES
 	atomic_set(&diff_io->bio_count, 0);
-#endif
 
 	return diff_io;
 }
