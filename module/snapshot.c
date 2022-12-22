@@ -890,29 +890,23 @@ int snapshot_collect_images(
 
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (snapshot->tracker_array[inx]) {
-			dev_t orig_dev_id =
-				snapshot->tracker_array[inx]->dev_id;
+			struct tracker *tr = snapshot->tracker_array[inx];
+			int mj = MAJOR(tr->dev_id);
+			int mn = MINOR(tr->dev_id);
 
-			pr_debug("Original [%u:%u]\n",
-				 MAJOR(orig_dev_id),
-				 MINOR(orig_dev_id));
-			image_info_array[inx].orig_dev_id.mj =
-				MAJOR(orig_dev_id);
-			image_info_array[inx].orig_dev_id.mn =
-				MINOR(orig_dev_id);
+			pr_debug("Original [%u:%u]\n", mj, mn);
+			image_info_array[inx].orig_dev_id.mj = mj;
+			image_info_array[inx].orig_dev_id.mn = mn;
 		}
 
 		if (snapshot->snapimage_array[inx]) {
-			struct block_device *bdev =
-				snapshot->snapimage_array[inx]->disk->part0;
+			struct snapimage *img = snapshot->snapimage_array[inx];
+			int mj = img->disk->major;
+			int mn = img->disk->first_minor;
 
-			pr_debug("Image [%u:%u]\n",
-				 MAJOR(bdev->bd_dev),
-				 MINOR(bdev->bd_dev));
-			image_info_array[inx].image_dev_id.mj =
-				MAJOR(bdev->bd_dev);
-			image_info_array[inx].image_dev_id.mn =
-				MINOR(bdev->bd_dev);
+			pr_debug("Image [%u:%u]\n", mj, mn);
+			image_info_array[inx].image_dev_id.mj = mj;
+			image_info_array[inx].image_dev_id.mn = mn;
 		}
 	}
 
@@ -952,10 +946,12 @@ int snapshot_mark_dirty_blocks(dev_t image_dev_id,
 
 	list_for_each_entry(s, &snapshots, link) {
 		for (inx = 0; inx < s->count; inx++) {
-			struct snapimage *image = s->snapimage_array[inx];
+			struct snapimage *img = s->snapimage_array[inx];
+			int mj = img->disk->major;
+			int mn = img->disk->first_minor;
 
-			if (image->disk->part0->bd_dev == image_dev_id) {
-				cbt_map = image->cbt_map;
+			if (MKDEV(mj,mn) == image_dev_id) {
+				cbt_map = img->cbt_map;
 				break;
 			}
 		}
@@ -984,9 +980,8 @@ int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
 {
 	int ret = 0;
 	int inx = 0;
-	bool found = false;
 	struct snapshot *s;
-	struct snapimage *image;
+	struct snapimage *image = NULL;
 
 	down_read(&snapshots_lock);
 	if (list_empty(&snapshots))
@@ -994,16 +989,19 @@ int snapshot_get_chunk_state(dev_t image_dev_id, sector_t sector,
 
 	list_for_each_entry (s, &snapshots, link) {
 		for (inx = 0; inx < s->count; inx++) {
-			image = s->snapimage_array[inx];
-			if (image->disk->part0->bd_dev == image_dev_id) {
-				found = true;
+			struct snapimage *img = s->snapimage_array[inx];
+			int mj = img->disk->major;
+			int mn = img->disk->first_minor;
+
+			if (MKDEV(mj,mn) == image_dev_id) {
+				image = img;
 				break;
 			}
 		}
 
 		inx++;
 	}
-	if (!found) {
+	if (!image) {
 		pr_err("Cannot find snapshot image device [%u:%u]\n",
 		       MAJOR(image_dev_id), MINOR(image_dev_id));
 		ret = -ENODEV;

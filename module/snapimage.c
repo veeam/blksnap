@@ -112,6 +112,7 @@ static void snapimage_submit_bio(struct bio *bio)
 }
 #endif
 
+#ifndef HAVE_GENHD_H
 static void snapimage_free_disk(struct gendisk *disk)
 {
 	struct snapimage *snapimage = disk->private_data;
@@ -122,11 +123,14 @@ static void snapimage_free_disk(struct gendisk *disk)
 	kfree(snapimage);
 	memory_object_dec(memory_object_snapimage);
 }
+#endif
 
 const struct block_device_operations bd_ops = {
 	.owner = THIS_MODULE,
 	.submit_bio = snapimage_submit_bio,
+#ifndef HAVE_GENHD_H
 	.free_disk = snapimage_free_disk,
+#endif
 };
 
 void snapimage_free(struct snapimage *snapimage)
@@ -145,6 +149,14 @@ void snapimage_free(struct snapimage *snapimage)
 #else
 	blk_cleanup_queue(snapimage->disk->queue);
 	put_disk(snapimage->disk);
+#endif
+
+#ifdef HAVE_GENHD_H
+	diff_area_put(snapimage->diff_area);
+	cbt_map_put(snapimage->cbt_map);
+
+	kfree(snapimage);
+	memory_object_dec(memory_object_snapimage);
 #endif
 }
 
@@ -184,7 +196,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	memory_object_inc(memory_object_snapimage);
 
 	snapimage->capacity = cbt_map->device_capacity;
-	pr_info("Create snapshot image devicefor original device [%u:%u]\n",
+	pr_info("Create snapshot image device for original device [%u:%u]\n",
 		MAJOR(dev_id), MINOR(dev_id));
 
 	spin_lock_init(&snapimage->queue_lock);
@@ -257,6 +269,9 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 #else
 	add_disk(disk);
 #endif
+
+	pr_debug("Image block device [%d:%d] has been created.\n",
+		disk->major, disk->first_minor);
 
 	return snapimage;
 
