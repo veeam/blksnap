@@ -119,9 +119,10 @@ static bool tracker_submit_bio(struct bio *bio)
 		return false;
 
 	sector = bio->bi_iter.bi_sector;
+#ifdef HAVE_BI_BDEV
 	if (bio_flagged(bio, BIO_REMAPPED))
 		sector -= bio->bi_bdev->bd_start_sect;
-
+#endif
 	current_flag = memalloc_noio_save();
 	err = cbt_map_set(tracker->cbt_map, sector, count);
 	memalloc_noio_restore(current_flag);
