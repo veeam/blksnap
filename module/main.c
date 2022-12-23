@@ -637,8 +637,8 @@ static int __init blk_snap_init(void)
 {
 	int ret;
 
-#ifdef BLK_SNAP_FILELOG
 	log_init();
+#ifdef STANDALONE_BDEVFILTER
 	pr_info("Loading\n");
 #else
 	pr_debug("Loading\n");
@@ -674,16 +674,14 @@ fail_misc_register:
 fail_tracker_init:
 	diff_io_done();
 fail_diff_io_init:
-#ifdef BLK_SNAP_FILELOG
 	log_done();
-#endif
 
 	return ret;
 }
 
 static void __exit blk_snap_exit(void)
 {
-#ifdef BLK_SNAP_FILELOG
+#ifdef STANDALONE_BDEVFILTER
 	pr_info("Unloading module\n");
 #else
 	pr_debug("Unloading module\n");
@@ -693,13 +691,8 @@ static void __exit blk_snap_exit(void)
 	diff_io_done();
 	snapshot_done();
 	tracker_done();
-
-#ifdef BLK_SNAP_FILELOG
 	log_done();
-#endif
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_print(true);
-#endif
 	pr_debug("Module was unloaded\n");
 }
 

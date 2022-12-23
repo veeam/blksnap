@@ -84,6 +84,11 @@ void log_printk(const int level, const char *fmt, ...);
 	no_printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
-#endif
+#else
+static inline void log_init(void)
+{};
+static inline void void log_done(void)
+{};
+#endif /* BLK_SNAP_FILELOG */
 
 #endif /* __BLK_SNAP_LOG_H */

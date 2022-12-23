@@ -25,9 +25,6 @@ struct diff_area;
 struct diff_buffer {
 	struct list_head link;
 	size_t size;
-#ifdef BLK_SNAP_DEBUG_DIFF_BUFFER
-	int number;
-#endif
 	size_t page_count;
 	struct page *pages[0];
 };

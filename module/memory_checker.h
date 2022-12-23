@@ -48,5 +48,10 @@ static inline void memory_object_inc(
 static inline void memory_object_dec(
 	__attribute__ ((unused)) enum memory_object_type type)
 {};
+static inline int  memory_object_print(
+	__attribute__ ((unused)) bool is_error)
+{};
+static inline void memory_object_max_print(void)
+{};
 #endif
 #endif /* __BLK_SNAP_MEMORY_CHECKER_H */
