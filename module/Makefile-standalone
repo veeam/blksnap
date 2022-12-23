@@ -82,12 +82,7 @@ ccflags-y += "-D BLK_SNAP_FILELOG"
 ccflags-y += "-D BLK_SNAP_SEQUENTALFREEZE"
 # ccflags-y += "-D BLK_SNAP_DEBUGLOG"
 # ccflags-y += "-D BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY"
-# ccflags-y += "-D BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS"
-# ccflags-y += "-D BLK_SNAP_DEBUG_DIFF_BUFFER"
-# ccflags-y += "-D BLK_SNAP_DEBUG_CHUNK_IO"
-# ccflags-y += "-D BLK_SNAP_DEBUG_IMAGE_WRITE"
 # ccflags-y += "-D BLK_SNAP_DEBUG_SECTOR_STATE"
-# ccflags-y += "-D BLK_SNAP_DEBUG_RELEASE_SNAPSHOT"
 
 blksnap-$(CONFIG_BLK_SNAP) += memory_checker.o
 blksnap-$(CONFIG_BLK_SNAP) += log.o

@@ -48,10 +48,6 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 		if (!tracker || !tracker->diff_area)
 			continue;
 
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-		pr_debug("\tfor device [%u:%u]\n",
-			MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-#endif
 		/* Flush and freeze fs */
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &sb);
@@ -97,9 +93,6 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 	int inx;
 
 	/* Flush and freeze fs on each original block device. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Flush and freeze fs on each original block device\n");
-#endif
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -120,16 +113,10 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 	}
 
 	/* Set tracker as available for new snapshots. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Set tracker as available for new snapshots");
-#endif
 	for (inx = 0; inx < snapshot->count; ++inx)
 		tracker_release_snapshot(snapshot->tracker_array[inx]);
 
 	/* Thaw fs on each original block device. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Thaw fs on each original block device");
-#endif
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -159,9 +146,6 @@ static void snapshot_release(struct snapshot *snapshot)
 	pr_info("Release snapshot %pUb\n", &snapshot->id);
 
 	/* Destroy all snapshot images. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Destroy all snapshot images\n");
-#endif
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct snapimage *snapimage = snapshot->snapimage_array[inx];
 
@@ -172,9 +156,6 @@ static void snapshot_release(struct snapshot *snapshot)
 	snapshot_release_trackers(snapshot);
 
 	/* Destroy diff area for each tracker. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Destroy diff area for each tracker");
-#endif
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -192,9 +173,6 @@ static void snapshot_free(struct kref *kref)
 {
 	struct snapshot *snapshot = container_of(kref, struct snapshot, kref);
 
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s releasing snapshot\n", __FUNCTION__);
-#endif
 	snapshot_release(snapshot);
 
 	kfree(snapshot->snapimage_array);
@@ -206,16 +184,11 @@ static void snapshot_free(struct kref *kref)
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE) && !defined(BLK_SNAP_SEQUENTALFREEZE)
 	if (snapshot->superblock_array) {
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-		pr_debug("DEBUG! %s free superblocks\n", __FUNCTION__);
-#endif
 		kfree(snapshot->superblock_array);
 		memory_object_dec(memory_object_superblock_array);
 	}
 #endif
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s put diff storage\n", __FUNCTION__);
-#endif
+
 	diff_storage_put(snapshot->diff_storage);
 
 	kfree(snapshot);
@@ -425,13 +398,8 @@ int snapshot_destroy(uuid_t *id)
 	struct snapshot *snapshot = NULL;
 
 	pr_info("Destroy snapshot %pUb\n", id);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_print(false);
-#endif
 	down_write(&snapshots_lock);
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s try to find snapshot\n", __FUNCTION__);
-#endif
 	if (!list_empty(&snapshots)) {
 		struct snapshot *s = NULL;
 
@@ -450,15 +418,10 @@ int snapshot_destroy(uuid_t *id)
 		       id);
 		return -ENODEV;
 	}
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s snapshot was found and should be released\n",
-		 __FUNCTION__);
-#endif
 	snapshot_put(snapshot);
-#ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 	memory_object_print(false);
 	memory_object_max_print();
-#endif
+
 	return 0;
 }
 
@@ -493,9 +456,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	int inx;
 
 	/* Try to flush and freeze file system on each original block device. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Try to flush and freeze file system on each original block device\n");
-#endif
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -527,9 +487,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		 * Take snapshot - switch CBT tables and enable COW logic
 		 * for each tracker.
 		 */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-		pr_debug("Switch CBT tables and enable COW logic for each tracker\n");
-#endif
 		ret = tracker_take_snapshot(tracker);
 		if (ret) {
 			pr_err("Unable to take snapshot: failed to capture snapshot %pUb\n",
@@ -538,10 +495,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		}
 
 		/* Thaw file systems on original block devices. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-		pr_debug("Thaw file systems on original block devices\n");
-#endif
-
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(orig_bdev, sb);
 #else
@@ -561,9 +514,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		return 0;
 	}
 
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Release taked trackers\n");
-#endif
 	while (inx--) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -617,9 +567,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	unsigned int current_flag;
 
 	/* Try to flush and freeze file system on each original block device. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Try to flush and freeze file system on each original block device\n");
-#endif
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -643,9 +590,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	 * Take snapshot - switch CBT tables and enable COW logic
 	 * for each tracker.
 	 */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Switch CBT tables and enable COW logic for each tracker\n");
-#endif
 	for (inx = 0; inx < snapshot->count; inx++) {
 		if (!snapshot->tracker_array[inx])
 			continue;
@@ -659,9 +603,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	}
 
 	if (ret) {
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-		pr_debug("Release taked snapshots\n");
-#endif
 		while (inx--) {
 			struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -672,9 +613,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		snapshot->is_taken = true;
 
 	/* Thaw file systems on original block devices. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("Thaw file systems on original block devices\n");
-#endif
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
@@ -760,10 +698,6 @@ int snapshot_take(uuid_t *id)
 	}
 
 	/* Create all image block devices. */
-#ifdef BLK_SNAP_DEBUG_RELEASE_SNAPSHOT
-	pr_debug("DEBUG! %s - create all image block device", __FUNCTION__);
-#endif
-
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct snapimage *snapimage;
 		struct tracker *tracker = snapshot->tracker_array[inx];
