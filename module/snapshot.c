@@ -5,6 +5,7 @@
 #include <linux/sched/mm.h>
 #ifdef STANDALONE_BDEVFILTER
 #include "blksnap.h"
+#include "bdevfilter.h"
 #else
 #include <uapi/linux/blksnap.h>
 #endif
@@ -15,13 +16,7 @@
 #include "diff_area.h"
 #include "snapimage.h"
 #include "cbt_map.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
-
-#ifdef STANDALONE_BDEVFILTER
-#include "bdevfilter.h"
-#endif
 
 LIST_HEAD(snapshots);
 DECLARE_RWSEM(snapshots_lock);
@@ -104,11 +99,13 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 			     &snapshot->superblock_array[inx]);
 #else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to freeze device [%u:%u]\n",
-			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-		else
+			pr_warn("Failed to freeze device [%u:%u]\n",
+				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		else {
+			tracker->is_frozen = true;
 			pr_debug("Device [%u:%u] was frozen\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		}
 #endif
 	}
 
@@ -120,7 +117,7 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 	for (inx = 0; inx < snapshot->count; ++inx) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
-		if (!tracker || !tracker->diff_area)
+		if (!tracker || !tracker->diff_area || !tracker->is_frozen)
 			continue;
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -134,6 +131,7 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 			pr_debug("Device [%u:%u] was unfrozen\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
+		tracker->is_frozen = false;
 	}
 }
 
@@ -527,7 +525,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &sb);
 #else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to freeze device [%u:%u]\n",
+			pr_warn("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
 			pr_debug("Device [%u:%u] was frozen\n",
@@ -564,7 +562,6 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 {
 	int ret = 0;
 	int inx;
-	unsigned int current_flag;
 
 	/* Try to flush and freeze file system on each original block device. */
 	for (inx = 0; inx < snapshot->count; inx++) {
@@ -578,11 +575,13 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 			     &snapshot->superblock_array[inx]);
 #else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
-			pr_err("Failed to freeze device [%u:%u]\n",
+			pr_warn("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-		else
+		else {
+			tracker->is_frozen = true;
 			pr_debug("Device [%u:%u] was frozen\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		}
 #endif
 	}
 
@@ -616,7 +615,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	for (inx = 0; inx < snapshot->count; inx++) {
 		struct tracker *tracker = snapshot->tracker_array[inx];
 
-		if (!tracker)
+		if (!tracker || !tracker->is_frozen)
 			continue;
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -630,6 +629,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 			pr_debug("Device [%u:%u] was unfrozen\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 #endif
+		tracker->is_frozen = false;
 	}
 
 	return ret;

@@ -4,9 +4,7 @@
 #include "memory_checker.h"
 #include "diff_buffer.h"
 #include "diff_area.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 extern int free_diff_buffer_pool_size;
 

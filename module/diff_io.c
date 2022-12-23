@@ -9,8 +9,9 @@
 #include "memory_checker.h"
 #include "diff_io.h"
 #include "diff_buffer.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
+
+#ifdef STANDALONE_BDEVFILTER
 #ifndef PAGE_SECTORS
 #define PAGE_SECTORS	(1 << (PAGE_SHIFT - SECTOR_SHIFT))
 #endif
@@ -210,7 +211,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		processed += offset;
 	}
 
-	/* sumbit all bio */
+	/* sumbit all bios */
 	while ((bio = bio_list_pop(&bio_list_head)))
 		submit_bio_noacct(bio);
 

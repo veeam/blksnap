@@ -67,7 +67,7 @@ void memory_object_dec(enum memory_object_type type)
 	atomic_dec(&memory_counter[type]);
 }
 
-int memory_object_print(bool is_error)
+void memory_object_print(bool is_error)
 {
 	int inx;
 	int not_free = 0;
@@ -94,7 +94,6 @@ int memory_object_print(bool is_error)
 			pr_debug("Found %d allocated objects\n", not_free);
 	else
 		pr_debug("All objects have been released\n");
-	return not_free;
 }
 
 void memory_object_max_print(void)

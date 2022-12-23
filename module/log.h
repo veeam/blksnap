@@ -87,7 +87,7 @@ void log_printk(const int level, const char *fmt, ...);
 #else
 static inline void log_init(void)
 {};
-static inline void void log_done(void)
+static inline void log_done(void)
 {};
 #endif /* BLK_SNAP_FILELOG */
 

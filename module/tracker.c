@@ -13,9 +13,7 @@
 #include "tracker.h"
 #include "cbt_map.h"
 #include "diff_area.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 #ifndef HAVE_BDEV_NR_SECTORS
 static inline sector_t bdev_nr_sectors(struct block_device *bdev)
@@ -126,13 +124,10 @@ static bool tracker_submit_bio(struct bio *bio)
 	current_flag = memalloc_noio_save();
 	err = cbt_map_set(tracker->cbt_map, sector, count);
 	memalloc_noio_restore(current_flag);
-	if (unlikely(err))
-		return false;
 
-	if (!atomic_read(&tracker->snapshot_is_taken))
-		return false;
-
-	if (unlikely(diff_area_is_corrupted(tracker->diff_area)))
+	if (err ||
+	    !atomic_read(&tracker->snapshot_is_taken) ||
+	    diff_area_is_corrupted(tracker->diff_area))
 		return false;
 
 	current_flag = memalloc_noio_save();
@@ -224,10 +219,9 @@ static int tracker_filter_attach(struct block_device *bdev,
 				 struct tracker *tracker)
 {
 	int ret;
+
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *superblock = NULL;
-#else
-	bool is_frozen = false;
 #endif
 	pr_debug("Tracker attach filter\n");
 
@@ -248,9 +242,9 @@ static int tracker_filter_attach(struct block_device *bdev,
 			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
 	else {
-		is_frozen = true;
-		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
-			 MINOR(bdev->bd_dev));
+		tracker->is_frozen = true;
+		pr_debug("Device [%u:%u] was frozen\n",
+			 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 	}
 #endif
 
@@ -259,7 +253,8 @@ static int tracker_filter_attach(struct block_device *bdev,
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_thaw_bdev(bdev, superblock);
 #else
-	if (is_frozen) {
+	if (tracker->is_frozen) {
+		tracker->is_frozen = false;
 		if (thaw_bdev(bdev))
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
@@ -352,6 +347,7 @@ static struct tracker *tracker_new(struct block_device *bdev)
 		goto fail;
 	}
 	tracker->cbt_map = cbt_map;
+	tracker->is_frozen = false;
 
 	ret = tracker_filter_attach(bdev, tracker);
 	if (ret) {

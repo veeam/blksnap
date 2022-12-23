@@ -5,9 +5,7 @@
 #include <linux/sched.h>
 #include "memory_checker.h"
 #include "event_queue.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 void event_queue_init(struct event_queue *event_queue)
 {
