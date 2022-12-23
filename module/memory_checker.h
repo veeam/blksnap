@@ -39,7 +39,7 @@ enum memory_object_type {
 #ifdef BLK_SNAP_DEBUG_MEMORY_LEAK
 void memory_object_inc(enum memory_object_type type);
 void memory_object_dec(enum memory_object_type type);
-int  memory_object_print(bool is_error);
+void memory_object_print(bool is_error);
 void memory_object_max_print(void);
 #else
 static inline void memory_object_inc(
@@ -48,7 +48,7 @@ static inline void memory_object_inc(
 static inline void memory_object_dec(
 	__attribute__ ((unused)) enum memory_object_type type)
 {};
-static inline int  memory_object_print(
+static inline void memory_object_print(
 	__attribute__ ((unused)) bool is_error)
 {};
 static inline void memory_object_max_print(void)

@@ -10,9 +10,7 @@
 #endif
 #include "memory_checker.h"
 #include "cbt_map.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 extern int tracking_block_minimum_shift;
 extern int tracking_block_maximum_count;
@@ -311,8 +309,8 @@ int cbt_map_get_sector_state(struct cbt_map *cbt_map, sector_t sector,
 		ret = -EINVAL;
 		goto out;
 	}
-	snap_number_curr = cbt_map->write_map[cbt_block];
-	snap_number_prev = cbt_map->read_map[cbt_block];
+	*snap_number_curr = cbt_map->write_map[cbt_block];
+	*snap_number_prev = cbt_map->read_map[cbt_block];
 out:
 	spin_unlock(&cbt_map->locker);
 

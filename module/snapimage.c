@@ -14,9 +14,7 @@
 #include "diff_area.h"
 #include "chunk.h"
 #include "cbt_map.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 static void snapimage_process_bio(struct snapimage *snapimage, struct bio *bio)
 {
@@ -55,21 +53,7 @@ static int snapimage_kthread_worker_fn(void *param)
 {
 	struct snapimage *snapimage = param;
 	struct bio *bio;
-#if 0
-	/*
-	 * Old implementation should be removed. TODO
-	 */
-	while (!kthread_should_stop()) {
-		bio = get_bio_from_queue(snapimage);
-		if (!bio) {
-			schedule_timeout_interruptible(HZ / 100);
-			continue;
-		}
-		snapimage_process_bio(snapimage, bio);
-	}
-	while ((bio = get_bio_from_queue(snapimage)))
-		snapimage_process_bio(snapimage, bio);
-#else
+
 	for (;;) {
 		while ((bio = get_bio_from_queue(snapimage)))
 			snapimage_process_bio(snapimage, bio);
@@ -77,7 +61,7 @@ static int snapimage_kthread_worker_fn(void *param)
 			break;
 		schedule();
 	}
-#endif
+
 	return 0;
 }
 
@@ -117,6 +101,8 @@ static void snapimage_free_disk(struct gendisk *disk)
 {
 	struct snapimage *snapimage = disk->private_data;
 
+	might_sleep();
+
 	diff_area_put(snapimage->diff_area);
 	cbt_map_put(snapimage->cbt_map);
 
@@ -135,7 +121,7 @@ const struct block_device_operations bd_ops = {
 
 void snapimage_free(struct snapimage *snapimage)
 {
-	pr_info("Snapshot image disk %s delete\n", snapimage->disk->disk_name);
+	pr_debug("Snapshot image disk %s delete\n", snapimage->disk->disk_name);
 
 	del_gendisk(snapimage->disk);
 
@@ -208,7 +194,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	if (IS_ERR(task)) {
 		ret = PTR_ERR(task);
 		pr_err("Failed to start worker thread. errno=%d\n", abs(ret));
-		goto fail_free_image;
+		goto fail_create_task;
 	}
 
 	snapimage->worker = task;
@@ -219,22 +205,12 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	if (!disk) {
 		pr_err("Failed to allocate disk\n");
 		ret = -ENOMEM;
-		goto fail_free_worker;
+		goto fail_disk_alloc;
 	}
 	snapimage->disk = disk;
 
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
-
-	ret = snprintf(disk->disk_name, DISK_NAME_LEN, "%s_%d:%d",
-		       BLK_SNAP_IMAGE_NAME, MAJOR(dev_id), MINOR(dev_id));
-	if (ret < 0) {
-		pr_err("Unable to set disk name for snapshot image device: invalid device id [%d:%d]\n",
-		       MAJOR(dev_id),MINOR(dev_id));
-		ret = -EINVAL;
-		goto fail_cleanup_disk;
-	}
-	pr_debug("Snapshot image disk name [%s]\n", disk->disk_name);
 
 	disk->flags = 0;
 #ifdef STANDALONE_BDEVFILTER
@@ -259,6 +235,15 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	cbt_map_get(cbt_map);
 	snapimage->cbt_map = cbt_map;
 
+	ret = snprintf(disk->disk_name, DISK_NAME_LEN, "%s_%d:%d",
+		       BLK_SNAP_IMAGE_NAME, MAJOR(dev_id), MINOR(dev_id));
+	if (ret < 0) {
+		pr_err("Unable to set disk name for snapshot image device: invalid device id [%d:%d]\n",
+		       MAJOR(dev_id), MINOR(dev_id));
+		ret = -EINVAL;
+		goto fail_cleanup_disk;
+	}
+	pr_debug("Snapshot image disk name [%s]\n", disk->disk_name);
 #ifdef HAVE_ADD_DISK_RESULT
 	ret = add_disk(disk);
 	if (ret) {
@@ -276,6 +261,7 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	return snapimage;
 
 fail_cleanup_disk:
+	kthread_stop(snapimage->worker);
 #ifdef HAVE_BLK_ALLOC_DISK
 #ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(disk);
@@ -285,9 +271,11 @@ fail_cleanup_disk:
 #else
 	del_gendisk(disk);
 #endif
-fail_free_worker:
+	return ERR_PTR(ret);
+
+fail_disk_alloc:
 	kthread_stop(snapimage->worker);
-fail_free_image:
+fail_create_task:
 	kfree(snapimage);
 	memory_object_dec(memory_object_snapimage);
 	return ERR_PTR(ret);

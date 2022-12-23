@@ -15,9 +15,7 @@
 #include "diff_io.h"
 #include "diff_buffer.h"
 #include "diff_storage.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 extern int diff_storage_minimum;
 

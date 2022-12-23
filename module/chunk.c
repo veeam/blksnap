@@ -10,9 +10,7 @@
 #include "diff_buffer.h"
 #include "diff_area.h"
 #include "diff_storage.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 extern int chunk_maximum_in_cache;
 
@@ -109,7 +107,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	up(&chunk->lock);
 
 	/* Initiate the cache clearing process */
-	if ((in_cache_count > chunk_maximum_in_cache))
+	if (in_cache_count > chunk_maximum_in_cache)
 		queue_work(system_wq, &diff_area->cache_release_work);
 }
 

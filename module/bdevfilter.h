@@ -5,6 +5,7 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/blk_types.h>
+#include <linux/kref.h>
 
 struct bdev_filter;
 struct bdev_filter_operations {

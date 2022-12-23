@@ -17,9 +17,7 @@
 #include "diff_buffer.h"
 #include "diff_storage.h"
 #include "diff_io.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "log.h"
-#endif
 
 extern int chunk_minimum_shift;
 extern int chunk_maximum_count;

@@ -48,6 +48,8 @@ struct tracker {
 
 	struct cbt_map *cbt_map;
 	struct diff_area *diff_area;
+
+        bool is_frozen;
 };
 
 static inline void tracker_put(struct tracker *tracker)

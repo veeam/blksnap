@@ -13,10 +13,8 @@
 #include "snapshot.h"
 #include "tracker.h"
 #include "diff_io.h"
-#ifdef STANDALONE_BDEVFILTER
 #include "version.h"
 #include "log.h"
-#endif
 
 static_assert(sizeof(uuid_t) == sizeof(struct blk_snap_uuid),
 	"Invalid size of struct blk_snap_uuid.");
