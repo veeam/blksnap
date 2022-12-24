@@ -17,7 +17,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.5)
-project(blksnap)
+project(blksnap-dev)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc -pthread")
@@ -30,8 +30,6 @@ if (NOT LIBUUID_LIBRARY)
     message(FATAL_ERROR "libuuid not found. please install uuid-dev or libuuid-devel package.")
 endif ()
 
-include_directories(${CMAKE_SOURCE_DIR}/../../include)
-
 set(SOURCE_FILES
     Blksnap.cpp
     Cbt.cpp
@@ -39,11 +37,13 @@ set(SOURCE_FILES
     Session.cpp
 )
 
-add_library(${PROJECT_NAME} ${SOURCE_FILES})
+add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "blksnap")
 
-set_target_properties(${PROJECT_NAME}
-    PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
-    #LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
-    #RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
-)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
+
+install(TARGETS ${PROJECT_NAME} DESTINATION lib)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../include/blksnap
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.h")
