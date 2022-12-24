@@ -81,24 +81,7 @@ The program allows for execution of individual ioctls of the blksnap module.
 The interface of the program may seem inconvenient to the user,
 since it is assumed that it will be called by other applications.
 ### How to build
-Installing the necessary deb packages.
-``` bash
-sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev
-```
-Or installing the necessary rpm packages.
-``` bash
-sudo yum install g++ cmake libuuid-devel boost-static libstdc++-static
-```
-Build.
-``` bash
-cd ./tools/blksnap
-mkdir bin
-cd bin
-cmake ..
-make
-```
-
-For deb packages see [how to create dev, tools and tests deb packages](#how-to-create-dev-tools-and-tests-deb-packages)
+See [how to build library, tools and tests](#how-to-build-library-tools-and-tests)
 
 ## Library
 The dynamic C library is not needed to work with blksnap. File
@@ -107,24 +90,7 @@ But to demonstrate how to call the ioctl, a static c++ library was created.
 The library can also help you quickly create a working prototype.
 In the project, the library is used for tests.
 ### How to build
-Installing the necessary deb packages.
-``` bash
-sudo apt install g++ cmake uuid-dev libboost-filesystem-dev
-```
-Or installing the necessary rpm packages.
-``` bash
-sudo yum install g++ cmake libuuid-devel boost-static libstdc++-static
-```
-Build.
-``` bash
-cd ./lib/blksnap
-mkdir bin
-cd bin
-cmake ..
-make
-```
-
-For deb packages see [how to create dev, tools and tests deb packages](#how-to-create-dev-tools-and-tests-deb-packages)
+See [how to build library, tools and tests](#how-to-build-library-tools-and-tests)
 
 ## Tests
 The test scripts are written in bash and use the blksnap tool to control
@@ -133,24 +99,7 @@ the module. To implement complex test algorithms, С++ tests are implemented.
 C++ tests use the static library libblksnap.a and it must be compiled to
 build С++ tests.
 ### How to build
-Installing the necessary deb packages.
-``` bash
-sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
-```
-Or installing the necessary rpm packages.
-``` bash
-sudo yum install g++ cmake libuuid-devel boost-static libstdc++-static openssl-static
-```
-Build.
-``` bash
-cd ./tests/cpp
-mkdir bin
-cd bin
-cmake ..
-make
-```
-
-For deb packages see [how to create dev, tools and tests deb packages](#how-to-create-dev-tools-and-tests-deb-packages)
+See [how to build library, tools and tests](#how-to-build-library-tools-and-tests)
 
 ### How to run all usage tests
 ``` bash
@@ -162,7 +111,30 @@ sudo ./all.sh
 sudo ./all.sh 2>&1 | tee -a /tmp/blksnap_test_$(date -u '+%Y-%m-%d_%H-%M-%S').log
 ```
 
-## How to create dev, tools and tests deb packages
+## How to build library, tools and tests
+Installing the necessary deb packages.
+``` bash
+sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
+```
+Or installing the necessary rpm packages.
+``` bash
+sudo yum install g++ cmake libuuid-devel boost-static libstdc++-static openssl-static
+```
+Build.
+``` bash
+cmake .
+make
+```
+Install (but it is recommended to use packages instead, for example the [debian](#how-to-create-dev-tools-and-tests-deb-packages) ones)
+```
+sudo make install
+```
+Uninstall (if needed)
+```
+sudo make uninstall
+```
+
+### How to create dev, tools and tests deb packages
 ``` bash
 sudo apt install g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev debhelper
 cd ./pkg/deb
