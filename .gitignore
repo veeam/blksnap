@@ -5,6 +5,11 @@
 !.clang-format
 !.circleci
 cmake*
+CMakeCache.txt
+CMakeFiles
+Makefile
+obj-*-linux-gnu
+debian/
 /build/
 /lib/blksnap/bin/
 /tools/blksnap/bin/
