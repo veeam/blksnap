@@ -51,25 +51,37 @@ Documentation/output/block/blkfilter.html
 
 ## Build
 
-For example an easy and fast way for build kernel packages for Debian and
+For example an easy and fast way for build kernel and its packages for Debian and
 derivates is:
 ``` bash
 # install prerequisites
-sudo apt install wget build-essential bison flex libncurses-dev libssl-dev libelf-dev
-# use actual kernel config as base, copy inside the source folder
-cp /boot/config-`uname -r` .config
-# adapt to lastest kernel version, remember to enable blksnap
-make oldconfig
-# this will ask for any new config so in major of cases can be better make default for the new
-make olddefconfig
-# and after enable blksnap from menu
-make menuconfig
-# and finally build it and make deb packages for easy/fast install it
-make deb-pkg
-# install the generated packages (value inside < > need to be replaced)
-sudo dpkg -i linux-image-<version>_<arch>.deb
-# for debug is needed also "linux-image-" with "-dbg" and others where needed
+sudo apt install wget build-essential bison flex libncurses-dev libssl-dev libelf-dev dwarves
 ```
+take the actual kernel config as base, you can also take another kernel config,
+should be copied as .config inside the kernel source folder
+``` bash
+cp /boot/config-`uname -r` .config
+```
+adapt the config to latest kernel version, this will ask for any new options
+(remember to enable blksnap)
+``` bash
+make oldconfig
+```
+or you can instead automatically set default for all new options
+``` bash
+make olddefconfig
+# and after enable blksnap from menu in "Device drivers"->"Block devices"
+make menuconfig
+```
+build it and make deb packages for easy/fast install/remove it
+``` bash
+make deb-pkg
+```
+install the generated packages (value inside < > need to be replaced)
+``` bash
+sudo dpkg -i linux-image-<version>_<arch>.deb
+```
+for debug is needed also "linux-image-" with "-dbg", others can be installed if/when needed
 
 **Notes:**
 
