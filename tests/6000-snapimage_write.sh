@@ -77,6 +77,8 @@ do
 	blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
 	blksnap_snapshot_take
 
+	#echo "Finita le comedy"
+	#exit 1
 	mount ${MOUNTOPT} ${IMAGEDEVICE} ${IMAGEMOUNTPOINT}
 
 	generate_block_MB ${IMAGEMOUNTPOINT} "image-it#${ITERATOR}" 10 &
