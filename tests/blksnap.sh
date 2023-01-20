@@ -6,7 +6,7 @@ if [ -f "/usr/bin/blksnap" ] || [ -f "/usr/sbin/blksnap" ]
 then
 	BLKSNAP=blksnap
 else
-	BLKSNAP="$(cd ../; pwd)/tools/blksnap/blksnap"
+	BLKSNAP="$(cd ../; pwd)/tools/blksnap/bin/blksnap"
 fi
 
 ID=""
@@ -25,12 +25,11 @@ blksnap_snapshot_create()
 		PARAM="${PARAM} --device ${DEVICE}"
 	done
 
-	${BLKSNAP} version
 	ID=$(${BLKSNAP} snapshot_create ${PARAM})
 	echo "New snapshot ${ID} was created"
 }
 
-blksnap_snapshot_append()
+blksnap_snapshot_appendstorage()
 {
 	local FILE=$1
 
@@ -42,13 +41,10 @@ blksnap_snapshot_destroy()
 {
 	echo "Destroy snapshot ${ID}"
 	${BLKSNAP} snapshot_destroy --id=${ID}
-}
-
-blksnap_snapshot_take()
-{
-	echo "Take snapshot ${ID}"
-
-	${BLKSNAP} snapshot_take --id=${ID}
+	if $?
+	then
+		ID=""
+	fi
 }
 
 blksnap_snapshot_take()
@@ -60,26 +56,30 @@ blksnap_snapshot_take()
 
 blksnap_snapshot_collect()
 {
-	echo "Collect snapshot ${ID}"
+	echo "Collect snapshots"
 
-	${BLKSNAP} snapshot_collect --id=${ID}
-}
-
-blksnap_snapshot_collect_all()
-{
 	${BLKSNAP} snapshot_collect
 }
 
-blksnap_tracker_remove()
+blksnap_attach()
 {
 	local DEVICE=$1
 
-	${BLKSNAP} tracker_remove --device=${DEVICE}
+	${BLKSNAP} attach --device=${DEVICE}
 }
 
-blksnap_tracker_collect()
+blksnap_detach()
 {
-	${BLKSNAP} tracker_collect
+	local DEVICE=$1
+
+	${BLKSNAP} detach --device=${DEVICE}
+}
+
+blksnap_cbtinfo()
+{
+	local DEVICE=$1
+
+	${BLKSNAP} cbtinfo --device=${DEVICE} --file=${CBTMAP}
 }
 
 blksnap_readcbt()
@@ -87,14 +87,14 @@ blksnap_readcbt()
 	local DEVICE=$1
 	local CBTMAP=$2
 
-	${BLKSNAP} tracker_readcbtmap --device=${DEVICE} --file=${CBTMAP}
+	${BLKSNAP} readcbtmap --device=${DEVICE} --file=${CBTMAP}
 }
 
 blksnap_markdirty()
 {
 	local DIRTYFILE=$2
 
-	${BLKSNAP} tracker_markdirtyblock --file=${DIRTYFILE}
+	${BLKSNAP} markdirtyblock --file=${DIRTYFILE}
 }
 
 blksnap_stretch_snapshot()
