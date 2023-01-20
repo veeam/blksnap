@@ -41,10 +41,6 @@ blksnap_snapshot_destroy()
 {
 	echo "Destroy snapshot ${ID}"
 	${BLKSNAP} snapshot_destroy --id=${ID}
-	if $?
-	then
-		ID=""
-	fi
 }
 
 blksnap_snapshot_take()
