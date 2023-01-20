@@ -9,8 +9,7 @@ echo "---"
 echo "Change tracking test"
 
 # diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB dikk_storage portion size
-modprobe blksnap diff_storage_minimum=262144
-sleep 2s
+blksnap_load "diff_storage_minimum=262144"
 
 # check module is ready
 blksnap_version
@@ -45,7 +44,7 @@ fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
 # full
 echo "First snapshot for just attached devices"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt0.map
@@ -61,7 +60,7 @@ cmp -l ${TESTDIR}/cbt0.map ${TESTDIR}/cbt0_.map
 # increment 1
 echo "First increment"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt1.map
@@ -75,7 +74,7 @@ cmp -l ${TESTDIR}/cbt1.map ${TESTDIR}/cbt1_.map
 # increment 2
 echo "Second increment"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt2.map
@@ -89,7 +88,7 @@ cmp -l ${TESTDIR}/cbt2.map ${TESTDIR}/cbt2_.map
 # increment 3
 echo "Second increment"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3.map
@@ -104,13 +103,12 @@ cmp -l ${TESTDIR}/cbt3.map ${TESTDIR}/cbt3_.map 2>&1
 set -e
 
 echo "Destroy first device"
-echo "press..."
+
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
-echo "Unload module"
-modprobe -r blksnap
+blksnap_unload
 
 echo "Change tracking test finish"
 echo "---"

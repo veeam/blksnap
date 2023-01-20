@@ -8,8 +8,7 @@
 echo "---"
 echo "pullout test start"
 
-modprobe blksnap
-sleep 2s
+blksnap_load
 
 # check module is ready
 blksnap_version
@@ -47,7 +46,8 @@ mount ${DEVICE_2} ${MOUNTPOINT_2}
 generate_files ${MOUNTPOINT_1} "before" 9
 drop_cache
 
-echo "Block device prepared, press ..."
+echo "Block device prepared"
+#echo "press ..."
 #read -n 1
 
 blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
@@ -55,11 +55,12 @@ blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
 DIFF_STORAGE=~/diff_storage0
 rm -f ${DIFF_STORAGE}
 fallocate --length 1GiB ${DIFF_STORAGE}
-blksnap_snapshot_append ${DIFF_STORAGE}
+blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 
 blksnap_snapshot_take
 
-echo "Snapshot was token, press ..."
+echo "Snapshot was token"
+#echo "press ..."
 #read -n 1
 
 blksnap_snapshot_collect_all
@@ -91,7 +92,8 @@ umount ${IMAGE_1}
 
 blksnap_snapshot_destroy
 
-echo "Destroy snapshot, press ..."
+echo "Destroy snapshot"
+#echo "press ..."
 #read -n 1
 
 rm ${DIFF_STORAGE}
@@ -110,8 +112,7 @@ modprobe -r zram
 echo "Tracking device info:"
 blksnap_tracker_collect
 
-echo "Unload module"
-modprobe -r blksnap
+blksnap_unload
 
 echo "pullout test finish"
 echo "---"
