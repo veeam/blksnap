@@ -9,7 +9,7 @@ echo "---"
 echo "Diff storage test"
 
 # diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB diff_storage portion size
-modprobe blksnap diff_storage_minimum=262144
+blksnap_load "diff_storage_minimum=262144"
 
 # check module is ready
 blksnap_version
@@ -70,8 +70,7 @@ blksnap_snapshot_destroy
 echo "Waiting for streach process terminate"
 sleep 2s
 
-echo "Unload module"
-modprobe -r blksnap
+blksnap_unload
 
 echo "Diff storage test finish"
 echo "---"
