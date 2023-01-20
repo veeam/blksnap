@@ -699,6 +699,25 @@ public:
     };
 };
 
+static inline void AppendStorage(const int blksnapFd, const Uuid& id, const std::string& devicePath, std::vector<struct blksnap_sectors>& ranges)
+{
+    struct blksnap_snapshot_append_storage param;
+
+    uuid_copy(param.id.b, id.Get());
+
+    unsigned int size = devicePath.size();
+    std::unique_ptr<char []> bdev_path(new char[size+1]);
+    strncpy(bdev_path.get(), devicePath.c_str(), size);
+    bdev_path[size] = '\0';
+
+    param.bdev_path = reinterpret_cast<__s8 *>(bdev_path.get());
+    param.bdev_path_size = size + 1;
+    param.count = ranges.size();
+    param.ranges = ranges.data();
+    if (::ioctl(blksnapFd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
+        throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot");
+}
+
 class SnapshotAppendStorageArgsProc : public IArgsProc
 {
 public:
@@ -716,14 +735,15 @@ public:
     void Execute(po::variables_map& vm) override
     {
         CBlksnapFileWrap blksnapFd;
-        struct blksnap_snapshot_append_storage param;
+
         std::vector<struct blksnap_sectors> ranges;
         std::string devicePath;
 
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
-        uuid_copy(param.id.b, Uuid(vm["id"].as<std::string>()).Get());
+        Uuid id(vm["id"].as<std::string>());
+
 
         if (vm.count("file"))
             fiemapStorage(vm["file"].as<std::string>(), devicePath, ranges);
@@ -740,18 +760,7 @@ public:
                 ranges.push_back(parseRange(range));
         }
 
-        unsigned int size = devicePath.size();
-        std::unique_ptr<char []> bdev_path(new char[size+1]);
-        strncpy(bdev_path.get(), devicePath.c_str(), size);
-        bdev_path[size] = '\0';
-
-        param.bdev_path = reinterpret_cast<__s8 *>(bdev_path.get());
-        param.bdev_path_size = size + 1;
-        param.count = ranges.size();
-        param.ranges = ranges.data();
-        if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param)) {
-            throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot");
-        }
+        AppendStorage(blksnapFd.get(), id, devicePath, ranges);
     };
 };
 
@@ -949,21 +958,7 @@ private:
 
         fiemapStorage(filename, devicePath, ranges);
 
-        struct blksnap_snapshot_append_storage param;
-        uuid_copy(param.id.b, m_id.Get());
-
-        unsigned int bdev_path_size = devicePath.size();
-        std::unique_ptr<char []> bdev_path(new char[bdev_path_size+1]);
-        strncpy(bdev_path.get(), devicePath.c_str(), bdev_path_size);
-        bdev_path[bdev_path_size] = '\0';
-
-        param.bdev_path = reinterpret_cast<__s8 *>(bdev_path.get());
-        param.bdev_path_size = bdev_path_size;
-        param.count = ranges.size();
-        param.ranges = ranges.data();
-
-        if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
-            throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot.");
+        AppendStorage(blksnapFd.get(), m_id, devicePath, ranges);
     };
 
     void ProcessEventCorrupted(unsigned int time_label, struct blksnap_event_corrupted* data)
