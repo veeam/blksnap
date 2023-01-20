@@ -10,6 +10,29 @@ else
 fi
 
 ID=""
+BLKSNAP_FILENAME=$(modinfo --field filename blksnap)
+
+blksnap_load()
+{
+	if [ ${BLKSNAP_FILENAME} = "(builtin)" ]
+	then
+		return
+	fi
+
+	modprobe blksnap $1
+	sleep 2s
+}
+
+blksnap_unload()
+{
+	if [ ${BLKSNAP_FILENAME} = "(builtin)" ]
+	then
+		return
+	fi
+
+	echo "Unload module"
+	modprobe -r blksnap
+}
 
 blksnap_version()
 {
