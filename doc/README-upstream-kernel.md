@@ -2,6 +2,7 @@
 
 * [Introduction](#introduction)
 * [Patches submitted](#patches-submitted)
+* [Work in progress and news](#work-in-progress-and-news)
 * [Documentation](#documentation)
 * [Build](#build)
 * [Contributing](#contributing)
@@ -19,7 +20,7 @@ more possibilities about contributions and testing, etc...
 
 [Initial patch](https://lore.kernel.org/linux-block/1655135593-1900-1-git-send-email-sergei.shtepa@veeam.com/) was posted at 13 June 2022.
 
-Thanks to many replies, mainly by Christoph Hellwig and Randy Dunlap but not only
+Thanks to many replies, mainly by Christoph Hellwig and Randy Dunlap but not only,
 many improvements have been made.
 
 [A "v1" patch](https://lore.kernel.org/lkml/20221102155101.4550-1-sergei.shtepa@veeam.com/) was posted at 2 November 2022.
@@ -33,16 +34,21 @@ and Jonathan Corbet for his [article](https://lwn.net/Articles/914031/).
 
 A "v2" patch on [patchwork](https://patchwork.kernel.org./project/linux-block/list/?series=703315) or [lore](https://lore.kernel.org/linux-block/20221209142331.26395-1-sergei.shtepa@veeam.com/) was posted at 9 December 2022.
 
-Is also possible use the [branch on linux fork](https://github.com/SergeiShtepa/linux/commits/blksnap_lk6.1-rc8_v5).
+Is also possible use [this branch](https://github.com/SergeiShtepa/linux/commits/blksnap_lk6.1-rc8_v5) of a linux fork git.
 
-Latest news is also visible from [here](https://github.com/veeam/blksnap/issues/2)
+## Work in progress and news
+
+There is a work in progress for "v3", there are many changes,
+is possible view/test it from [this branch](https://github.com/SergeiShtepa/linux/tree/blksnap-master) of a linux fork git.
+
+Latest news are also visible from [here](https://github.com/veeam/blksnap/issues/2)
 
 ## Documentation
 
 When blksnap will be integrated upstream the documentation will be available in
 https://docs.kernel.org/
 
-For now can be manually generated from kernel source (including the latest
+For now can be manually generated from kernel source (that include the latest
 blksnap patch) with `make htmldocs` and after will be visible opening in browser:
 
 Documentation/output/block/blksnap.html
