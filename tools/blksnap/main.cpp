@@ -476,16 +476,16 @@ public:
 
     void Execute(po::variables_map& vm) override
     {
-        const unsigned int bufferSize = 1024 * 1024;
-        std::unique_ptr<char[]> buffer(new char [bufferSize]);
-        struct blksnap_cbtmap *arg = reinterpret_cast<struct blksnap_cbtmap *>(buffer.get());
-        arg->offset = 0;
-        arg->length = bufferSize - sizeof(struct blksnap_cbtmap);
+        unsigned int elapsed;
 
         if (!vm.count("device"))
             throw std::invalid_argument("Argument 'device' is missed.");
 
         CBlkFilterCtl ctl(vm["device"].as<std::string>());
+
+        struct blksnap_cbtinfo info;
+        ctl.Control(blkfilter_ctl_blksnap_cbtinfo, &info, sizeof(info));
+        elapsed = info.block_count;
 
         if (vm.count("json"))
             throw std::invalid_argument("Argument 'json' is not supported yet.");
@@ -496,13 +496,21 @@ public:
         std::ofstream output;
         output.open(vm["file"].as<std::string>(), std::ofstream::out | std::ofstream::binary);
 
-        unsigned int optlen;
-        while ((optlen = ctl.Control(blkfilter_ctl_blksnap_cbtmap, arg, bufferSize)) > sizeof(struct blksnap_cbtmap))
-        {
-            optlen -= sizeof(struct blksnap_cbtmap);
-            output.write(reinterpret_cast<char *>(arg->buffer), optlen);
-            arg->offset += optlen;
-        }
+        std::vector<unsigned char> buf(std::min(32*1024u, elapsed));
+        struct blksnap_cbtmap arg = {
+            .offset = 0,
+            .buffer = buf.data()
+        };
+        while (elapsed) {
+            arg.length = std::min(static_cast<unsigned int>(buf.size()), elapsed);
+
+            ctl.Control(blkfilter_ctl_blksnap_cbtmap, &arg, sizeof(struct blksnap_cbtmap));
+
+            elapsed -= arg.length;
+            arg.offset += arg.length;
+
+            output.write(reinterpret_cast<char *>(arg.buffer), arg.length);
+        };
 
         output.close();
     };

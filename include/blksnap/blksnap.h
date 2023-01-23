@@ -166,7 +166,7 @@ struct blksnap_cbtinfo {
 struct blksnap_cbtmap {
 	__u32 offset;
 	__u32 length;
-	__u8 buffer[0];
+	__u8 *buffer;
 };
 
 /**
