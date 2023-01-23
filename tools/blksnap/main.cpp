@@ -553,15 +553,11 @@ public:
         }
 
         CBlkFilterCtl ctl(devicePath);
-
-        const size_t bufferSize = sizeof(struct blksnap_cbtdirty) + sizeof(struct blksnap_sectors) * ranges.size();
-        std::unique_ptr<char []> buffer(new char [bufferSize]);
-        struct blksnap_cbtdirty *arg = reinterpret_cast<struct blksnap_cbtdirty *>(buffer.get());
-
-        arg->count = ranges.size();
-        std::copy(std::begin(ranges), std::end(ranges), arg->dirty_sectors_array);
-
-        ctl.Control(blkfilter_ctl_blksnap_cbtdirty, arg, bufferSize);
+        struct blksnap_cbtdirty arg = {
+            .count = static_cast<unsigned int>(ranges.size()),
+            .dirty_sectors = ranges.data()
+        };
+        ctl.Control(blkfilter_ctl_blksnap_cbtdirty, &arg, sizeof(arg));
     }
 };
 

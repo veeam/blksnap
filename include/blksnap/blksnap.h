@@ -193,7 +193,7 @@ struct blksnap_sectors {
  */
 struct blksnap_cbtdirty {
 	__u32 count;
-	struct blksnap_sectors dirty_sectors_array[0];
+	struct blksnap_sectors *dirty_sectors;
 };
 
 /**
