@@ -126,5 +126,5 @@ blksnap_stretch_snapshot()
 
 blksnap_get_image()
 {
-	echo "/dev/blksnap-image_"$(stat -c %t $1)":"$(stat -c %T $1)
+	${BLKSNAP} snapshot_info --field image --device $1
 }

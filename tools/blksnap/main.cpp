@@ -570,6 +570,7 @@ public:
         m_usage = std::string("Get information about block device snapshot image.");
         m_desc.add_options()
             ("device,d", po::value<std::string>(), "Device name.")
+            ("field,f", po::value<std::string>(), "Out only selected field.")
             ("json,j", "Use json format for output.");
     };
 
@@ -589,8 +590,21 @@ public:
         std::vector<char> image(IMAGE_DISK_NAME_LEN + 1);
         strncpy(image.data(), reinterpret_cast<char *>(param.image), IMAGE_DISK_NAME_LEN);
 
-        std::cout << "error_code=" << param.error_code << std::endl;
-        std::cout << "image=" << std::string("/dev/") + std::string(image.data()) << std::endl;
+        if (vm.count("field")) {
+            std::string field=vm["field"].as<std::string>();
+
+            if (field == "image")
+                std::cout << std::string("/dev/") + std::string(image.data()) << std::endl;
+            else if (field == "error_code")
+                std::cout << param.error_code << std::endl;
+            else
+                throw std::invalid_argument("Value '"+field+"' for argument '--field' is not supported.");
+        }
+        else
+        {
+            std::cout << "error_code=" << param.error_code << std::endl;
+            std::cout << "image=" << std::string("/dev/") + std::string(image.data()) << std::endl;
+        }
     };
 };
 
