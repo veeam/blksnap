@@ -21,11 +21,12 @@ MPDIR=/mnt/blksnap-test
 rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
+ALG="lzo"
 modprobe zram num_devices=2
 
 # create first device
 DEVICE_1="/dev/zram0"
-zramctl --size 128M --algorithm lz4 ${DEVICE_1}
+zramctl --size 128M --algorithm ${ALG} ${DEVICE_1}
 mkfs.ext4 ${DEVICE_1}
 echo "new device ${DEVICE_1}"
 
@@ -35,7 +36,7 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 
 # create second device
 DEVICE_2="/dev/zram1"
-zramctl --size 128M --algorithm lz4 ${DEVICE_2}
+zramctl --size 128M --algorithm ${ALG} ${DEVICE_2}
 mkfs.ext4 ${DEVICE_2}
 echo "new device ${DEVICE_2}"
 
@@ -63,7 +64,7 @@ echo "Snapshot was token"
 #echo "press ..."
 #read -n 1
 
-blksnap_snapshot_collect_all
+blksnap_snapshot_collect
 
 echo "Write to original"
 #echo "Write something" > ${MOUNTPOINT_1}/something.txt
@@ -108,9 +109,6 @@ echo "Destroy devices"
 umount ${MOUNTPOINT_2}
 umount ${MOUNTPOINT_1}
 modprobe -r zram
-
-echo "Tracking device info:"
-blksnap_tracker_collect
 
 blksnap_unload
 
