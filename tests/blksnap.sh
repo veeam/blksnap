@@ -128,3 +128,11 @@ blksnap_get_image()
 {
 	${BLKSNAP} snapshot_info --field image --device $1
 }
+
+blksnap_cleanup()
+{
+	for ID in $(${BLKSNAP} snapshot_collect)
+	do
+		${BLKSNAP} snapshot_destroy --id=${ID}
+	done
+}

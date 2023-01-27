@@ -920,7 +920,9 @@ public:
         std::vector<Uuid> ids;
         CollectSnapshots(ids);
         for (const Uuid& id : ids)
-            std::cout << "id=" << id.ToString() << std::endl;
+            std::cout << id.ToString() << " " << std::endl;
+        std::cout << std::endl;
+            //std::cout << "id=" << id.ToString() << std::endl;
     };
 };
 
