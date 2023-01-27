@@ -126,4 +126,7 @@ blksnap_stretch_snapshot()
 	local LIMIT_MB=$2
 
 	${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE_PATH} --limit=${LIMIT_MB} &
+
+	echo "Waiting for creating first portion"
+	sleep 2s
 }
