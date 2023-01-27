@@ -43,7 +43,7 @@ blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 blksnap_snapshot_take
 echo "Snapshot was token"
 
-blksnap_snapshot_collect_all
+blksnap_snapshot_collect
 echo "Make your manual tests, then press ..."
 read -n 1
 
