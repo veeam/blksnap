@@ -73,8 +73,8 @@ blksnap_snapshot_take
 #echo "Snapshot was token, press ..."
 #read -n 1
 
-echo "Write to original"
 #echo "Write something" > ${MOUNTPOINT_1}/something.txt
+echo "Write to original"
 generate_files ${MOUNTPOINT_1} "after" 3
 drop_cache
 
@@ -85,6 +85,8 @@ DEVICE_IMAGE_1=$(blksnap_get_image ${DEVICE_1})
 IMAGE_1=${TESTDIR}/image0
 mkdir -p ${IMAGE_1}
 mount ${DEVICE_IMAGE_1} ${IMAGE_1}
+#echo "pause, press ..."
+#read -n 1
 check_files ${IMAGE_1}
 
 echo "Write to snapshot"
@@ -94,13 +96,15 @@ drop_cache
 umount ${DEVICE_IMAGE_1}
 mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 
+#echo "pause, press ..."
+#read -n 1
 check_files ${IMAGE_1}
 
 umount ${IMAGE_1}
 
 blksnap_snapshot_destroy
 
-echo "Destroy snapshot, press ..."
+#echo "Destroy snapshot, press ..."
 #read -n 1
 
 rm ${DIFF_STORAGE}
