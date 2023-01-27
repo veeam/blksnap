@@ -43,8 +43,6 @@ check_files ${TEST_DIR}
 blksnap_snapshot_create "${DEVICE}"
 
 blksnap_stretch_snapshot ${DIFF_STORAGE} 1024
-echo "Waiting for creating first portion"
-sleep 2s
 
 blksnap_snapshot_take
 
