@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0+
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-#include <cstring>
-#include <errno.h>
-#include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <cstring>
+#include <map>
+#include <vector>
+#include <errno.h>
+#include <fcntl.h>
 #include <linux/fiemap.h>
 #include <linux/fs.h>
-#include <map>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
@@ -17,7 +18,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <uuid/uuid.h>
-#include <vector>
 #include <blksnap/blksnap.h>
 #include <time.h>
 
@@ -151,12 +151,12 @@ namespace
             catch (std::system_error &ex)
             {
                 if (ex.code() == std::error_code(EALREADY, std::generic_category()))
-                    return true;
+                    return false;
 
                 throw std::runtime_error(std::string("Failed to attach filter to the block device: ") + ex.what());
             }
 
-            return false;
+            return true;
         };
 
         void Detach()
@@ -403,7 +403,10 @@ public:
         if (!vm.count("device"))
             throw std::invalid_argument("Argument 'device' is missed.");
 
-        CBlkFilterCtl(vm["device"].as<std::string>()).Attach();
+        if (CBlkFilterCtl(vm["device"].as<std::string>()).Attach())
+            std::cout << "Attached successfully" << std::endl;
+        else
+            std::cout << "Already was attached" << std::endl;
     };
 };
 
