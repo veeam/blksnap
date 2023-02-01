@@ -31,7 +31,8 @@ if (NOT LIBUUID_LIBRARY)
 endif ()
 
 set(SOURCE_FILES
-    Blksnap.cpp
+    SnapshotCtl.cpp
+    TrackerCtl.cpp
     Cbt.cpp
     Service.cpp
     Session.cpp

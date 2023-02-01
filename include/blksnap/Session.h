@@ -30,10 +30,8 @@ namespace blksnap
 {
     struct ISession
     {
-        virtual ~ISession(){};
+        virtual ~ISession() = default;
 
-        virtual std::string GetImageDevice(const std::string& original) = 0;
-        virtual std::string GetOriginalDevice(const std::string& image) = 0;
         virtual bool GetError(std::string& errorMessage) = 0;
 
         // TODO: add limits

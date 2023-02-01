@@ -17,7 +17,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 #include <atomic>
-#include <blksnap/Blksnap.h>
+
+#include <blksnap/TrackerCtl.h>
+#include <blksnap/SnapshotCtl.h>
 #include <blksnap/Session.h>
 #include <boost/filesystem.hpp>
 #include <errno.h>
@@ -40,14 +42,6 @@ namespace fs = boost::filesystem;
 
 using namespace blksnap;
 
-struct SSessionInfo
-{
-    struct blk_snap_dev original;
-    struct blk_snap_dev image;
-    std::string originalName;
-    std::string imageName;
-};
-
 struct SRangeVectorPos
 {
     size_t rangeInx;
@@ -63,14 +57,13 @@ struct SState
 {
     std::atomic<bool> stop;
     std::string diffStorage;
-    uuid_t id;
+    CSnapshotId id;
     std::mutex lock;
     std::list<std::string> errorMessage;
     std::vector<std::string> diffStorageFiles;
 
     std::vector<SRange> diffStorageRanges;
-    int diffDeviceMajor;
-    int diffDeviceMinor;
+    std::string diffDevicePath;
     SRangeVectorPos diffStoragePosition;
 };
 
@@ -80,15 +73,12 @@ public:
     CSession(const std::vector<std::string>& devices, const std::string& diffStorage, const SStorageRanges& diffStorageRanges);
     ~CSession() override;
 
-    std::string GetImageDevice(const std::string& original) override;
-    std::string GetOriginalDevice(const std::string& image) override;
     bool GetError(std::string& errorMessage) override;
 
 private:
-    uuid_t m_id;
-    std::vector<SSessionInfo> m_devices;
+    CSnapshotId m_id;
 
-    std::shared_ptr<CBlksnap> m_ptrBlksnap;
+    std::shared_ptr<CSnapshotCtl> m_ptrCtl;
     std::shared_ptr<SState> m_ptrState;
     std::shared_ptr<std::thread> m_ptrThread;
 };
@@ -109,22 +99,8 @@ std::shared_ptr<ISession> ISession::Create(const std::vector<std::string>& devic
 
 namespace
 {
-    static inline struct blk_snap_dev deviceByName(const std::string& name)
-    {
-        struct stat st;
-
-        if (::stat(name.c_str(), &st))
-            throw std::system_error(errno, std::generic_category(), name);
-
-        struct blk_snap_dev device = {
-          .mj = major(st.st_rdev),
-          .mn = minor(st.st_rdev),
-        };
-        return device;
-    }
-
-    static void FiemapStorage(const std::string& filename, struct blk_snap_dev& dev_id,
-                              std::vector<struct blk_snap_block_range>& ranges)
+    static void FiemapStorage(const std::string& filename, std::string& devicePath,
+                              std::vector<struct blksnap_sectors>& ranges)
     {
         int ret = 0;
         const char* errMessage;
@@ -138,8 +114,9 @@ namespace
             throw std::system_error(errno, std::generic_category(), "Failed to get file size.");
 
         fileSize = st.st_size;
-        dev_id.mj = major(st.st_dev);
-        dev_id.mn = minor(st.st_dev);
+        devicePath = "/dev/block/" +
+            std::to_string(major(st.st_dev)) + ":" +
+            std::to_string(minor(st.st_dev));
 
         fd = ::open(filename.c_str(), O_RDONLY | O_EXCL | O_LARGEFILE);
         if (fd < 0)
@@ -173,7 +150,7 @@ namespace
 
             for (int i = 0; i < map->fm_mapped_extents; ++i)
             {
-                struct blk_snap_block_range rg;
+                struct blksnap_sectors rg;
                 struct fiemap_extent* extent = map->fm_extents + i;
 
                 if (extent->fe_physical & (SECTOR_SIZE - 1))
@@ -183,13 +160,13 @@ namespace
                     goto out;
                 }
 
-                rg.sector_offset = extent->fe_physical >> SECTOR_SHIFT;
-                rg.sector_count = extent->fe_length >> SECTOR_SHIFT;
+                rg.offset = extent->fe_physical >> SECTOR_SHIFT;
+                rg.count = extent->fe_length >> SECTOR_SHIFT;
                 ranges.push_back(rg);
 
                 fileOffset = extent->fe_logical + extent->fe_length;
 
-                // std::cout << "allocate range: ofs=" << rg.sector_offset << " cnt=" << rg.sector_count << std::endl;
+                // std::cout << "allocate range: ofs=" << rg.offset << " cnt=" << rg.count << std::endl;
             }
         }
 
@@ -219,25 +196,13 @@ namespace
         ::close(fd);
     }
 
-    static void DeviceNumberByName(const std::string& deviceName, int& mj, int& mn)
-    {
-        struct stat64 st;
-
-        if (::stat64(deviceName.c_str(), &st))
-            throw std::system_error(errno, std::generic_category(), "Failed to get file size.");
-
-        mj = major(st.st_rdev);
-        mn = minor(st.st_rdev);
-    }
-
     static void AllocateDiffStorage(std::shared_ptr<SState> ptrState, sector_t requestedSectors,
-                                    struct blk_snap_dev& dev_id, std::vector<struct blk_snap_block_range>& ranges)
+                                    std::string& devicePath, std::vector<struct blksnap_sectors>& ranges)
     {
         if (ptrState->diffStorageRanges.size() <= ptrState->diffStoragePosition.rangeInx)
             throw std::runtime_error("Failed to allocate diff storage. Not enough free ranges");
 
-        dev_id.mj = ptrState->diffDeviceMajor;
-        dev_id.mn = ptrState->diffDeviceMinor;
+        devicePath = ptrState->diffDevicePath;
 
         while (requestedSectors)
         {
@@ -256,9 +221,9 @@ namespace
             }
 
             {
-                struct blk_snap_block_range rg = {
-                    .sector_offset = ofs,
-                    .sector_count = sz
+                struct blksnap_sectors rg = {
+                    .offset = ofs,
+                    .count = sz
                 };
 
                 ranges.push_back(rg);
@@ -268,24 +233,24 @@ namespace
             requestedSectors -= sz;
         }
     }
-    static void LogAppendedRanges(std::vector<struct blk_snap_block_range>& ranges)
+    static void LogAppendedRanges(std::vector<struct blksnap_sectors>& ranges)
     {
         sector_t totalSectors = 0;
 
         std::cout << "" << std::endl;
         std::cout << "Append " << ranges.size() << " ranges: " << std::endl;
-        for (const struct blk_snap_block_range& rg : ranges)
+        for (const struct blksnap_sectors& rg : ranges)
         {
-            totalSectors += rg.sector_count;
-            std::cout << std::to_string(rg.sector_offset) << ":"<< std::to_string(rg.sector_count) << std::endl;
+            totalSectors += rg.count;
+            std::cout << std::to_string(rg.offset) << ":"<< std::to_string(rg.count) << std::endl;
 
         }
         std::cout << "Total sectors append: " << totalSectors << std::endl;
 
     }
-} //
+}
 
-static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<SState> ptrState)
+static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<SState> ptrState)
 {
     struct SBlksnapEvent ev;
     int diffStorageNumber = 1;
@@ -295,7 +260,7 @@ static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<
     {
         try
         {
-            is_eventReady = ptrBlksnap->WaitEvent(ptrState->id, 100, ev);
+            is_eventReady = ptrCtl->WaitEvent(ptrState->id, 100, ev);
         }
         catch (std::exception& ex)
         {
@@ -312,10 +277,10 @@ static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<
         {
             switch (ev.code)
             {
-            case blk_snap_event_code_low_free_space:
+            case blksnap_event_code_low_free_space:
             {
-                struct blk_snap_dev dev_id;
-                std::vector<struct blk_snap_block_range> ranges;
+                std::string devicePath;
+                std::vector<struct blksnap_sectors> ranges;
 
                 if (!ptrState->diffStorage.empty())
                 {
@@ -330,20 +295,20 @@ static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<
                         ptrState->diffStorageFiles.push_back(filename);
                     }
                     FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-                    FiemapStorage(filename, dev_id, ranges);
+                    FiemapStorage(filename, devicePath, ranges);
                 }
                 else
-                    AllocateDiffStorage(ptrState, ev.lowFreeSpace.requestedSectors, dev_id, ranges);
+                    AllocateDiffStorage(ptrState, ev.lowFreeSpace.requestedSectors, devicePath, ranges);
 
                 LogAppendedRanges(ranges);
-                ptrBlksnap->AppendDiffStorage(ptrState->id, dev_id, ranges);
+                ptrCtl->AppendDiffStorage(ptrState->id, devicePath, ranges);
             }
             break;
-            case blk_snap_event_code_corrupted:
+            case blksnap_event_code_corrupted:
                 throw std::system_error(ev.corrupted.errorCode, std::generic_category(),
-                                        std::string("Snapshot corrupted for device "
-                                                    + std::to_string(ev.corrupted.origDevId.mj) + ":"
-                                                    + std::to_string(ev.corrupted.origDevId.mn)));
+                                        std::string("Snapshot corrupted for device " +
+                                                    std::to_string(ev.corrupted.origDevId.major) + ":" +
+                                                    std::to_string(ev.corrupted.origDevId.minor)));
                 break;
             default:
                 throw std::runtime_error("Invalid blksnap event code received.");
@@ -360,30 +325,19 @@ static void BlksnapThread(std::shared_ptr<CBlksnap> ptrBlksnap, std::shared_ptr<
 
 CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorage, const SStorageRanges& diffStorageRanges)
 {
-    m_ptrBlksnap = std::make_shared<CBlksnap>();
+    m_ptrCtl = std::make_shared<CSnapshotCtl>();
 
     for (const auto& name : devices)
-    {
-        SSessionInfo info;
+        CTrackerCtl(name).Attach();
 
-        info.originalName = name;
-        info.original = deviceByName(name);
-        info.image = {0};
-        info.imageName = "";
-        m_devices.push_back(info);
-    }
+    // Create snapshot
+    m_id = m_ptrCtl->Create();
 
-    /*
-     * Create snapshot
-     */
-    std::vector<struct blk_snap_dev> blk_snap_devs;
-    for (const SSessionInfo& info : m_devices)
-        blk_snap_devs.push_back(info.original);
-    m_ptrBlksnap->Create(blk_snap_devs, m_id);
+    // Add devices to snapshot
+    for (const auto& name : devices)
+        CTrackerCtl(name).SnapshotAdd(m_id.Get());
 
-    /*
-     * Prepare state structure for thread
-     */
+    // Prepare state structure for thread
     m_ptrState = std::make_shared<SState>();
     m_ptrState->stop = false;
     if (!diffStorage.empty())
@@ -391,21 +345,19 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
     if (!diffStorageRanges.ranges.empty())
         m_ptrState->diffStorageRanges = diffStorageRanges.ranges;
     if (!diffStorageRanges.device.empty())
-        DeviceNumberByName(diffStorageRanges.device, m_ptrState->diffDeviceMajor, m_ptrState->diffDeviceMinor);
-    uuid_copy(m_ptrState->id, m_id);
+        m_ptrState->diffDevicePath = diffStorageRanges.device;
+    m_ptrState->id = m_id;
 
-    /*
-     * Append first portion for diff storage
-     */
+    // Append first portion for diff storage
     struct SBlksnapEvent ev;
-    if (m_ptrBlksnap->WaitEvent(m_id, 100, ev))
+    if (m_ptrCtl->WaitEvent(m_id, 100, ev))
     {
         switch (ev.code)
         {
-        case blk_snap_event_code_low_free_space:
+        case blksnap_event_code_low_free_space:
         {
-            struct blk_snap_dev dev_id;
-            std::vector<struct blk_snap_block_range> ranges;
+            std::string devicePath;
+            std::vector<struct blksnap_sectors> ranges;
 
             if (!m_ptrState->diffStorage.empty())
             {
@@ -417,73 +369,48 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
 
                 m_ptrState->diffStorageFiles.push_back(filename);
                 FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-                FiemapStorage(filename, dev_id, ranges);
+                FiemapStorage(filename, devicePath, ranges);
             }
             else
-                AllocateDiffStorage(m_ptrState, ev.lowFreeSpace.requestedSectors, dev_id, ranges);
+                AllocateDiffStorage(m_ptrState, ev.lowFreeSpace.requestedSectors, devicePath, ranges);
 
             LogAppendedRanges(ranges);
-            m_ptrBlksnap->AppendDiffStorage(m_id, dev_id, ranges);
+            m_ptrCtl->AppendDiffStorage(m_id, devicePath, ranges);
         }
         break;
-        case blk_snap_event_code_corrupted:
+        case blksnap_event_code_corrupted:
             throw std::system_error(ev.corrupted.errorCode, std::generic_category(),
                                     std::string("Failed to create snapshot for device "
-                                                + std::to_string(ev.corrupted.origDevId.mj) + ":"
-                                                + std::to_string(ev.corrupted.origDevId.mn)));
+                                                + std::to_string(ev.corrupted.origDevId.major) + ":"
+                                                + std::to_string(ev.corrupted.origDevId.minor)));
             break;
         default:
             throw std::runtime_error("Invalid blksnap event code received.");
         }
     }
 
-    /*
-     * Start stretch snapshot thread
-     */
-    m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrBlksnap, m_ptrState);
+    // Start stretch snapshot thread
+    m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrCtl, m_ptrState);
     ::usleep(0);
 
-    /*
-     * Take snapshot
-     */
-    m_ptrBlksnap->Take(m_id);
 
-    /*
-     * Collect images
-     */
-    std::vector<struct blk_snap_image_info> images;
-    m_ptrBlksnap->Collect(m_id, images);
+    // Take snapshot
+    m_ptrCtl->Take(m_id);
 
-    for (const struct blk_snap_image_info& imageInfo : images)
-    {
-        for (size_t inx = 0; inx < m_devices.size(); inx++)
-        {
-            if ((m_devices[inx].original.mj == imageInfo.orig_dev_id.mj)
-                && (m_devices[inx].original.mn == imageInfo.orig_dev_id.mn))
-            {
-                m_devices[inx].image = imageInfo.image_dev_id;
-                m_devices[inx].imageName
-                  = std::string("/dev/" BLK_SNAP_IMAGE_NAME) + std::to_string(imageInfo.image_dev_id.mn);
-            }
-        }
-    }
 }
 
 CSession::~CSession()
 {
     // std::cout << "Destroy blksnap session" << std::endl;
-    /**
-     * Stop thread
-     */
+
+    // Stop thread
     m_ptrState->stop = true;
     m_ptrThread->join();
 
-    /**
-     * Destroy snapshot
-     */
+    // Destroy snapshot
     try
     {
-        m_ptrBlksnap->Destroy(m_id);
+        m_ptrCtl->Destroy(m_id);
     }
     catch (std::exception& ex)
     {
@@ -491,9 +418,7 @@ CSession::~CSession()
         return;
     }
 
-    /**
-     * Cleanup diff storage files
-     */
+    // Cleanup diff storage files
     for (const std::string& filename : m_ptrState->diffStorageFiles)
     {
         try
@@ -506,32 +431,6 @@ CSession::~CSession()
             std::cerr << ex.what() << std::endl;
         }
     }
-}
-
-std::string CSession::GetImageDevice(const std::string& original)
-{
-    struct blk_snap_dev devId = deviceByName(original);
-
-    for (size_t inx = 0; inx < m_devices.size(); inx++)
-    {
-        if ((m_devices[inx].original.mj == devId.mj) && (m_devices[inx].original.mn == devId.mn))
-            return m_devices[inx].imageName;
-    }
-
-    throw std::runtime_error("Failed to get image device for [" + original + "].");
-}
-
-std::string CSession::GetOriginalDevice(const std::string& image)
-{
-    struct blk_snap_dev devId = deviceByName(image);
-
-    for (size_t inx = 0; inx < m_devices.size(); inx++)
-    {
-        if ((m_devices[inx].image.mj == devId.mj) && (m_devices[inx].image.mn == devId.mn))
-            return m_devices[inx].originalName;
-    }
-
-    throw std::runtime_error("Failed to get original device for [" + image + "].");
 }
 
 bool CSession::GetError(std::string& errorMessage)

@@ -25,13 +25,16 @@
 
 #include <string>
 #include <uuid/uuid.h>
+#include <cstring>
 #include <vector>
 
-#ifndef BLK_SNAP_MODIFICATION
+#if 0
+#ifndef BLKSNAP_MODIFICATION
 /* Allow to use additional IOCTL from module modification */
-#    define BLK_SNAP_MODIFICATION
+#    define BLKSNAP_MODIFICATION
 /* Allow to get any sector state. Can be used only for debug purpose */
-#    define BLK_SNAP_DEBUG_SECTOR_STATE
+#    define BLKSNAP_DEBUG_SECTOR_STATE
+#endif
 #endif
 #include "Sector.h"
 #include "blksnap.h"
@@ -45,7 +48,7 @@ namespace blksnap
 
     struct SBlksnapEventCorrupted
     {
-        struct blk_snap_dev origDevId;
+        struct blksnap_bdev origDevId;
         int errorCode;
     };
 
@@ -60,29 +63,66 @@ namespace blksnap
         };
     };
 
-    class CBlksnap
+    class CSnapshotId
     {
     public:
-        CBlksnap();
-        ~CBlksnap();
+        CSnapshotId()
+        {
+            uuid_clear(m_id);
+        };
+        CSnapshotId(const uuid_t& id)
+        {
+            uuid_copy(m_id, id);
+        };
+        CSnapshotId(const __u8 buf[16])
+        {
+            memcpy(m_id, buf, sizeof(uuid_t));
+        };
+        CSnapshotId(const std::string& idStr)
+        {
+            uuid_parse(idStr.c_str(), m_id);
+        };
 
-        void Version(struct blk_snap_version& version);
-        void CollectTrackers(std::vector<struct blk_snap_cbt_info>& cbtInfoVector);
-        void ReadCbtMap(struct blk_snap_dev dev_id, unsigned int offset, unsigned int length, uint8_t* buff);
+        void FromString(const std::string& idStr)
+        {
+            uuid_parse(idStr.c_str(), m_id);
+        };
+        const uuid_t& Get() const
+        {
+            return m_id;
+        };
+        std::string ToString() const
+        {
+            char idStr[64];
 
-        void Create(const std::vector<struct blk_snap_dev>& devices, uuid_t& id);
-        void Destroy(const uuid_t& id);
-        void Collect(const uuid_t& id, std::vector<struct blk_snap_image_info>& images);
-        void AppendDiffStorage(const uuid_t& id, const struct blk_snap_dev& dev_id,
-                               const std::vector<struct blk_snap_block_range>& ranges);
-        void Take(const uuid_t& id);
-        bool WaitEvent(const uuid_t& id, unsigned int timeoutMs, SBlksnapEvent& ev);
+            uuid_unparse(m_id, idStr);
 
+            return std::string(idStr);
+        };
+    private:
+        uuid_t m_id;
+    };
+
+    class CSnapshotCtl
+    {
+    public:
+        CSnapshotCtl();
+        ~CSnapshotCtl();
+
+        CSnapshotId Create();
+        void Destroy(const CSnapshotId& id);
+        void Collect(std::vector<CSnapshotId>& ids);
+        void AppendDiffStorage(const CSnapshotId& id, const std::string& devicePath,
+                               const std::vector<struct blksnap_sectors>& ranges);
+        void Take(const CSnapshotId& id);
+        bool WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlksnapEvent& ev);
+
+        void Version(struct blksnap_version& version);
 #ifdef BLK_SNAP_MODIFICATION
         /* Additional functional */
-        bool Modification(struct blk_snap_mod& mod);
+        bool Modification(struct blksnap_mod& mod);
 #    ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-        void GetSectorState(struct blk_snap_dev image_dev_id, off_t offset, struct blk_snap_sector_state& state);
+        void GetSectorState(struct blksnap_dev image_dev_id, off_t offset, struct blksnap_sector_state& state);
 #    endif
 #endif
     private:
