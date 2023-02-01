@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 #include <algorithm>
-//#include <blksnap/Cbt.h>
+#include <blksnap/Cbt.h>
 #include <blksnap/Service.h>
 #include <blksnap/Session.h>
 #include <boost/filesystem.hpp>
@@ -162,7 +162,7 @@ void CheckBoundary(const std::string& origDevName, const std::string& diffStorag
 
             logger.Info("test sequence time " + std::to_string(testSeqTime));
 
-            std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+            std::string imageDevName = blksnap::ICbt::Create(origDevName)->GetImage();
             logger.Info("Found image block device [" + imageDevName + "]");
             auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
@@ -240,7 +240,7 @@ void CheckBoundary(const std::string& origDevName, const std::string& diffStorag
 
             logger.Info("test sequence time " + std::to_string(testSeqTime));
 
-            std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+            std::string imageDevName = blksnap::ICbt::Create(origDevName)->GetImage();;
             logger.Info("Found image block device [" + imageDevName + "]");
             auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
@@ -313,7 +313,7 @@ void CheckBoundary(const std::string& origDevName, const std::string& diffStorag
 
             logger.Info("test sequence time " + std::to_string(testSeqTime));
 
-            std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+            std::string imageDevName = blksnap::ICbt::Create(origDevName)->GetImage();;
             logger.Info("Found image block device [" + imageDevName + "]");
             auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 

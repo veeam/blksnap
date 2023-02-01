@@ -4,7 +4,7 @@ if [ -n "$1" ]
 then
 	VERSION="$1"
 else
-	VERSION="1.0.0.0"
+	VERSION="2.0.0.0"
 fi
 
 CURR_DIR=$(pwd)

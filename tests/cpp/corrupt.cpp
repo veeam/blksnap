@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 #include <algorithm>
+#include <thread>
 #include <blksnap/Cbt.h>
 #include <blksnap/Service.h>
 #include <blksnap/Session.h>
@@ -9,7 +10,6 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <thread>
 #include <unistd.h>
 
 #include "helpers/AlignedBuffer.hpp"
@@ -183,10 +183,10 @@ void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo>& ptrCbtInfoPreviou
         throw std::runtime_error("Failed to check CBT corruption. Corrupts list is empty");
     const std::string& original = corrupts[0].original;
 
-    auto ptrCbt = blksnap::ICbt::Create();
+    auto ptrCbt = blksnap::ICbt::Create(original);
 
-    std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoCurrent = ptrCbt->GetCbtInfo(original);
-    std::shared_ptr<blksnap::SCbtData> ptrCbtDataCurrent = ptrCbt->GetCbtData(ptrCbtInfoCurrent);
+    std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoCurrent = ptrCbt->GetCbtInfo();
+    std::shared_ptr<blksnap::SCbtData> ptrCbtDataCurrent = ptrCbt->GetCbtData();
 
     logger.Info("Previous CBT snap number= " + std::to_string(ptrCbtInfoPrevious->snapNumber));
     logger.Info("Current CBT snap number= " + std::to_string(ptrCbtInfoCurrent->snapNumber));
@@ -258,11 +258,11 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
         logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
         logger.Info("-- Create snapshot");
         auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+        auto ptrCbt = blksnap::ICbt::Create(origDevName);
 
         { // get CBT information
             char generationIdStr[64];
-            auto ptrCbt = blksnap::ICbt::Create();
-            auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
+            auto ptrCbtInfo = ptrCbt->GetCbtInfo();
 
             if (ptrCbtInfoPrevious)
             {
@@ -285,7 +285,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
         clock_t testSeqTime = std::clock();
         logger.Info("test sequence time " + std::to_string(testSeqTime));
 
-        std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+        std::string imageDevName = ptrCbt->GetImage();;
         logger.Info("Found image block device [" + imageDevName + "]");
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
@@ -453,33 +453,16 @@ void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
     ptrCtx->complete = true;
 };
 
-void CheckCbtCorrupt(const std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>>& previousCbtInfoMap,
+void CheckCbtCorrupt(const std::map<std::string,
+                     std::shared_ptr<blksnap::SCbtInfo>>& previousCbtInfoMap,
                      const std::vector<SCorruptInfo>& corrupts)
 {
-    auto ptrCbt = blksnap::ICbt::Create();
+    for (const SCorruptInfo& corruptInfo : corrupts) {
+        for (const SRange& range : corruptInfo.ranges) {
+            auto ptrCbt = blksnap::ICbt::Create(corruptInfo.original);
 
-    std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>> currentCbtInfoMap;
-    std::map<std::string, std::shared_ptr<blksnap::SCbtData>> currentCbtDataMap;
-    for (const SCorruptInfo& corruptInfo : corrupts)
-    {
-        if (currentCbtInfoMap.count(corruptInfo.original) == 0)
-        {
-            auto ptrCbtInfo = ptrCbt->GetCbtInfo(corruptInfo.original);
-
-            currentCbtInfoMap[corruptInfo.original] = ptrCbtInfo;
-            currentCbtDataMap[corruptInfo.original] = ptrCbt->GetCbtData(ptrCbtInfo);
-            ;
-        }
-    }
-
-    for (const SCorruptInfo& corruptInfo : corrupts)
-    {
-        for (const SRange& range : corruptInfo.ranges)
-        {
-            const std::string& device = corruptInfo.original;
-
-            IsChangedRegion(previousCbtInfoMap.at(device), currentCbtInfoMap.at(device), currentCbtDataMap.at(device),
-                            range);
+            IsChangedRegion(previousCbtInfoMap.at(corruptInfo.original),
+                            ptrCbt->GetCbtInfo(), ptrCbt->GetCbtData(), range);
         }
     }
 }
@@ -533,12 +516,11 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
 
         { // get CBT information
             char generationIdStr[64];
-            auto ptrCbt = blksnap::ICbt::Create();
 
             previousCbtInfoMap.clear();
             for (const std::string& origDevName : origDevNames)
             {
-                auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
+                auto ptrCbtInfo = blksnap::ICbt::Create(origDevName)->GetCbtInfo();
 
                 if (!(previousCbtInfoMap.find(origDevName) == previousCbtInfoMap.end()))
                 {
@@ -565,7 +547,8 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
         for (const std::string& origDevName : origDevNames)
         {
             auto ptrCtx = std::make_shared<SCheckerContext>(
-              std::make_shared<CBlockDevice>(ptrSession->GetImageDevice(origDevName)), genMap[origDevName]);
+                std::make_shared<CBlockDevice>(blksnap::ICbt::Create(origDevName)->GetImage()),
+                genMap[origDevName]);
 
             checkerCtxs.push_back(ptrCtx);
         }
@@ -626,7 +609,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
                             ptrCtx->errorMessages.pop_front();
                         }
                         logger.Err(ss);
-                        corrupts.emplace_back(ptrSession->GetOriginalDevice(ptrCtx->ptrBdev->Name()),
+                        corrupts.emplace_back(ptrCtx->ptrBdev->Name(),
                                               ptrCtx->ptrGen->GetFails());
                     }
                     ptrCtx->processed = true;

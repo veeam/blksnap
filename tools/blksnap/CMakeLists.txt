@@ -19,8 +19,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "blksnap")
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC BLK_SNAP_MODIFICATION)
 
-include_directories(${CMAKE_SOURCE_DIR}/../../include)
-set(TOOLS_LIBS ${LIBUUID_LIBRARY} Boost::filesystem Boost::program_options)
+set(TOOLS_LIBS ${LIBUUID_LIBRARY} blksnap-dev Boost::filesystem Boost::program_options)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${TOOLS_LIBS})
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 
