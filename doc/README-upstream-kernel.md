@@ -41,6 +41,9 @@ Is also possible use [this branch](https://github.com/SergeiShtepa/linux/commits
 There is a work in progress for "v3", there are many changes,
 is possible view/test it from [this branch](https://github.com/SergeiShtepa/linux/tree/blksnap-master) of a linux fork git.
 
+For testing this version, that have interface changes, [this blksnap branch](https://github.com/veeam/blksnap/tree/blksnap_interface_v2) must be used,
+have updated library, tools and tests working with new upstream version.
+
 Latest news are also visible from [here](https://github.com/veeam/blksnap/issues/2)
 
 ## Documentation
