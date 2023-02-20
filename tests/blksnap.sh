@@ -31,7 +31,7 @@ blksnap_unload()
 	fi
 
 	echo "Unload module"
-	modprobe -r blksnap
+	modprobe -r blksnap 2>&1 || sleep 1 && modprobe -r blksnap && echo "Unload success"
 }
 
 blksnap_version()
