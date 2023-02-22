@@ -158,8 +158,8 @@ bool CSnapshotCtl::WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlk
     {
         if ((errno == ENOENT) || (errno == EINTR))
             return false;
-        else
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get event from snapshot.");
+
+        throw std::system_error(errno, std::generic_category(), "Failed to get event from snapshot.");
     }
     ev.code = param.code;
     ev.time = param.time_label;
