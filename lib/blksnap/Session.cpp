@@ -307,8 +307,8 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
             case blksnap_event_code_corrupted:
                 throw std::system_error(ev.corrupted.errorCode, std::generic_category(),
                                         std::string("Snapshot corrupted for device " +
-                                                    std::to_string(ev.corrupted.origDevId.major) + ":" +
-                                                    std::to_string(ev.corrupted.origDevId.minor)));
+                                                    std::to_string(ev.corrupted.origDevIdMj) + ":" +
+                                                    std::to_string(ev.corrupted.origDevIdMn)));
                 break;
             default:
                 throw std::runtime_error("Invalid blksnap event code received.");
@@ -381,8 +381,8 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
         case blksnap_event_code_corrupted:
             throw std::system_error(ev.corrupted.errorCode, std::generic_category(),
                                     std::string("Failed to create snapshot for device "
-                                                + std::to_string(ev.corrupted.origDevId.major) + ":"
-                                                + std::to_string(ev.corrupted.origDevId.minor)));
+                                                + std::to_string(ev.corrupted.origDevIdMj) + ":"
+                                                + std::to_string(ev.corrupted.origDevIdMn)));
             break;
         default:
             throw std::runtime_error("Invalid blksnap event code received.");

@@ -177,7 +177,8 @@ bool CSnapshotCtl::WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlk
     {
         struct blksnap_event_corrupted* corrupted = (struct blksnap_event_corrupted*)(param.data);
 
-        ev.corrupted.origDevId = corrupted->dev_id;
+        ev.corrupted.origDevIdMj = corrupted->dev_id_mj;
+        ev.corrupted.origDevIdMn = corrupted->dev_id_mn;
         ev.corrupted.errorCode = corrupted->err_code;
         break;
     }

@@ -48,7 +48,8 @@ namespace blksnap
 
     struct SBlksnapEventCorrupted
     {
-        struct blksnap_bdev origDevId;
+        unsigned int origDevIdMj;
+        unsigned int origDevIdMn;
         int errorCode;
     };
 

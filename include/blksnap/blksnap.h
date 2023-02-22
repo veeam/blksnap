@@ -122,11 +122,6 @@ struct blksnap_uuid {
 	__u8 b[UUID_SIZE];
 };
 
-struct blksnap_bdev {
-	__u32 major;
-	__u32 minor;
-};
-
 /**
  * struct blksnap_cbt_info - Information about change tracking for a block
  *	device.
@@ -466,16 +461,21 @@ struct blksnap_event_low_free_space {
 
 /**
  * struct blksnap_event_corrupted - Data for the
- *	&blksnap_event_code_corrupted event.
- * @orig_dev_id:
- *	Device ID.
+ *      &blksnap_event_code_corrupted event.
+ *
+ * @dev_id_mj:
+ *      Major part of original device ID.
+ * @dev_id_mn:
+ *      Minor part of original device ID.
  * @err_code:
- *	Error code.
+ *      Error code.
  */
 struct blksnap_event_corrupted {
-	struct blksnap_bdev dev_id;
-	__s32 err_code;
+        __u32 dev_id_mj;
+        __u32 dev_id_mn;
+        __s32 err_code;
 };
+
 
 #ifdef BLKSNAP_MODIFICATION
 /**

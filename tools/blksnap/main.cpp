@@ -986,8 +986,8 @@ private:
 
     void ProcessEventCorrupted(unsigned int time_label, struct blksnap_event_corrupted* data)
     {
-        std::cout << time_label << " - The snapshot was corrupted for device [" << data->dev_id.major << ":"
-                  << data->dev_id.minor << "] with error \"" << std::strerror(data->err_code) << "\"." << std::endl;
+        std::cout << time_label << " - The snapshot was corrupted for device [" << data->dev_id_mj << ":"
+                  << data->dev_id_mn << "] with error \"" << std::strerror(data->err_code) << "\"." << std::endl;
     };
 
 public:
