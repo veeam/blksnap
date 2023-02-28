@@ -21,7 +21,7 @@ MPDIR=/mnt/blksnap-test
 rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
-modprobe zram num_devices=2
+modprobe zram num_devices=2 && sleep 1
 
 # create first device
 DEVICE_1="/dev/zram0"
