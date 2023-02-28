@@ -22,7 +22,7 @@ rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
 ALG="lzo"
-modprobe zram num_devices=2
+modprobe zram num_devices=2 && sleep 1
 
 # create first device
 DEVICE_1="/dev/zram0"
