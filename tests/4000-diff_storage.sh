@@ -65,8 +65,7 @@ umount ${IMAGE}
 echo "Destroy snapshot"
 blksnap_snapshot_destroy
 
-echo "Waiting for streach process terminate"
-sleep 2s
+blksnap_stretch_wait
 
 blksnap_unload
 
