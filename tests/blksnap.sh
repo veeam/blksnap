@@ -11,6 +11,7 @@ fi
 
 ID=""
 BLKSNAP_FILENAME=$(modinfo --field filename blksnap)
+STRETCH_PROCESS_PID=""
 
 blksnap_load()
 {
@@ -122,9 +123,15 @@ blksnap_stretch_snapshot()
 	local LIMIT_MB=$2
 
 	${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE_PATH} --limit=${LIMIT_MB} &
+	STRETCH_PROCESS_PID=$!
 
 	echo "Waiting for creating first portion"
 	sleep 2s
+}
+blksnap_stretch_wait()
+{
+	echo "Waiting for streach process terminate"
+	wait ${STRETCH_PROCESS_PID}
 }
 
 blksnap_get_image()

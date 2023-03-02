@@ -88,6 +88,8 @@ umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
+blksnap_stretch_wait
+
 blksnap_unload
 
 echo "Stretch snapshot test finish"

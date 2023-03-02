@@ -68,8 +68,7 @@ blksnap_snapshot_destroy
 
 blksnap_detach ${DEVICE}
 
-echo "Waiting for streach process terminate"
-sleep 2s
+blksnap_stretch_wait
 
 blksnap_unload
 
