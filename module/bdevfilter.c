@@ -13,6 +13,8 @@
 #include "bdevfilter.h"
 #include "version.h"
 
+static struct bio_list bdev_filter_bio_list[2] = { };
+
 #if defined(BLK_SNAP_DEBUGLOG)
 #undef pr_debug
 #define pr_debug(fmt, ...) \
@@ -360,28 +362,31 @@ static inline bool bdev_filters_apply(struct bio *bio)
 	return true;
 }
 
-#ifdef CONFIG_X86
-#define CALL_INSTRUCTION_LENGTH 5
-#else
-#pragma error "Current CPU is not supported yet"
-#endif
-
+/**
+ * submit_bio_noacct_notrace() - Execute submit_bio_noacct() without handling.
+ */
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-blk_qc_t (*submit_bio_noacct_notrace)(struct bio *) =
-	(blk_qc_t(*)(struct bio *))((unsigned long)(submit_bio_noacct) +
-				    CALL_INSTRUCTION_LENGTH);
+blk_qc_t notrace submit_bio_noacct_notrace(struct bio *bio)
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-void (*submit_bio_noacct_notrace)(struct bio *) =
-	(void (*)(struct bio *))((unsigned long)(submit_bio_noacct) +
-				 CALL_INSTRUCTION_LENGTH);
+void notrace submit_bio_noacct_notrace(struct bio *bio)
 #else
 #error "Your kernel is too old for this module."
 #endif
+{
+	if (!current->bio_list)
+		current->bio_list = bdev_filter_bio_list;
+
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+	return submit_bio_noacct(bio);
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
+	submit_bio_noacct(bio);
+#endif
+}
 EXPORT_SYMBOL(submit_bio_noacct_notrace);
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
-#else
+#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
 static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
@@ -391,8 +396,6 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 			return BLK_QC_T_NONE;
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
 			return;
-#else
-#error "Your kernel is too old for this module."
 #endif
 		}
 	}
@@ -401,79 +404,29 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 	return submit_bio_noacct_notrace(bio);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
 	submit_bio_noacct_notrace(bio);
-#else
-#error "Your kernel is too old for this module."
 #endif
 }
-
-#ifdef CONFIG_LIVEPATCH
-#pragma message("livepatch used")
-
-static struct klp_func funcs[] = {
-	{
-		.old_name = "submit_bio_noacct",
-		.new_func = submit_bio_noacct_handler,
-	},
-	{ 0 }
-};
-
-static struct klp_object objs[] = {
-	{
-		/* name being NULL means vmlinux */
-		.funcs = funcs,
-	},
-	{ 0 }
-};
-
-static struct klp_patch patch = {
-	.mod = THIS_MODULE,
-	.objs = objs,
-};
-
-static int __init lp_filter_init(void)
-{
-	return klp_enable_patch(&patch);
-}
-
-/*
- * For standalone only:
- * Before unload module all filters should be detached and livepatch are
- * disabled.
- *
- * echo 0 > /sys/kernel/livepatch/bdev_filter/enabled
- */
-static void __exit lp_filter_done(void)
-{
-	struct bdev_extension *ext;
-
-	while ((ext = list_first_entry_or_null(&bdev_extension_list,
-					       struct bdev_extension, link))) {
-		list_del(&ext->link);
-		kfree(ext);
-	}
-}
-module_init(lp_filter_init);
-module_exit(lp_filter_done);
-MODULE_INFO(livepatch, "Y");
-
-#elif defined(CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS)
-#pragma message("ftrace filter used")
 
 #ifdef HAVE_FTRACE_REGS
 static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
 			struct ftrace_ops *fops,
 			struct ftrace_regs *fregs)
-{
-	ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
-}
 #else
 static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
 			struct ftrace_ops *fops,
 			struct pt_regs *regs)
-{
-	regs->ip = (unsigned long)submit_bio_noacct_handler;
-}
 #endif
+{
+	if (!current->bio_list) {
+#ifdef HAVE_FTRACE_REGS
+		ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
+#else
+		regs->ip = (unsigned long)submit_bio_noacct_handler;
+#endif
+	} else if (current->bio_list == bdev_filter_bio_list) {
+		current->bio_list = NULL;
+	}
+}
 
 unsigned char* funcname_submit_bio_noacct = "submit_bio_noacct";
 static struct ftrace_ops ops_submit_bio_noacct = {
@@ -524,9 +477,6 @@ static void __exit trace_filter_done(void)
 
 module_init(trace_filter_init);
 module_exit(trace_filter_done);
-#else
-#error "The bdevfilter cannot be used for the current kernels configuration"
-#endif
 
 MODULE_DESCRIPTION("Block Device Filter kernel module");
 MODULE_VERSION(VERSION_STR);

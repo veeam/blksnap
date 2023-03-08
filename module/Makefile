@@ -19,6 +19,7 @@ $(KERNEL_MODULE_NAME)-y += memory_checker.o
 
 # for upstream, we don't need any addition makefiles,
 # but for a standalone module the configuration is necessary
-include ${M}/Makefile-*
+include ${M}/Makefile-bdevfilter
+include ${M}/Makefile-standalone
 
 obj-m	 += $(KERNEL_MODULE_NAME).o
