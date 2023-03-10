@@ -4,59 +4,6 @@
 EXTRA_CFLAGS += "-D BLK_SNAP_MODIFICATION"
 EXTRA_CFLAGS += "-D MOD_NAME=\"standalone\" "
 
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "blk_qc_t submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&& \
-		echo -D HAVE_QC_SUBMIT_BIO_NOACCT)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "void submit_bio_noacct" $(srctree)/include/linux/blkdev.h &&	\
-		echo -D HAVE_VOID_SUBMIT_BIO_NOACCT)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "struct super_block \*freeze_bdev"				\
-		$(srctree)/include/linux/blkdev.h &&				\
-		echo -D HAVE_SUPER_BLOCK_FREEZE)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -D HAVE_BI_BDEV)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -D HAVE_BI_BDISK)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
-	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
-		echo -D HAVE_BDEV_NR_SECTORS)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
-	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/blkdev.h && \
-		echo -D HAVE_BDEV_NR_SECTORS)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
-		echo -D HAVE_BLK_MQ_ALLOC_DISK)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "BIO_MAX_PAGES" $(srctree)/include/linux/bio.h &&		\
-		echo -D HAVE_BIO_MAX_PAGES)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
-	grep -qw "int add_disk" $(srctree)/include/linux/genhd.h &&		\
-		echo -D HAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
-	grep -qw "int add_disk" $(srctree)/include/linux/blkdev.h &&		\
-		echo -D HAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
-	grep -qw "int __must_check add_disk" $(srctree)/include/linux/genhd.h && \
-		echo -D HAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
-	grep -qw "int __must_check add_disk" $(srctree)/include/linux/blkdev.h && \
-		echo -D HAVE_ADD_DISK_RESULT)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
-	grep -qw "void blk_cleanup_disk" $(srctree)/include/linux/genhd.h &&	\
-		echo -D HAVE_BLK_CLEANUP_DISK)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
-	grep -qw "void blk_cleanup_disk" $(srctree)/include/linux/blkdev.h &&	\
-		echo -D HAVE_BLK_CLEANUP_DISK)
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
-		echo -D HAVE_GENHD_H)
-EXTRA_CFLAGS += $(shell 							\
-	grep "bio_alloc_bioset" $(srctree)/include/linux/bio.h |		\
-	grep -qw "struct block_device" &&					\
-		echo -D HAVE_BDEV_BIO_ALLOC)
-
 # The power of 2 for minimum tracking block size.
 # The minimum tracking block size by default is 64 KB (shift 16)
 # It's looks good for block device 128 GB or lower.

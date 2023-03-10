@@ -1,6 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0
 KERNEL_MODULE_NAME := blksnap
 
+# for upstream, we don't need any addition makefiles,
+# but for a standalone module the configuration is necessary
+# EXTRA_CFLAGS += "-D DEBUG"
+EXTRA_CFLAGS += "-D STANDALONE_BDEVFILTER"
+include ${M}/Makefile-config
+include ${M}/Makefile-bdevfilter
+include ${M}/Makefile-standalone
+
 $(KERNEL_MODULE_NAME)-y += big_buffer.o
 $(KERNEL_MODULE_NAME)-y += cbt_map.o
 $(KERNEL_MODULE_NAME)-y += chunk.o
@@ -16,10 +24,5 @@ $(KERNEL_MODULE_NAME)-y += snapshot.o
 $(KERNEL_MODULE_NAME)-y += sysfs.o
 $(KERNEL_MODULE_NAME)-y += tracker.o
 $(KERNEL_MODULE_NAME)-y += memory_checker.o
-
-# for upstream, we don't need any addition makefiles,
-# but for a standalone module the configuration is necessary
-include ${M}/Makefile-bdevfilter
-include ${M}/Makefile-standalone
 
 obj-m	 += $(KERNEL_MODULE_NAME).o

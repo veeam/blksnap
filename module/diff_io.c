@@ -9,6 +9,7 @@
 #include "diff_io.h"
 #include "diff_buffer.h"
 #ifdef STANDALONE_BDEVFILTER
+#include "bdevfilter.h"
 #include "log.h"
 #endif
 
@@ -216,9 +217,6 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 	}
 
-#ifndef STANDALONE_BDEVFILTER
-	bio_set_flag(bio, BIO_FILTERED);
-#endif
 	bio->bi_end_io = diff_io_endio;
 	bio->bi_private = diff_io;
 	bio_set_dev(bio, diff_region->bdev);
@@ -230,8 +228,14 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	atomic_inc(&diff_io->bio_count);
 
 	/* sumbit all bio */
-	while ((bio = bio_list_pop(&bio_list_head)))
+	while ((bio = bio_list_pop(&bio_list_head))) {
+#ifdef STANDALONE_BDEVFILTER
+		submit_bio_noacct_notrace(bio);
+#else
+		io_set_flag(bio, BIO_FILTERED);
 		submit_bio_noacct(bio);
+#endif
+	}
 
 	if (diff_io->is_sync_io)
 		wait_for_completion_io(&diff_io->notify.sync.completion);
