@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
-#include <linux/livepatch.h>
+#include <linux/ftrace.h>
 #include <linux/sched/task.h>
 #include <linux/bio.h>
 #ifdef HAVE_GENHD_H
@@ -12,8 +12,6 @@
 
 #include "bdevfilter.h"
 #include "version.h"
-
-static struct bio_list bdev_filter_bio_list[2] = { };
 
 #if defined(BLK_SNAP_DEBUGLOG)
 #undef pr_debug
@@ -366,16 +364,13 @@ static inline bool bdev_filters_apply(struct bio *bio)
  * submit_bio_noacct_notrace() - Execute submit_bio_noacct() without handling.
  */
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-blk_qc_t notrace submit_bio_noacct_notrace(struct bio *bio)
+notrace blk_qc_t submit_bio_noacct_notrace(struct bio *bio)
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-void notrace submit_bio_noacct_notrace(struct bio *bio)
+notrace void submit_bio_noacct_notrace(struct bio *bio)
 #else
 #error "Your kernel is too old for this module."
 #endif
 {
-	if (!current->bio_list)
-		current->bio_list = bdev_filter_bio_list;
-
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 	return submit_bio_noacct(bio);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
@@ -384,20 +379,19 @@ void notrace submit_bio_noacct_notrace(struct bio *bio)
 }
 EXPORT_SYMBOL(submit_bio_noacct_notrace);
 
+static notrace __attribute__((optimize("no-optimize-sibling-calls")))
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-static blk_qc_t notrace submit_bio_noacct_handler(struct bio *bio)
+blk_qc_t submit_bio_noacct_handler(struct bio *bio)
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-static void notrace submit_bio_noacct_handler(struct bio *bio)
+void submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
-	if (!current->bio_list) {
-		if (!bdev_filters_apply(bio)) {
+	if (!bdev_filters_apply(bio)) {
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-			return BLK_QC_T_NONE;
+		return BLK_QC_T_NONE;
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-			return;
+		return;
 #endif
-		}
 	}
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
@@ -407,64 +401,61 @@ static void notrace submit_bio_noacct_handler(struct bio *bio)
 #endif
 }
 
+static notrace void ftrace_handler_submit_bio_noacct(
+	unsigned long ip, unsigned long parent_ip, struct ftrace_ops *fops,
 #ifdef HAVE_FTRACE_REGS
-static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
-			struct ftrace_ops *fops,
-			struct ftrace_regs *fregs)
+	struct ftrace_regs *fregs
 #else
-static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
-			struct ftrace_ops *fops,
-			struct pt_regs *regs)
+	struct pt_regs *regs
 #endif
+	)
 {
-	if (!current->bio_list) {
+	if (!current->bio_list && !within_module(parent_ip, THIS_MODULE)) {
 #ifdef HAVE_FTRACE_REGS
 		ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
 #else
-		regs->ip = (unsigned long)submit_bio_noacct_handler;
+		instruction_pointer_set(regs, (unsigned long)submit_bio_noacct_handler);
 #endif
-	} else if (current->bio_list == bdev_filter_bio_list) {
-		current->bio_list = NULL;
 	}
 }
 
-unsigned char* funcname_submit_bio_noacct = "submit_bio_noacct";
 static struct ftrace_ops ops_submit_bio_noacct = {
 	.func = ftrace_handler_submit_bio_noacct,
 	.flags = FTRACE_OPS_FL_DYNAMIC |
-#ifndef CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS
 		FTRACE_OPS_FL_SAVE_REGS |
-#endif
 		FTRACE_OPS_FL_IPMODIFY |
 		FTRACE_OPS_FL_PERMANENT,
 };
 
-static int __init trace_filter_init(void)
+static int __init bdevfilter_init(void)
 {
-	int ret = 0;
+	int ret;
 
-	ret = ftrace_set_filter(&ops_submit_bio_noacct, funcname_submit_bio_noacct, strlen(funcname_submit_bio_noacct), 0);
+	ret = ftrace_set_filter(&ops_submit_bio_noacct, "submit_bio_noacct", strlen("submit_bio_noacct"), 0);
 	if (ret) {
-		pr_err("Failed to set ftrace filter for function '%s' (%d)\n", funcname_submit_bio_noacct, ret);
-		goto err;
+		pr_err("Failed to set ftrace handler for function 'submit_bio_noacct'\n");
+		return ret;
 	}
 
 	ret = register_ftrace_function(&ops_submit_bio_noacct);
 	if (ret) {
 		pr_err("Failed to register ftrace handler (%d)\n", ret);
 		ftrace_set_filter(&ops_submit_bio_noacct, NULL, 0, 1);
-		goto err;
+		return ret;
 	}
 
-err:
-	return ret;
+	pr_debug("Ftrace filter for 'submit_bio_noacct' has been registered\n");
+
+	return 0;
 }
 
-static void __exit trace_filter_done(void)
+static void __exit bdevfilter_done(void)
 {
 	struct bdev_extension *ext;
 
 	unregister_ftrace_function(&ops_submit_bio_noacct);
+
+	pr_debug("Ftrace filter for 'submit_bio_noacct' has been unregistered\n");
 
 	spin_lock(&bdev_extension_list_lock);
 	while ((ext = list_first_entry_or_null(&bdev_extension_list,
@@ -475,8 +466,8 @@ static void __exit trace_filter_done(void)
 	spin_unlock(&bdev_extension_list_lock);
 }
 
-module_init(trace_filter_init);
-module_exit(trace_filter_done);
+module_init(bdevfilter_init);
+module_exit(bdevfilter_done);
 
 MODULE_DESCRIPTION("Block Device Filter kernel module");
 MODULE_VERSION(VERSION_STR);
