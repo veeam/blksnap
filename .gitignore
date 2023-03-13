@@ -1,7 +1,9 @@
 .*
+!.github
 !.gitignore
 !.editorconfig
 !.clang-format
+!.circleci
 cmake*
 CMakeCache.txt
 CMakeFiles
@@ -18,4 +20,3 @@ debian/
 *.a
 *.so
 *.ko
-sync.sh
