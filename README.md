@@ -42,6 +42,8 @@ mk.sh install
 ### How to create deb package
 ``` bash
 sudo apt install debhelper dkms
+# on debian >=12 and ubuntu >= 23.04 is needed dh-dkms, not installed anymore as dkms dep.
+sudo apt install dh-dkms
 cd ./pkg/deb
 ./build-blksnap-dkms.sh ${VERSION}
 ```
