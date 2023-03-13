@@ -14,7 +14,8 @@ shared: &shared
       - run:
             name: Install dependencies
             command: |
-                apt-get install -y g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev debhelper dkms
+                apt-get install -y g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev debhelper
+                apt-get install -y dh-dkms || apt-get install -y dkms
       - run:
             name: Build blksnap-dkms package
             working_directory: pkg/deb
