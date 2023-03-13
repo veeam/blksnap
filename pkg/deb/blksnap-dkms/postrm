@@ -1,0 +1,32 @@
+#!/bin/sh
+set -e
+
+checkModule()
+{
+	if ! lsmod | grep "$1" > /dev/null
+	then
+		return 1
+	fi
+	return 0
+}
+
+case "$1" in
+	remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear|purge)
+		if checkModule "blksnap"
+		then
+			rmmod blksnap || true
+		fi
+		if checkModule "bdevfilter"
+		then
+			echo 0 > /sys/kernel/livepatch/bdevfilter/enabled || true
+			sleep 3s
+			rmmod bdevfilter || true
+		fi
+	;;
+	*)
+		echo "prerm called with unknown argument '$1'" >&2
+		exit 1
+	;;
+esac
+
+exit 0
