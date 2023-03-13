@@ -4,6 +4,9 @@ EXTRA_CFLAGS += $(shell 							\
 	grep -qw "struct ftrace_regs" $(srctree)/include/linux/ftrace.h	&&	\
 		echo -D HAVE_FTRACE_REGS)
 EXTRA_CFLAGS += $(shell 							\
+	grep -qw "ftrace_regs_set_instruction_pointer" $(srctree)/include/linux/ftrace.h && \
+		echo -D HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
+EXTRA_CFLAGS += $(shell 							\
 	grep -qw "blk_qc_t submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&& \
 		echo -D HAVE_QC_SUBMIT_BIO_NOACCT)
 EXTRA_CFLAGS += $(shell 							\

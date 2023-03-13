@@ -411,7 +411,9 @@ static notrace void ftrace_handler_submit_bio_noacct(
 	)
 {
 	if (!current->bio_list && !within_module(parent_ip, THIS_MODULE)) {
-#ifdef HAVE_FTRACE_REGS
+#if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
+		ftrace_regs_set_instruction_pointer(fregs, (unsigned long)submit_bio_noacct_handler);
+#elif defined(HAVE_FTRACE_REGS)
 		ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
 #else
 		instruction_pointer_set(regs, (unsigned long)submit_bio_noacct_handler);
