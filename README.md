@@ -9,7 +9,7 @@
 * tests/ - Test scripts and test source codes.
 * tools/ - source files of tools for working with blksnap
 
-## kernel module blksnap
+## Kernel module
 This kernel module implements snapshot and changed block tracking functionality.
 The module is developed with the condition of simply adding it to the upstream.
 Therefore, the module is divided into two parts: bdevfilter and blksnap.
@@ -17,10 +17,12 @@ bdevfilter provides the ability to intercept I/O units (bio). The main logic
 is concentrated in blksnap. The upstream variant does not contain a bdevfilter,
 but accesses the kernel to attach and detach the block device filter.
 
+Relating the work in progress for integration in upstream kernel see the specific [README](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
+
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install gcc linux-headers
+sudo apt install gcc linux-headers-$(uname -r)
 ```
 Or installing the necessary rpm packages.
 ``` bash
@@ -35,14 +37,15 @@ In directory current directory you can found bdevfilter.ko and blksnap.ko.
 ### How to install
 ``` bash
 cd ./mobule
-mk.sh install-flt
 mk.sh install
 ```
 ### How to create deb package
 ``` bash
-sudo apt install debhelper
-cd ./pkg/deb/blksnap-dkms
-build.sh ${VERSION}
+sudo apt install debhelper dkms
+# on debian >=12 and ubuntu >= 23.04 is needed dh-dkms, not installed anymore as dkms dep.
+sudo apt install dh-dkms
+cd ./pkg/deb
+./build-blksnap-dkms.sh ${VERSION}
 ```
 ### How to create rpm package
 There are several variants, look in the ./pkg/rpm directory.

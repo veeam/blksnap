@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+include /usr/share/dpkg/pkg-info.mk
+
+PACKAGE_VERSION=$(shell grep PACKAGE_VERSION= src/dkms.conf | cut -d= -f2 | cut -d\" -f2)
+
+%:
+	dh $@ --with dkms
+
+override_dh_install:
+	dh_install src/* usr/src/blksnap-${PACKAGE_VERSION}/
+
+override_dh_dkms:
+	dh_dkms -V ${PACKAGE_VERSION} -- src/dkms.conf
+
