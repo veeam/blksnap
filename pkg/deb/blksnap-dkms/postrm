@@ -18,8 +18,6 @@ case "$1" in
 		fi
 		if checkModule "bdevfilter"
 		then
-			echo 0 > /sys/kernel/livepatch/bdevfilter/enabled || true
-			sleep 3s
 			rmmod bdevfilter || true
 		fi
 	;;
