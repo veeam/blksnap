@@ -13,6 +13,7 @@
     * [Corrupt](doc/tests/corrupt.md)
     * [Diff storage](doc/tests/diff_storage.md)
 * [Compatibility notes](#compatibility-notes)
+* [Debugging](doc/DEBUGGING.md)
 * [Contributing](CONTRIBUTING.md)
 
 ## Repository structure
