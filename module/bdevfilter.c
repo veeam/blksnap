@@ -443,21 +443,23 @@ MODULE_INFO(livepatch, "Y");
 #elif defined(CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS)
 #pragma message("ftrace filter used")
 
+static notrace void ftrace_handler_submit_bio_noacct(
+	unsigned long ip, unsigned long parent_ip, struct ftrace_ops *fops,
 #ifdef HAVE_FTRACE_REGS
-static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
-			struct ftrace_ops *fops,
-			struct ftrace_regs *fregs)
-{
-	ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
-}
+	struct ftrace_regs *fregs
 #else
-static void notrace ftrace_handler_submit_bio_noacct(unsigned long ip, unsigned long parent_ip,
-			struct ftrace_ops *fops,
-			struct pt_regs *regs)
-{
-	regs->ip = (unsigned long)submit_bio_noacct_handler;
-}
+	struct pt_regs *regs
 #endif
+	)
+{
+#if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
+	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)submit_bio_noacct_handler);
+#elif defined(HAVE_FTRACE_REGS)
+	ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
+#else
+	instruction_pointer_set(regs, (unsigned long)submit_bio_noacct_handler);
+#endif
+}
 
 unsigned char* funcname_submit_bio_noacct = "submit_bio_noacct";
 static struct ftrace_ops ops_submit_bio_noacct = {
