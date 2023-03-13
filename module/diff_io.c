@@ -13,9 +13,13 @@
 #include "log.h"
 #endif
 
-#define SECTORS_IN_PAGE (PAGE_SIZE / SECTOR_SIZE)
+#ifdef STANDALONE_BDEVFILTER
+#ifndef PAGE_SECTORS
+#define PAGE_SECTORS	(1 << (PAGE_SHIFT - SECTOR_SHIFT))
+#endif
+#endif
 
-struct bio_set diff_io_bioset = { 0 };
+struct bio_set diff_io_bioset;
 
 int diff_io_init(void)
 {
@@ -111,7 +115,7 @@ static inline bool check_page_aligned(sector_t sector)
 
 static inline unsigned short calc_page_count(sector_t sectors)
 {
-	return round_up(sectors, SECTOR_IN_PAGE) / SECTOR_IN_PAGE;
+	return round_up(sectors, PAGE_SECTORS) / PAGE_SECTORS;
 }
 
 #ifdef HAVE_BIO_MAX_PAGES
@@ -121,17 +125,24 @@ static inline unsigned int bio_max_segs(unsigned int nr_segs)
 }
 #endif
 
+/*
+ * diff_io_do() - Perform an I/O operation.
+ *
+ * Returns zero if successful. Failure is possible if the is_nowait flag is set
+ * and a failure was occured when allocating memory. In this case, the error
+ * code -EAGAIN is returned. The error code -EINVAL means that the input
+ * arguments are incorrect.
+ */
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	       struct diff_buffer *diff_buffer, const bool is_nowait)
 {
-	int ret = 0;
 	struct bio *bio;
 	struct bio_list bio_list_head = BIO_EMPTY_LIST;
 	struct page **current_page_ptr;
 	sector_t processed = 0;
 	gfp_t gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
 	unsigned int opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
-	unsigned op_flags = REQ_SYNC | REQ_IDLE | REQ_FUA;
+	unsigned op_flags = REQ_SYNC | (diff_io->is_write ? REQ_FUA : 0);
 
 	if (unlikely(!check_page_aligned(diff_region->sector))) {
 		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
@@ -153,9 +164,10 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 		portion = diff_region->count - processed;
 		nr_iovecs = calc_page_count(portion);
+
 		if (nr_iovecs > bio_max_segs(nr_iovecs)) {
 			nr_iovecs = bio_max_segs(nr_iovecs);
-			portion = nr_iovecs * SECTORS_IN_PAGE;
+			portion = nr_iovecs * PAGE_SECTORS;
 		}
 
 #ifdef HAVE_BDEV_BIO_ALLOC
@@ -164,18 +176,14 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 #else
 		bio = bio_alloc_bioset(gfp, nr_iovecs, &diff_io_bioset);
 #endif
-		if (unlikely(!bio)) {
-			ret = is_nowait ? -EAGAIN : -ENOMEM;
+		if (unlikely(!bio))
 			goto fail;
-		}
 
-#ifndef STANDALONE_BDEVFILTER
-		bio_set_flag(bio, BIO_FILTERED);
-#endif
 		bio->bi_end_io = diff_io_endio;
 		bio->bi_private = diff_io;
 		bio_set_dev(bio, diff_region->bdev);
 		bio->bi_iter.bi_sector = diff_region->sector + processed;
+
 #ifndef HAVE_BDEV_BIO_ALLOC
 		bio_set_op_attrs(bio, opf, op_flags);
 #endif
@@ -184,7 +192,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			sector_t bvec_len_sect;
 			unsigned int bvec_len;
 
-			bvec_len_sect = min_t(sector_t, SECTORS_IN_PAGE,
+			bvec_len_sect = min_t(sector_t, PAGE_SECTORS,
 					      portion - offset);
 			bvec_len =
 				(unsigned int)(bvec_len_sect << SECTOR_SHIFT);
@@ -202,32 +210,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 		processed += offset;
 	}
 
-	/* Append last sync bio to bio_list */
-	op_flags = REQ_SYNC | REQ_PREFLUSH;
-#ifdef HAVE_BDEV_BIO_ALLOC
-	bio = bio_alloc_bioset(diff_region->bdev, 0, opf | op_flags, gfp,
-			       &diff_io_bioset);
-#else
-	bio = bio_alloc_bioset(gfp, 0, &diff_io_bioset);
-
-#endif
-	if (unlikely(!bio)) {
-		ret = is_nowait ? -EAGAIN : -ENOMEM;
-		goto fail;
-
-	}
-
-	bio->bi_end_io = diff_io_endio;
-	bio->bi_private = diff_io;
-	bio_set_dev(bio, diff_region->bdev);
-	bio->bi_iter.bi_sector = 0;
-#ifndef HAVE_BDEV_BIO_ALLOC
-	bio_set_op_attrs(bio, opf, op_flags);
-#endif
-	bio_list_add(&bio_list_head, bio);
-	atomic_inc(&diff_io->bio_count);
-
-	/* sumbit all bio */
+	/* sumbit all bios */
 	while ((bio = bio_list_pop(&bio_list_head))) {
 #ifdef STANDALONE_BDEVFILTER
 		submit_bio_noacct_notrace(bio);
@@ -242,8 +225,7 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 
 	return 0;
 fail:
-	pr_err("%s failed\n", __FUNCTION__);
 	while ((bio = bio_list_pop(&bio_list_head)))
 		bio_put(bio);
-	return ret;
+	return -EAGAIN;
 }
