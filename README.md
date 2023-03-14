@@ -33,7 +33,6 @@ Copyright (C) 2022 Veeam Software Group GmbH
 
 This project use [SPDX License Identifier](https://spdx.dev/ids/) in source files header.
 
-
 ## Kernel module
 This kernel module implements snapshot and changed block tracking functionality.
 The module is developed with the condition of simply adding it to the upstream.
@@ -62,7 +61,6 @@ In directory current directory you can found bdevfilter.ko and blksnap.ko.
 ### How to install
 ``` bash
 cd ./module
-mk.sh install-flt
 mk.sh install
 ```
 ### How to create deb package
