@@ -20,89 +20,50 @@ if (NOT OPENSSL_LIBRARIES)
     message(FATAL_ERROR "openssl not found. please install libssl-dev package.")
 endif ()
 
-include_directories(${CMAKE_SOURCE_DIR}/../../include)
-set(BLKSNAP_LIBRARY "${CMAKE_SOURCE_DIR}/../../lib/libblksnap.a")
 add_subdirectory(helpers)
 
-set(CORRUPT_SRC
-    TestSector.cpp
-    corrupt.cpp
-)
+set(TESTS_LIBS blksnap-dev Helpers::Lib Boost::program_options Boost::filesystem ${LIBUUID_LIBRARY})
+
 set(TEST_CORRUPT test_corrupt)
-add_executable(${TEST_CORRUPT} ${CORRUPT_SRC})
-target_link_libraries(${TEST_CORRUPT} PRIVATE Helpers::Lib)
-target_link_libraries(${TEST_CORRUPT} PRIVATE ${BLKSNAP_LIBRARY})
-target_link_libraries(${TEST_CORRUPT} PRIVATE Boost::program_options)
-target_link_libraries(${TEST_CORRUPT} PRIVATE Boost::filesystem )
-target_link_libraries(${TEST_CORRUPT} PRIVATE ${LIBUUID_LIBRARY})
+add_executable(${TEST_CORRUPT} TestSector.cpp corrupt.cpp)
+target_link_libraries(${TEST_CORRUPT} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_CORRUPT} PRIVATE ./)
-set_target_properties(${TEST_CORRUPT}
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
-)
 
-set(CBT_SRC
-    cbt.cpp
-)
 set(TEST_CBT test_cbt)
-add_executable(${TEST_CBT} ${CBT_SRC})
-target_link_libraries(${TEST_CBT} PRIVATE Helpers::Lib)
-target_link_libraries(${TEST_CBT} PRIVATE ${BLKSNAP_LIBRARY})
-target_link_libraries(${TEST_CBT} PRIVATE Boost::program_options)
-target_link_libraries(${TEST_CBT} PRIVATE Boost::filesystem )
-target_link_libraries(${TEST_CBT} PRIVATE ${LIBUUID_LIBRARY})
+add_executable(${TEST_CBT} cbt.cpp)
+target_link_libraries(${TEST_CBT} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_CBT} PRIVATE ./)
-set_target_properties(${TEST_CBT}
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
-)
 
-set(DIFF_STORAGE_SRC
-    TestSector.cpp
-    diff_storage.cpp
-)
 set(TEST_DIFF_STORAGE test_diff_storage)
-add_executable(${TEST_DIFF_STORAGE} ${DIFF_STORAGE_SRC})
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Helpers::Lib)
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${BLKSNAP_LIBRARY})
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Boost::program_options)
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE Boost::filesystem )
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${LIBUUID_LIBRARY})
+add_executable(${TEST_DIFF_STORAGE} TestSector.cpp diff_storage.cpp)
+target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_DIFF_STORAGE} PRIVATE ./)
-set_target_properties(${TEST_DIFF_STORAGE}
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
-)
 
-set(BOUNDARY_SRC
-    TestSector.cpp
-    boundary.cpp
-)
 set(TEST_BOUNDARY test_boundary)
-add_executable(${TEST_BOUNDARY} ${BOUNDARY_SRC})
-target_link_libraries(${TEST_BOUNDARY} PRIVATE Helpers::Lib)
-target_link_libraries(${TEST_BOUNDARY} PRIVATE ${BLKSNAP_LIBRARY})
-target_link_libraries(${TEST_BOUNDARY} PRIVATE Boost::program_options)
-target_link_libraries(${TEST_BOUNDARY} PRIVATE Boost::filesystem )
-target_link_libraries(${TEST_BOUNDARY} PRIVATE ${LIBUUID_LIBRARY})
+add_executable(${TEST_BOUNDARY} TestSector.cpp boundary.cpp)
+target_link_libraries(${TEST_BOUNDARY} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_BOUNDARY} PRIVATE ./)
-set_target_properties(${TEST_BOUNDARY}
+
+set(TEST_PERFORMANCE test_performance)
+add_executable(${TEST_PERFORMANCE} performance.cpp)
+target_link_libraries(${TEST_PERFORMANCE} PRIVATE ${TESTS_LIBS})
+target_include_directories(${TEST_PERFORMANCE} PRIVATE ./)
+
+set_target_properties(${TEST_CORRUPT} ${TEST_CBT} ${TEST_DIFF_STORAGE} ${TEST_BOUNDARY} ${TEST_PERFORMANCE}
     PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../
 )
 
-set(PERFORMANCE_SRC
-    performance.cpp
+#add_custom_target(blksnap-tests DEPENDS ${TEST_CORRUPT} ${TEST_CBT} ${TEST_DIFF_STORAGE} ${TEST_BOUNDARY} ${TEST_PERFORMANCE})
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../
+        DESTINATION /opt/blksnap/tests
+        USE_SOURCE_PERMISSIONS
+        PATTERN "*.sh"
+        PATTERN "build_and_install.sh" EXCLUDE
+        PATTERN "cpp" EXCLUDE
 )
-set(TEST_PERFORMANCE test_performance)
-add_executable(${TEST_PERFORMANCE} ${PERFORMANCE_SRC})
-target_link_libraries(${TEST_PERFORMANCE} PRIVATE Helpers::Lib)
-target_link_libraries(${TEST_PERFORMANCE} PRIVATE ${BLKSNAP_LIBRARY})
-target_link_libraries(${TEST_PERFORMANCE} PRIVATE Boost::program_options)
-target_link_libraries(${TEST_PERFORMANCE} PRIVATE Boost::filesystem )
-target_link_libraries(${TEST_PERFORMANCE} PRIVATE ${LIBUUID_LIBRARY})
-target_include_directories(${TEST_PERFORMANCE} PRIVATE ./)
-set_target_properties(${TEST_PERFORMANCE}
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}../../
+
+install(TARGETS ${TEST_CORRUPT} ${TEST_CBT} ${TEST_DIFF_STORAGE} ${TEST_BOUNDARY} ${TEST_PERFORMANCE}
+        DESTINATION /opt/blksnap/tests
 )

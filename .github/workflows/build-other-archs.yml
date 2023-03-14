@@ -1,0 +1,64 @@
+name: Test build on other archs
+
+on:
+  push:
+    branches:
+      - "*"
+    paths:
+      - "include/**"
+      - "lib/**"
+      - "tests/**"
+      - "tools/**"
+  pull_request:
+    branches:
+      - "*"
+    paths:
+      - "include/**"
+      - "lib/**"
+      - "tests/**"
+      - "tools/**"
+  workflow_dispatch:
+
+jobs:
+  build_job:
+    # The host should always be linux
+    runs-on: ubuntu-18.04
+    name: ${{ matrix.arch }}
+
+    strategy:
+      matrix:
+        include:
+          - arch: aarch64
+          - arch: ppc64le
+          - arch: s390x
+          - arch: armv7
+    steps:
+      - uses: actions/checkout@v3
+      - uses: uraimo/run-on-arch-action@v2
+        name: Build
+        id: build
+        with:
+          arch: ${{ matrix.arch }}
+          distro: bullseye
+
+          # Not required, but speeds up builds
+          githubToken: ${{ github.token }}
+
+          # The shell to run commands with in the container
+          shell: /bin/sh
+
+          # Install some dependencies in the container. This speeds up builds if
+          # you are also using githubToken. Any dependencies installed here will
+          # be part of the container image that gets cached, so subsequent
+          # builds don't have to re-install them. The image layer is cached
+          # publicly in your project's package repository, so it is vital that
+          # no secrets are present in the container state or logs.
+          install: |
+            apt-get update -q -y
+            apt-get install -q -y g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
+
+          # Build blksnap-dev, blksnap-tools and blksnap-tests
+          run: |
+            cmake .
+            make
+

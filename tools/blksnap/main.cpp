@@ -796,7 +796,7 @@ private:
             fs::remove(filepath);
         filename = filepath.string();
 
-        fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);
+        fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, 0600);
         if (fd < 0)
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create file for diff storage.");
         m_allocated_sectFiles.push_back(filename);

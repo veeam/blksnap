@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
-if [ -f "/usr/bin/blksnap" ]
+if [ -f "/usr/bin/blksnap" ] || [ -f "/usr/sbin/blksnap" ]
 then
 	BLKSNAP=blksnap
 else
-	BLKSNAP="$(cd ../; pwd)/tools/blksnap/bin/blksnap"
+	BLKSNAP="$(cd ../; pwd)/tools/blksnap/blksnap"
 fi
 
 ID=""
