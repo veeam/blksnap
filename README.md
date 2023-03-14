@@ -61,7 +61,6 @@ In directory current directory you can found bdevfilter.ko and blksnap.ko.
 ### How to install
 ``` bash
 cd ./module
-mk.sh install-flt
 mk.sh install
 ```
 ### How to create deb package
