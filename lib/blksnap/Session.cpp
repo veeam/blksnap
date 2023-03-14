@@ -204,7 +204,7 @@ namespace
 
     static void FallocateStorage(const std::string& filename, const off_t filesize)
     {
-        int fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);
+        int fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, 0600);
         if (fd < 0)
             throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create file for diff storage.");
 

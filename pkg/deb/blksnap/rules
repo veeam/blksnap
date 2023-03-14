@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+include /usr/share/dpkg/default.mk
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+CFLAGS+=$(CPPFLAGS)
+CXXFLAGS+=$(CPPFLAGS)
+
+
+DEB_CMAKE_EXTRA_FLAGS = \
+	-DCMAKE_INSTALL_PREFIX=/usr \
+	-DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(DEB_CMAKE_EXTRA_FLAGS)
+
