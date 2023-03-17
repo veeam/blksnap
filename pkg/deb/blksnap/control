@@ -4,13 +4,7 @@ Priority: optional
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
 Build-Depends:
  bash,
- cmake,
  debhelper (>= 9.0.0),
- g++,
- libboost-filesystem-dev,
- libboost-program-options-dev,
- libssl-dev,
- uuid-dev,
 Homepage: https://github.org/veeam/blksnap
 
 Package: blksnap-dev
