@@ -10,7 +10,7 @@ fi
 CURR_DIR=$(pwd)
 cd "../../"
 ROOT_DIR=$(pwd)
-BUILD_DIR=${ROOT_DIR}"/build"
+BUILD_DIR=${ROOT_DIR}"/build/pkg"
 
 # recreate build directory
 rm -rf ${BUILD_DIR}
