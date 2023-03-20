@@ -124,6 +124,7 @@ module_init(blk_snap_init);
 module_exit(blk_snap_exit);
 
 int tracking_block_minimum_shift = CONFIG_BLK_SNAP_TRACKING_BLOCK_MINIMUM_SHIFT;
+int tracking_block_maximum_shift = 26; /* 2^26=64MiB - upper limit for a CBT block size */
 int tracking_block_maximum_count = CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT;
 int chunk_minimum_shift = CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT;
 int chunk_maximum_shift = 26; /* 2^26=64MiB - upper limit for a chunk size */
