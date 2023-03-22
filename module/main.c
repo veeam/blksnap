@@ -137,6 +137,10 @@ module_param_named(tracking_block_minimum_shift, tracking_block_minimum_shift,
 		   int, 0644);
 MODULE_PARM_DESC(tracking_block_minimum_shift,
 		 "The power of 2 for minimum trackings block size");
+module_param_named(tracking_block_maximum_shift, tracking_block_maximum_shift,
+		   int, 0644);
+MODULE_PARM_DESC(tracking_block_maximum_shift,
+		 "The power of 2 for maximum trackings block size");
 module_param_named(tracking_block_maximum_count, tracking_block_maximum_count,
 		   int, 0644);
 MODULE_PARM_DESC(tracking_block_maximum_count,
