@@ -251,21 +251,6 @@ def TryUnloadModules():
 			print("Failed to unload blksnap. {0}".format(ex))
 			return False
 
-	if os.path.exists("/sys/kernel/livepatch/bdevfilter"):
-		try:
-			ExecuteCommand("echo 0 > /sys/kernel/livepatch/bdevfilter/enabled")
-		except Exception as ex:
-			print("Failed to disable bdevfilter. {0}".format(ex))
-			return False
-
-	cnt = 0
-	while os.path.exists("/sys/kernel/livepatch/bdevfilter"):
-		time.sleep(1)
-		cnt+=1
-		if cnt > 10:
-			print("bdevfilter cannot be disabled.")
-			return False
-
 	TryExecuteCommand("rmmod bdevfilter")
 
 	return True
@@ -275,14 +260,7 @@ def TryLoadBdevFilter(modulePath):
 
 	CheckModuleExist(modulePath)
 
-	if os.path.isfile("/sys/kernel/livepatch/bdevfilter/enabled"):
-		UnloadModule();
-
 	cmd = "insmod " + modulePath
-	for param in params:
-		cmd += " "
-		cmd += param
-
 	ExecuteCommand(cmd)
 
 def TryLoadBlksnap(modulePath, params):
