@@ -54,7 +54,7 @@ blksnap_snapshot_create()
 	echo "New snapshot ${ID} was created"
 }
 
-blksnap_snapshot_append()
+blksnap_snapshot_appendstorage()
 {
 	local FILE=$1
 
