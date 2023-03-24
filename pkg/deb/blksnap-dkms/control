@@ -6,7 +6,7 @@ Build-Depends: debhelper (>= 9.0.0), dh-dkms | dkms
 Homepage: https://github.org/veeam/blksnap
 Testsuite: autopkgtest-pkg-dkms
 
-Package: blksnap
+Package: blksnap-dkms
 Architecture: all
 Depends: dkms, ${shlibs:Depends}, ${misc:Depends}
 Conflicts: veeamsnap
