@@ -74,7 +74,7 @@ do
 	echo "Itearation: ${ITERATOR}"
 
 	blksnap_snapshot_create ${DEVICE}
-	blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
+	blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
 	blksnap_snapshot_take
 
 	#echo "Finita le comedy"
