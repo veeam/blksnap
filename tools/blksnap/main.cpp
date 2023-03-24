@@ -209,7 +209,7 @@ public:
     IArgsProc()
     {
         m_desc.add_options()
-            ("help,h", "[TBD]Print usage for command.");
+            ("help,h", "Print usage for command.");
     };
     virtual ~IArgsProc(){};
     virtual void PrintUsage() const
@@ -249,13 +249,13 @@ public:
     VersionArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Print " BLK_SNAP_MODULE_NAME " module version.");
+        m_usage = std::string("Print " BLK_SNAP_MODULE_NAME " module version.");
         m_desc.add_options()
 #ifdef BLK_SNAP_MODIFICATION
-          ("modification,m", "[TBD]Print module modification name.")
-          ("compatibility,c", "[TBD]Print compatibility flag value in decimal form.")
+          ("modification,m", "Print module modification name.")
+          ("compatibility,c", "Print compatibility flag value in decimal form.")
 #endif
-          ("json,j", "[TBD]Use json format for output.");
+          ("json,j", "Use json format for output.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -302,9 +302,9 @@ public:
     TrackerRemoveArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Remove block device from change tracking.");
+        m_usage = std::string("Remove block device from change tracking.");
         m_desc.add_options()
-            ("device,d", po::value<std::string>(), "[TBD]Device name.");
+            ("device,d", po::value<std::string>(), "Device name.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -329,9 +329,9 @@ public:
     TrackerCollectArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Collect block devices with change tracking.");
+        m_usage = std::string("Collect block devices with change tracking.");
         m_desc.add_options()
-            ("json,j", "[TBD]Use json format for output.");
+            ("json,j", "Use json format for output.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -342,14 +342,14 @@ public:
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(),
-                                    "[TBD]Failed to collect block devices with change tracking.");
+                                    "Failed to collect block devices with change tracking.");
 
         cbtInfoVector.resize(param.count);
         param.cbt_info_array = cbtInfoVector.data();
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(),
-                                    "[TBD]Failed to collect block devices with change tracking.");
+                                    "Failed to collect block devices with change tracking.");
 
         if (vm.count("json"))
             throw std::invalid_argument("Argument 'json' is not supported yet.");
@@ -379,11 +379,11 @@ public:
     TrackerReadCbtMapArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Read change tracking map.");
+        m_usage = std::string("Read change tracking map.");
         m_desc.add_options()
-            ("device,d", po::value<std::string>(), "[TBD]Device name.")
-            ("file,f", po::value<std::string>(), "[TBD]File name for output.")
-            ("json,j", "[TBD]Use json format for output.");
+            ("device,d", po::value<std::string>(), "Device name.")
+            ("file,f", po::value<std::string>(), "File name for output.")
+            ("json,j", "Use json format for output.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -415,7 +415,7 @@ public:
             ret = ::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_READ_CBT_MAP, &param);
             if (ret < 0)
                 throw std::system_error(errno, std::generic_category(),
-                                        "[TBD]Failed to read map of difference from change tracking.");
+                                        "Failed to read map of difference from change tracking.");
             if (ret > 0)
             {
                 output.write((char*)param.buff, ret);
@@ -433,11 +433,11 @@ public:
     TrackerMarkDirtyBlockArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Mark blocks as changed in change tracking map.");
+        m_usage = std::string("Mark blocks as changed in change tracking map.");
         m_desc.add_options()
-            ("file,f", po::value<std::string>(), "[TBD]File name with dirty blocks.")
-            ("device,d", po::value<std::string>(), "[TBD]Device name.")
-            ("ranges,r", po::value<std::vector<std::string>>()->multitoken(), "[TBD]Sectors range in format 'sector:count'. It's multitoken argument.");
+            ("file,f", po::value<std::string>(), "File name with dirty blocks.")
+            ("device,d", po::value<std::string>(), "Device name.")
+            ("ranges,r", po::value<std::vector<std::string>>()->multitoken(), "Sectors range in format 'sector:count'. It's multitoken argument.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -467,7 +467,7 @@ public:
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_TRACKER_MARK_DIRTY_BLOCKS, &param))
             throw std::system_error(errno, std::generic_category(),
-                                    "[TBD]Failed to mark dirty blocks in change tracking map.");
+                                    "Failed to mark dirty blocks in change tracking map.");
     }
 };
 
@@ -477,9 +477,9 @@ public:
     SnapshotCreateArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Create snapshot object structure.");
+        m_usage = std::string("Create snapshot object structure.");
         m_desc.add_options()
-            ("device,d", po::value<std::vector<std::string>>()->multitoken(), "[TBD]Device for snapshot. It's multitoken argument.");
+            ("device,d", po::value<std::vector<std::string>>()->multitoken(), "Device for snapshot. It's multitoken argument.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -497,7 +497,7 @@ public:
         param.dev_id_array = devices.data();
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_CREATE, &param))
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create snapshot object.");
+            throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
 
         char idStr[64];
         uuid_unparse(param.id, idStr);
@@ -512,9 +512,9 @@ public:
     SnapshotDestroyArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Release snapshot and destroy snapshot object.");
+        m_usage = std::string("Release snapshot and destroy snapshot object.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.");
+            ("id,i", po::value<std::string>(), "Snapshot uuid.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -529,7 +529,7 @@ public:
         uuid_copy(param.id, id.Get());
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_DESTROY, &param))
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to destroy snapshot.");
+            throw std::system_error(errno, std::generic_category(), "Failed to destroy snapshot.");
     };
 };
 
@@ -539,12 +539,12 @@ public:
     SnapshotAppendStorageArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Append space in difference storage for snapshot.");
+        m_usage = std::string("Append space in difference storage for snapshot.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
-            ("device,d", po::value<std::string>(), "[TBD]Device name.")
-            ("range,r", po::value<std::vector<std::string>>()->multitoken(), "[TBD]Sectors range in format 'sector:count'. It's multitoken argument.")
-            ("file,f", po::value<std::string>(), "[TBD]File for diff storage instead --device.");
+            ("id,i", po::value<std::string>(), "Snapshot uuid.")
+            ("device,d", po::value<std::string>(), "Device name.")
+            ("range,r", po::value<std::vector<std::string>>()->multitoken(), "Sectors range in format 'sector:count'. It's multitoken argument.")
+            ("file,f", po::value<std::string>(), "File for diff storage instead --device.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -577,7 +577,7 @@ public:
         param.count = ranges.size();
         param.ranges = ranges.data();
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to append storage for snapshot.");
+            throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot.");
     };
 };
 
@@ -587,9 +587,9 @@ public:
     SnapshotTakeArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Take snapshot.");
+        m_usage = std::string("Take snapshot.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.");
+            ("id,i", po::value<std::string>(), "Snapshot uuid.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -604,7 +604,7 @@ public:
         uuid_copy(param.id, id.Get());
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_TAKE, &param))
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to take snapshot.");
+            throw std::system_error(errno, std::generic_category(), "Failed to take snapshot.");
     };
 };
 
@@ -614,11 +614,11 @@ public:
     SnapshotWaitEventArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Wait and read event from snapshot.");
+        m_usage = std::string("Wait and read event from snapshot.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
-            ("timeout,t", po::value<std::string>(), "[TBD]The allowed waiting time for the event in milliseconds.")
-            ("json,j", "[TBD]Use json format for output.");
+            ("id,i", po::value<std::string>(), "Snapshot uuid.")
+            ("timeout,t", po::value<std::string>(), "The allowed waiting time for the event in milliseconds.")
+            ("json,j", "Use json format for output.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -693,7 +693,7 @@ private:
         struct blk_snap_snapshot_collect param = {0};
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get list of active snapshots.");
+            throw std::system_error(errno, std::generic_category(), "Failed to get list of active snapshots.");
 
         if (param.count == 0)
             return;
@@ -702,7 +702,7 @@ private:
         param.ids = id_array.data();
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT, &param))
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get list of snapshots.");
+            throw std::system_error(errno, std::generic_category(), "Failed to get list of snapshots.");
 
         for (int inx = 0; inx < param.count; inx++)
             ids.emplace_back(id_array[inx]);
@@ -715,7 +715,7 @@ private:
         uuid_copy(param.id, id.Get());
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
             throw std::system_error(errno, std::generic_category(),
-                                    "[TBD]Failed to get device collection for snapshot images.");
+                                    "Failed to get device collection for snapshot images.");
 
         if (param.count == 0)
             return;
@@ -725,17 +725,17 @@ private:
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_COLLECT_IMAGES, &param))
             throw std::system_error(errno, std::generic_category(),
-                                    "[TBD]Failed to get device collection for snapshot images.");
+                                    "Failed to get device collection for snapshot images.");
     };
 
 public:
     SnapshotCollectArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Get collection of devices and his snapshot images.");
+        m_usage = std::string("Get collection of devices and his snapshot images.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "[TBD]Optional parameter snapshot uuid.")
-            ("json,j", "[TBD]Use json format for output.");
+            ("id,i", po::value<std::string>(), "Optional parameter snapshot uuid.")
+            ("json,j", "Use json format for output.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -804,7 +804,7 @@ private:
 
         fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, 0600);
         if (fd < 0)
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create file for diff storage.");
+            throw std::system_error(errno, std::generic_category(), "Failed to create file for diff storage.");
         m_allocated_sectFiles.push_back(filename);
 
         if (::fallocate64(fd, 0, 0, data->requested_nr_sect * SECTOR_SIZE))
@@ -812,7 +812,7 @@ private:
             int err = errno;
 
             ::close(fd);
-            throw std::system_error(err, std::generic_category(), "[TBD]Failed to allocate file for diff storage.");
+            throw std::system_error(err, std::generic_category(), "Failed to allocate file for diff storage.");
         }
         ::close(fd);
         m_allocated_sect += data->requested_nr_sect;
@@ -828,7 +828,7 @@ private:
         param.ranges = ranges.data();
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLK_SNAP_SNAPSHOT_APPEND_STORAGE, &param))
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to append storage for snapshot.");
+            throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot.");
     };
 
     void ProcessEventCorrupted(unsigned int time_label, struct blk_snap_event_corrupted* data)
@@ -841,11 +841,11 @@ public:
     StretchSnapshotArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("[TBD]Start stretch snapshot service.");
+        m_usage = std::string("Start stretch snapshot service.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "[TBD]Snapshot uuid.")
-            ("path,p", po::value<std::string>(), "[TBD]Path for diff storage files.")
-            ("limit,l", po::value<unsigned int>(), "[TBD]Available diff storage size in MiB.");
+            ("id,i", po::value<std::string>(), "Snapshot uuid.")
+            ("path,p", po::value<std::string>(), "Path for diff storage files.")
+            ("limit,l", po::value<unsigned int>(), "Available diff storage size in MiB.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -884,7 +884,7 @@ public:
                     if ((err == ENOENT) || (err == EINTR))
                         continue;
 
-                    throw std::system_error(err, std::generic_category(), "[TBD]Failed to get event from snapshot.");
+                    throw std::system_error(err, std::generic_category(), "Failed to get event from snapshot.");
                 }
 
                 switch (param.code)
@@ -1010,7 +1010,7 @@ static std::map<std::string, std::shared_ptr<IArgsProc>> argsProcMap{
 
 static void printUsage()
 {
-    std::cout << "[TBD]Usage:" << std::endl;
+    std::cout << "Usage:" << std::endl;
     std::cout << "--help, -h or help:" << std::endl;
     std::cout << "\tPrint this usage." << std::endl;
     std::cout << "<command> [arguments]:" << std::endl;
@@ -1027,7 +1027,7 @@ static void printUsage()
 static void process(int argc, char** argv)
 {
     if (argc < 2)
-        throw std::runtime_error("[TBD]Command not found.");
+        throw std::runtime_error("Command not found.");
 
     std::string commandName(argv[1]);
 
