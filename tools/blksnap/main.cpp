@@ -652,8 +652,14 @@ public:
 
                 std::cout << "result=interrupted" << std::endl;
             }
-            else
-                throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get event from snapshot.");
+            else if (errno == ESRCH)
+            {
+                if (vm.count("json"))
+                    throw std::invalid_argument("Argument 'json' is not supported yet.");
+
+                std::cout << "result=not found" << std::endl;
+            } else
+                throw std::system_error(errno, std::generic_category(), "Failed to get event from snapshot.");
         }
         else
         {
@@ -899,6 +905,14 @@ public:
                 if (::remove(filename.c_str()))
                     std::cout << "Failed to cleanup diff storage file \"" << filename << "\". " << std::strerror(errno)
                               << std::endl;
+        }
+        catch (std::system_error& ex){
+            if (ex.code() == std::error_code(ESRCH, std::generic_category()))
+                std::cout << "The snapshot no longer exists." << std::endl;
+            else {
+                std::cerr << ex.what() << std::endl;
+                throw std::runtime_error("Stretch snapshot service failed.");
+            }
         }
         catch (std::exception& ex)
         {
