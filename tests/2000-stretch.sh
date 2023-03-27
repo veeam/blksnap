@@ -84,6 +84,7 @@ blksnap_snapshot_destroy
 
 echo "Destroy first device"
 #echo "press..."
+blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}

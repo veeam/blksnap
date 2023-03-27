@@ -103,7 +103,7 @@ cmp -l ${TESTDIR}/cbt3.map ${TESTDIR}/cbt3_.map 2>&1
 set -e
 
 echo "Destroy first device"
-
+blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}

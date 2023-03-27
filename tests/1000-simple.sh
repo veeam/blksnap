@@ -116,11 +116,13 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 check_files ${MOUNTPOINT_1}
 
 echo "Destroy second device"
+blksnap_detach ${DEVICE_2}
 umount ${MOUNTPOINT_2}
 loop_device_detach ${DEVICE_2}
 imagefile_cleanup ${IMAGEFILE_2}
 
 echo "Destroy first device"
+blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
