@@ -65,8 +65,6 @@ umount ${IMAGE}
 echo "Destroy snapshot"
 blksnap_snapshot_destroy
 
-blksnap_detach ${DEVICE}
-
 blksnap_stretch_wait
 
 blksnap_unload
