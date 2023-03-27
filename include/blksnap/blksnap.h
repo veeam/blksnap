@@ -21,6 +21,37 @@
 
 #include <linux/types.h>
 #include <linux/fs.h>
+#if 0
+#include <linux/blk-filter.h>
+#else
+#define BLKFILTER_ATTACH        _IOWR(0x12, 140, struct blkfilter_name)
+#define BLKFILTER_DETACH        _IOWR(0x12, 141, struct blkfilter_name)
+#define BLKFILTER_CTL           _IOWR(0x12, 142, struct blkfilter_ctl)
+
+#define _UAPI_LINUX_BLK_FILTER_H
+
+#define BLKFILTER_NAME_LENGTH   32
+
+struct blkfilter_name {
+        __u8 name[BLKFILTER_NAME_LENGTH];
+};
+
+/**
+ * struct blkfilter_ctl - parameter for BLKFILTER ioctl
+ *
+ * @name:       Name of block device filter.
+ * @cmd:        Command code opcode (BLKFILTER_CMD_*)
+ * @optlen:     Size of data at @opt
+ * @opt:        userspace buffer with options
+ */
+struct blkfilter_ctl {
+        __u8 name[BLKFILTER_NAME_LENGTH];
+        __u32 cmd;
+        __u32 optlen;
+        __u64 opt;
+};
+
+#endif
 
 #define BLKSNAP_CTL "blksnap-control"
 #define BLKSNAP_IMAGE_NAME "blksnap-image"
@@ -30,45 +61,11 @@
 #define IOCTL_MOD 32
 #endif
 
-#ifndef BLKFILTER
-/*
- * Should be in fs.h
- */
-
-/**
- *
- *
- */
-enum {
-	BLKFILTER_CMD_ATTACH,
-	BLKFILTER_CMD_DETACH,
-	BLKFILTER_CMD_CTL,
-};
-
-#define BLKFILTER_NAME_LENGTH   32
-
-/**
- *
- *
- */
-struct blkfilter_ctl {
-	__s8 name[BLKFILTER_NAME_LENGTH];
-	__u32 cmd;
-	__u32 optlen;
-	void *opt;
-};
-
-/**
- * BLKFILTER -
- */
-#define BLKFILTER _IOWR(0x12, 129, struct blkfilter_ctl)
-#endif
-
 /**
  * DOC: Block filter interface.
  *
  * Control commands that are transmitted through the block device filter interface.
- * See: include/uapi/fs.h#BLKFILTER
+ * See: include/uapi/linux/fs.h and include/uapi/linux/blk-filter.h
  */
 
 enum blkfilter_ctl_blksnap {

@@ -47,14 +47,11 @@ CTrackerCtl::~CTrackerCtl()
 
 bool CTrackerCtl::Attach()
 {
-    struct blkfilter_ctl ctl = {
+    struct blkfilter_name name = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = BLKFILTER_CMD_ATTACH,
-        .optlen = 0,
-        .opt = nullptr,
     };
 
-    if (::ioctl(m_fd, BLKFILTER, &ctl) < 0) {
+    if (::ioctl(m_fd, BLKFILTER_ATTACH, &name) < 0) {
         if (errno == EALREADY)
             return false;
         else
@@ -65,14 +62,11 @@ bool CTrackerCtl::Attach()
 }
 void CTrackerCtl::Detach()
 {
-    struct blkfilter_ctl ctl = {
+    struct blkfilter_name name = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = BLKFILTER_CMD_DETACH,
-        .optlen = 0,
-        .opt = nullptr,
     };
 
-    if (::ioctl(m_fd, BLKFILTER, &ctl) < 0)
+    if (::ioctl(m_fd, BLKFILTER_DETACH, &name) < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to detach 'blksnap' filter.");
 
@@ -82,12 +76,12 @@ void CTrackerCtl::CbtInfo(struct blksnap_cbtinfo& cbtInfo)
 {
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = BLKFILTER_CMD_CTL + blkfilter_ctl_blksnap_cbtinfo,
+        .cmd = blkfilter_ctl_blksnap_cbtinfo,
         .optlen = sizeof(cbtInfo),
-        .opt = &cbtInfo,
+        .opt = (__u64)&cbtInfo,
     };
 
-    if (::ioctl(m_fd, BLKFILTER, &ctl) < 0)
+    if (::ioctl(m_fd, BLKFILTER_CTL, &ctl) < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to get CBT information.");
 }
@@ -99,12 +93,12 @@ void CTrackerCtl::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* 
     };
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = BLKFILTER_CMD_CTL + blkfilter_ctl_blksnap_cbtmap,
+        .cmd = blkfilter_ctl_blksnap_cbtmap,
         .optlen = sizeof(arg),
-        .opt = &arg,
+        .opt = (__u64)&arg,
     };
 
-    if (::ioctl(m_fd, BLKFILTER, &ctl) < 0)
+    if (::ioctl(m_fd, BLKFILTER_CTL, &ctl) < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to read CBT map.");
 
@@ -117,12 +111,12 @@ void CTrackerCtl::MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges)
     };
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = BLKFILTER_CMD_CTL + blkfilter_ctl_blksnap_cbtdirty,
+        .cmd = blkfilter_ctl_blksnap_cbtdirty,
         .optlen = sizeof(arg),
-        .opt = &arg,
+        .opt = (__u64)&arg,
     };
 
-    if (::ioctl(m_fd, BLKFILTER, &ctl) < 0)
+    if (::ioctl(m_fd, BLKFILTER_CTL, &ctl) < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to mark block as 'dirty' in CBT map.");
 }
@@ -133,12 +127,12 @@ void CTrackerCtl::SnapshotAdd(const uuid_t& id)
 
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = BLKFILTER_CMD_CTL + blkfilter_ctl_blksnap_snapshotadd,
+        .cmd = blkfilter_ctl_blksnap_snapshotadd,
         .optlen = sizeof(arg),
-        .opt = &arg,
+        .opt = (__u64)&arg,
     };
 
-    if (::ioctl(m_fd, BLKFILTER, &ctl) < 0)
+    if (::ioctl(m_fd, BLKFILTER_CTL, &ctl) < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to add device to snapshot.");
 }
@@ -146,12 +140,12 @@ void CTrackerCtl::SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo)
 {
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = BLKFILTER_CMD_CTL + blkfilter_ctl_blksnap_snapshotinfo,
+        .cmd = blkfilter_ctl_blksnap_snapshotinfo,
         .optlen = sizeof(snapshotinfo),
-        .opt = &snapshotinfo,
+        .opt = (__u64)&snapshotinfo,
     };
 
-    if (::ioctl(m_fd, BLKFILTER, &ctl) < 0)
+    if (::ioctl(m_fd, BLKFILTER_CTL, &ctl) < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to get snapshot information.");
 }

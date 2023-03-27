@@ -137,16 +137,13 @@ namespace
 
         bool Attach()
         {
-            struct blkfilter_ctl ctl = {
+            struct blkfilter_name name = {
                 .name = {'b','l','k','s','n','a','p', '\0'},
-                .cmd = BLKFILTER_CMD_ATTACH,
-                .optlen = 0,
-                .opt = nullptr,
             };
 
             try
             {
-                deviceCtl.Ioctl(BLKFILTER, &ctl);
+                deviceCtl.Ioctl(BLKFILTER_ATTACH, &name);
             }
             catch (std::system_error &ex)
             {
@@ -161,16 +158,13 @@ namespace
 
         void Detach()
         {
-            struct blkfilter_ctl ctl = {
+            struct blkfilter_ctl name = {
                 .name = {'b','l','k','s','n','a','p', '\0'},
-                .cmd = BLKFILTER_CMD_DETACH,
-                .optlen = 0,
-                .opt = nullptr,
             };
 
             try
             {
-                deviceCtl.Ioctl(BLKFILTER, &ctl);
+                deviceCtl.Ioctl(BLKFILTER_DETACH, &name);
             }
             catch (std::exception &ex)
             {
@@ -183,12 +177,12 @@ namespace
         {
             struct blkfilter_ctl ctl = {
                 .name = {'b','l','k','s','n','a','p', '\0'},
-                .cmd = BLKFILTER_CMD_CTL + cmd,
+                .cmd = cmd,
                 .optlen = len,
-                .opt = buf,
+                .opt = (__u64)buf,
             };
 
-            deviceCtl.Ioctl(BLKFILTER, &ctl);
+            deviceCtl.Ioctl(BLKFILTER_CTL, &ctl);
 
             return ctl.optlen;
         };
