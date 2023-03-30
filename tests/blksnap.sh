@@ -10,6 +10,30 @@ else
 fi
 
 ID=""
+BLKSNAP_FILENAME=$(modinfo --field filename blksnap)
+STRETCH_PROCESS_PID=""
+
+blksnap_load()
+{
+	if [ ${BLKSNAP_FILENAME} = "(builtin)" ]
+	then
+		return
+	fi
+
+	modprobe blksnap $1
+	sleep 2s
+}
+
+blksnap_unload()
+{
+	if [ ${BLKSNAP_FILENAME} = "(builtin)" ]
+	then
+		return
+	fi
+
+	echo "Unload module"
+	modprobe -r blksnap 2>&1 || sleep 1 && modprobe -r blksnap && echo "Unload success"
+}
 
 blksnap_version()
 {
@@ -30,7 +54,7 @@ blksnap_snapshot_create()
 	echo "New snapshot ${ID} was created"
 }
 
-blksnap_snapshot_append()
+blksnap_snapshot_appendstorage()
 {
 	local FILE=$1
 
@@ -103,4 +127,14 @@ blksnap_stretch_snapshot()
 	local LIMIT_MB=$2
 
 	${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE_PATH} --limit=${LIMIT_MB} &
+	STRETCH_PROCESS_PID=$!
+
+	echo "Waiting for creating first portion"
+	sleep 2s
+}
+
+blksnap_stretch_wait()
+{
+	echo "Waiting for streach process terminate"
+	wait ${STRETCH_PROCESS_PID}
 }

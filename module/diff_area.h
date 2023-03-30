@@ -120,6 +120,11 @@ struct diff_area {
 
 	atomic_t corrupt_flag;
 	atomic_t pending_io_count;
+
+#ifdef STANDALONE_BDEVFILTER
+	atomic64_t stat_processed;
+	atomic64_t stat_copied;
+#endif
 };
 
 struct diff_area *diff_area_new(dev_t dev_id,
@@ -147,7 +152,7 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 		   const bool is_nowait);
 
 int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
-                   const bool is_nowait);
+		   const bool is_nowait);
 /**
  * struct diff_area_image_ctx - The context for processing an io request to
  *	the snapshot image.

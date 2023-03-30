@@ -123,6 +123,14 @@ void diff_area_free(struct kref *kref)
 		chunk_free(chunk);
 	xa_destroy(&diff_area->chunk_map);
 
+#ifdef STANDALONE_BDEVFILTER
+	pr_info("Difference area statistic for device [%d:%d]\n",
+		MAJOR(diff_area->orig_bdev->bd_dev),
+		MINOR(diff_area->orig_bdev->bd_dev));
+	pr_info("%llu MiB was processed\n", atomic64_read(&diff_area->stat_processed) >> (20 - SECTOR_SHIFT));
+	pr_info("%llu MiB was copied\n", atomic64_read(&diff_area->stat_copied) >> (20 - SECTOR_SHIFT));
+#endif
+
 	if (diff_area->orig_bdev) {
 		blkdev_put(diff_area->orig_bdev, FMODE_READ | FMODE_WRITE);
 		diff_area->orig_bdev = NULL;
@@ -325,6 +333,11 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	atomic_set(&diff_area->corrupt_flag, 0);
 	atomic_set(&diff_area->pending_io_count, 0);
 
+#ifdef STANDALONE_BDEVFILTER
+	atomic64_set(&diff_area->stat_processed, 0);
+	atomic64_set(&diff_area->stat_copied, 0);
+#endif
+
 	/**
 	 * Allocating all chunks in advance allows to avoid doing this in
 	 * the process of filtering bio.
@@ -396,6 +409,9 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 	sector_t area_sect_first;
 	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
 
+#ifdef STANDALONE_BDEVFILTER
+	atomic64_add(count, &diff_area->stat_processed);
+#endif
 	area_sect_first = round_down(sector, chunk_sectors);
 	for (offset = area_sect_first; offset < (sector + count);
 	     offset += chunk_sectors) {
@@ -453,6 +469,9 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 			WARN(chunk->diff_buffer, "Chunks buffer has been lost");
 			chunk->diff_buffer = diff_buffer;
 
+#ifdef STANDALONE_BDEVFILTER
+			atomic64_add(chunk->sector_count, &diff_area->stat_copied);
+#endif
 			ret = chunk_async_load_orig(chunk, is_nowait);
 			if (unlikely(ret))
 				goto fail_unlock_chunk;

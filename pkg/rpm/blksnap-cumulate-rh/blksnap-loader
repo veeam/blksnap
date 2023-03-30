@@ -66,7 +66,10 @@ class CKernelVersion:
 		if not isinstance(other,CKernelVersion):
 			return NotImplemented
 
-		return ((self._revisionString == other._revisionString) and (self._patchNumbers[0] == other._patchNumbers[0]) and self.IsSameFlavour(other))
+		return ((self._revisionString == other._revisionString) and
+			(self._patchNumbers[0] == other._patchNumbers[0]) and
+			self.IsSameFlavour(other) and
+			self > other)
 
 	def IsUek(self):
 		result = self._revisionString+"-"+str(self._patchNumbers[0])
@@ -210,7 +213,7 @@ def FindSameReleaseModule(kver, moduleNames):
 		return NotImplemented
 
 	modulesList = EnumerateAvaildableKernels(moduleNames)
-	modulesList = sorted(modulesList, key=lambda CKernelModule: CKernelModule._kernelVersion, reverse=False)
+	modulesList = sorted(modulesList, key=lambda CKernelModule: CKernelModule._kernelVersion, reverse=True)
 
 	print("Kmod binaries were found:")
 	for module in modulesList:
@@ -251,21 +254,6 @@ def TryUnloadModules():
 			print("Failed to unload blksnap. {0}".format(ex))
 			return False
 
-	if os.path.exists("/sys/kernel/livepatch/bdevfilter"):
-		try:
-			ExecuteCommand("echo 0 > /sys/kernel/livepatch/bdevfilter/enabled")
-		except Exception as ex:
-			print("Failed to disable bdevfilter. {0}".format(ex))
-			return False
-
-	cnt = 0
-	while os.path.exists("/sys/kernel/livepatch/bdevfilter"):
-		time.sleep(1)
-		cnt+=1
-		if cnt > 10:
-			print("bdevfilter cannot be disabled.")
-			return False
-
 	TryExecuteCommand("rmmod bdevfilter")
 
 	return True
@@ -275,14 +263,7 @@ def TryLoadBdevFilter(modulePath):
 
 	CheckModuleExist(modulePath)
 
-	if os.path.isfile("/sys/kernel/livepatch/bdevfilter/enabled"):
-		UnloadModule();
-
 	cmd = "insmod " + modulePath
-	for param in params:
-		cmd += " "
-		cmd += param
-
 	ExecuteCommand(cmd)
 
 def TryLoadBlksnap(modulePath, params):

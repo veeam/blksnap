@@ -38,7 +38,7 @@ blksnap_snapshot_create "${DEVICE}"
 DIFF_STORAGE=${DIFF_STORAGE}/diff_storage0
 rm -f ${DIFF_STORAGE}/diff_storage0
 fallocate --length ${DIFF_STORAGE_SIZE} ${DIFF_STORAGE}
-blksnap_snapshot_append ${DIFF_STORAGE}
+blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 
 blksnap_snapshot_take
 echo "Snapshot was token"

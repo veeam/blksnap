@@ -17,8 +17,7 @@ echo "Diff storage directory ${DIFF_STORAGE_DIR}"
 echo "---"
 echo "Simple test start"
 
-modprobe blksnap
-sleep 2s
+blksnap_load
 
 # check module is ready
 blksnap_version
@@ -59,7 +58,7 @@ mount ${DEVICE_2} ${MOUNTPOINT_2}
 generate_files ${MOUNTPOINT_1} "before" 9
 drop_cache
 
-echo "Block device prepared, press ..."
+#echo "Block device prepared, press ..."
 #read -n 1
 
 blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
@@ -67,14 +66,12 @@ blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
 DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage0
 rm -f ${DIFF_STORAGE}
 fallocate --length 1GiB ${DIFF_STORAGE}
-blksnap_snapshot_append ${DIFF_STORAGE}
+blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 
 blksnap_snapshot_take
 
-echo "Snapshot was token, press ..."
-read -n 1
-
-blksnap_snapshot_collect_all
+#echo "Snapshot was token, press ..."
+#read -n 1
 
 echo "Write to original"
 #echo "Write something" > ${MOUNTPOINT_1}/something.txt
@@ -131,11 +128,7 @@ umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
-echo "Tracking device info:"
-blksnap_tracker_collect
-
-echo "Unload module"
-modprobe -r blksnap
+blksnap_unload
 
 echo "Simple test finish"
 echo "---"
