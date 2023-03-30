@@ -15,10 +15,10 @@ on:
 
 jobs:
   build-on-image:
-    name: Kernel 5.10
+    name: Kernel ${{ matrix.kversion }}
     runs-on: ubuntu-latest
     container:
-      image: library/debian:bullseye
+      image: ${{ matrix.image }}
       # Disable seccomp until a container manager in GitHub recognizes
       # clone3() syscall,
       # <https://github.com/actions/virtual-environments/issues/3812>.
@@ -26,6 +26,12 @@ jobs:
 
     strategy:
       fail-fast: false
+      matrix:
+        include:
+          - kversion: "5.10"
+            image: "library/debian:bullseye"
+          - kversion: "6.1"
+            image: "library/debian:bookworm"
 
     steps:
       - uses: actions/checkout@v3
@@ -38,5 +44,5 @@ jobs:
       - name: Build kernel module
         run: |
           cd module
-          make -Wall -C /lib/modules/5.10*/build M=`pwd`
+          make -Wall -C /lib/modules/*/build M=`pwd`
 
