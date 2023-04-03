@@ -18,7 +18,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <uuid/uuid.h>
-#include <blksnap/blksnap.h>
+#include <linux/blk-filter.h>
+#include <linux/blksnap.h>
 #include <time.h>
 
 namespace po = boost::program_options;
@@ -725,7 +726,7 @@ static inline void AppendStorage(const int blksnapFd, const Uuid& id, const std:
     strncpy(bdev_path.get(), devicePath.c_str(), size);
     bdev_path[size] = '\0';
 
-    param.bdev_path = reinterpret_cast<__s8 *>(bdev_path.get());
+    param.bdev_path = reinterpret_cast<__u8 *>(bdev_path.get());
     param.bdev_path_size = size + 1;
     param.count = ranges.size();
     param.ranges = ranges.data();

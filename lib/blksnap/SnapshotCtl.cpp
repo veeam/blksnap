@@ -127,7 +127,7 @@ void CSnapshotCtl::AppendDiffStorage(const CSnapshotId& id, const std::string& d
 
     std::vector<struct blksnap_sectors> _ranges(ranges);
 
-    param.bdev_path = reinterpret_cast<__s8 *>(bdev_path.get());
+    param.bdev_path = reinterpret_cast<__u8 *>(bdev_path.get());
     param.bdev_path_size = size + 1;
     param.count = _ranges.size();
     param.ranges = _ranges.data();

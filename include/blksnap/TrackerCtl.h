@@ -36,7 +36,8 @@
 #endif
 #endif
 #include "Sector.h"
-#include "blksnap.h"
+#include <linux/blk-filter.h>
+#include <linux/blksnap.h>
 
 namespace blksnap
 {
