@@ -7,14 +7,12 @@ on:
     paths-ignore:
       - "README.md"
       - "doc/**"
-      - "patches/**"
   pull_request:
     branches:
       - "*"
     paths-ignore:
       - "README.md"
       - "doc/**"
-      - "patches/**"
   workflow_dispatch:
 
 jobs:
@@ -31,12 +29,7 @@ jobs:
       - name: Install packages required
         run: |
          sudo apt-get update
-         sudo apt-get install -y linux-headers-$(uname -r) g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
-
-      - name: Build kernel module
-        run: |
-          cd module
-          ./mk.sh build
+         sudo apt-get install -y g++ cmake uuid-dev libboost-program-options-dev libboost-filesystem-dev libssl-dev
 
       - name: Build blksnap-dev, blksnap-tools and blksnap-tests
         working-directory: .
