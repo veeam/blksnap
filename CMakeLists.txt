@@ -11,7 +11,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/tests/cpp)
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in)
     configure_file(${CMAKE_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in
-                ${CMAKE_SOURCE_DIR}/cmake/cmake_uninstall.cmake @ONLY
+                ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake @ONLY
     )
-    add_custom_target(uninstall "${CMAKE_COMMAND}" -P "${CMAKE_SOURCE_DIR}/cmake/cmake_uninstall.cmake")
+    add_custom_target(uninstall "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
 endif()
