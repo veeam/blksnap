@@ -1,0 +1,112 @@
+.TH BLKSNAP 8 "6 April 2023"
+
+.SH NAME
+blksnap \- creating snapshots of block devices
+
+.SH SYNOPSIS
+
+.I COMMAND
+{
+.I ARGUMENTS
+|
+.B help
+}
+
+.SH DESCRIPTION
+.PP
+The tool for creating snapshots of block devices using the blksnap kernel module.
+
+.SH COMMANDS, ARGUMENTS
+
+.HP 5
+HELP - Print usage.
+
+.B blksnap help
+
+.B blksnap --help
+
+.B blksnap -h
+
+.HP 5
+ATTACH - Attach blksnap tracker to block device.
+
+.B blksnap attach --device <device name>
+
+.HP 5
+CBTINFO - Get change tracker information.
+
+.B blksnap cbtinfo --device <device name>
+
+.HP 5
+DETACH - Detach blksnap tracker from block device.
+
+.B blksnap detach --device <device name>
+
+.HP 5
+MARKDIRTYBLOCK - Mark blocks as changed in change tracking map. Sectors range in format 'sector:count' is multitoken argument.
+
+.B blksnap markdirtyblock  {--file <file name> | --device <device name> --range <sectors range>}
+
+.HP 5
+READCBTMAP - Read change tracking map.
+
+.B blksnap readcbtmap --device <device name> --file <file name>
+
+.HP 5
+SNAPSHOT_ADD - Create snapshot object structure.
+
+.B blksnap snapshot_add --id <snapshot uuid> --device <device name>
+
+.HP 5
+SNAPSHOT_APPENDSTORAGE - Append space in difference storage for snapshot.
+
+.B blksnap snapshot_appendstorage --id <snapshot uuid> {--file <file name> | --device <device name> --range <sectors range>}
+
+.HP 5
+SNAPSHOT_COLLECT - Get collection of snapshots.
+
+.B blksnap snapshot_collect
+
+.HP 5
+SNAPSHOT_CREATE - Create snapshot object structure. Device name for snapshot is multitoken argument.
+
+.B blksnap snapshot_create --device <device name>
+
+.HP 5
+SNAPSHOT_DESTROY - Release snapshot and destroy snapshot object.
+
+.B blksnap snapshot_destroy --id <snapshot uuid>
+
+.HP 5
+SNAPSHOT_INFO - Get information about block device snapshot image.
+
+.B blksnap snapshot_info --device <device name> --field {image | error_code}
+
+.HP 5
+SNAPSHOT_TAKE - Take snapshot.
+
+.B blksnap snapshot_take --id <snapshot uuid>
+
+.HP 5
+SNAPSHOT_WAIT_EVENT - Wait and read event from snapshot.
+
+.B blksnap snapshot_waitevent --id <snapshot uuid> --timeout <milliseconds>
+
+.HP 5
+STRETCH_SNAPSHOT - Start stretch snapshot service.
+
+.B blksnap stretch_snapshot --id <snapshot uuid> --path <path for difference storage> --limit <difference storage size in MiB>
+
+.HP 5
+VERSION - Show module version.
+
+.B blksnap version
+
+.SH REPORTING BUGS
+
+Report bugs to sergei.shtepa@veeam.com
+
+.SH COPYRIGHT
+Copyright (C) 2022 Veeam Software Group GmbH <https://www.veeam.com/contacts.html>
+
+GPL-2.0+
