@@ -21,7 +21,7 @@ shared: &shared
             command: ./build-blksnap.sh
       - run:
             name: Save generate packages as artifacts
-            working_directory: build
+            working_directory: ..
             command: |
                 mkdir /tmp/artifacts
                 mv *.deb /tmp/artifacts
