@@ -36,12 +36,18 @@ A "v2" patch on [patchwork](https://patchwork.kernel.org./project/linux-block/li
 
 Is also possible use [this branch](https://github.com/SergeiShtepa/linux/commits/blksnap_lk6.1-rc8_v5) of a linux fork git.
 
+Since then, in collaboration with Christoph, work was carried out to optimize
+COW algorithms for snapshots, the algorithm for reading images of snapshots,
+and the control interface was redesigned.
+
+A "v3" patch on [patchwork](https://patchwork.kernel.org/project/linux-block/list/?series=737222) or [lore](https://lore.kernel.org/linux-block/20230404140835.25166-1-sergei.shtepa@veeam.com/) was posted at 4 April 2023.
+
 ## Work in progress and news
 
-There is a work in progress for "v3", there are many changes,
+There is a work in progress for "v4",
 is possible view/test it from [this branch](https://github.com/SergeiShtepa/linux/tree/blksnap-master) of a linux fork git.
 
-For testing this version, that have interface changes, [this blksnap branch](https://github.com/veeam/blksnap/tree/blksnap_interface_v2) must be used,
+For testing this version, that have interface changes, [the blksnap branch stable-2.0](https://github.com/veeam/blksnap/tree/stable-v2.0) must be used,
 have updated library, tools and tests working with new upstream version.
 
 Latest news are also visible from [here](https://github.com/veeam/blksnap/issues/2)
