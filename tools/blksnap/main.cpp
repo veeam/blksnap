@@ -911,7 +911,7 @@ public:
     SnapshotCollectArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("Get collection of devices and his snapshot images.");
+        m_usage = std::string("Get collection of snapshots.");
         m_desc.add_options()
             ("json,j", "Use json format for output.");
     };
