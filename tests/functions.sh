@@ -39,14 +39,12 @@ generate_files()
 	local TARGET_DIR=$1
 	local PREFIX=$2
 	local CNT=$3
-	local GEN_FILE_PWD=$(pwd)
 
 	echo "generate files in ${TARGET_DIR}"
-	cd ${TARGET_DIR}
 
 	for ((ITER = 0 ; ITER < ${CNT} ; ITER++))
 	do
-		local FILE="./${PREFIX}-${ITER}"
+		local FILE="${TARGET_DIR}/${PREFIX}-${ITER}"
 		local SZ=$RANDOM
 
 		let "SZ = ${SZ} % 100 + 8"
@@ -54,7 +52,6 @@ generate_files()
 		dd if=/dev/urandom of=${FILE} count=${SZ} bs=512 >/dev/null 2>&1
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 	done
-	cd ${GEN_FILE_PWD}
 	echo "generate complete"
 }
 
@@ -65,15 +62,12 @@ generate_block_MB()
 	local SZ_MB=$3
 	local ITER_SZ_MB=0
 	local ITER=0
-	local GEN_FILE_PWD=$(pwd)
 
 	echo "generate files in ${TARGET_DIR}"
-	cd ${TARGET_DIR}
-
 
 	while [ ${ITER_SZ_MB} -lt ${SZ_MB} ]
 	do
-		local FILE="./${PREFIX}-${ITER}"
+		local FILE="${TARGET_DIR}/${PREFIX}-${ITER}"
 		local SZ=${RANDOM:0:1}
 
 		SZ=$((SZ + 1))
@@ -84,9 +78,8 @@ generate_block_MB()
 		ITER_SZ_MB=$((SZ + ITER_SZ_MB))
 		ITER=$((ITER + 1))
 
-		echo "processed ${ITER_SZ_MB} MiB"
+		# echo "processed ${ITER_SZ_MB} MiB"
 	done
-	cd ${GEN_FILE_PWD}
 	echo "generate complete"
 }
 
