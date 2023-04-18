@@ -49,13 +49,6 @@ add_executable(${TEST_PERFORMANCE} performance.cpp)
 target_link_libraries(${TEST_PERFORMANCE} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_PERFORMANCE} PRIVATE ./)
 
-set_target_properties(${TEST_CORRUPT} ${TEST_CBT} ${TEST_DIFF_STORAGE} ${TEST_BOUNDARY} ${TEST_PERFORMANCE}
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../
-)
-
-#add_custom_target(blksnap-tests DEPENDS ${TEST_CORRUPT} ${TEST_CBT} ${TEST_DIFF_STORAGE} ${TEST_BOUNDARY} ${TEST_PERFORMANCE})
-
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../
         DESTINATION /opt/blksnap/tests
         USE_SOURCE_PERMISSIONS
