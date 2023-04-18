@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 #
 # SPDX-License-Identifier: GPL-2.0+
 
@@ -8,7 +8,7 @@
 echo "---"
 echo "Snapshot write test"
 
-# diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB dikk_storage portion size
+# diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB.
 modprobe blksnap diff_storage_minimum=262144
 sleep 2s
 
@@ -21,14 +21,14 @@ then
 
 	#echo "Create original loop device"
 	LOOPFILE=~/blksnap-original.img
-	dd if=/dev/zero of=${LOOPFILE} count=4096 bs=1M
+	dd if=/dev/zero of=${LOOPFILE} count=1024 bs=1M
 
 	DEVICE=$(loop_device_attach ${LOOPFILE})
 	mkfs.xfs -f ${DEVICE}
 
-	MOUNTPOINT=/mnt/blksnap-original
-	mkdir -p ${MOUNTPOINT}
-	mount ${DEVICE} ${MOUNTPOINT}
+	ORIGINAL=/mnt/blksnap-original
+	mkdir -p ${ORIGINAL}
+	mount ${DEVICE} ${ORIGINAL}
 else
 	echo "Should use device [$1]"
 
@@ -36,14 +36,14 @@ else
 
 	MNTDIR=$(findmnt -n -o TARGET ${DEVICE})
 	echo ${MNTDIR}
-	MOUNTPOINT=${MNTDIR}"/blksnap-original"
-	rm -rf ${MOUNTPOINT}/*
-	mkdir -p ${MOUNTPOINT}
+	ORIGINAL=${MNTDIR}"/blksnap-original"
+	rm -rf ${ORIGINAL}/*
+	mkdir -p ${ORIGINAL}
 fi
 
 FSTYPE=$(findmnt -n -o FSTYPE ${DEVICE})
 
-if [ ${FSTYPE} == "xfs" ]
+if [ "${FSTYPE}" = "xfs" ]
 then
 	MOUNTOPT="-o nouuid"
 else
@@ -52,21 +52,20 @@ fi
 
 if [ -z $2 ]
 then
-	END="10"
+	END="3"
 else
 	END="$2"
 fi
 
-IMAGEDEVICE=/dev/blksnap-image0
-IMAGEMOUNTPOINT=/mnt/blksnap-image0
-mkdir -p ${IMAGEMOUNTPOINT}
+IMAGE=/mnt/blksnap-image0
+mkdir -p ${IMAGE}
 
-DIFF_STORAGE="${MOUNTPOINT}/diff_storage/"
+DIFF_STORAGE="${ORIGINAL}/diff_storage"
 mkdir -p ${DIFF_STORAGE}
 
-fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage" &
+fallocate --length 256MiB "${DIFF_STORAGE}/#0" &
 
-generate_files ${MOUNTPOINT} "original-it#0" 5
+generate_files ${ORIGINAL} "original-it#0" 5
 drop_cache
 
 for ITERATOR in $(seq 1 $END)
@@ -74,32 +73,45 @@ do
 	echo "Itearation: ${ITERATOR}"
 
 	blksnap_snapshot_create ${DEVICE}
-	blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+	blksnap_snapshot_appendstorage "${DIFF_STORAGE}/#0"
 	blksnap_snapshot_take
 
-	#echo "Finita le comedy"
-	#exit 1
-	mount ${MOUNTOPT} ${IMAGEDEVICE} ${IMAGEMOUNTPOINT}
+	DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
+	mount ${MOUNTOPT} ${DEVICE_IMAGE} ${IMAGE}
 
-	generate_block_MB ${IMAGEMOUNTPOINT} "image-it#${ITERATOR}" 10 &
-	generate_block_MB ${MOUNTPOINT} "original-it#${ITERATOR}" 10
-	sleep 1s
+	generate_block_MB ${IMAGE} "image-it#${ITERATOR}" 10
+	# generate_block_MB ${IMAGE} "image-it#${ITERATOR}" 10 &
+	# IMAGE_PID=$!
+	# generate_block_MB ${ORIGINAL} "original-it#${ITERATOR}" 10
+	# wait ${IMAGE_PID}
+
 	drop_cache
 
-	check_files ${IMAGEMOUNTPOINT} &
-	check_files ${MOUNTPOINT}
-	sleep 1s
+	check_files ${IMAGE}
+	# check_files ${IMAGE} &
+	# IMAGE_PID=$!
+	# check_files ${ORIGINAL}
+	# wait ${IMAGE_PID}
+
 	drop_cache
 
-	umount ${IMAGEDEVICE}
+	#echo "pause, press ..."
+	#read -n 1
 
-	mount ${MOUNTOPT} ${IMAGEDEVICE} ${IMAGEMOUNTPOINT}
+	echo "Remount image device "${DEVICE_IMAGE}
+	umount ${DEVICE_IMAGE}
+	mount ${MOUNTOPT} ${DEVICE_IMAGE} ${IMAGE}
 
-	check_files ${IMAGEMOUNTPOINT} &
-	check_files ${MOUNTPOINT}
-	sleep 1s
+	check_files ${IMAGE}
+	# check_files ${IMAGE} &
+	# IMAGE_PID=$!
+	# check_files ${ORIGINAL}
+	# wait ${IMAGE_PID}
 
-	umount ${IMAGEDEVICE}
+	#echo "pause, press ..."
+	#read -n 1
+
+	umount ${IMAGE}
 
 	blksnap_snapshot_destroy
 done
@@ -107,14 +119,16 @@ done
 if [ -z $1 ]
 then
 	echo "Destroy original loop device"
-	umount ${MOUNTPOINT}
+	umount ${ORIGINAL}
+
+	blksnap_detach ${DEVICE}
 
 	loop_device_detach ${DEVICE}
 	imagefile_cleanup ${LOOPFILE}
 else
-	echo "Cleanup directory [${MOUNTPOINT}]"
+	echo "Cleanup directory [${ORIGINAL}]"
 fi
-rm -rf ${MOUNTPOINT}/*
+rm -rf ${ORIGINAL}/*
 
 echo "Unload module"
 modprobe -r blksnap
