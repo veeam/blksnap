@@ -34,6 +34,19 @@ loop_device_detach()
 	losetup -d ${DEVICE}
 }
 
+generate_file_magic()
+{
+	local FILE=$1
+	local SECTORS=$2
+
+	rm -f ${FILE}
+	echo "file: ${FILE} size: ${SECTORS} sectors"
+	for ((ITER = 0 ; ITER < ${SECTORS} ; ITER++))
+	do
+		echo "BLKSNAP" >> ${FILE} && dd if=/dev/urandom of=${FILE} count=1 bs=504 oflag=append conv=notrunc
+	done
+}
+
 generate_files()
 {
 	local TARGET_DIR=$1
