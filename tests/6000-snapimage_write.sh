@@ -9,7 +9,7 @@ echo "---"
 echo "Snapshot write test"
 
 # diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB.
-modprobe blksnap diff_storage_minimum=262144
+modprobe blksnap diff_storage_minimum=262144 chunk_maximum_in_queue=16
 sleep 2s
 
 # check module is ready
@@ -25,6 +25,7 @@ then
 
 	DEVICE=$(loop_device_attach ${LOOPFILE})
 	mkfs.xfs -f ${DEVICE}
+	# mkfs.ext4 ${DEVICE}
 
 	ORIGINAL=/mnt/blksnap-original
 	mkdir -p ${ORIGINAL}
@@ -79,19 +80,17 @@ do
 	DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
 	mount ${MOUNTOPT} ${DEVICE_IMAGE} ${IMAGE}
 
-	generate_block_MB ${IMAGE} "image-it#${ITERATOR}" 10
-	# generate_block_MB ${IMAGE} "image-it#${ITERATOR}" 10 &
-	# IMAGE_PID=$!
-	# generate_block_MB ${ORIGINAL} "original-it#${ITERATOR}" 10
-	# wait ${IMAGE_PID}
+	generate_block_MB ${IMAGE} "image-it#${ITERATOR}" 10 &
+	IMAGE_PID=$!
+	generate_block_MB ${ORIGINAL} "original-it#${ITERATOR}" 10
+	wait ${IMAGE_PID}
 
 	drop_cache
 
-	check_files ${IMAGE}
-	# check_files ${IMAGE} &
-	# IMAGE_PID=$!
-	# check_files ${ORIGINAL}
-	# wait ${IMAGE_PID}
+	check_files ${IMAGE} &
+	IMAGE_PID=$!
+	check_files ${ORIGINAL}
+	wait ${IMAGE_PID}
 
 	drop_cache
 
@@ -102,11 +101,10 @@ do
 	umount ${DEVICE_IMAGE}
 	mount ${MOUNTOPT} ${DEVICE_IMAGE} ${IMAGE}
 
-	check_files ${IMAGE}
-	# check_files ${IMAGE} &
-	# IMAGE_PID=$!
-	# check_files ${ORIGINAL}
-	# wait ${IMAGE_PID}
+	check_files ${IMAGE} &
+	IMAGE_PID=$!
+	check_files ${ORIGINAL}
+	wait ${IMAGE_PID}
 
 	#echo "pause, press ..."
 	#read -n 1
@@ -127,8 +125,8 @@ then
 	imagefile_cleanup ${LOOPFILE}
 else
 	echo "Cleanup directory [${ORIGINAL}]"
+	rm -rf ${ORIGINAL}/*
 fi
-rm -rf ${ORIGINAL}/*
 
 echo "Unload module"
 modprobe -r blksnap

@@ -48,8 +48,8 @@ generate_files()
 		local SZ=$RANDOM
 
 		let "SZ = ${SZ} % 100 + 8"
-		echo "file: ${FILE} size: ${SZ} sectors"
-		dd if=/dev/urandom of=${FILE} count=${SZ} bs=512 >/dev/null 2>&1
+		echo "file: ${FILE} size: ${SZ} KiB"
+		dd if=/dev/urandom of=${FILE} count=${SZ} oflag=direct bs=1024
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 	done
 	echo "generate complete"
@@ -71,8 +71,8 @@ generate_block_MB()
 		local SZ=${RANDOM:0:1}
 
 		SZ=$((SZ + 1))
-		echo "file: ${FILE} size: ${SZ} MiB"
-		dd if=/dev/urandom of=${FILE} count=${SZ} bs=1048576 >/dev/null 2>&1
+		echo "file: ${FILE} size: "$((SZ * 1024))" KiB"
+		dd if=/dev/urandom of=${FILE} count=$((SZ * 1024)) bs=1024 oflag=direct
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 
 		ITER_SZ_MB=$((SZ + ITER_SZ_MB))
