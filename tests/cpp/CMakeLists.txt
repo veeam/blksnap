@@ -53,7 +53,6 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../
         DESTINATION /opt/blksnap/tests
         USE_SOURCE_PERMISSIONS
         PATTERN "*.sh"
-        PATTERN "build_and_install.sh" EXCLUDE
         PATTERN "cpp" EXCLUDE
 )
 
