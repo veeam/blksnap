@@ -130,7 +130,10 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	sector_t processed = 0;
 	gfp_t gfp = GFP_NOIO | (is_nowait ? GFP_NOWAIT : 0);
 	unsigned int opf = diff_io->is_write ? REQ_OP_WRITE : REQ_OP_READ;
-	unsigned op_flags = REQ_SYNC | REQ_IDLE | REQ_FUA;
+	unsigned op_flags = REQ_SYNC | REQ_IDLE;
+
+	if (diff_io->is_write)
+		op_flags |= REQ_FUA;
 
 	if (unlikely(!check_page_aligned(diff_region->sector))) {
 		pr_err("Difference storage block should be aligned to PAGE_SIZE\n");
