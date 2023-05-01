@@ -7,7 +7,7 @@ imagefile_make()
 	local FILEPATH=$1
 	local SIZE=$2
 
-	dd if=/dev/zero of=${FILEPATH} count=${SIZE} bs=1M
+	dd if=/dev/zero of=${FILEPATH} count=${SIZE} bs=1M status=none
 	mkfs.ext4 ${FILEPATH}
 }
 
@@ -62,7 +62,7 @@ generate_files()
 
 		let "SZ = ${SZ} % 100 + 8"
 		echo "file: ${FILE} size: ${SZ} KiB"
-		dd if=/dev/urandom of=${FILE} count=${SZ} oflag=direct bs=1024
+		dd if=/dev/urandom of=${FILE} count=${SZ} oflag=direct bs=1024 status=none
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 	done
 	echo "generate complete"
@@ -85,7 +85,7 @@ generate_block_MB()
 
 		SZ=$((SZ + 1))
 		echo "file: ${FILE} size: "$((SZ * 1024))" KiB"
-		dd if=/dev/urandom of=${FILE} count=$((SZ * 1024)) bs=1024 oflag=direct
+		dd if=/dev/urandom of=${FILE} count=$((SZ * 1024)) bs=1024 oflag=direct status=none
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 
 		ITER_SZ_MB=$((SZ + ITER_SZ_MB))
