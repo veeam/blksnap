@@ -27,7 +27,6 @@ mkdir -p ${DIFF_STORAGE}
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 4096
-echo "new image file ${IMAGEFILE_1}"
 
 DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
 echo "new device ${DEVICE_1}"

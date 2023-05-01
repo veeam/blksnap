@@ -34,7 +34,6 @@ mkdir -p ${MPDIR}
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 64
-echo "new image file ${IMAGEFILE_1}"
 
 DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
 echo "new device ${DEVICE_1}"
@@ -46,7 +45,6 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 # create second device
 IMAGEFILE_2=${TESTDIR}/simple_2.img
 imagefile_make ${IMAGEFILE_2} 128
-echo "new image file ${IMAGEFILE_2}"
 
 DEVICE_2=$(loop_device_attach ${IMAGEFILE_2})
 echo "new device ${DEVICE_2}"

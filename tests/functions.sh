@@ -9,6 +9,7 @@ imagefile_make()
 
 	dd if=/dev/zero of=${FILEPATH} count=${SIZE} bs=1M status=none
 	mkfs.ext4 ${FILEPATH}
+	echo "new image file ${FILEPATH}"
 }
 
 imagefile_cleanup()
