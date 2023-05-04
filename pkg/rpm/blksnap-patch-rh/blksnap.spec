@@ -22,7 +22,7 @@ of the same variant of the Linux kernel and not on any one specific build.
 %package -n kmod-%{name}-patch
 Summary: %{name} patch kernel module
 Group: System Environment/Kernel
-Requires: python3
+Requires: python3, kmod-blksnap = %{version}
 
 %description -n kmod-%{name}-patch
 This package provides the ${kmod_name} kernel modules built for the Linux
