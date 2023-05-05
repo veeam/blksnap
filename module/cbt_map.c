@@ -30,7 +30,7 @@ static inline unsigned long long count_by_shift(sector_t capacity,
 
 static void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 {
-	unsigned long long shift = min(tracking_block_minimum_shift, tracking_block_maximum_shift);
+	unsigned long long shift = tracking_block_minimum_shift;
 	unsigned long long count;
 	sector_t capacity = cbt_map->device_capacity;
 

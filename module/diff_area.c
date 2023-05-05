@@ -61,7 +61,7 @@ static inline unsigned long long count_by_shift(sector_t capacity,
 
 static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 {
-	unsigned long long shift = min(chunk_minimum_shift, chunk_maximum_shift);
+	unsigned long long shift = chunk_minimum_shift;
 	unsigned long long count;
 	sector_t capacity;
 	sector_t min_io_sect;

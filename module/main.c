@@ -59,15 +59,8 @@
 #pragma message("The function blk_cleanup_disk() was found.")
 #endif
 
-static int __init blk_snap_init(void)
+static int __init parameters_init(void)
 {
-	int result;
-
-#ifdef BLK_SNAP_FILELOG
-	log_init();
-#endif
-	pr_info("Loading\n");
-	pr_debug("Version: %s\n", VERSION_STR);
 	pr_debug("tracking_block_minimum_shift: %d\n",
 		 tracking_block_minimum_shift);
 	pr_debug("tracking_block_maximum_count: %d\n",
@@ -78,6 +71,33 @@ static int __init blk_snap_init(void)
 	pr_debug("free_diff_buffer_pool_size: %d\n",
 		 free_diff_buffer_pool_size);
 	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
+
+	if (chunk_maximum_shift < chunk_minimum_shift) {
+		chunk_maximum_shift = chunk_minimum_shift;
+		pr_warn("fixed chunk_maximum_shift: %d\n",
+			 chunk_maximum_shift);
+	}
+	if (tracking_block_maximum_shift < tracking_block_minimum_shift) {
+		tracking_block_maximum_shift = tracking_block_minimum_shift;
+		pr_warn("fixed tracking_block_maximum_shift: %d\n",
+			 tracking_block_maximum_shift);
+	}
+
+	return 0;
+}
+
+static int __init blk_snap_init(void)
+{
+	int result;
+
+#ifdef BLK_SNAP_FILELOG
+	log_init();
+#endif
+	pr_info("Loading\n");
+	pr_debug("Version: %s\n", VERSION_STR);
+	result = parameters_init();
+	if (result)
+		return result;
 
 	result = diff_io_init();
 	if (result)
