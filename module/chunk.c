@@ -18,6 +18,13 @@
 DEFINE_MUTEX(logging_lock);
 #endif
 
+#ifndef HAVE_BDEV_NR_SECTORS
+static inline sector_t bdev_nr_sectors(struct block_device *bdev)
+{
+	return i_size_read(bdev->bd_inode) >> 9;
+};
+#endif
+
 void chunk_diff_buffer_release(struct chunk *chunk)
 {
 	if (unlikely(!chunk->diff_buffer))
@@ -234,7 +241,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 {
 	struct chunk *chunk;
 
-	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
+	chunk = kzalloc(sizeof(struct chunk), GFP_NOIO);
 	if (!chunk)
 		return NULL;
 	memory_object_inc(memory_object_chunk);
@@ -245,14 +252,20 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	chunk->number = number;
 	atomic_set(&chunk->state, 0);
 
+	chunk->sector_count = diff_area_chunk_sectors(diff_area);
+	/*
+	 * The last chunk has a special size.
+	 */
+	if (unlikely((number + 1) == diff_area->chunk_count)) {
+		chunk->sector_count = bdev_nr_sectors(diff_area->orig_bdev) -
+					(chunk->sector_count * number);
+	}
+
 	return chunk;
 }
 
 void chunk_free(struct chunk *chunk)
 {
-	if (unlikely(!chunk))
-		return;
-
 	down(&chunk->lock);
 	chunk_diff_buffer_release(chunk);
 	diff_storage_free_region(chunk->diff_region);

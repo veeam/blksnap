@@ -21,10 +21,6 @@ EXTRA_CFLAGS += "-D CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT=2097152"
 # In this case, the block device is divided into 524288 chunks.
 EXTRA_CFLAGS += "-D CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT=18"
 
-# As the size of the block device grows, the size of the chunk should also grow.
-# For this purpose, the limit of the maximum number of chunks is set.
-EXTRA_CFLAGS += "-D CONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT=2097152"
-
 # Since reading and writing to snapshots is performed in large chunks,
 # a cache is implemented to optimize reading small portions of data
 # from the snapshot image. As the number of chunks in the cache

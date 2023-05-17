@@ -101,7 +101,7 @@ struct diff_area {
 	struct block_device *orig_bdev;
 	struct diff_storage *diff_storage;
 
-	unsigned long long chunk_shift;
+	unsigned long chunk_shift;
 	unsigned long chunk_count;
 	struct xarray chunk_map;
 #ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
@@ -166,8 +166,9 @@ int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
  */
 struct diff_area_image_ctx {
 	struct diff_area *diff_area;
-	bool is_write;
 	struct chunk *chunk;
+	bool is_write;
+	bool in_chunk_map;
 };
 
 static inline void diff_area_image_ctx_init(struct diff_area_image_ctx *io_ctx,

@@ -59,32 +59,7 @@
 #pragma message("The function blk_cleanup_disk() was found.")
 #endif
 
-static int __init parameters_init(void)
-{
-	pr_debug("tracking_block_minimum_shift: %d\n",
-		 tracking_block_minimum_shift);
-	pr_debug("tracking_block_maximum_count: %d\n",
-		 tracking_block_maximum_count);
-	pr_debug("chunk_minimum_shift: %d\n", chunk_minimum_shift);
-	pr_debug("chunk_maximum_count: %d\n", chunk_maximum_count);
-	pr_debug("chunk_maximum_in_cache: %d\n", chunk_maximum_in_cache);
-	pr_debug("free_diff_buffer_pool_size: %d\n",
-		 free_diff_buffer_pool_size);
-	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
-
-	if (chunk_maximum_shift < chunk_minimum_shift) {
-		chunk_maximum_shift = chunk_minimum_shift;
-		pr_warn("fixed chunk_maximum_shift: %d\n",
-			 chunk_maximum_shift);
-	}
-	if (tracking_block_maximum_shift < tracking_block_minimum_shift) {
-		tracking_block_maximum_shift = tracking_block_minimum_shift;
-		pr_warn("fixed tracking_block_maximum_shift: %d\n",
-			 tracking_block_maximum_shift);
-	}
-
-	return 0;
-}
+static int __init parameters_init(void);
 
 static int __init blk_snap_init(void)
 {
@@ -148,10 +123,54 @@ int tracking_block_maximum_shift = 26; /* 2^26=64MiB - upper limit for a CBT blo
 int tracking_block_maximum_count = CONFIG_BLK_SNAP_TRACKING_BLOCK_MAXIMUM_COUNT;
 int chunk_minimum_shift = CONFIG_BLK_SNAP_CHUNK_MINIMUM_SHIFT;
 int chunk_maximum_shift = 26; /* 2^26=64MiB - upper limit for a chunk size */
-int chunk_maximum_count = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_COUNT;
+int chunk_maximum_count_shift = 40; /*2^40= 1*10^12 - upper limit for a count of chunks*/
 int chunk_maximum_in_cache = CONFIG_BLK_SNAP_CHUNK_MAXIMUM_IN_CACHE;
 int free_diff_buffer_pool_size = CONFIG_BLK_SNAP_FREE_DIFF_BUFFER_POOL_SIZE;
 int diff_storage_minimum = CONFIG_BLK_SNAP_DIFF_STORAGE_MINIMUM;
+
+unsigned long get_chunk_maximum_count(void)
+{
+	return (1ul << chunk_maximum_count_shift);
+}
+
+static int __init parameters_init(void)
+{
+	pr_debug("tracking_block_minimum_shift: %d\n",
+		 tracking_block_minimum_shift);
+	pr_debug("tracking_block_maximum_count: %d\n",
+		 tracking_block_maximum_count);
+	pr_debug("chunk_minimum_shift: %d\n", chunk_minimum_shift);
+	pr_debug("chunk_maximum_count_shift: %d\n", chunk_maximum_count_shift);
+	pr_debug("chunk_maximum_in_cache: %d\n", chunk_maximum_in_cache);
+	pr_debug("free_diff_buffer_pool_size: %d\n",
+		 free_diff_buffer_pool_size);
+	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
+
+	if (chunk_maximum_shift < chunk_minimum_shift) {
+		chunk_maximum_shift = chunk_minimum_shift;
+		pr_warn("fixed chunk_maximum_shift: %d\n",
+			 chunk_maximum_shift);
+	}
+	if (tracking_block_maximum_shift < tracking_block_minimum_shift) {
+		tracking_block_maximum_shift = tracking_block_minimum_shift;
+		pr_warn("fixed tracking_block_maximum_shift: %d\n",
+			 tracking_block_maximum_shift);
+	}
+
+	/*
+	 * The XArray is used to store chunks. And 'unsigned long' is used as
+	 * chunk number parameter. So, The number of chunks cannot exceed the
+	 * limits of ULONG_MAX.
+	 */
+	if (sizeof(unsigned long) < 4)
+		chunk_maximum_count_shift = min(16, chunk_maximum_count_shift);
+	else if (sizeof(unsigned long) == 4)
+		chunk_maximum_count_shift = min(32, chunk_maximum_count_shift);
+	else if (sizeof(unsigned long) >= 8)
+		chunk_maximum_count_shift = min(64, chunk_maximum_count_shift);
+
+	return 0;
+}
 
 module_param_named(tracking_block_minimum_shift, tracking_block_minimum_shift,
 		   int, 0644);
@@ -171,9 +190,9 @@ MODULE_PARM_DESC(chunk_minimum_shift,
 module_param_named(chunk_maximum_shift, chunk_maximum_shift, int, 0644);
 MODULE_PARM_DESC(chunk_maximum_shift,
 		 "The power of 2 for maximum snapshots chunk size");
-module_param_named(chunk_maximum_count, chunk_maximum_count, int, 0644);
-MODULE_PARM_DESC(chunk_maximum_count,
-		 "The limit of the maximum number of snapshots chunks");
+module_param_named(chunk_maximum_count_shift, chunk_maximum_count_shift, int, 0644);
+MODULE_PARM_DESC(chunk_maximum_count_shift,
+		 "The power of 2 for the maximum number of snapshots chunks");
 module_param_named(chunk_maximum_in_cache, chunk_maximum_in_cache, int, 0644);
 MODULE_PARM_DESC(chunk_maximum_in_cache,
 		 "The limit of the maximum chunks in memory cache");

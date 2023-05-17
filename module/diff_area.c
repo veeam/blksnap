@@ -28,8 +28,14 @@ static inline sector_t bdev_nr_sectors(struct block_device *bdev)
 };
 #endif
 
-static inline unsigned long chunk_number(struct diff_area *diff_area,
-					 sector_t sector)
+static inline sector_t diff_area_chunk_offset(struct diff_area *diff_area,
+					      sector_t sector)
+{
+	return sector & ((1ull << (diff_area->chunk_shift - SECTOR_SHIFT)) - 1);
+}
+
+static inline unsigned long diff_area_chunk_number(struct diff_area *diff_area,
+						   sector_t sector)
 {
 	return (unsigned long)(sector >>
 			       (diff_area->chunk_shift - SECTOR_SHIFT));
@@ -74,24 +80,17 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 
 	count = count_by_shift(capacity, shift);
 	pr_debug("Chunks count %llu\n", count);
-	while ((count > chunk_maximum_count) ||
+
+	while ((count > get_chunk_maximum_count()) ||
 		((1ull << (shift - SECTOR_SHIFT)) < min_io_sect)) {
-		if (shift >= chunk_maximum_shift) {
-			pr_info("The maximum allowable chunk size has been reached.\n");
-			break;
-		}
-		shift = shift + 1ull;
+		shift++;
 		count = count_by_shift(capacity, shift);
 		pr_debug("Chunks count %llu\n", count);
 	}
 
 	diff_area->chunk_shift = shift;
-	diff_area->chunk_count = count;
-
-	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
-		 (1ull << diff_area->chunk_shift),
-		 MAJOR(diff_area->orig_bdev->bd_dev),
-		 MINOR(diff_area->orig_bdev->bd_dev));
+	diff_area->chunk_count = (unsigned long)DIV_ROUND_UP_ULL(capacity,
+					(1ul << (shift - SECTOR_SHIFT)));
 }
 
 void diff_area_free(struct kref *kref)
@@ -120,7 +119,8 @@ void diff_area_free(struct kref *kref)
 	atomic_set(&diff_area->corrupt_flag, 1);
 	flush_work(&diff_area->cache_release_work);
 	xa_for_each(&diff_area->chunk_map, inx, chunk)
-		chunk_free(chunk);
+		if (chunk)
+			chunk_free(chunk);
 	xa_destroy(&diff_area->chunk_map);
 
 #ifdef STANDALONE_BDEVFILTER
@@ -278,8 +278,6 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	int ret = 0;
 	struct diff_area *diff_area = NULL;
 	struct block_device *bdev;
-	unsigned long number;
-	struct chunk *chunk;
 
 	pr_debug("Open device [%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
 
@@ -301,8 +299,15 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);
-	pr_debug("Chunk size %llu in bytes\n", 1ull << diff_area->chunk_shift);
-	pr_debug("Chunk count %lu\n", diff_area->chunk_count);
+
+	if (diff_area->chunk_shift > get_chunk_maximum_count()) {
+		pr_info("The maximum allowable chunk size has been reached.\n");
+		return ERR_PTR(-EFAULT);
+	}
+	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
+		 (1ull << diff_area->chunk_shift),
+		 MAJOR(diff_area->orig_bdev->bd_dev),
+		 MINOR(diff_area->orig_bdev->bd_dev));
 
 	kref_init(&diff_area->kref);
 	xa_init(&diff_area->chunk_map);
@@ -338,37 +343,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	atomic64_set(&diff_area->stat_copied, 0);
 #endif
 
-	/**
-	 * Allocating all chunks in advance allows to avoid doing this in
-	 * the process of filtering bio.
-	 * In addition, the chunk structure has an rw semaphore that allows
-	 * to lock data of a single chunk.
-	 * Different threads can read, write, or dump their data to diff storage
-	 * independently of each other, provided that different chunks are used.
-	 */
-	for (number = 0; number < diff_area->chunk_count; number++) {
-		chunk = chunk_alloc(diff_area, number);
-		if (!chunk) {
-			pr_err("Failed allocate chunk\n");
-			ret = -ENOMEM;
-			break;
-		}
-		chunk->sector_count = diff_area_chunk_sectors(diff_area);
-
-		ret = xa_insert(&diff_area->chunk_map, number, chunk,
-				GFP_KERNEL);
-		if (ret) {
-			pr_err("Failed insert chunk to chunk map\n");
-			chunk_free(chunk);
-			break;
-		}
-	}
 	if (ret) {
 		diff_area_put(diff_area);
 		return ERR_PTR(ret);
 	}
-
-	recalculate_last_chunk_size(chunk);
 
 	atomic_set(&diff_area->corrupt_flag, 0);
 
@@ -415,13 +393,37 @@ int diff_area_copy(struct diff_area *diff_area, sector_t sector, sector_t count,
 	area_sect_first = round_down(sector, chunk_sectors);
 	for (offset = area_sect_first; offset < (sector + count);
 	     offset += chunk_sectors) {
-		chunk = xa_load(&diff_area->chunk_map,
-				chunk_number(diff_area, offset));
+	     	unsigned long nr = diff_area_chunk_number(diff_area, offset);
+
+		chunk = xa_load(&diff_area->chunk_map, nr);
 		if (!chunk) {
-			diff_area_set_corrupted(diff_area, -EINVAL);
-			return -EINVAL;
+			chunk = chunk_alloc(diff_area, nr);
+			if (!chunk) {
+				diff_area_set_corrupted(diff_area, -EINVAL);
+				return -ENOMEM;
+			}
+
+			ret = xa_insert(&diff_area->chunk_map, nr, chunk,
+					GFP_NOIO);
+			if (likely(!ret)) {
+				/* new chunk has been added */
+			} else if (ret == -EBUSY) {
+				/* another chunk has just been created */
+				chunk_free(chunk);
+				chunk = xa_load(&diff_area->chunk_map, nr);
+				WARN_ON_ONCE(!chunk);
+				if (unlikely(!chunk)) {
+					diff_area_set_corrupted(diff_area, -EINVAL);
+					return -EINVAL;
+				}
+			} else if (ret) {
+				pr_err("Failed insert chunk to chunk map\n");
+				chunk_free(chunk);
+				diff_area_set_corrupted(diff_area, ret);
+				return ret;
+			}
 		}
-		WARN_ON(chunk_number(diff_area, offset) != chunk->number);
+		WARN_ON(diff_area_chunk_number(diff_area, offset) != chunk->number);
 		if (is_nowait) {
 			if (down_trylock(&chunk->lock))
 				return -EAGAIN;
@@ -498,12 +500,12 @@ int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
 	for (offset = area_sect_first; offset < (sector + count);
 	     offset += chunk_sectors) {
 		chunk = xa_load(&diff_area->chunk_map,
-				chunk_number(diff_area, offset));
+				diff_area_chunk_number(diff_area, offset));
 		if (!chunk) {
 			diff_area_set_corrupted(diff_area, -EINVAL);
 			return -EINVAL;
 		}
-		WARN_ON(chunk_number(diff_area, offset) != chunk->number);
+		WARN_ON(diff_area_chunk_number(diff_area, offset) != chunk->number);
 		if (is_nowait) {
 			if (down_trylock(&chunk->lock))
 				return -EAGAIN;
@@ -594,25 +596,57 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 	int ret;
 	struct chunk *chunk;
 	struct diff_area *diff_area = io_ctx->diff_area;
-	unsigned long new_chunk_number = chunk_number(diff_area, sector);
+	unsigned long nr = diff_area_chunk_number(diff_area, sector);
 
 	chunk = io_ctx->chunk;
 	if (chunk) {
-		if (chunk->number == new_chunk_number)
+		if (chunk->number == nr)
 			return chunk;
 
 		/*
 		 * If the sector falls into a new chunk, then we release
 		 * the old chunk.
 		 */
-		diff_area_image_put_chunk(chunk, io_ctx->is_write);
+		if (io_ctx->in_chunk_map)
+			diff_area_image_put_chunk(chunk, io_ctx->is_write);
+		else
+			chunk_free(chunk);
 		io_ctx->chunk = NULL;
 	}
 
 	/* Take a next chunk. */
-	chunk = xa_load(&diff_area->chunk_map, new_chunk_number);
-	if (unlikely(!chunk))
-		return ERR_PTR(-EINVAL);
+	chunk = xa_load(&diff_area->chunk_map, nr);
+	if (chunk)
+		io_ctx->in_chunk_map = true;
+	else {
+		chunk = chunk_alloc(diff_area, nr);
+		if (!chunk) {
+			diff_area_set_corrupted(diff_area, -EINVAL);
+			return ERR_PTR(-ENOMEM);
+		}
+
+		if ((io_ctx->in_chunk_map = io_ctx->is_write)) {
+			ret = xa_insert(&diff_area->chunk_map, nr, chunk,
+					GFP_NOIO);
+			if (likely(!ret)) {
+				/* new chunk has been added */
+			} else if (ret == -EBUSY) {
+				/* another chunk has just been created */
+				chunk_free(chunk);
+				chunk = xa_load(&diff_area->chunk_map, nr);
+				WARN_ON_ONCE(!chunk);
+				if (unlikely(!chunk)) {
+					diff_area_set_corrupted(diff_area, ret);
+					return ERR_PTR(-EINVAL);
+				}
+			} else if (ret) {
+				pr_err("Failed insert chunk to chunk map\n");
+				chunk_free(chunk);
+				diff_area_set_corrupted(diff_area, ret);
+				return ERR_PTR(ret);
+			}
+		}
+	}
 
 	ret = down_killable(&chunk->lock);
 	if (ret)
@@ -621,7 +655,7 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk #%ld corrupted\n", chunk->number);
 
-		pr_debug("new_chunk_number=%ld\n", new_chunk_number);
+		pr_debug("nr=%ld\n", nr);
 		pr_debug("sector=%llu\n", sector);
 		pr_debug("Chunk size %llu in bytes\n",
 		       (1ull << diff_area->chunk_shift));
@@ -759,11 +793,11 @@ int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector,
 	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
 	sector_t offset = round_down(sector, chunk_sectors);
 
-	chunk = xa_load(&diff_area->chunk_map, chunk_number(diff_area, offset));
+	chunk = xa_load(&diff_area->chunk_map, diff_area_chunk_number(diff_area, offset));
 	if (!chunk)
 		return -EINVAL;
 
-	WARN_ON(chunk_number(diff_area, offset) != chunk->number);
+	WARN_ON(diff_area_chunk_number(diff_area, offset) != chunk->number);
 	down(&chunk->lock);
 	*chunk_state = atomic_read(&chunk->state);
 	up(&chunk->lock);
