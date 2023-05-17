@@ -118,9 +118,10 @@ void diff_area_free(struct kref *kref)
 
 	atomic_set(&diff_area->corrupt_flag, 1);
 	flush_work(&diff_area->cache_release_work);
-	xa_for_each(&diff_area->chunk_map, inx, chunk)
+	xa_for_each(&diff_area->chunk_map, inx, chunk) {
 		if (chunk)
 			chunk_free(chunk);
+	}
 	xa_destroy(&diff_area->chunk_map);
 
 #ifdef STANDALONE_BDEVFILTER
@@ -561,10 +562,17 @@ static inline void diff_area_image_put_chunk(struct chunk *chunk, bool is_write)
 
 void diff_area_image_ctx_done(struct diff_area_image_ctx *io_ctx)
 {
-	if (!io_ctx->chunk)
+	struct chunk *chunk = io_ctx->chunk;
+
+	if (!chunk)
 		return;
 
-	diff_area_image_put_chunk(io_ctx->chunk, io_ctx->is_write);
+	if (io_ctx->in_chunk_map)
+		diff_area_image_put_chunk(chunk, io_ctx->is_write);
+	else {
+		up(&chunk->lock);
+		chunk_free(chunk);
+	}
 }
 
 static int diff_area_load_chunk_from_storage(struct diff_area *diff_area,
@@ -609,8 +617,10 @@ diff_area_image_context_get_chunk(struct diff_area_image_ctx *io_ctx,
 		 */
 		if (io_ctx->in_chunk_map)
 			diff_area_image_put_chunk(chunk, io_ctx->is_write);
-		else
+		else {
+			up(&chunk->lock);
 			chunk_free(chunk);
+		}
 		io_ctx->chunk = NULL;
 	}
 
