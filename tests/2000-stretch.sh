@@ -16,13 +16,14 @@ blksnap_version
 
 TESTDIR=~/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE=~/diff_storage/
+DIFF_STORAGE_DIR=~/diff_storage/
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
-rm -rf ${DIFF_STORAGE}
+chattr -i ${DIFF_STORAGE_DIR}/*
+rm -rf ${DIFF_STORAGE_DIR}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
-mkdir -p ${DIFF_STORAGE}
+mkdir -p ${DIFF_STORAGE_DIR}
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
@@ -43,11 +44,7 @@ blksnap_snapshot_create "${DEVICE_1}"
 generate_files ${MOUNTPOINT_1} "tracked" 5
 drop_cache
 
-#fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
-#blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
-
-#echo "Call: ${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE} --limit=1024"
-blksnap_stretch_snapshot ${DIFF_STORAGE} 1024
+blksnap_stretch_snapshot ${DIFF_STORAGE_DIR} 1024
 #echo "Press for taking snapshot..."
 #read -n 1
 

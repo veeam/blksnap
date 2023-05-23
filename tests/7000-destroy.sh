@@ -49,8 +49,8 @@ drop_cache
 blksnap_snapshot_create "${DEVICE_1}"
 
 DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage0
-rm -f ${DIFF_STORAGE}
 fallocate --length 128MiB ${DIFF_STORAGE}
+chattr +i ${DIFF_STORAGE}
 blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 
 blksnap_snapshot_take
@@ -76,6 +76,7 @@ blksnap_snapshot_destroy
 
 umount --lazy --force ${IMAGE_1}
 
+chattr -i ${DIFF_STORAGE}
 rm ${DIFF_STORAGE}
 
 echo "Destroy device"

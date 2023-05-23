@@ -53,28 +53,27 @@ fi
 
 if [ -z $2 ]
 then
-	END="3"
+	ITERATION_CNT="3"
 else
-	END="$2"
+	ITERATION_CNT="$2"
 fi
 
 IMAGE=/mnt/blksnap-image0
 mkdir -p ${IMAGE}
 
-DIFF_STORAGE="${ORIGINAL}/diff_storage"
-mkdir -p ${DIFF_STORAGE}
-
-fallocate --length 256MiB "${DIFF_STORAGE}/#0" &
+DIFF_STORAGE="${ORIGINAL}/diff_storage0"
+fallocate --length 256MiB "${DIFF_STORAGE}" &
+chattr +i ${DIFF_STORAGE}
 
 generate_files ${ORIGINAL} "original-it#0" 5
 drop_cache
 
-for ITERATOR in $(seq 1 $END)
+for ITERATOR in $(seq 1 $ITERATION_CNT)
 do
 	echo "Itearation: ${ITERATOR}"
 
 	blksnap_snapshot_create ${DEVICE}
-	blksnap_snapshot_appendstorage "${DIFF_STORAGE}/#0"
+	blksnap_snapshot_appendstorage "${DIFF_STORAGE}"
 	blksnap_snapshot_take
 
 	DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
@@ -113,6 +112,9 @@ do
 
 	blksnap_snapshot_destroy
 done
+
+chattr -i ${DIFF_STORAGE}
+rm ${DIFF_STORAGE}
 
 if [ -z $1 ]
 then

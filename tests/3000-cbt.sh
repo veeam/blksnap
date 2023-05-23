@@ -16,13 +16,14 @@ blksnap_version
 
 TESTDIR=~/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE=~/diff_storage/
+DIFF_STORAGE_DIR=~/diff_storage/
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
-rm -rf ${DIFF_STORAGE}
+rm -rf ${DIFF_STORAGE_DIR}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
-mkdir -p ${DIFF_STORAGE}
+mkdir -p ${DIFF_STORAGE_DIR}
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
@@ -38,12 +39,13 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 generate_files ${MOUNTPOINT_1} "before" 5
 drop_cache
 
-fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
+chattr +i ${DIFF_STORAGE}
+fallocate --length 256MiB "${DIFF_STORAGE}"
 
 # full
 echo "First snapshot for just attached devices"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt0.map
@@ -59,7 +61,7 @@ cmp -l ${TESTDIR}/cbt0.map ${TESTDIR}/cbt0_.map
 # increment 1
 echo "First increment"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt1.map
@@ -73,7 +75,7 @@ cmp -l ${TESTDIR}/cbt1.map ${TESTDIR}/cbt1_.map
 # increment 2
 echo "Second increment"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt2.map
@@ -87,7 +89,7 @@ cmp -l ${TESTDIR}/cbt2.map ${TESTDIR}/cbt2_.map
 # increment 3
 echo "Second increment"
 blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_appendstorage "${DIFF_STORAGE}"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3.map
@@ -96,6 +98,9 @@ blksnap_markdirty ${DEVICE_1} "${MOUNTPOINT_1}/dirty_file"
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3_.map
 
 blksnap_snapshot_destroy
+
+chattr -i "${DIFF_STORAGE}"
+rm "${DIFF_STORAGE}"
 set +e
 echo "dirty blocks:"
 cmp -l ${TESTDIR}/cbt3.map ${TESTDIR}/cbt3_.map 2>&1

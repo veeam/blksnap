@@ -64,6 +64,7 @@ blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
 DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage0
 rm -f ${DIFF_STORAGE}
 fallocate --length 1GiB ${DIFF_STORAGE}
+chattr +i ${DIFF_STORAGE}
 blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 
 blksnap_snapshot_take
@@ -104,7 +105,7 @@ blksnap_snapshot_destroy
 
 #echo "Destroy snapshot, press ..."
 #read -n 1
-
+chattr -i ${DIFF_STORAGE}
 rm ${DIFF_STORAGE}
 
 drop_cache

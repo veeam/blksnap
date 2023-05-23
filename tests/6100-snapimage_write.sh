@@ -32,17 +32,16 @@ DEVICE=$(loop_device_attach ${LOOPFILE})
 
 if [ -z $1 ]
 then
-	END="1"
+	ITERATION_CNT="1"
 else
-	END="$1"
+	ITERATION_CNT="$1"
 fi
 
-DIFF_STORAGE="${TESTDIR}/diff_storage"
-mkdir -p ${DIFF_STORAGE}
+DIFF_STORAGE="${TESTDIR}/diff_storage0"
+chattr +i ${DIFF_STORAGE}
+fallocate --length 256MiB "${DIFF_STORAGE}" &
 
-fallocate --length 256MiB "${DIFF_STORAGE}/#0" &
-
-for ITERATOR in $(seq 1 $END)
+for ITERATOR in $(seq 1 $ITERATION_CNT)
 do
 	echo "Itearation: ${ITERATOR}"
 
@@ -83,6 +82,9 @@ do
 
 	blksnap_snapshot_destroy
 done
+
+chattr -i ${DIFF_STORAGE}
+rm ${DIFF_STORAGE}
 
 echo "Destroy original loop device"
 

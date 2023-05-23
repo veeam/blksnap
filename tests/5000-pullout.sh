@@ -2,6 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
+if [ -z $1 ]
+then
+	DIFF_STORAGE_DIR=${HOME}
+else
+	DIFF_STORAGE_DIR=$1
+fi
+echo "Diff storage directory ${DIFF_STORAGE_DIR}"
+
 . ./functions.sh
 . ./blksnap.sh
 
@@ -53,9 +61,11 @@ echo "Block device prepared"
 
 blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
 
-DIFF_STORAGE=~/diff_storage0
-rm -f ${DIFF_STORAGE}
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage0"
+chattr -i ${DIFF_STORAGE}
+rm ${DIFF_STORAGE}
 fallocate --length 1GiB ${DIFF_STORAGE}
+chattr +i ${DIFF_STORAGE}
 blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 
 blksnap_snapshot_take
@@ -97,6 +107,7 @@ echo "Destroy snapshot"
 #echo "press ..."
 #read -n 1
 
+chattr -i ${DIFF_STORAGE}
 rm ${DIFF_STORAGE}
 
 drop_cache
