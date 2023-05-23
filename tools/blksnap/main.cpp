@@ -191,6 +191,90 @@ namespace
         CDeviceCtl deviceCtl;
     };
 
+    static void FsChattr(int fd, int set_flags, int clear_flags)
+    {
+        int attr = 0;
+
+        if (::ioctl(fd, FS_IOC_GETFLAGS, &attr))
+            throw std::system_error(errno, std::generic_category(), "Failed to get file flags.");
+
+        attr &= ~clear_flags;
+        attr |= set_flags;
+
+        if (::ioctl(fd, FS_IOC_SETFLAGS, &attr ))
+            throw std::system_error(errno, std::generic_category(), "Failed to set file flags.");
+    };
+
+    class OpenFileHolder
+    {
+    public:
+        OpenFileHolder(const std::string& filename, int flags)
+            : m_fd(0)
+        {
+            int fd = ::open(filename.c_str(), flags);
+            if (fd < 0)
+                throw std::system_error(errno, std::generic_category(), "Cannot open file.");
+            m_fd = fd;
+        };
+        ~OpenFileHolder()
+        {
+            if (m_fd) {
+                ::close(m_fd);
+                m_fd = 0;
+            }
+        };
+
+        int Get()
+        {
+            return m_fd;
+        } ;
+    private:
+        int m_fd;
+    };
+
+    static void SetImmutable(const std::string& filename)
+    {
+        OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
+        FsChattr(fileHolder.Get(), FS_IMMUTABLE_FL, 0);
+    }
+
+    static void ClearImmutable(const std::string& filename)
+    {
+        OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
+        FsChattr(fileHolder.Get(), 0, FS_IMMUTABLE_FL);
+    }
+
+    class DiffStorageFilesHolder
+    {
+    public:
+        DiffStorageFilesHolder()
+        {};
+        ~DiffStorageFilesHolder()
+        {
+            for (const std::string& filename : m_files)
+            {
+                try
+                {
+                    ClearImmutable(filename);
+                    if (::remove(filename.c_str()))
+                        throw std::system_error(errno, std::generic_category(), "Cannot remove file.");
+                }
+                catch (std::exception& ex)
+                {
+                    std::cout << "Failed to cleanup difference storage file \"" <<
+                        filename << "\": " << ex.what() << std::endl;
+                }
+            }
+        };
+        void Append(const std::string& filename)
+        {
+            SetImmutable(filename);
+            m_files.emplace_back(filename);
+        };
+
+    private:
+        std::vector<std::string> m_files;
+    };
 
     static inline struct blksnap_sectors parseRange(const std::string& str)
     {
@@ -760,9 +844,13 @@ public:
 
         Uuid id(vm["id"].as<std::string>());
 
-
         if (vm.count("file"))
-            fiemapStorage(vm["file"].as<std::string>(), devicePath, ranges);
+        {
+            std::string filename = vm["file"].as<std::string>();
+
+            SetImmutable(filename);
+            fiemapStorage(filename, devicePath, ranges);
+        }
         else
         {
             if (!vm.count("device"))
@@ -935,13 +1023,12 @@ class StretchSnapshotArgsProc : public IArgsProc
 private:
     Uuid m_id;
     std::string m_path;
-    std::vector<std::string> m_allocated_sectFiles;
     int m_counter;
-    unsigned long long m_allocated_sect;
-    unsigned long long m_limit_sect;
+    unsigned long long m_allocatedSectors;
+    unsigned long long m_limitSectors;
 
 private:
-    void ProcessLowFreeSpace(const CBlksnapFileWrap& blksnapFd, unsigned int time_label, struct blksnap_event_low_free_space* data)
+    std::string ProcessLowFreeSpace(const CBlksnapFileWrap& blksnapFd, unsigned int time_label, struct blksnap_event_low_free_space* data)
     {
         std::string filename;
         int fd;
@@ -949,11 +1036,8 @@ private:
         std::cout << time_label << " - Low free space in diff storage. Requested " << data->requested_nr_sect
                   << " sectors." << std::endl;
 
-        if (m_allocated_sect > m_limit_sect)
-        {
-            std::cerr << "The diff storage limit has been achieved." << std::endl;
-            return;
-        }
+        if (m_allocatedSectors > m_limitSectors)
+            throw std::runtime_error("The diff storage limit has been achieved.");
 
         fs::path filepath(m_path);
         filepath += "diff_storage#";
@@ -962,20 +1046,12 @@ private:
             fs::remove(filepath);
         filename = filepath.string();
 
-        fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, 0600);
-        if (fd < 0)
-            throw std::system_error(errno, std::generic_category(), "Failed to create file for diff storage.");
-        m_allocated_sectFiles.push_back(filename);
-
-        if (::fallocate64(fd, 0, 0, data->requested_nr_sect * SECTOR_SIZE))
         {
-            int err = errno;
-
-            ::close(fd);
-            throw std::system_error(err, std::generic_category(), "Failed to allocate file for diff storage.");
+            OpenFileHolder fileHolder(filename, O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);
+            if (::fallocate64(fileHolder.Get(), 0, 0, data->requested_nr_sect * SECTOR_SIZE))
+                throw std::system_error(errno, std::generic_category(), "Failed to allocate file for diff storage.");
         }
-        ::close(fd);
-        m_allocated_sect += data->requested_nr_sect;
+        m_allocatedSectors += data->requested_nr_sect;
 
         std::vector<struct blksnap_sectors> ranges;
         std::string devicePath;
@@ -983,6 +1059,8 @@ private:
         fiemapStorage(filename, devicePath, ranges);
 
         AppendStorage(blksnapFd.get(), m_id, devicePath, ranges);
+
+        return filename;
     };
 
     void ProcessEventCorrupted(unsigned int time_label, struct blksnap_event_corrupted* data)
@@ -1018,14 +1096,16 @@ public:
         m_path = vm["path"].as<std::string>();
 
         if (vm.count("limit"))
-            m_limit_sect = (1024ULL * 1024 / SECTOR_SIZE) * vm["limit"].as<unsigned int>();
+            m_limitSectors = (1024ULL * 1024 / SECTOR_SIZE) * vm["limit"].as<unsigned int>();
         else
-            m_limit_sect = -1ULL;
+            m_limitSectors = -1ULL;
 
         std::cout << "Stretch snapshot service started." << std::endl;
 
         try
         {
+            DiffStorageFilesHolder diffFiles;
+
             uuid_copy(param.id.b, m_id.Get());
             param.timeout_ms = 1000;
             m_counter = 0;
@@ -1044,7 +1124,8 @@ public:
                 switch (param.code)
                 {
                 case blksnap_event_code_low_free_space:
-                    ProcessLowFreeSpace(blksnapFd, param.time_label, (struct blksnap_event_low_free_space*)param.data);
+                    diffFiles.Append(ProcessLowFreeSpace(
+                        blksnapFd, param.time_label, (struct blksnap_event_low_free_space*)param.data));
                     break;
                 case blksnap_event_code_corrupted:
                     ProcessEventCorrupted(param.time_label, (struct blksnap_event_corrupted*)param.data);
@@ -1054,11 +1135,6 @@ public:
                     std::cout << param.time_label << " - unsupported event #" << param.code << "." << std::endl;
                 }
             }
-
-            for (const std::string& filename : m_allocated_sectFiles)
-                if (::remove(filename.c_str()))
-                    std::cout << "Failed to cleanup diff storage file \"" << filename << "\". " << std::strerror(errno)
-                              << std::endl;
         }
         catch (std::system_error& ex){
             if (ex.code() == std::error_code(ESRCH, std::generic_category()))

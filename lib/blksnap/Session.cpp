@@ -53,6 +53,88 @@ struct SRangeVectorPos
     {};
 };
 
+static void FsChattr(int fd, int set_flags, int clear_flags)
+{
+    int attr = 0;
+
+    if (::ioctl(fd, FS_IOC_GETFLAGS, &attr))
+        throw std::system_error(errno, std::generic_category(), "Failed to get file flags.");
+
+    attr &= ~clear_flags;
+    attr |= set_flags;
+
+    if (::ioctl(fd, FS_IOC_SETFLAGS, &attr ))
+        throw std::system_error(errno, std::generic_category(), "Failed to set file flags.");
+}
+
+class OpenFileHolder
+{
+public:
+    OpenFileHolder(const std::string& filename, int flags)
+    {
+        int fd = ::open(filename.c_str(), flags);
+        if (fd < 0)
+            throw std::system_error(errno, std::generic_category(), "Cannot open file.");
+        m_fd = fd;
+    };
+    ~OpenFileHolder()
+    {
+        ::close(m_fd);
+    };
+
+    int Get()
+    {
+        return m_fd;
+    } ;
+private:
+    int m_fd;
+};
+
+static void SetImmutable(const std::string& filename)
+{
+    OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
+    FsChattr(fileHolder.Get(), FS_IMMUTABLE_FL, 0);
+}
+
+static void ClearImmutable(const std::string& filename)
+{
+    OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
+    FsChattr(fileHolder.Get(), 0, FS_IMMUTABLE_FL);
+}
+
+
+class DiffStorageFilesHolder
+{
+public:
+    DiffStorageFilesHolder()
+    {};
+    ~DiffStorageFilesHolder()
+    {
+        for (const std::string& filename : m_files)
+        {
+            try
+            {
+                ClearImmutable(filename);
+                if (::remove(filename.c_str()))
+                    throw std::system_error(errno, std::generic_category(), "Cannot remove file.");
+            }
+            catch (std::exception& ex)
+            {
+                std::cout << "Failed to cleanup difference storage file \"" <<
+                    filename << "\": " << ex.what() << std::endl;
+            }
+        }
+    };
+    void Append(const std::string& filename)
+    {
+        SetImmutable(filename);
+        m_files.emplace_back(filename);
+    };
+
+private:
+    std::vector<std::string> m_files;
+};
+
 struct SState
 {
     std::atomic<bool> stop;
@@ -60,7 +142,7 @@ struct SState
     CSnapshotId id;
     std::mutex lock;
     std::list<std::string> errorMessage;
-    std::vector<std::string> diffStorageFiles;
+    DiffStorageFilesHolder diffStorageFiles;
 
     std::vector<SRange> diffStorageRanges;
     std::string diffDevicePath;
@@ -290,11 +372,11 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
                         fs::remove(filepath);
                     std::string filename = filepath.string();
 
+                    FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
                     {
                         std::lock_guard<std::mutex> guard(ptrState->lock);
-                        ptrState->diffStorageFiles.push_back(filename);
+                        ptrState->diffStorageFiles.Append(filename);
                     }
-                    FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
                     FiemapStorage(filename, devicePath, ranges);
                 }
                 else
@@ -367,8 +449,8 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
                     fs::remove(filepath);
                 std::string filename = filepath.string();
 
-                m_ptrState->diffStorageFiles.push_back(filename);
                 FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
+                m_ptrState->diffStorageFiles.Append(filename);
                 FiemapStorage(filename, devicePath, ranges);
             }
             else
@@ -416,20 +498,6 @@ CSession::~CSession()
     {
         std::cerr << ex.what() << std::endl;
         return;
-    }
-
-    // Cleanup diff storage files
-    for (const std::string& filename : m_ptrState->diffStorageFiles)
-    {
-        try
-        {
-            if (::remove(filename.c_str()))
-                throw std::system_error(errno, std::generic_category(), "[TBD]Failed to remove diff storage file.");
-        }
-        catch (std::exception& ex)
-        {
-            std::cerr << ex.what() << std::endl;
-        }
     }
 }
 
