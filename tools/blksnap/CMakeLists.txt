@@ -23,4 +23,4 @@ set(TOOLS_LIBS ${LIBUUID_LIBRARY} blksnap-dev Boost::filesystem Boost::program_o
 target_link_libraries(${PROJECT_NAME} PRIVATE ${TOOLS_LIBS})
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 
-install(TARGETS ${PROJECT_NAME} DESTINATION sbin)
+install(TARGETS ${PROJECT_NAME} DESTINATION /usr/sbin)
