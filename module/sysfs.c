@@ -15,15 +15,20 @@
 #include "log.h"
 #endif
 
+#if defined(HAVE_DEFINE_CLASS_CREATE_H)
 static ssize_t major_show(struct class *class, struct class_attribute *attr,
 			  char *buf)
+#else
+static ssize_t major_show(const struct class *class, const struct class_attribute *attr,
+			  char *buf)
+#endif
 {
 	sprintf(buf, "%d", get_blk_snap_major());
 	return strlen(buf);
 }
 
 /* Declare class_attr_major */
-CLASS_ATTR_RO(major);
+static CLASS_ATTR_RO(major);
 
 static struct class *blk_snap_class;
 
@@ -34,7 +39,11 @@ int sysfs_init(void)
 	struct device *dev;
 	int res;
 
+#if defined(HAVE_DEFINE_CLASS_CREATE_H)
 	blk_snap_class = class_create(THIS_MODULE, BLK_SNAP_MODULE_NAME);
+#else
+	blk_snap_class = class_create(BLK_SNAP_MODULE_NAME);
+#endif
 	if (IS_ERR(blk_snap_class)) {
 		res = PTR_ERR(blk_snap_class);
 
