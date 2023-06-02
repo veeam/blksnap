@@ -62,6 +62,9 @@ SNAPSHOT_APPENDSTORAGE - Append space in difference storage for snapshot.
 
 .B blksnap snapshot_appendstorage --id <snapshot uuid> {--file <file name> | --device <device name> --range <sectors range>}
 
+.B WARNING:
+When using a file to store snapshot data, it is important that the file is not writable by other programs, has not been deleted, and its location on disk should not change. Otherwise, it may cause the snapshot data to be corrupted or the data on the original file system to be corrupted. To avoid changing the file location, in particular due to defragmentation, it is recommended to set the 'immutable' attribute for the file.
+
 .HP 5
 SNAPSHOT_COLLECT - Get collection of snapshots.
 
