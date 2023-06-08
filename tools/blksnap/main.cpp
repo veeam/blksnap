@@ -581,7 +581,7 @@ public:
         std::vector<unsigned char> buf(std::min(32*1024u, elapsed));
         struct blksnap_cbtmap arg = {
             .offset = 0,
-            .buffer = buf.data()
+            .buffer = (__u64)buf.data()
         };
         while (elapsed) {
             arg.length = std::min(static_cast<unsigned int>(buf.size()), elapsed);
@@ -637,7 +637,7 @@ public:
         CBlkFilterCtl ctl(devicePath);
         struct blksnap_cbtdirty arg = {
             .count = static_cast<unsigned int>(ranges.size()),
-            .dirty_sectors = ranges.data()
+            .dirty_sectors = (__u64)ranges.data()
         };
         ctl.Control(blkfilter_ctl_blksnap_cbtdirty, &arg, sizeof(arg));
     }
@@ -810,10 +810,10 @@ static inline void AppendStorage(const int blksnapFd, const Uuid& id, const std:
     strncpy(bdev_path.get(), devicePath.c_str(), size);
     bdev_path[size] = '\0';
 
-    param.bdev_path = reinterpret_cast<__u8 *>(bdev_path.get());
+    param.bdev_path = (__u64)bdev_path.get();
     param.bdev_path_size = size + 1;
     param.count = ranges.size();
-    param.ranges = ranges.data();
+    param.ranges = (__u64)ranges.data();
     if (::ioctl(blksnapFd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
         throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot");
 }
@@ -986,7 +986,7 @@ private:
             return;
 
         std::vector<struct blksnap_uuid> id_array(param.count);
-        param.ids = id_array.data();
+        param.ids = (__u64)id_array.data();
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
             throw std::system_error(errno, std::generic_category(), "Failed to get list of snapshots.");

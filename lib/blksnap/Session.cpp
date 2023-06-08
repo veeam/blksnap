@@ -315,7 +315,7 @@ namespace
             requestedSectors -= sz;
         }
     }
-    static void LogAppendedRanges(std::vector<struct blksnap_sectors>& ranges)
+    static void LogAppendedRanges(const std::vector<struct blksnap_sectors>& ranges)
     {
         sector_t totalSectors = 0;
 

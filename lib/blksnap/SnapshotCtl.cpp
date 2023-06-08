@@ -103,7 +103,7 @@ void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
         return;
 
     std::vector<struct blksnap_uuid> id_array(param.count);
-    param.ids = id_array.data();
+    param.ids = (__u64)id_array.data();
 
     if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
         throw std::system_error(errno, std::generic_category(),
@@ -114,7 +114,7 @@ void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
 }
 
 void CSnapshotCtl::AppendDiffStorage(const CSnapshotId& id, const std::string& devicePath,
-                                 const std::vector<struct blksnap_sectors>& ranges)
+                                     std::vector<struct blksnap_sectors>& ranges)
 {
     struct blksnap_snapshot_append_storage param;
 
@@ -125,12 +125,10 @@ void CSnapshotCtl::AppendDiffStorage(const CSnapshotId& id, const std::string& d
     strncpy(bdev_path.get(), devicePath.c_str(), size);
     bdev_path[size] = '\0';
 
-    std::vector<struct blksnap_sectors> _ranges(ranges);
-
-    param.bdev_path = reinterpret_cast<__u8 *>(bdev_path.get());
+    param.bdev_path = (__u64)bdev_path.get();
     param.bdev_path_size = size + 1;
-    param.count = _ranges.size();
-    param.ranges = _ranges.data();
+    param.count = ranges.size();
+    param.ranges = (__u64)ranges.data();
     if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to append storage for snapshot");

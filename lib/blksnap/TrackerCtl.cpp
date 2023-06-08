@@ -89,7 +89,7 @@ void CTrackerCtl::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* 
 {
     struct blksnap_cbtmap arg = {
         .offset = offset,
-        .buffer = buff
+        .buffer = (__u64)buff
     };
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
@@ -107,7 +107,7 @@ void CTrackerCtl::MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges)
 {
     struct blksnap_cbtdirty arg = {
         .count = static_cast<unsigned int>(ranges.size()),
-        .dirty_sectors = ranges.data(),
+        .dirty_sectors = (__u64)ranges.data(),
     };
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,

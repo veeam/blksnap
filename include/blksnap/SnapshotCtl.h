@@ -115,7 +115,7 @@ namespace blksnap
         void Destroy(const CSnapshotId& id);
         void Collect(std::vector<CSnapshotId>& ids);
         void AppendDiffStorage(const CSnapshotId& id, const std::string& devicePath,
-                               const std::vector<struct blksnap_sectors>& ranges);
+                               std::vector<struct blksnap_sectors>& ranges);
         void Take(const CSnapshotId& id);
         bool WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlksnapEvent& ev);
 
