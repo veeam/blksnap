@@ -36,11 +36,11 @@ MOUNTPOINT_1=${MPDIR}/simple_1
 mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
-generate_files ${MOUNTPOINT_1} "before" 5
+generate_files direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
-chattr +i ${DIFF_STORAGE}
 fallocate --length 256MiB "${DIFF_STORAGE}"
+chattr +i ${DIFF_STORAGE}
 
 # full
 echo "First snapshot for just attached devices"

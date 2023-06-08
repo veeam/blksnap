@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 #
 # SPDX-License-Identifier: GPL-2.0+
 
@@ -38,15 +38,15 @@ else
 fi
 
 DIFF_STORAGE="${TESTDIR}/diff_storage0"
+fallocate --length 256MiB "${DIFF_STORAGE}"
 chattr +i ${DIFF_STORAGE}
-fallocate --length 256MiB "${DIFF_STORAGE}" &
 
 for ITERATOR in $(seq 1 $ITERATION_CNT)
 do
 	echo "Itearation: ${ITERATOR}"
 
 	blksnap_snapshot_create ${DEVICE}
-	blksnap_snapshot_appendstorage "${DIFF_STORAGE}/#0"
+	blksnap_snapshot_appendstorage "${DIFF_STORAGE}"
 	blksnap_snapshot_take
 
 	DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
@@ -54,31 +54,31 @@ do
 	FILE="${TESTDIR}/image-it#${ITERATOR}"
 	generate_file_magic ${FILE} 2048
 
-	dd if=${FILE} of=${DEVICE} bs=1KiB count=1024 seek=0 oflag=direct
+	dd if=${FILE} of=${DEVICE} bs=1KiB count=1024 seek=0 oflag=direct status=none
 
-	dd if=${FILE} of=${DEVICE_IMAGE} bs=1KiB count=1024 seek=126 oflag=direct conv=sync
+	dd if=${FILE} of=${DEVICE_IMAGE} bs=1KiB count=1024 seek=126 oflag=direct status=none
 
-	dd if=${FILE} of=${DEVICE_IMAGE} bs=1KiB count=1024 seek=$((2048 + 126)) oflag=direct conv=sync
+	dd if=${FILE} of=${DEVICE_IMAGE} bs=1KiB count=1024 seek=$((2048 + 126)) oflag=direct status=none
 
-	dd if=${FILE} of=${DEVICE_IMAGE} bs=1KiB count=1024 seek=$((4096 + 126)) oflag=direct conv=sync
+	dd if=${FILE} of=${DEVICE_IMAGE} bs=1KiB count=1024 seek=$((4096 + 126)) oflag=direct status=none
 
 
 	sync ${DEVICE_IMAGE}
-	echo "pause, press ..."
-	read -n 1
+	# echo "pause, press ..."
+	# read -n 1
 
-	dd if=${DEVICE_IMAGE} of="${FILE}_copy" bs=1KiB count=1024 skip=126 iflag=direct conv=sync
+	dd if=${DEVICE_IMAGE} of="${FILE}_copy" bs=1KiB count=1024 skip=126 iflag=direct status=none
 	cmp ${FILE} "${FILE}_copy" && echo "Files are equal."
 
-	dd if=${DEVICE_IMAGE} of="${FILE}_copy1" bs=1KiB count=1024 skip=$((2048 + 126)) iflag=direct conv=sync
+	dd if=${DEVICE_IMAGE} of="${FILE}_copy1" bs=1KiB count=1024 skip=$((2048 + 126)) iflag=direct status=none
 	cmp ${FILE} "${FILE}_copy1" && echo "Files are equal."
 
-	dd if=${DEVICE_IMAGE} of="${FILE}_copy2" bs=1KiB count=1024 skip=$((4096 + 126)) oflag=direct conv=sync
+	dd if=${DEVICE_IMAGE} of="${FILE}_copy2" bs=1KiB count=1024 skip=$((4096 + 126)) oflag=direct status=none
 	cmp ${FILE} "${FILE}_copy2" && echo "Files are equal."
 
 
-	echo "pause, press ..."
-	read -n 1
+	# echo "pause, press ..."
+	# read -n 1
 
 	blksnap_snapshot_destroy
 done

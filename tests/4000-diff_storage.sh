@@ -33,8 +33,6 @@ MP_DIR=/mnt/blksnap-test
 DIFF_STORAGE_DIR=${TEST_DIR}/diff_storage/
 
 rm -rf ${MP_DIR}
-chattr -i ${DIFF_STORAGE_DIR}/*
-rm -rf ${DIFF_STORAGE_DIR}
 mkdir -p ${MP_DIR}
 mkdir -p ${DIFF_STORAGE_DIR}
 

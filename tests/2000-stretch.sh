@@ -36,12 +36,12 @@ MOUNTPOINT_1=${MPDIR}/simple_1
 mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
-generate_files ${MOUNTPOINT_1} "before" 5
+generate_files direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
 blksnap_snapshot_create "${DEVICE_1}"
 
-generate_files ${MOUNTPOINT_1} "tracked" 5
+generate_files direct ${MOUNTPOINT_1} "tracked" 5
 drop_cache
 
 blksnap_stretch_snapshot ${DIFF_STORAGE_DIR} 1024

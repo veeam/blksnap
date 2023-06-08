@@ -43,7 +43,7 @@ mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
 echo "Write to original before taking snapshot"
-generate_files ${MOUNTPOINT_1} "before" 9
+generate_files direct ${MOUNTPOINT_1} "before" 9
 drop_cache
 
 blksnap_snapshot_create "${DEVICE_1}"
@@ -61,20 +61,32 @@ IMAGE_1=${TESTDIR}/image0
 mkdir -p ${IMAGE_1}
 mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 
-echo "Write to original after taking snapshot"
-generate_files ${MOUNTPOINT_1} "after" 4 &
+set +e
 
+echo "Write to original after taking snapshot"
+generate_files direct ${MOUNTPOINT_1} "after" 4 &
+PID_GEN1=$!
 dd if=${DEVICE_IMAGE_1} of=/dev/zero &
+PID_DD1=$!
 
 echo "Write to snapshot"
-generate_files ${IMAGE_1} "snapshot" 4 &
-
+generate_files direct ${IMAGE_1} "snapshot" 4 &
+PID_GEN2=$!
 dd if=${DEVICE_IMAGE_1} of=/dev/zero &
+PID_DD2=$!
 
 echo "Destroy snapshot ..."
 blksnap_snapshot_destroy
 
 umount --lazy --force ${IMAGE_1}
+
+echo "Waiting for all process terminate"
+wait ${PID_GEN1}
+wait ${PID_DD1}
+wait ${PID_GEN2}
+wait ${PID_DD2}
+
+set -e
 
 chattr -i ${DIFF_STORAGE}
 rm ${DIFF_STORAGE}

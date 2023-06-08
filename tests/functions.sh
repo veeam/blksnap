@@ -44,15 +44,16 @@ generate_file_magic()
 	echo "file: ${FILE} size: ${SECTORS} sectors"
 	for ((ITER = 0 ; ITER < ${SECTORS} ; ITER++))
 	do
-		echo "BLKSNAP" >> ${FILE} && dd if=/dev/urandom of=${FILE} count=1 bs=504 oflag=append conv=notrunc
+		echo "BLKSNAP" >> ${FILE} && dd if=/dev/urandom of=${FILE} count=1 bs=504 oflag=append conv=notrunc status=none
 	done
 }
 
 generate_files()
 {
-	local TARGET_DIR=$1
-	local PREFIX=$2
-	local CNT=$3
+	local FLAGS=$1
+	local TARGET_DIR=$2
+	local PREFIX=$3
+	local CNT=$4
 
 	echo "generate files in ${TARGET_DIR}"
 
@@ -63,7 +64,7 @@ generate_files()
 
 		let "SZ = ${SZ} % 100 + 8"
 		echo "file: ${FILE} size: ${SZ} KiB"
-		dd if=/dev/urandom of=${FILE} count=${SZ} oflag=direct bs=1024 status=none
+		dd if=/dev/urandom of=${FILE} count=${SZ} bs=1024 status=none oflag=${FLAGS}
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 	done
 	echo "generate complete"

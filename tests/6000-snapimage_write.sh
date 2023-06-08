@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 #
 # SPDX-License-Identifier: GPL-2.0+
 
@@ -65,7 +65,7 @@ DIFF_STORAGE="${ORIGINAL}/diff_storage0"
 fallocate --length 256MiB "${DIFF_STORAGE}" &
 chattr +i ${DIFF_STORAGE}
 
-generate_files ${ORIGINAL} "original-it#0" 5
+generate_files direct ${ORIGINAL} "original-it#0" 5
 drop_cache
 
 for ITERATOR in $(seq 1 $ITERATION_CNT)
