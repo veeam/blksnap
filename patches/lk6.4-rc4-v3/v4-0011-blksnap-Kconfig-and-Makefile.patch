@@ -1,0 +1,82 @@
+From 1963bd0052225d83b48d4b2752f640ee126620a6 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Fri, 9 Jun 2023 11:07:01 +0200
+Subject: [PATCH v4 11/11] blksnap: Kconfig and Makefile
+
+Allows to build a module and add the blksnap to the kernel tree.
+
+Co-developed-by: Christoph Hellwig <hch@infradead.org>
+Signed-off-by: Christoph Hellwig <hch@infradead.org>
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/Kconfig          |  2 ++
+ drivers/block/Makefile         |  2 ++
+ drivers/block/blksnap/Kconfig  | 12 ++++++++++++
+ drivers/block/blksnap/Makefile | 15 +++++++++++++++
+ 4 files changed, 31 insertions(+)
+ create mode 100644 drivers/block/blksnap/Kconfig
+ create mode 100644 drivers/block/blksnap/Makefile
+
+diff --git a/drivers/block/Kconfig b/drivers/block/Kconfig
+index 5b9d4aaebb81..74d2d55526a3 100644
+--- a/drivers/block/Kconfig
++++ b/drivers/block/Kconfig
+@@ -404,4 +404,6 @@ config BLKDEV_UBLK_LEGACY_OPCODES
+
+ source "drivers/block/rnbd/Kconfig"
+
++source "drivers/block/blksnap/Kconfig"
++
+ endif # BLK_DEV
+diff --git a/drivers/block/Makefile b/drivers/block/Makefile
+index 101612cba303..9a2a9a56a247 100644
+--- a/drivers/block/Makefile
++++ b/drivers/block/Makefile
+@@ -40,3 +40,5 @@ obj-$(CONFIG_BLK_DEV_NULL_BLK)	+= null_blk/
+ obj-$(CONFIG_BLK_DEV_UBLK)			+= ublk_drv.o
+
+ swim_mod-y	:= swim.o swim_asm.o
++
++obj-$(CONFIG_BLKSNAP) += blksnap/
+diff --git a/drivers/block/blksnap/Kconfig b/drivers/block/blksnap/Kconfig
+new file mode 100644
+index 000000000000..14081359847b
+--- /dev/null
++++ b/drivers/block/blksnap/Kconfig
+@@ -0,0 +1,12 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Block device snapshot module configuration
++#
++
++config BLKSNAP
++	tristate "Block Devices Snapshots Module (blksnap)"
++	help
++	  Allow to create snapshots and track block changes for block devices.
++	  Designed for creating backups for simple block devices. Snapshots are
++	  temporary and are released then backup is completed. Change block
++	  tracking allows to create incremental or differential backups.
+diff --git a/drivers/block/blksnap/Makefile b/drivers/block/blksnap/Makefile
+new file mode 100644
+index 000000000000..8d528b95579a
+--- /dev/null
++++ b/drivers/block/blksnap/Makefile
+@@ -0,0 +1,15 @@
++# SPDX-License-Identifier: GPL-2.0
++
++blksnap-y := 		\
++	cbt_map.o	\
++	chunk.o		\
++	diff_area.o	\
++	diff_buffer.o	\
++	diff_storage.o	\
++	event_queue.o	\
++	main.o		\
++	snapimage.o	\
++	snapshot.o	\
++	tracker.o
++
++obj-$(CONFIG_BLKSNAP)	 += blksnap.o
+--
+2.20.1
+
