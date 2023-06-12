@@ -16,10 +16,10 @@ blksnap_version
 
 TESTDIR=~/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE_DIR=~/diff_storage/
+DIFF_STORAGE_DIR=~/diff_storage
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
-chattr -i ${DIFF_STORAGE_DIR}/*
+chattr -i ${DIFF_STORAGE_DIR}/* | echo "${DIFF_STORAGE_DIR} already clean"
 rm -rf ${DIFF_STORAGE_DIR}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
