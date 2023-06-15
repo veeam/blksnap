@@ -60,5 +60,5 @@ EXTRA_CFLAGS += $(shell 							\
 		echo -D HAVE_BDEV_BIO_ALLOC)
 
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device/class.h &&	\
-	grep -qw "#define class_create" $(srctree)/include/linux/device/class.h && \
+	grep -qw "\#define class_create" $(srctree)/include/linux/device/class.h && \
 		echo -D HAVE_DEFINE_CLASS_CREATE_H)
