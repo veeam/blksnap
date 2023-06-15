@@ -59,6 +59,10 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device/class.h &&	\
 	grep -qw "\#define class_create" $(srctree)/include/linux/device/class.h && \
 		echo -D HAVE_DEFINE_CLASS_CREATE_H)
+# special for sles 15 sp3
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device.h &&	\
+	grep -qw "\#define class_create" $(srctree)/include/linux/device.h && \
+		echo -D HAVE_DEFINE_CLASS_CREATE_H)
 
 # The power of 2 for minimum tracking block size.
 # The minimum tracking block size by default is 64 KB (shift 16)
