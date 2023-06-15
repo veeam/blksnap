@@ -41,6 +41,9 @@ echo -e "support or upgrade DKMS to a more current version."
 exit 1
 
 %postun
+exit 0
+
+%preun
 checkModule()
 {
   if ! lsmod | grep "$1" > /dev/null
@@ -67,9 +70,7 @@ then
   fi
   modprobe -r bdevfilter 2>/dev/null || true
 fi
-exit 0
 
-%preun
 if [  "$(dkms status -m %{name} -v %{version})" ]; then
   dkms remove -m %{name} -v %{version} --all
 fi
