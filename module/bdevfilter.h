@@ -73,9 +73,9 @@ int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
 			   const enum bdev_filter_altitudes altitude);
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-extern blk_qc_t (*submit_bio_noacct_notrace)(struct bio *);
+blk_qc_t submit_bio_noacct_notrace(struct bio *);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-extern void (*submit_bio_noacct_notrace)(struct bio *);
+void submit_bio_noacct_notrace(struct bio *);
 #endif
 
 #endif /* __LINUX_BDEVFILTER_H */

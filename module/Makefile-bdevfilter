@@ -1,10 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 # Additions for standalone bdevfilter module
 
-EXTRA_CFLAGS += "-DSTANDALONE_BDEVFILTER"
-
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "struct ftrace_regs" $(srctree)/include/linux/ftrace.h	&&	\
-		echo -DHAVE_FTRACE_REGS)
+EXTRA_CFLAGS += "-Wno-unused-function"
 
 obj-m	 += bdevfilter.o
