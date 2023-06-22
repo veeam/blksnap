@@ -66,3 +66,7 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device/class.h &&	\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device.h &&		\
 	grep -qw "\#define class_create" $(srctree)/include/linux/device.h &&	\
 		echo -D HAVE_DEFINE_CLASS_CREATE_H)
+
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "struct blk_holder_ops" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_BLK_HOLDER_OPS)
