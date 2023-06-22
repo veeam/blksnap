@@ -472,7 +472,11 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 	struct block_device *bdev;
 	struct tracked_device *tr_dev;
 
+#if defined(HAVE_BLK_HOLDER_OPS)
+	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
+#else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
+#endif
 	if (IS_ERR(bdev)) {
 		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
@@ -536,7 +540,11 @@ int tracker_remove(dev_t dev_id)
 	pr_info("Removing device [%u:%u] from tracking\n", MAJOR(dev_id),
 		MINOR(dev_id));
 
+#if defined(HAVE_BLK_HOLDER_OPS)
+	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
+#else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
+#endif
 	if (IS_ERR(bdev)) {
 		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
@@ -606,7 +614,11 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 	struct tracker *tracker;
 	struct block_device *bdev;
 
+#if defined(HAVE_BLK_HOLDER_OPS)
+	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
+#else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
+#endif
 	if (IS_ERR(bdev)) {
 		pr_info("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
@@ -650,7 +662,11 @@ static inline void collect_cbt_info(dev_t dev_id,
 	struct block_device *bdev;
 	struct tracker *tracker;
 
+#if defined(HAVE_BLK_HOLDER_OPS)
+	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
+#else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
+#endif
 	if (IS_ERR(bdev)) {
 		pr_err("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));
@@ -729,7 +745,11 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 	struct tracker *tracker;
 	struct block_device *bdev;
 
+#if defined(HAVE_BLK_HOLDER_OPS)
+	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
+#else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
+#endif
 	if (IS_ERR(bdev)) {
 		pr_err("Cannot open device [%u:%u]\n", MAJOR(dev_id),
 		       MINOR(dev_id));

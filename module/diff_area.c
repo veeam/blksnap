@@ -275,7 +275,11 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	pr_debug("Open device [%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
 
+#if defined(HAVE_BLK_HOLDER_OPS)
+	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#else
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
+#endif
 	if (IS_ERR(bdev)) {
 		pr_err("Failed to open device. errno=%d\n",
 		       abs((int)PTR_ERR(bdev)));
