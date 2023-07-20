@@ -257,13 +257,19 @@ size_t cbt_map_read_to_user(struct cbt_map *cbt_map, char __user *user_buff,
 {
 	size_t readed = 0;
 	size_t left_size;
-	size_t real_size = min((cbt_map->blk_count - offset), size);
+	size_t real_size;
 
 	if (unlikely(cbt_map->is_corrupted)) {
 		pr_err("CBT table was corrupted\n");
 		return -EFAULT;
 	}
 
+	if (unlikely(offset >= cbt_map->blk_count)) {
+		pr_err("The offset exceeds the size of the CBT table\n");
+		return -EINVAL;
+	}
+
+ 	real_size = min((cbt_map->blk_count - offset), size);
 	left_size = real_size - big_buffer_copy_to_user(user_buff, offset,
 							cbt_map->read_map,
 							real_size);
