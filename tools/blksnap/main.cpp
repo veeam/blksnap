@@ -208,10 +208,10 @@ namespace
     class OpenFileHolder
     {
     public:
-        OpenFileHolder(const std::string& filename, int flags)
+        OpenFileHolder(const std::string& filename, int flags, int mode = 0)
             : m_fd(0)
         {
-            int fd = ::open(filename.c_str(), flags);
+            int fd = mode ? ::open(filename.c_str(), flags, mode) : ::open(filename.c_str(), flags);
             if (fd < 0)
                 throw std::system_error(errno, std::generic_category(), "Cannot open file.");
             m_fd = fd;
@@ -1047,7 +1047,7 @@ private:
         filename = filepath.string();
 
         {
-            OpenFileHolder fileHolder(filename, O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);
+            OpenFileHolder fileHolder(filename, O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, S_IRWXU);
             if (::fallocate64(fileHolder.Get(), 0, 0, data->requested_nr_sect * SECTOR_SIZE))
                 throw std::system_error(errno, std::generic_category(), "Failed to allocate file for diff storage.");
         }
