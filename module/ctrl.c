@@ -187,6 +187,12 @@ static int ioctl_tracker_mark_dirty_blocks(unsigned long arg)
 		return -ENODATA;
 	}
 
+	if (unlikely(karg.count > (KMALLOC_MAX_SIZE /
+				   sizeof(struct blk_snap_block_range)))) {
+		pr_err("Unable to mark dirty blocks: the array of dirty blocks is too big\n");
+		return -ENOMEM;
+	}
+
 	dirty_blocks_array = kcalloc(
 		karg.count, sizeof(struct blk_snap_block_range), GFP_KERNEL);
 	if (!dirty_blocks_array)
