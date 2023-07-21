@@ -228,7 +228,7 @@ struct blksnap_version {
  * Return: 0 if succeeded, negative errno otherwise.
  */
 #define IOCTL_BLKSNAP_VERSION							\
-	_IOW(BLKSNAP, blksnap_ioctl_version, struct blksnap_version)
+	_IOR(BLKSNAP, blksnap_ioctl_version, struct blksnap_version)
 
 
 /**
@@ -243,7 +243,7 @@ struct blksnap_version {
  * Return: 0 if succeeded, negative errno otherwise.
  */
 #define IOCTL_BLKSNAP_SNAPSHOT_CREATE						\
-	_IOW(BLKSNAP, blksnap_ioctl_snapshot_create,				\
+	_IOR(BLKSNAP, blksnap_ioctl_snapshot_create,				\
 	     struct blksnap_uuid)
 
 
@@ -257,7 +257,7 @@ struct blksnap_version {
  * Return: 0 if succeeded, negative errno otherwise.
  */
 #define IOCTL_BLKSNAP_SNAPSHOT_DESTROY						\
-	_IOR(BLKSNAP, blksnap_ioctl_snapshot_destroy,				\
+	_IOW(BLKSNAP, blksnap_ioctl_snapshot_destroy,				\
 	     struct blksnap_uuid)
 
 /**
@@ -307,7 +307,7 @@ struct blksnap_snapshot_append_storage {
  * Return: 0 if succeeded, negative errno otherwise.
  */
 #define IOCTL_BLKSNAP_SNAPSHOT_TAKE						\
-	_IOR(BLKSNAP, blksnap_ioctl_snapshot_take,				\
+	_IOW(BLKSNAP, blksnap_ioctl_snapshot_take,				\
 	     struct blksnap_uuid)
 
 /**
@@ -345,7 +345,7 @@ struct blksnap_snapshot_collect {
  * to store collection of active snapshots, or negative errno otherwise.
  */
 #define IOCTL_BLKSNAP_SNAPSHOT_COLLECT						\
-	_IOW(BLKSNAP, blksnap_ioctl_snapshot_collect,				\
+	_IOR(BLKSNAP, blksnap_ioctl_snapshot_collect,				\
 	     struct blksnap_snapshot_collect)
 
 /**
@@ -403,7 +403,7 @@ struct blksnap_snapshot_event {
  * Return: 0 if succeeded, negative errno otherwise.
  */
 #define IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT					\
-	_IOW(BLKSNAP, blksnap_ioctl_snapshot_wait_event,			\
+	_IOR(BLKSNAP, blksnap_ioctl_snapshot_wait_event,			\
 	     struct blksnap_snapshot_event)
 
 /**
