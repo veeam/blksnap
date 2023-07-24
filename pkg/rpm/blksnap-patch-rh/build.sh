@@ -1,13 +1,10 @@
 #!/bin/bash -e
 
-. /etc/os-release
-PACKAGE_RELEASE=${ID/-/_}${VERSION_ID/-/_}
-
 PACKAGE_NAME="blksnap"
 
 PACKAGE_VERSION="$1"
 KVERSION="$2"
-PACKAGE_VENDOR="$3"
+RELEASE_NUMBER="$3"
 
 if [[ -z "${PACKAGE_VERSION}" ]]
 then
@@ -16,11 +13,16 @@ then
 fi
 if [[ -z "${KVERSION}" ]]
 then
-	echo >&2 "Kernel version parameters is not set."
+	echo "Kernel version parameters is not set."
+fi
+if [[ -z "${RELEASE_NUMBER}" ]]
+then
+	echo "Release parameters is not set."
+	RELEASE_NUMBER="1"
 fi
 if [[ -z "${PACKAGE_VENDOR}" ]]
 then
-	echo >&2 "Vendor parameters is not set."
+	echo "Vendor parameters is not set."
 	PACKAGE_VENDOR="Veeam Software Group GmbH"
 fi
 
@@ -88,8 +90,5 @@ then
 fi
 
 cd ${BUILD_DIR}
-for KERN in ${KVERSION}
-do
-	rpmbuild --ba SPECS/${PACKAGE_NAME}.spec --define="kversion ${KERN}" --define="release "$(echo ${KERN%.el*} | sed -r 's/-/_/g')
-done
+rpmbuild --ba SPECS/${PACKAGE_NAME}.spec --define="kversion ${KVERSION}" --define="release ${RELEASE_NUMBER}"
 cd ${PROJECT_DIR}

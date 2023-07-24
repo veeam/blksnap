@@ -35,15 +35,23 @@ kernel %{kversion} for the %{_target_cpu} family of processors.
 %setup -q -n %{name}-%{version}
 
 %build
-KSRC=%{_usrsrc}/kernels/%{kversion}
+for kver in %{kversion}; do
+	KSRC=%{_usrsrc}/kernels/${kver}
 
-%{__make} -j$(nproc) -C "${KSRC}" %{?_smp_mflags} modules M=$PWD/module
+	mkdir -p $PWD/${kver}
+	cp -rf $PWD/module/ $PWD/${kver}/
+	%{__make} -j$(nproc) -C "${KSRC}" %{?_smp_mflags} modules M=$PWD/module
+done
 
-export INSTALL_MOD_PATH=%{buildroot}
-export INSTALL_MOD_DIR=extra
+for kver in %{kversion}; do
+	KSRC=%{_usrsrc}/kernels/${kver}
 
-%{__make} -C "${KSRC}" modules_install M=$PWD/module
-%{__rm} -f %{buildroot}/lib/modules/%{kversion}/modules.*
+	export INSTALL_MOD_PATH=%{buildroot}
+	export INSTALL_MOD_DIR=extra
+
+	%{__make} -C "${KSRC}" modules_install M=$PWD/module
+	%{__rm} -f %{buildroot}/lib/modules/${kver}/modules.*
+done
 
 %files -n kmod-%{name}-patch
 %defattr(644,root,root,755)
