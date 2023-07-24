@@ -1,8 +1,5 @@
 #!/bin/bash -e
 
-. /etc/os-release
-PACKAGE_RELEASE=${ID/-/_}${VERSION_ID/-/_}
-
 PACKAGE_NAME="blksnap"
 
 PACKAGE_VERSION="$1"
@@ -12,6 +9,11 @@ if [[ -z "${PACKAGE_VERSION}" ]]
 then
 	echo >&2 "Version parameters is not set."
 	exit
+fi
+
+if [[ -z "${KEXCLUDE}" ]]
+then
+	KEXCLUDE="5.14.0-70.13.1.el9_0.x86_64 5.14.0-70.36.1.el9_0.x86_64"
 fi
 if [[ -z "${PACKAGE_VENDOR}" ]]
 then
@@ -71,7 +73,18 @@ ls ${BUILD_DIR}/SPECS
 KVERSION=""
 for KERN in $(ls /usr/src/kernels/)
 do
-	if [[ -d "/usr/src/kernels/${KERN}" ]]
+	EXCL_FLAG=1
+
+	for EXCL in ${KEXCLUDE}
+	do
+		if [[ "${KERN}" == "${EXCL}" ]]
+		then
+			EXCL_FLAG=0
+			break
+		fi
+	done
+
+	if [[ -d "/usr/src/kernels/${KERN}" ]] && [[ ${EXCL_FLAG} -eq 1 ]]
 	then
 		if [[ -z ${KVERSION} ]]
 		then
@@ -79,6 +92,8 @@ do
 		else
 			KVERSION+=" ${KERN}"
 		fi
+	else
+		echo "kernel ${KERN} was skipped"
 	fi
 done
 
