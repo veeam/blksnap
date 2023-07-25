@@ -266,21 +266,12 @@ struct blksnap_version {
  *
  * @id:
  *	Snapshot ID.
- * @bdev_path:
- *	Device path string buffer.
- * @bdev_path_size:
- *	Device path string buffer size.
- * @count:
- *	Size of @ranges in the number of &struct blksnap_sectors.
- * @ranges:
- *	Pointer to the array of &struct blksnap_sectors.
+ * @fd:
+ *	File description.
  */
 struct blksnap_snapshot_append_storage {
 	struct blksnap_uuid id;
-	__u64 bdev_path;
-	__u32 bdev_path_size;
-	__u32 count;
-	__u64 ranges;
+	__u32 fd;
 };
 
 /**
