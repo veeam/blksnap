@@ -133,7 +133,11 @@ void diff_area_free(struct kref *kref)
 #endif
 
 	if (diff_area->orig_bdev) {
+#if defined(HAVE_BLK_HOLDER_OPS)
+		blkdev_put(diff_area->orig_bdev, NULL);
+#else
 		blkdev_put(diff_area->orig_bdev, FMODE_READ | FMODE_WRITE);
+#endif
 		diff_area->orig_bdev = NULL;
 	}
 
@@ -295,7 +299,11 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
 	if (!diff_area) {
+#if defined(HAVE_BLK_HOLDER_OPS)
+		blkdev_put(bdev, NULL);
+#else
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+#endif
 		return ERR_PTR(-ENOMEM);
 	}
 	memory_object_inc(memory_object_diff_area);
