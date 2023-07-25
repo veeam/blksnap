@@ -191,19 +191,6 @@ namespace
         CDeviceCtl deviceCtl;
     };
 
-    static void FsChattr(int fd, int set_flags, int clear_flags)
-    {
-        int attr = 0;
-
-        if (::ioctl(fd, FS_IOC_GETFLAGS, &attr))
-            throw std::system_error(errno, std::generic_category(), "Failed to get file flags.");
-
-        attr &= ~clear_flags;
-        attr |= set_flags;
-
-        if (::ioctl(fd, FS_IOC_SETFLAGS, &attr ))
-            throw std::system_error(errno, std::generic_category(), "Failed to set file flags.");
-    };
 
     class OpenFileHolder
     {
@@ -230,50 +217,6 @@ namespace
         } ;
     private:
         int m_fd;
-    };
-
-    static void SetImmutable(const std::string& filename)
-    {
-        OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
-        FsChattr(fileHolder.Get(), FS_IMMUTABLE_FL, 0);
-    }
-
-    static void ClearImmutable(const std::string& filename)
-    {
-        OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
-        FsChattr(fileHolder.Get(), 0, FS_IMMUTABLE_FL);
-    }
-
-    class DiffStorageFilesHolder
-    {
-    public:
-        DiffStorageFilesHolder()
-        {};
-        ~DiffStorageFilesHolder()
-        {
-            for (const std::string& filename : m_files)
-            {
-                try
-                {
-                    ClearImmutable(filename);
-                    if (::remove(filename.c_str()))
-                        throw std::system_error(errno, std::generic_category(), "Cannot remove file.");
-                }
-                catch (std::exception& ex)
-                {
-                    std::cout << "Failed to cleanup difference storage file \"" <<
-                        filename << "\": " << ex.what() << std::endl;
-                }
-            }
-        };
-        void Append(const std::string& filename)
-        {
-            SetImmutable(filename);
-            m_files.emplace_back(filename);
-        };
-
-    private:
-        std::vector<std::string> m_files;
     };
 
     static inline struct blksnap_sectors parseRange(const std::string& str)
@@ -799,21 +742,13 @@ public:
     };
 };
 
-static inline void AppendStorage(const int blksnapFd, const Uuid& id, const std::string& devicePath, std::vector<struct blksnap_sectors>& ranges)
+static inline void AppendStorage(const int blksnapFd, const Uuid& id, const std::string& filePath)
 {
     struct blksnap_snapshot_append_storage param;
+    OpenFileHolder file(filePath, O_RDWR);
 
     uuid_copy(param.id.b, id.Get());
-
-    unsigned int size = devicePath.size();
-    std::unique_ptr<char []> bdev_path(new char[size+1]);
-    strncpy(bdev_path.get(), devicePath.c_str(), size);
-    bdev_path[size] = '\0';
-
-    param.bdev_path = (__u64)bdev_path.get();
-    param.bdev_path_size = size + 1;
-    param.count = ranges.size();
-    param.ranges = (__u64)ranges.data();
+    param.fd = file.Get();
     if (::ioctl(blksnapFd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
         throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot");
 }
@@ -827,9 +762,7 @@ public:
         m_usage = std::string("Append space in difference storage for snapshot.");
         m_desc.add_options()
             ("id,i", po::value<std::string>(), "Snapshot uuid.")
-            ("device,d", po::value<std::string>(), "Device name.")
-            ("range,r", po::value<std::vector<std::string>>()->multitoken(), "Sectors range in format 'sector:count'. It's multitoken argument.")
-            ("file,f", po::value<std::string>(), "File for diff storage instead --device.");
+            ("file,f", po::value<std::string>(), "File for difference storage.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -844,27 +777,10 @@ public:
 
         Uuid id(vm["id"].as<std::string>());
 
-        if (vm.count("file"))
-        {
-            std::string filename = vm["file"].as<std::string>();
+        if (!vm.count("file"))
+            throw std::invalid_argument("Argument 'file' is missed.");
 
-            SetImmutable(filename);
-            fiemapStorage(filename, devicePath, ranges);
-        }
-        else
-        {
-            if (!vm.count("device"))
-                throw std::invalid_argument("Argument 'device' is missed.");
-            devicePath = vm["device"].as<std::string>();
-
-            if (!vm.count("ranges"))
-                throw std::invalid_argument("Argument 'ranges' is missed.");
-
-            for (const std::string& range : vm["range"].as<std::vector<std::string>>())
-                ranges.push_back(parseRange(range));
-        }
-
-        AppendStorage(blksnapFd.get(), id, devicePath, ranges);
+        AppendStorage(blksnapFd.get(), id, vm["file"].as<std::string>());
     };
 };
 
@@ -1053,12 +969,7 @@ private:
         }
         m_allocatedSectors += data->requested_nr_sect;
 
-        std::vector<struct blksnap_sectors> ranges;
-        std::string devicePath;
-
-        fiemapStorage(filename, devicePath, ranges);
-
-        AppendStorage(blksnapFd.get(), m_id, devicePath, ranges);
+        AppendStorage(blksnapFd.get(), m_id, filename);
 
         return filename;
     };
@@ -1104,8 +1015,6 @@ public:
 
         try
         {
-            DiffStorageFilesHolder diffFiles;
-
             uuid_copy(param.id.b, m_id.Get());
             param.timeout_ms = 1000;
             m_counter = 0;
@@ -1124,11 +1033,12 @@ public:
                 switch (param.code)
                 {
                 case blksnap_event_code_low_free_space:
-                    diffFiles.Append(ProcessLowFreeSpace(
-                        blksnapFd, param.time_label, (struct blksnap_event_low_free_space*)param.data));
+                    ProcessLowFreeSpace(blksnapFd, param.time_label,
+                            (struct blksnap_event_low_free_space*)param.data);
                     break;
                 case blksnap_event_code_corrupted:
-                    ProcessEventCorrupted(param.time_label, (struct blksnap_event_corrupted*)param.data);
+                    ProcessEventCorrupted(param.time_label,
+                            (struct blksnap_event_corrupted*)param.data);
                     terminate = true;
                     break;
                 default:
