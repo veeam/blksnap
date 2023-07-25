@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0+
+#if 0
 #include <algorithm>
 #include <cstdlib>
 #include <blksnap/Service.h>
@@ -430,3 +431,4 @@ int main(int argc, char* argv[])
 
     return 0;
 }
+#endif

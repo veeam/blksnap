@@ -40,7 +40,6 @@ generate_files direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
 fallocate --length 256MiB "${DIFF_STORAGE}"
-chattr +i ${DIFF_STORAGE}
 
 # full
 echo "First snapshot for just attached devices"
@@ -99,8 +98,6 @@ blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3_.map
 
 blksnap_snapshot_destroy
 
-chattr -i "${DIFF_STORAGE}"
-rm "${DIFF_STORAGE}"
 set +e
 echo "dirty blocks:"
 cmp -l ${TESTDIR}/cbt3.map ${TESTDIR}/cbt3_.map 2>&1

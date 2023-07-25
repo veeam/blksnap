@@ -39,7 +39,6 @@ fi
 
 DIFF_STORAGE="${TESTDIR}/diff_storage0"
 fallocate --length 256MiB "${DIFF_STORAGE}"
-chattr +i ${DIFF_STORAGE}
 
 for ITERATOR in $(seq 1 $ITERATION_CNT)
 do
@@ -82,9 +81,6 @@ do
 
 	blksnap_snapshot_destroy
 done
-
-chattr -i ${DIFF_STORAGE}
-rm ${DIFF_STORAGE}
 
 echo "Destroy original loop device"
 

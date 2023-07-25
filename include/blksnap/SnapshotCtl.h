@@ -105,6 +105,17 @@ namespace blksnap
         uuid_t m_id;
     };
 
+    class OpenFileHolder
+    {
+    public:
+        OpenFileHolder(const std::string& filename, int flags);
+        ~OpenFileHolder();
+        int Get();
+
+    private:
+        int m_fd;
+    };
+
     class CSnapshotCtl
     {
     public:
@@ -114,8 +125,7 @@ namespace blksnap
         CSnapshotId Create();
         void Destroy(const CSnapshotId& id);
         void Collect(std::vector<CSnapshotId>& ids);
-        void AppendDiffStorage(const CSnapshotId& id, const std::string& devicePath,
-                               std::vector<struct blksnap_sectors>& ranges);
+        void AppendDiffStorage(const CSnapshotId& id, const std::string& filePath);
         void Take(const CSnapshotId& id);
         bool WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlksnapEvent& ev);
 

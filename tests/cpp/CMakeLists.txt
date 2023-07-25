@@ -34,11 +34,6 @@ add_executable(${TEST_CBT} cbt.cpp)
 target_link_libraries(${TEST_CBT} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_CBT} PRIVATE ./)
 
-set(TEST_DIFF_STORAGE test_diff_storage)
-add_executable(${TEST_DIFF_STORAGE} TestSector.cpp diff_storage.cpp)
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${TESTS_LIBS})
-target_include_directories(${TEST_DIFF_STORAGE} PRIVATE ./)
-
 set(TEST_BOUNDARY test_boundary)
 add_executable(${TEST_BOUNDARY} TestSector.cpp boundary.cpp)
 target_link_libraries(${TEST_BOUNDARY} PRIVATE ${TESTS_LIBS})

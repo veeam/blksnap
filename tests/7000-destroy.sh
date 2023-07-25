@@ -50,7 +50,6 @@ blksnap_snapshot_create "${DEVICE_1}"
 
 DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage0
 fallocate --length 128MiB ${DIFF_STORAGE}
-chattr +i ${DIFF_STORAGE}
 blksnap_snapshot_appendstorage ${DIFF_STORAGE}
 
 blksnap_snapshot_take
@@ -87,9 +86,6 @@ wait ${PID_GEN2}
 wait ${PID_DD2}
 
 set -e
-
-chattr -i ${DIFF_STORAGE}
-rm ${DIFF_STORAGE}
 
 echo "Destroy device"
 blksnap_detach ${DEVICE_1}

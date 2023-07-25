@@ -31,6 +31,24 @@ static const char* blksnap_filename = "/dev/" BLKSNAP_CTL;
 
 using namespace blksnap;
 
+OpenFileHolder::OpenFileHolder(const std::string& filename, int flags)
+{
+    int fd = ::open(filename.c_str(), flags);
+    if (fd < 0)
+        throw std::system_error(errno, std::generic_category(), "Cannot open file.");
+    m_fd = fd;
+};
+OpenFileHolder::~OpenFileHolder()
+{
+    ::close(m_fd);
+};
+
+int OpenFileHolder::Get()
+{
+    return m_fd;
+};
+
+
 CSnapshotCtl::CSnapshotCtl()
     : m_fd(0)
 {
@@ -113,22 +131,13 @@ void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
         ids.emplace_back(id_array[inx].b);
 }
 
-void CSnapshotCtl::AppendDiffStorage(const CSnapshotId& id, const std::string& devicePath,
-                                     std::vector<struct blksnap_sectors>& ranges)
+void CSnapshotCtl::AppendDiffStorage(const CSnapshotId& id, const std::string& filePath)
 {
     struct blksnap_snapshot_append_storage param;
+    OpenFileHolder file(filePath, O_RDWR);
 
     uuid_copy(param.id.b, id.Get());
-
-    unsigned int size = devicePath.size();
-    std::unique_ptr<char []> bdev_path(new char[size+1]);
-    strncpy(bdev_path.get(), devicePath.c_str(), size);
-    bdev_path[size] = '\0';
-
-    param.bdev_path = (__u64)bdev_path.get();
-    param.bdev_path_size = size + 1;
-    param.count = ranges.size();
-    param.ranges = (__u64)ranges.data();
+    param.fd = file.Get();
     if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to append storage for snapshot");

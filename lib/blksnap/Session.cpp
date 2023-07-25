@@ -53,88 +53,6 @@ struct SRangeVectorPos
     {};
 };
 
-static void FsChattr(int fd, int set_flags, int clear_flags)
-{
-    int attr = 0;
-
-    if (::ioctl(fd, FS_IOC_GETFLAGS, &attr))
-        throw std::system_error(errno, std::generic_category(), "Failed to get file flags.");
-
-    attr &= ~clear_flags;
-    attr |= set_flags;
-
-    if (::ioctl(fd, FS_IOC_SETFLAGS, &attr ))
-        throw std::system_error(errno, std::generic_category(), "Failed to set file flags.");
-}
-
-class OpenFileHolder
-{
-public:
-    OpenFileHolder(const std::string& filename, int flags)
-    {
-        int fd = ::open(filename.c_str(), flags);
-        if (fd < 0)
-            throw std::system_error(errno, std::generic_category(), "Cannot open file.");
-        m_fd = fd;
-    };
-    ~OpenFileHolder()
-    {
-        ::close(m_fd);
-    };
-
-    int Get()
-    {
-        return m_fd;
-    } ;
-private:
-    int m_fd;
-};
-
-static void SetImmutable(const std::string& filename)
-{
-    OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
-    FsChattr(fileHolder.Get(), FS_IMMUTABLE_FL, 0);
-}
-
-static void ClearImmutable(const std::string& filename)
-{
-    OpenFileHolder fileHolder(filename, O_RDONLY | O_EXCL);
-    FsChattr(fileHolder.Get(), 0, FS_IMMUTABLE_FL);
-}
-
-
-class DiffStorageFilesHolder
-{
-public:
-    DiffStorageFilesHolder()
-    {};
-    ~DiffStorageFilesHolder()
-    {
-        for (const std::string& filename : m_files)
-        {
-            try
-            {
-                ClearImmutable(filename);
-                if (::remove(filename.c_str()))
-                    throw std::system_error(errno, std::generic_category(), "Cannot remove file.");
-            }
-            catch (std::exception& ex)
-            {
-                std::cout << "Failed to cleanup difference storage file \"" <<
-                    filename << "\": " << ex.what() << std::endl;
-            }
-        }
-    };
-    void Append(const std::string& filename)
-    {
-        SetImmutable(filename);
-        m_files.emplace_back(filename);
-    };
-
-private:
-    std::vector<std::string> m_files;
-};
-
 struct SState
 {
     std::atomic<bool> stop;
@@ -142,7 +60,6 @@ struct SState
     CSnapshotId id;
     std::mutex lock;
     std::list<std::string> errorMessage;
-    DiffStorageFilesHolder diffStorageFiles;
 
     std::vector<SRange> diffStorageRanges;
     std::string diffDevicePath;
@@ -152,7 +69,8 @@ struct SState
 class CSession : public ISession
 {
 public:
-    CSession(const std::vector<std::string>& devices, const std::string& diffStorage, const SStorageRanges& diffStorageRanges);
+    CSession(const std::vector<std::string>& devices,
+             const std::string& diffStorage);
     ~CSession() override;
 
     bool GetError(std::string& errorMessage) override;
@@ -167,16 +85,7 @@ private:
 
 std::shared_ptr<ISession> ISession::Create(const std::vector<std::string>& devices, const std::string& diffStorage)
 {
-    SStorageRanges diffStorageRanges;
-
-    return std::make_shared<CSession>(devices, diffStorage, diffStorageRanges);
-}
-
-std::shared_ptr<ISession> ISession::Create(const std::vector<std::string>& devices, const SStorageRanges& diffStorageRanges)
-{
-    std::string diffStorage;
-
-    return std::make_shared<CSession>(devices, diffStorage, diffStorageRanges);
+    return std::make_shared<CSession>(devices, diffStorage);
 }
 
 namespace
@@ -277,59 +186,6 @@ namespace
         }
         ::close(fd);
     }
-
-    static void AllocateDiffStorage(std::shared_ptr<SState> ptrState, sector_t requestedSectors,
-                                    std::string& devicePath, std::vector<struct blksnap_sectors>& ranges)
-    {
-        if (ptrState->diffStorageRanges.size() <= ptrState->diffStoragePosition.rangeInx)
-            throw std::runtime_error("Failed to allocate diff storage. Not enough free ranges");
-
-        devicePath = ptrState->diffDevicePath;
-
-        while (requestedSectors)
-        {
-            const SRange& rg = ptrState->diffStorageRanges[ptrState->diffStoragePosition.rangeInx];
-
-            sector_t ofs = rg.sector + ptrState->diffStoragePosition.rangeOfs;
-            sector_t sz = std::min(rg.count - ptrState->diffStoragePosition.rangeOfs, requestedSectors);
-
-            if (sz == 0)
-            {
-                ptrState->diffStoragePosition.rangeOfs = 0;
-                if (ptrState->diffStorageRanges.size() == ++ptrState->diffStoragePosition.rangeInx)
-                    break;
-
-                continue;
-            }
-
-            {
-                struct blksnap_sectors rg = {
-                    .offset = ofs,
-                    .count = sz
-                };
-
-                ranges.push_back(rg);
-            }
-
-            ptrState->diffStoragePosition.rangeOfs += sz;
-            requestedSectors -= sz;
-        }
-    }
-    static void LogAppendedRanges(const std::vector<struct blksnap_sectors>& ranges)
-    {
-        sector_t totalSectors = 0;
-
-        std::cout << "" << std::endl;
-        std::cout << "Append " << ranges.size() << " ranges: " << std::endl;
-        for (const struct blksnap_sectors& rg : ranges)
-        {
-            totalSectors += rg.count;
-            std::cout << std::to_string(rg.offset) << ":"<< std::to_string(rg.count) << std::endl;
-
-        }
-        std::cout << "Total sectors append: " << totalSectors << std::endl;
-
-    }
 }
 
 static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<SState> ptrState)
@@ -361,29 +217,14 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
             {
             case blksnap_event_code_low_free_space:
             {
-                std::string devicePath;
-                std::vector<struct blksnap_sectors> ranges;
+                fs::path filepath(ptrState->diffStorage);
+                filepath += std::string("diff_storage#" + std::to_string(diffStorageNumber++));
+                if (fs::exists(filepath))
+                    fs::remove(filepath);
+                std::string filename = filepath.string();
 
-                if (!ptrState->diffStorage.empty())
-                {
-                    fs::path filepath(ptrState->diffStorage);
-                    filepath += std::string("diff_storage#" + std::to_string(diffStorageNumber++));
-                    if (fs::exists(filepath))
-                        fs::remove(filepath);
-                    std::string filename = filepath.string();
-
-                    FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-                    {
-                        std::lock_guard<std::mutex> guard(ptrState->lock);
-                        ptrState->diffStorageFiles.Append(filename);
-                    }
-                    FiemapStorage(filename, devicePath, ranges);
-                }
-                else
-                    AllocateDiffStorage(ptrState, ev.lowFreeSpace.requestedSectors, devicePath, ranges);
-
-                LogAppendedRanges(ranges);
-                ptrCtl->AppendDiffStorage(ptrState->id, devicePath, ranges);
+                FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
+                ptrCtl->AppendDiffStorage(ptrState->id, filename);
             }
             break;
             case blksnap_event_code_corrupted:
@@ -405,7 +246,7 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
     }
 }
 
-CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorage, const SStorageRanges& diffStorageRanges)
+CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorage)
 {
     m_ptrCtl = std::make_shared<CSnapshotCtl>();
 
@@ -424,10 +265,6 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
     m_ptrState->stop = false;
     if (!diffStorage.empty())
         m_ptrState->diffStorage = diffStorage;
-    if (!diffStorageRanges.ranges.empty())
-        m_ptrState->diffStorageRanges = diffStorageRanges.ranges;
-    if (!diffStorageRanges.device.empty())
-        m_ptrState->diffDevicePath = diffStorageRanges.device;
     m_ptrState->id = m_id;
 
     // Append first portion for diff storage
@@ -438,26 +275,14 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
         {
         case blksnap_event_code_low_free_space:
         {
-            std::string devicePath;
-            std::vector<struct blksnap_sectors> ranges;
+            fs::path filepath(m_ptrState->diffStorage);
+            filepath += std::string("diff_storage#" + std::to_string(0));
+            if (fs::exists(filepath))
+                fs::remove(filepath);
+            std::string filename = filepath.string();
 
-            if (!m_ptrState->diffStorage.empty())
-            {
-                fs::path filepath(m_ptrState->diffStorage);
-                filepath += std::string("diff_storage#" + std::to_string(0));
-                if (fs::exists(filepath))
-                    fs::remove(filepath);
-                std::string filename = filepath.string();
-
-                FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-                m_ptrState->diffStorageFiles.Append(filename);
-                FiemapStorage(filename, devicePath, ranges);
-            }
-            else
-                AllocateDiffStorage(m_ptrState, ev.lowFreeSpace.requestedSectors, devicePath, ranges);
-
-            LogAppendedRanges(ranges);
-            m_ptrCtl->AppendDiffStorage(m_id, devicePath, ranges);
+            FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
+            m_ptrCtl->AppendDiffStorage(m_id, filename);
         }
         break;
         case blksnap_event_code_corrupted:

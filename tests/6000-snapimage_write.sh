@@ -63,7 +63,6 @@ mkdir -p ${IMAGE}
 
 DIFF_STORAGE="${ORIGINAL}/diff_storage0"
 fallocate --length 256MiB "${DIFF_STORAGE}" &
-chattr +i ${DIFF_STORAGE}
 
 generate_files direct ${ORIGINAL} "original-it#0" 5
 drop_cache
@@ -112,9 +111,6 @@ do
 
 	blksnap_snapshot_destroy
 done
-
-chattr -i ${DIFF_STORAGE}
-rm ${DIFF_STORAGE}
 
 if [ -z $1 ]
 then
