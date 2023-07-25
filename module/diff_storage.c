@@ -119,7 +119,11 @@ void diff_storage_free(struct kref *kref)
 	}
 
 	while ((storage_bdev = first_storage_bdev(diff_storage))) {
+#if defined(HAVE_BLK_HOLDER_OPS)
+		blkdev_put(storage_bdev->bdev, NULL);
+#else
 		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
+#endif
 		list_del(&storage_bdev->link);
 		kfree(storage_bdev);
 		memory_object_dec(memory_object_storage_bdev);
@@ -167,7 +171,11 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 
 	storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
 	if (!storage_bdev) {
+#if defined(HAVE_BLK_HOLDER_OPS)
+		blkdev_put(bdev, NULL);
+#else
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+#endif
 		return ERR_PTR(-ENOMEM);
 	}
 	memory_object_inc(memory_object_storage_bdev);

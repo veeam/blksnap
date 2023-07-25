@@ -527,7 +527,11 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		spin_unlock(&tracked_device_lock);
 	}
 put_bdev:
+#if defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
+#else
 	blkdev_put(bdev, 0);
+#endif
 	return tracker;
 }
 
@@ -603,7 +607,11 @@ int tracker_remove(dev_t dev_id)
 put_tracker:
 	tracker_put(tracker);
 put_bdev:
+#if defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
+#else
 	blkdev_put(bdev, 0);
+#endif
 	return ret;
 }
 
@@ -652,7 +660,11 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 
 	tracker_put(tracker);
 put_bdev:
+#if defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
+#else
 	blkdev_put(bdev, 0);
+#endif
 	return ret;
 }
 
@@ -688,7 +700,11 @@ static inline void collect_cbt_info(dev_t dev_id,
 put_tracker:
 	tracker_put(tracker);
 put_bdev:
+#if defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
+#else
 	blkdev_put(bdev, 0);
+#endif
 }
 
 int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
@@ -779,6 +795,10 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 
 	tracker_put(tracker);
 put_bdev:
+#if defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
+#else
 	blkdev_put(bdev, 0);
+#endif
 	return ret;
 }
