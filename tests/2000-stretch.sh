@@ -63,7 +63,7 @@ echo "Check snapshot before overflow."
 
 IMAGE_1=${MPDIR}/image0
 mkdir -p ${IMAGE_1}
-mount /dev/blksnap-image0 ${IMAGE_1}
+mount /dev/veeamblksnap-image0 ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Try to make snapshot overflow."

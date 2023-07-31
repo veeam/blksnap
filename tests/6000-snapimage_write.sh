@@ -57,8 +57,8 @@ else
 	END="$2"
 fi
 
-IMAGEDEVICE=/dev/blksnap-image0
-IMAGEMOUNTPOINT=/mnt/blksnap-image0
+IMAGEDEVICE=/dev/veeamblksnap-image0
+IMAGEMOUNTPOINT=/mnt/veeamblksnap-image0
 mkdir -p ${IMAGEMOUNTPOINT}
 
 DIFF_STORAGE="${MOUNTPOINT}/diff_storage/"

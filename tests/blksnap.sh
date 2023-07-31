@@ -10,7 +10,7 @@ else
 fi
 
 ID=""
-BLKSNAP_FILENAME=$(modinfo --field filename blksnap)
+BLKSNAP_FILENAME=$(modinfo --field filename veeamblksnap)
 STRETCH_PROCESS_PID=""
 
 blksnap_load()
@@ -20,7 +20,7 @@ blksnap_load()
 		return
 	fi
 
-	modprobe blksnap $1
+	modprobe veeamblksnap $1
 	sleep 2s
 }
 
@@ -32,7 +32,7 @@ blksnap_unload()
 	fi
 
 	echo "Unload module"
-	modprobe -r blksnap 2>&1 || sleep 1 && modprobe -r blksnap && echo "Unload success"
+	modprobe -r veeamblksnap 2>&1 || sleep 1 && modprobe -r veeamblksnap && echo "Unload success"
 }
 
 blksnap_version()

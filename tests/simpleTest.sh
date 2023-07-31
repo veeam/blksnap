@@ -25,7 +25,7 @@ echo "STORE_UUID: $STORE_UUID"
 SNAP_ID=$(./blksnap create-snapshot --device $SRC_DEVICE --store $STORE_UUID)
 echo "SNAP_ID: $SNAP_ID"
 
-mount "/dev/blksnap-image0" $DST_MOUNT_DIR
+mount "/dev/veeamblksnap-image0" $DST_MOUNT_DIR
 SNAPSHOT_SHA=$(sha1sum "$DST_MOUNT_DIR/test_file")
 echo "ORIGINAL_SHA: $ORIGINAL_SHA"
 echo "SNAPSHOT_SHA: $SNAPSHOT_SHA"
