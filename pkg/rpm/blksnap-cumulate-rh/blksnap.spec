@@ -24,7 +24,7 @@ of the same variant of the Linux kernel and not on any one specific build.
 Summary: %{name} kernel module
 Group: System Environment/Kernel
 Provides: %{name} = %{version}
-Requires: python3
+Requires: kmod python3
 Conflicts: veeamsnap
 
 %description -n kmod-%{name}
