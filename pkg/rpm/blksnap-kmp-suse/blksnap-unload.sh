@@ -1,18 +1,13 @@
-checkModule()
-{
-  if ! lsmod | grep "$1" > /dev/null
-  then
-    return 1
-  fi
-  return 0
-}
-
-if checkModule blksnap
+if [ -e "/dev/blksnap" ]
 then
-  modprobe -r blksnap || true
+  modprobe -r blksnap 2>/dev/null || true
+fi
+if [ -e "/dev/veeamblksnap" ]
+then
+  modprobe -r veeamblksnap 2>/dev/null || true
 fi
 
-if checkModule bdevfilter
+if ! lsmod | grep "bdevfilter" > /dev/null
 then
   if [ -e /sys/kernel/livepatch/bdevfilter/enabled ]
   then

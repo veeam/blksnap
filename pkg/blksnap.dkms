@@ -1,6 +1,6 @@
 PACKAGE_VERSION="#PACKAGE_VERSION#"
 PACKAGE_NAME="blksnap"
-BUILT_MODULE_NAME[0]="blksnap"
+BUILT_MODULE_NAME[0]="veeamblksnap"
 BUILT_MODULE_NAME[1]="bdevfilter"
 DEST_MODULE_LOCATION[0]="/kernel/drivers/block/"
 DEST_MODULE_LOCATION[1]="/kernel/drivers/block/"

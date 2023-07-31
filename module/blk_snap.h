@@ -5,8 +5,8 @@
 #include <linux/types.h>
 #include <linux/uuid.h>
 
-#define BLK_SNAP_MODULE_NAME "blksnap"
-#define BLK_SNAP_IMAGE_NAME "blksnap-image"
+#define BLK_SNAP_MODULE_NAME "veeamblksnap"
+#define BLK_SNAP_IMAGE_NAME "veeamblksnap-image"
 #define BLK_SNAP 'V'
 
 #ifdef BLK_SNAP_MODIFICATION
@@ -94,8 +94,8 @@ static_assert(blk_snap_compat_flags_end <= 64,
  * @compatibility_flags:
  *	[TBD] Reserved for new modification specific features.
  * @name:
- *	Name of modification of the module blksnap (fork name, for example).
- *      It's should be empty string for upstream module.
+ *	Name of modification of the module (fork name, for example).
+ *	It's should be empty string for upstream module.
  */
 struct blk_snap_mod {
 	__u64 compatibility_flags;

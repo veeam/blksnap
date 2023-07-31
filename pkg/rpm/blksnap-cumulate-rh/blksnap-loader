@@ -247,7 +247,14 @@ def CheckModuleExist(modulePath):
 		raise RuntimeError("Module [{0}] is not exist".format(modulePath))
 
 def TryUnloadModules():
-	if os.path.exists("/sys/class/blksnap"):
+	if os.path.exists("/dev/veeamblksnap"):
+		try:
+			ExecuteCommand("rmmod veeamblksnap")
+		except Exception as ex:
+			print("Failed to unload veeamblksnap. {0}".format(ex))
+			return False
+
+	if os.path.exists("/dev/blksnap"):
 		try:
 			ExecuteCommand("rmmod blksnap")
 		except Exception as ex:
@@ -289,7 +296,7 @@ def TryLoadBdevFilter(modulePath):
 	ExecuteCommand(cmd)
 
 def TryLoadBlksnap(modulePath, params):
-	modulePath = modulePath+'/'+"blksnap.ko"
+	modulePath = modulePath+'/'+"veeamblksnap.ko"
 
 	CheckModuleExist(modulePath)
 
@@ -308,9 +315,9 @@ def ModInfo(modulePath):
 
 def TryProcess(modulePath, params, isCheck, isModinfo):
 	if isCheck:
-		CheckModuleExist(modulePath+'/'+"blksnap.ko")
+		CheckModuleExist(modulePath+'/'+"veeamblksnap.ko")
 	elif isModinfo:
-		ModInfo(modulePath+'/'+"blksnap.ko")
+		ModInfo(modulePath+'/'+"veeamblksnap.ko")
 	else:
 		TryUnloadModules()
 		TryLoadBdevFilter(modulePath)
@@ -395,7 +402,7 @@ def main(params):
 		if kver.IsUek():
 			print("Skip an attempt to load a same release kernel for UEK")
 		else:
-			kmodPath = FindSameReleaseModule(kver, ["blksnap", "bdevfilter"])
+			kmodPath = FindSameReleaseModule(kver, ["veeamblksnap", "bdevfilter"])
 			if kmodPath is None:
 				print("Failed to find same release modules for kernel [{0}]".format(strAccurateKernelVersion) )
 			else:
@@ -409,7 +416,7 @@ def main(params):
 		if not isKmodAnyKernel:
 			return -1
 
-		kmodPath = FindSuitableModule(strAccurateKernelVersion, ["blksnap", "bdevfilter"])
+		kmodPath = FindSuitableModule(strAccurateKernelVersion, ["veeamblksnap", "bdevfilter"])
 		if kmodPath is None:
 			print("Failed to find suitable module for kernel [{0}]".format(strAccurateKernelVersion) )
 			return -1

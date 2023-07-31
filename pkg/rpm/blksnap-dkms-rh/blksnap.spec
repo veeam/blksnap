@@ -53,9 +53,13 @@ checkModule()
   return 0
 }
 
-if checkModule %{name}
+if [ -e "/dev/blksnap" ]
 then
-  modprobe -r %{name} 2>/dev/null || true
+  modprobe -r blksnap 2>/dev/null || true
+fi
+if [ -e "/dev/veeamblksnap" ]
+then
+  modprobe -r veeamblksnap 2>/dev/null || true
 fi
 
 if checkModule bdevfilter

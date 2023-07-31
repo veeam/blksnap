@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-KERNEL_MODULE_NAME := blksnap
+KERNEL_MODULE_NAME := veeamblksnap
 
 # for upstream, we don't need any addition makefiles,
 # but for a standalone module the configuration is necessary

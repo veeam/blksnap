@@ -12,12 +12,24 @@ checkModule()
 
 case "$1" in
 	remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear|purge)
-		if checkModule "blksnap"
+		if [ -e "/dev/blksnap" ]
 		then
 			rmmod blksnap || true
 		fi
-		if checkModule "bdevfilter"
+		if [ -e "/dev/veeamblksnap" ]
 		then
+			rmmod veeamblksnap || true
+		fi
+		if ! lsmod | grep "/dev/bdevfilter" > /dev/null
+		then
+			if [ -e /sys/kernel/livepatch/bdevfilter/enabled ]
+			then
+				echo 0 > /sys/kernel/livepatch/bdevfilter/enabled || true
+				while [ -e /sys/kernel/livepatch/bdevfilter/enabled ]
+				do
+					sleep 1s
+				done
+			fi
 			rmmod bdevfilter || true
 		fi
 	;;

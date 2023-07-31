@@ -1,6 +1,6 @@
 #!/bin/bash -e
 # SPDX-License-Identifier: GPL-2.0
-MODULE_NAME=blksnap
+MODULE_NAME=veeamblksnap
 FILTER_NAME=bdevfilter
 CMD=$1
 if [ -n "$2" ]
