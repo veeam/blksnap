@@ -13,7 +13,7 @@ fi
 
 if [[ -z "${KEXCLUDE}" ]]
 then
-	KEXCLUDE="5.14.0-70.13.1.el9_0.x86_64 5.14.0-70.36.1.el9_0.x86_64"
+	KEXCLUDE="5.14.0-70.64.1.el9_0.x86_64 5.14.0-284.25.1.el9_2.x86_64"
 fi
 if [[ -z "${PACKAGE_VENDOR}" ]]
 then
