@@ -66,12 +66,21 @@ class CKernelVersion:
 		if not isinstance(other,CKernelVersion):
 			return NotImplemented
 
-		return ((self._revisionString == other._revisionString) and
-			(self._patchNumbers[0] == other._patchNumbers[0]) and
-			self.IsSameFlavour(other) and
-			self > other)
+		if len(self._patchNumbers) != len(other._patchNumbers):
+			return False
+
+		if (self._revisionString != other._revisionString):
+			return False
+
+		if (len(self._patchNumbers) > 0) and (self._patchNumbers[0] != other._patchNumbers[0]):
+			return False
+
+		return (self.IsSameFlavour(other)) and (self > other)
 
 	def IsUek(self):
+		if len(self._patchNumbers) == 0:
+			return False
+
 		result = self._revisionString+"-"+str(self._patchNumbers[0])
 		for flavour in self._flavour:
 			if flavour in ["el6uek", "el7uek", "el8uek"]:
