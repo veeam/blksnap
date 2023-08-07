@@ -24,22 +24,14 @@ then
 fi
 echo "Difference will be storage on ${DIFF_STORAGE}"
 
-DIFF_STORAGE_SIZE="1GiB"
-echo "Difference storage size ${DIFF_STORAGE_SIZE}"
-
 # check module is ready
 blksnap_version
 
 echo "Block device prepared, press ..."
 read -n 1
 
-blksnap_snapshot_create "${DEVICE}"
-
-DIFF_STORAGE=${DIFF_STORAGE}/diff_storage0
-rm -f ${DIFF_STORAGE}/diff_storage0
-fallocate --length ${DIFF_STORAGE_SIZE} ${DIFF_STORAGE}
-blksnap_snapshot_appendstorage ${DIFF_STORAGE}
-
+DIFF_STORAGE=${DIFF_STORAGE}/diff_storage
+blksnap_snapshot_create "${DEVICE}" "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_take
 echo "Snapshot was token"
 

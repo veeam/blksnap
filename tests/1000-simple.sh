@@ -30,6 +30,8 @@ MPDIR=/mnt/blksnap-test
 rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
+fallocate --length 4KiB ${DIFF_STORAGE}
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
@@ -59,13 +61,7 @@ drop_cache
 #echo "Block device prepared, press ..."
 #read -n 1
 
-blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
-
-DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage0
-rm -f ${DIFF_STORAGE}
-fallocate --length 1GiB ${DIFF_STORAGE}
-blksnap_snapshot_appendstorage ${DIFF_STORAGE}
-
+blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}" "${DIFF_STORAGE}" "2G"
 blksnap_snapshot_take
 
 #echo "Snapshot was token, press ..."

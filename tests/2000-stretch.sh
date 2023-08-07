@@ -16,13 +16,13 @@ blksnap_version
 
 TESTDIR=~/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE_DIR=~/diff_storage
+DIFF_STORAGE_DIR=${HOME}
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
+
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
-rm -rf ${DIFF_STORAGE_DIR}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
-mkdir -p ${DIFF_STORAGE_DIR}
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
@@ -38,12 +38,13 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 generate_files direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
-blksnap_snapshot_create "${DEVICE_1}"
+fallocate --length 1GiB ${DIFF_STORAGE}
+blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE}" "1G"
 
 generate_files direct ${MOUNTPOINT_1} "tracked" 5
 drop_cache
 
-blksnap_stretch_snapshot ${DIFF_STORAGE_DIR} 1024
+blksnap_snapshot_watcher
 #echo "Press for taking snapshot..."
 #read -n 1
 
@@ -84,7 +85,7 @@ umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
-blksnap_stretch_wait
+blksnap_watcher_wait
 
 blksnap_unload
 

@@ -46,12 +46,9 @@ echo "Write to original before taking snapshot"
 generate_files direct ${MOUNTPOINT_1} "before" 9
 drop_cache
 
-blksnap_snapshot_create "${DEVICE_1}"
-
-DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage0
-fallocate --length 128MiB ${DIFF_STORAGE}
-blksnap_snapshot_appendstorage ${DIFF_STORAGE}
-
+DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage
+fallocate --length 1GiB ${DIFF_STORAGE}
+blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE}" "128M"
 blksnap_snapshot_take
 
 echo "mount snapshot"

@@ -48,17 +48,11 @@ blksnap_snapshot_create()
 	do
 		PARAM="${PARAM} --device ${DEVICE}"
 	done
+	PARAM="${PARAM} --file $2"
+	PARAM="${PARAM} --limit $3"
 
 	ID=$(${BLKSNAP} snapshot_create ${PARAM})
 	echo "New snapshot ${ID} was created"
-}
-
-blksnap_snapshot_appendstorage()
-{
-	local FILE=$1
-
-	echo "Append file ${FILE} to diff storage"
-	${BLKSNAP} snapshot_appendstorage --id=${ID} --file=${FILE}
 }
 
 blksnap_snapshot_destroy()
@@ -117,18 +111,15 @@ blksnap_markdirty()
 	${BLKSNAP} markdirtyblock --file=${DIRTYFILE}
 }
 
-blksnap_stretch_snapshot()
+blksnap_snapshot_watcher()
 {
-	local DIFF_STORAGE_PATH=$1
-	local LIMIT_MB=$2
-
-	${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE_PATH} --limit=${LIMIT_MB} &
+	${BLKSNAP} snapshot_watcher --id=${ID} &
 	STRETCH_PROCESS_PID=$!
 
 	echo "Waiting for creating first portion"
 	sleep 2s
 }
-blksnap_stretch_wait()
+blksnap_watcher_wait()
 {
 	echo "Waiting for streach process terminate"
 	wait ${STRETCH_PROCESS_PID}

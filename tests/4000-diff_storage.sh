@@ -30,20 +30,18 @@ echo "Test directory [${TEST_DIR}] on device [${DEVICE}] selected"
 RELATIVE_TEST_DIR=${TEST_DIR#${MP_TEST_DIR}}
 
 MP_DIR=/mnt/blksnap-test
-DIFF_STORAGE_DIR=${TEST_DIR}/diff_storage/
 
 rm -rf ${MP_DIR}
 mkdir -p ${MP_DIR}
-mkdir -p ${DIFF_STORAGE_DIR}
-
 
 generate_block_MB ${TEST_DIR} "before" 10
 check_files ${TEST_DIR}
 
-blksnap_snapshot_create "${DEVICE}"
+DIFF_STORAGE=${TEST_DIR}/diff_storage
+fallocate --length 1GiB ${DIFF_STORAGE}
 
-blksnap_stretch_snapshot ${DIFF_STORAGE_DIR} 1024
-
+blksnap_snapshot_create "${DEVICE}" "${DIFF_STORAGE}" "1G"
+blksnap_snapshot_watcher
 blksnap_snapshot_take
 
 generate_block_MB ${TEST_DIR} "after" 1000
@@ -68,7 +66,7 @@ blksnap_snapshot_destroy
 
 blksnap_detach ${DEVICE}
 
-blksnap_stretch_wait
+blksnap_watcher_wait
 
 blksnap_unload
 

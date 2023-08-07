@@ -59,12 +59,9 @@ echo "Block device prepared"
 #echo "press ..."
 #read -n 1
 
-blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}"
-
-DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage0"
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
 fallocate --length 1GiB ${DIFF_STORAGE}
-blksnap_snapshot_appendstorage ${DIFF_STORAGE}
-
+blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}" "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_take
 
 echo "Snapshot was token"

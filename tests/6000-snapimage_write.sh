@@ -61,8 +61,8 @@ fi
 IMAGE=/mnt/blksnap-image0
 mkdir -p ${IMAGE}
 
-DIFF_STORAGE="${ORIGINAL}/diff_storage0"
-fallocate --length 256MiB "${DIFF_STORAGE}" &
+DIFF_STORAGE="${ORIGINAL}/diff_storage"
+fallocate --length 1GiB ${DIFF_STORAGE}
 
 generate_files direct ${ORIGINAL} "original-it#0" 5
 drop_cache
@@ -71,8 +71,7 @@ for ITERATOR in $(seq 1 $ITERATION_CNT)
 do
 	echo "Itearation: ${ITERATOR}"
 
-	blksnap_snapshot_create ${DEVICE}
-	blksnap_snapshot_appendstorage "${DIFF_STORAGE}"
+	blksnap_snapshot_create ${DEVICE} "${DIFF_STORAGE}" "256M"
 	blksnap_snapshot_take
 
 	DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
