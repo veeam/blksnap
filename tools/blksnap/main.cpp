@@ -666,7 +666,7 @@ public:
     SnapshotAddArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("Create snapshot object structure.");
+        m_usage = std::string("Add device fo snapshot.");
         m_desc.add_options()
             ("device,d", po::value<std::string>(), "Device name.")
             ("id,i", po::value<std::string>(), "Snapshot uuid.");
@@ -690,29 +690,55 @@ public:
     SnapshotCreateArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("Create snapshot object structure.");
+        m_usage = std::string("Create snapshot.");
         m_desc.add_options()
-            ("device,d", po::value<std::vector<std::string>>()->multitoken(), "Device name for snapshot. It's multitoken argument.");
+            ("device,d", po::value<std::vector<std::string>>()->multitoken(), "Device name for snapshot. It's multitoken argument.")
+            ("file,f", po::value<std::string>(), "File for difference storage.")
+            ("limit,l", po::value<std::string>(), "The allowable limit for the size of the difference storage file. The suffixes M, K and G is allowed.");
     };
 
     void Execute(po::variables_map& vm) override
     {
         CBlksnapFileWrap blksnapFd;
-        struct blksnap_uuid param = {0};
-        std::vector<std::string> devices;
+        struct blksnap_snapshot_create param = {0};
 
-        if (vm.count("device"))
-            devices = vm["device"].as<std::vector<std::string>>();
+        if (!vm.count("file"))
+            throw std::invalid_argument("Argument 'file' is missed.");
+        OpenFileHolder fd(vm["file"].as<std::string>(), O_RDWR);
 
+        unsigned long long limit = 0;
+        unsigned long long multiple = 1;
+        if (!vm.count("limit"))
+            throw std::invalid_argument("Argument 'limit' is missed.");
+        std::string limit_str = vm["limit"].as<std::string>();
+        switch (limit_str.back())
+        {
+            case 'G':
+                multiple *= 1024;
+            case 'M':
+                multiple *= 1024;
+            case 'K':
+                multiple *= 1024;
+                limit_str.back() = '\0';
+            default:
+                limit = std::stoll(limit_str.c_str()) * multiple;
+        }
+
+        param.diff_storage_limit_sect = limit / 512;
+        param.diff_storage_fd = fd.Get();
         if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
             throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
 
-        Uuid id(param.b);
+        Uuid id(param.id.b);
         std::cout << id.ToString() << std::endl;
 
         if (vm.count("device"))
+        {
+            std::vector<std::string> devices = vm["device"].as<std::vector<std::string>>();
+
             for (const std::string& devicePath : devices)
                 SnapshotAdd(id.Get(), devicePath);
+        }
     };
 };
 
@@ -739,48 +765,6 @@ public:
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_DESTROY, &param))
             throw std::system_error(errno, std::generic_category(), "Failed to destroy snapshot.");
-    };
-};
-
-static inline void AppendStorage(const int blksnapFd, const Uuid& id, const std::string& filePath)
-{
-    struct blksnap_snapshot_append_storage param;
-    OpenFileHolder file(filePath, O_RDWR);
-
-    uuid_copy(param.id.b, id.Get());
-    param.fd = file.Get();
-    if (::ioctl(blksnapFd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
-        throw std::system_error(errno, std::generic_category(), "Failed to append storage for snapshot");
-}
-
-class SnapshotAppendStorageArgsProc : public IArgsProc
-{
-public:
-    SnapshotAppendStorageArgsProc()
-        : IArgsProc()
-    {
-        m_usage = std::string("Append space in difference storage for snapshot.");
-        m_desc.add_options()
-            ("id,i", po::value<std::string>(), "Snapshot uuid.")
-            ("file,f", po::value<std::string>(), "File for difference storage.");
-    };
-
-    void Execute(po::variables_map& vm) override
-    {
-        CBlksnapFileWrap blksnapFd;
-
-        std::vector<struct blksnap_sectors> ranges;
-        std::string devicePath;
-
-        if (!vm.count("id"))
-            throw std::invalid_argument("Argument 'id' is missed.");
-
-        Uuid id(vm["id"].as<std::string>());
-
-        if (!vm.count("file"))
-            throw std::invalid_argument("Argument 'file' is missed.");
-
-        AppendStorage(blksnapFd.get(), id, vm["file"].as<std::string>());
     };
 };
 
@@ -872,10 +856,6 @@ public:
 
             switch (param.code)
             {
-            case blksnap_event_code_low_free_space:
-                std::cout << "event=low_free_space" << std::endl;
-                std::cout << "requested_nr_sect=" << *(__u64*)(param.data) << std::endl;
-                break;
             case blksnap_event_code_corrupted:
                 std::cout << "event=corrupted" << std::endl;
                 break;
@@ -930,50 +910,17 @@ public:
         for (const Uuid& id : ids)
             std::cout << id.ToString() << " " << std::endl;
         std::cout << std::endl;
-            //std::cout << "id=" << id.ToString() << std::endl;
     };
 };
 
-class StretchSnapshotArgsProc : public IArgsProc
+class SnapshotWatcherArgsProc : public IArgsProc
 {
 private:
     Uuid m_id;
     std::string m_path;
     int m_counter;
-    unsigned long long m_allocatedSectors;
-    unsigned long long m_limitSectors;
 
 private:
-    std::string ProcessLowFreeSpace(const CBlksnapFileWrap& blksnapFd, unsigned int time_label, struct blksnap_event_low_free_space* data)
-    {
-        std::string filename;
-        int fd;
-
-        std::cout << time_label << " - Low free space in diff storage. Requested " << data->requested_nr_sect
-                  << " sectors." << std::endl;
-
-        if (m_allocatedSectors > m_limitSectors)
-            throw std::runtime_error("The diff storage limit has been achieved.");
-
-        fs::path filepath(m_path);
-        filepath += "diff_storage#";
-        filepath += std::to_string(m_counter++);
-        if (fs::exists(filepath))
-            fs::remove(filepath);
-        filename = filepath.string();
-
-        {
-            OpenFileHolder fileHolder(filename, O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, S_IRWXU);
-            if (::fallocate64(fileHolder.Get(), 0, 0, data->requested_nr_sect * SECTOR_SIZE))
-                throw std::system_error(errno, std::generic_category(), "Failed to allocate file for diff storage.");
-        }
-        m_allocatedSectors += data->requested_nr_sect;
-
-        AppendStorage(blksnapFd.get(), m_id, filename);
-
-        return filename;
-    };
-
     void ProcessEventCorrupted(unsigned int time_label, struct blksnap_event_corrupted* data)
     {
         std::cout << time_label << " - The snapshot was corrupted for device [" << data->dev_id_mj << ":"
@@ -981,14 +928,12 @@ private:
     };
 
 public:
-    StretchSnapshotArgsProc()
+    SnapshotWatcherArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("Start stretch snapshot service.");
+        m_usage = std::string("Start snapshot watcher service.");
         m_desc.add_options()
-            ("id,i", po::value<std::string>(), "Snapshot uuid.")
-            ("path,p", po::value<std::string>(), "Path for diff storage files.")
-            ("limit,l", po::value<unsigned int>(), "Available diff storage size in MiB.");
+            ("id,i", po::value<std::string>(), "Snapshot uuid.");
     };
 
     void Execute(po::variables_map& vm) override
@@ -1002,17 +947,7 @@ public:
 
         m_id.FromString(vm["id"].as<std::string>());
 
-        if (!vm.count("path"))
-            throw std::invalid_argument("Argument 'path' is missed.");
-        m_path = vm["path"].as<std::string>();
-
-        if (vm.count("limit"))
-            m_limitSectors = (1024ULL * 1024 / SECTOR_SIZE) * vm["limit"].as<unsigned int>();
-        else
-            m_limitSectors = -1ULL;
-
-        std::cout << "Stretch snapshot service started." << std::endl;
-
+        std::cout << "Start snapshot watcher." << std::endl;
         try
         {
             uuid_copy(param.id.b, m_id.Get());
@@ -1032,10 +967,6 @@ public:
 
                 switch (param.code)
                 {
-                case blksnap_event_code_low_free_space:
-                    ProcessLowFreeSpace(blksnapFd, param.time_label,
-                            (struct blksnap_event_low_free_space*)param.data);
-                    break;
                 case blksnap_event_code_corrupted:
                     ProcessEventCorrupted(param.time_label,
                             (struct blksnap_event_corrupted*)param.data);
@@ -1051,84 +982,17 @@ public:
                 std::cout << "The snapshot no longer exists." << std::endl;
             else {
                 std::cerr << ex.what() << std::endl;
-                throw std::runtime_error("Stretch snapshot service failed.");
+                throw std::runtime_error("Snapshot watcher failed.");
             }
         }
         catch (std::exception& ex)
         {
             std::cerr << ex.what() << std::endl;
-            throw std::runtime_error("Stretch snapshot service failed.");
+            throw std::runtime_error("Snapshot watcher failed.");
         }
-        std::cout << "Stretch snapshot service finished." << std::endl;
+        std::cout << "Snapshot watcher finished." << std::endl;
     };
 };
-
-#ifdef BLKSNAP_MODIFICATION
-static int CalculateTzMinutesWest()
-{
-    time_t local_time = time(NULL);
-
-    struct tm *gm_tm = gmtime(&local_time);
-    gm_tm->tm_isdst = -1;
-    time_t gm_time = mktime(gm_tm);
-
-    return static_cast<int>(difftime(local_time, gm_time) / 60);
-}
-
-static inline int getTzMinutesWest()
-{
-    static int tzMinutesWest = -1;
-
-    if (tzMinutesWest != -1)
-        return tzMinutesWest;
-    else
-        return (tzMinutesWest = CalculateTzMinutesWest());
-}
-
-class SetlogArgsProc : public IArgsProc
-{
-public:
-    SetlogArgsProc()
-        : IArgsProc()
-    {
-        m_usage = std::string("Set module additional logging.");
-        m_desc.add_options()
-          ("level,l", po::value<int>()->default_value(6), "3 - only errors, 4 - warnings, 5 - notice, 6 - info (default), 7 - debug.")
-          ("path,p", po::value<std::string>(), "Full path for log file.")
-          ("disable", "Disable additional logging.");
-    };
-    void Execute(po::variables_map& vm) override
-    {
-        CBlksnapFileWrap blksnapFd;
-        struct blksnap_setlog param = {0};
-
-        if (vm.count("disable")) {
-            param.level = -1;
-            param.filepath = NULL;
-            if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SETLOG, &param))
-                throw std::system_error(errno, std::generic_category(), "Failed to disable logging.");
-            return;
-        }
-
-        param.tz_minuteswest = getTzMinutesWest();
-        param.level = vm["level"].as<int>();
-
-        if (!vm.count("path"))
-            throw std::invalid_argument("Argument 'path' is missed.");
-
-        std::string path = vm["path"].as<std::string>();
-
-        std::vector<__u8> filepathBuffer(path.size());
-        memcpy(filepathBuffer.data(), path.c_str(), path.size());
-
-        param.filepath = filepathBuffer.data();
-        param.filepath_size = filepathBuffer.size();
-
-        if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SETLOG, &param))
-            throw std::system_error(errno, std::generic_category(), "Failed to set logging.");
-    };
-};
-#endif
 
 static std::map<std::string, std::shared_ptr<IArgsProc>> argsProcMap{
   {"version", std::make_shared<VersionArgsProc>()},
@@ -1141,14 +1005,10 @@ static std::map<std::string, std::shared_ptr<IArgsProc>> argsProcMap{
   {"snapshot_add", std::make_shared<SnapshotAddArgsProc>()},
   {"snapshot_create", std::make_shared<SnapshotCreateArgsProc>()},
   {"snapshot_destroy", std::make_shared<SnapshotDestroyArgsProc>()},
-  {"snapshot_appendstorage", std::make_shared<SnapshotAppendStorageArgsProc>()},
   {"snapshot_take", std::make_shared<SnapshotTakeArgsProc>()},
   {"snapshot_waitevent", std::make_shared<SnapshotWaitEventArgsProc>()},
   {"snapshot_collect", std::make_shared<SnapshotCollectArgsProc>()},
-  {"stretch_snapshot", std::make_shared<StretchSnapshotArgsProc>()},
-#ifdef BLKSNAP_MODIFICATION
-  {"setlog", std::make_shared<SetlogArgsProc>()},
-#endif
+  {"snapshot_watcher", std::make_shared<SnapshotWatcherArgsProc>()},
 };
 
 static void printUsage()

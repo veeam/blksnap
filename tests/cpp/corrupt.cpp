@@ -226,7 +226,10 @@ void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ra
     }
 }
 
-void CheckCorruption(const std::string& origDevName, const std::string& diffStorage, const int durationLimitSec,
+void CheckCorruption(const std::string& origDevName,
+                     const std::string& diffStorage,
+                     const unsigned long long diffStorageLimit,
+                     const int durationLimitSec,
                      const bool isSync, const int blocksCountMax)
 {
     std::vector<SCorruptInfo> corrupts;
@@ -236,6 +239,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     logger.Info("version: " + blksnap::Version());
     logger.Info("device: " + origDevName);
     logger.Info("diffStorage: " + diffStorage);
+    logger.Info("diffStorageLimit: " + diffStorageLimit);
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>(false);
@@ -257,7 +261,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     {
         logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
         logger.Info("-- Create snapshot");
-        auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
         auto ptrCbt = blksnap::ICbt::Create(origDevName);
 
         { // get CBT information
@@ -354,7 +358,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     {
         // Create snapshot and check corrupted ranges and cbt table content.
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
-        auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
 
         CheckCbtCorrupt(ptrCbtInfoPrevious, corrupts);
 
@@ -468,7 +472,7 @@ void CheckCbtCorrupt(const std::map<std::string,
 }
 
 void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, const std::string& diffStorage,
-                                const int durationLimitSec)
+                                const unsigned long long diffStorageLimit, const int durationLimitSec)
 {
     std::map<std::string, std::shared_ptr<CTestSectorGenetor>> genMap;
     std::vector<std::thread> genThreads;
@@ -485,6 +489,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
         logger.Info(mess);
     }
     logger.Info("diffStorage: " + diffStorage);
+    logger.Info("durationLimitSec: " + std::to_string(durationLimitSec));
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     for (const std::string& origDevName : origDevNames)
@@ -512,7 +517,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
         logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
 
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
-        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage, diffStorageLimit);
 
         { // get CBT information
             char generationIdStr[64];
@@ -664,7 +669,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
     {
         // Create snapshot and check corrupted ranges and cbt table content.
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
-        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage, diffStorageLimit);
 
         CheckCbtCorrupt(previousCbtInfoMap, corrupts);
 
@@ -685,11 +690,13 @@ void Main(int argc, char* argv[])
 
     desc.add_options()
         ("help,h", "Show usage information.")
-        ("log,l", po::value<std::string>()->default_value("/var/log/blksnap_corrupt.log"),"Detailed log of all transactions.")
+        ("log,L", po::value<std::string>()->default_value("/var/log/blksnap_corrupt.log"),"Detailed log of all transactions.")
         ("device,d", po::value<std::vector<std::string>>()->multitoken(),
             "Device name. It's multitoken for multithread test mod.")
         ("diff_storage,s", po::value<std::string>(),
-            "Directory name for allocating diff storage files.")
+            "The name of the file to allocate the difference storage.")
+        ("diff_storage_limit,l", po::value<std::string>()->default_value("1G"),
+            "The available limit for the size of the difference storage file. The suffixes M, K and G is allowed.")
         ("multithread",
             "Testing mode in which writings to the original devices and their checks are performed in parallel.")
         ("duration,u", po::value<int>()->default_value(5), "The test duration limit in minutes.")
@@ -727,6 +734,23 @@ void Main(int argc, char* argv[])
     std::string diffStorage = vm["diff_storage"].as<std::string>();
     logger.Info("diff_storage: " + diffStorage);
 
+
+    unsigned long long diffStorageLimit = 0;
+    unsigned long long multiple = 1;
+    std::string limit_str = vm["diff_storage_limit"].as<std::string>();
+    switch (limit_str.back())
+    {
+        case 'G':
+            multiple *= 1024;
+        case 'M':
+            multiple *= 1024;
+        case 'K':
+            multiple *= 1024;
+            limit_str.back() = '\0';
+        default:
+            diffStorageLimit = std::stoll(limit_str.c_str()) * multiple;
+    }
+
     int duration = vm["duration"].as<int>();
     logger.Info("duration: " + std::to_string(duration));
 
@@ -741,14 +765,15 @@ void Main(int argc, char* argv[])
 
     std::srand(std::time(0));
     if (!!vm.count("multithread"))
-        MultithreadCheckCorruption(origDevNames, diffStorage, duration * 60);
+        MultithreadCheckCorruption(origDevNames, diffStorage,
+                                   diffStorageLimit, duration * 60);
     else
     {
         if (origDevNames.size() > 1)
             logger.Err("In singlethread test mode used only first device.");
 
-        CheckCorruption(origDevNames[0], diffStorage, duration * 60,
-                        isSync, blocksCountMax);
+        CheckCorruption(origDevNames[0], diffStorage, diffStorageLimit,
+                        duration * 60, isSync, blocksCountMax);
     }
 }
 

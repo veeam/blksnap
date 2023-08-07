@@ -230,22 +230,43 @@ struct blksnap_version {
 #define IOCTL_BLKSNAP_VERSION							\
 	_IOR(BLKSNAP, blksnap_ioctl_version, struct blksnap_version)
 
+/**
+ * struct blksnap_snapshot_create - Argument for the
+ *	&IOCTL_BLKSNAP_SNAPSHOT_CREATE control.
+ *
+ * @diff_storage_limit_sect:
+ *	The maximum allowed difference storage size in sectors.
+ * @diff_storage_fd:
+ *	The difference storage file descriptor.
+ * @id:
+ *	Generated new snapshot ID.
+ */
+struct blksnap_snapshot_create {
+	__u64 diff_storage_limit_sect;
+	__u32 diff_storage_fd;
+	struct blksnap_uuid id;
+};
 
 /**
  * define IOCTL_BLKSNAP_SNAPSHOT_CREATE - Create snapshot.
  *
- * Creates a snapshot structure in the memory and allocates an identifier for
- * it. Further interaction with the snapshot is possible by this identifier.
- * A snapshot is created for several block devices at once.
- * Several snapshots can be created at the same time, but with the condition
- * that one block device can only be included in one snapshot.
+ * Creates a snapshot structure and initializes the difference storage.
+ * A snapshot is created for several block devices at once. Several snapshots
+ * can be created at the same time, but with the condition that one block
+ * device can only be included in one snapshot.
+ *
+ * The difference storage can be dynamically increase as it fills up.
+ * The file is increased in portions, the size of which is determined by the
+ * module parameter &diff_storage_minimum. Each time the amount of free space
+ * in the difference storage is reduced to the half of &diff_storage_minimum,
+ * the file is expanded by a portion, until it reaches the allowable limit
+ * &diff_storage_limit_sect.
  *
  * Return: 0 if succeeded, negative errno otherwise.
  */
 #define IOCTL_BLKSNAP_SNAPSHOT_CREATE						\
-	_IOR(BLKSNAP, blksnap_ioctl_snapshot_create,				\
-	     struct blksnap_uuid)
-
+	_IOWR(BLKSNAP, blksnap_ioctl_snapshot_create,				\
+	     struct blksnap_snapshot_create)
 
 /**
  * define IOCTL_BLKSNAP_SNAPSHOT_DESTROY - Release and destroy the snapshot.
@@ -261,26 +282,10 @@ struct blksnap_version {
 	     struct blksnap_uuid)
 
 /**
- * struct blksnap_snapshot_append_storage - Argument for the
- *	&IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE control.
- *
- * @id:
- *	Snapshot ID.
- * @fd:
- *	File description.
- */
-struct blksnap_snapshot_append_storage {
-	struct blksnap_uuid id;
-	__u32 fd;
-};
-
-/**
  * define IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE - Append storage to the
  *	difference storage of the snapshot.
  *
- * The snapshot difference storage can be set either before or after creating
- * the snapshot images. This allows to dynamically expand the difference
- * storage while holding the snapshot.
+ *
  *
  * Return: 0 if succeeded, negative errno otherwise.
  */
@@ -342,10 +347,6 @@ struct blksnap_snapshot_collect {
 /**
  * enum blksnap_event_codes - Variants of event codes.
  *
- * @blksnap_event_code_low_free_space:
- *	Low free space in difference storage event.
- *	If the free space in the difference storage is reduced to the specified
- *	limit, the module generates this event.
  * @blksnap_event_code_corrupted:
  *	Snapshot image is corrupted event.
  *	If a chunk could not be allocated when trying to save data to the
@@ -355,7 +356,6 @@ struct blksnap_snapshot_collect {
  *	considered successful.
  */
 enum blksnap_event_codes {
-	blksnap_event_code_low_free_space,
 	blksnap_event_code_corrupted,
 };
 
@@ -396,17 +396,6 @@ struct blksnap_snapshot_event {
 #define IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT					\
 	_IOR(BLKSNAP, blksnap_ioctl_snapshot_wait_event,			\
 	     struct blksnap_snapshot_event)
-
-/**
- * struct blksnap_event_low_free_space - Data for the
- *	&blksnap_event_code_low_free_space event.
- *
- * @requested_nr_sect:
- *	The required number of sectors.
- */
-struct blksnap_event_low_free_space {
-	__u64 requested_nr_sect;
-};
 
 /**
  * struct blksnap_event_corrupted - Data for the

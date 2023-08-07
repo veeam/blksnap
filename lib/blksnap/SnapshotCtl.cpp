@@ -72,29 +72,18 @@ void CSnapshotCtl::Version(struct blksnap_version& version)
             "Failed to get version.");
 }
 
-#ifdef BLKSNAP_MODIFICATION
-bool CSnapshotCtl::Modification(struct blksnap_mod& mod)
+CSnapshotId CSnapshotCtl::Create(const std::string& filePath, const unsigned long long limit)
 {
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_MOD, &mod))
-    {
-        if (errno == ENOTTY)
-            return false;
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to get modification.");
-    }
-    return true;
-}
-#endif
+    OpenFileHolder fd(filePath, O_RDWR);
 
-CSnapshotId CSnapshotCtl::Create()
-{
-    struct blksnap_uuid param = {0};
-
+    struct blksnap_snapshot_create param = {0};
+    param.diff_storage_limit_sect = limit / 512;
+    param.diff_storage_fd = fd.Get();
     if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to create snapshot object.");
 
-    return CSnapshotId(param.b);
+    return CSnapshotId(param.id.b);
 }
 
 void CSnapshotCtl::Destroy(const CSnapshotId& id)
@@ -131,18 +120,6 @@ void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
         ids.emplace_back(id_array[inx].b);
 }
 
-void CSnapshotCtl::AppendDiffStorage(const CSnapshotId& id, const std::string& filePath)
-{
-    struct blksnap_snapshot_append_storage param;
-    OpenFileHolder file(filePath, O_RDWR);
-
-    uuid_copy(param.id.b, id.Get());
-    param.fd = file.Get();
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to append storage for snapshot");
-}
-
 void CSnapshotCtl::Take(const CSnapshotId& id)
 {
     struct blksnap_uuid param;
@@ -173,13 +150,6 @@ bool CSnapshotCtl::WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlk
 
     switch (param.code)
     {
-    case blksnap_event_code_low_free_space:
-    {
-        struct blksnap_event_low_free_space* lowFreeSpace = (struct blksnap_event_low_free_space*)(param.data);
-
-        ev.lowFreeSpace.requestedSectors = lowFreeSpace->requested_nr_sect;
-        break;
-    }
     case blksnap_event_code_corrupted:
     {
         struct blksnap_event_corrupted* corrupted = (struct blksnap_event_corrupted*)(param.data);
@@ -192,16 +162,3 @@ bool CSnapshotCtl::WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlk
     }
     return true;
 }
-
-#if defined(BLKSNAP_MODIFICATION) && defined(BLKSNAP_DEBUG_SECTOR_STATE)
-void CSnapshotCtl::GetSectorState(struct blksnap_bdev image_dev_id, off_t offset, struct blksnap_sector_state& state)
-{
-    struct blksnap_get_sector_state param
-      = {.image_dev_id = image_dev_id, .sector = static_cast<__u64>(offset >> SECTOR_SHIFT), .state = {0}};
-
-    if (::ioctl(m_fd, IOCTLBLK_SNAP_GET_SECTOR_STATE, &param))
-        throw std::system_error(errno, std::generic_category(), "[TBD]Failed to get sectors state.");
-
-    state = param.state;
-}
-#endif

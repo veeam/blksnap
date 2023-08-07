@@ -42,17 +42,6 @@ namespace fs = boost::filesystem;
 
 using namespace blksnap;
 
-struct SRangeVectorPos
-{
-    size_t rangeInx;
-    sector_t rangeOfs;
-
-    SRangeVectorPos()
-        : rangeInx(0)
-        , rangeOfs(0)
-    {};
-};
-
 struct SState
 {
     std::atomic<bool> stop;
@@ -60,17 +49,14 @@ struct SState
     CSnapshotId id;
     std::mutex lock;
     std::list<std::string> errorMessage;
-
-    std::vector<SRange> diffStorageRanges;
-    std::string diffDevicePath;
-    SRangeVectorPos diffStoragePosition;
 };
 
 class CSession : public ISession
 {
 public:
     CSession(const std::vector<std::string>& devices,
-             const std::string& diffStorage);
+             const std::string& diffStorageFilePath,
+             const unsigned long long limit);
     ~CSession() override;
 
     bool GetError(std::string& errorMessage) override;
@@ -83,109 +69,12 @@ private:
     std::shared_ptr<std::thread> m_ptrThread;
 };
 
-std::shared_ptr<ISession> ISession::Create(const std::vector<std::string>& devices, const std::string& diffStorage)
+std::shared_ptr<ISession> ISession::Create(
+    const std::vector<std::string>& devices,
+    const std::string& diffStorageFilePath,
+    const unsigned long long limit)
 {
-    return std::make_shared<CSession>(devices, diffStorage);
-}
-
-namespace
-{
-    static void FiemapStorage(const std::string& filename, std::string& devicePath,
-                              std::vector<struct blksnap_sectors>& ranges)
-    {
-        int ret = 0;
-        const char* errMessage;
-        int fd = -1;
-        struct fiemap* map = NULL;
-        int extentMax = 500;
-        long long fileSize;
-        struct stat64 st;
-
-        if (::stat64(filename.c_str(), &st))
-            throw std::system_error(errno, std::generic_category(), "Failed to get file size.");
-
-        fileSize = st.st_size;
-        devicePath = "/dev/block/" +
-            std::to_string(major(st.st_dev)) + ":" +
-            std::to_string(minor(st.st_dev));
-
-        fd = ::open(filename.c_str(), O_RDONLY | O_EXCL | O_LARGEFILE);
-        if (fd < 0)
-        {
-            ret = errno;
-            errMessage = "Failed to open file.";
-            goto out;
-        }
-
-        map = (struct fiemap*)::malloc(sizeof(struct fiemap) + sizeof(struct fiemap_extent) * extentMax);
-        if (!map)
-        {
-            ret = ENOMEM;
-            errMessage = "Failed to allocate memory for fiemap structure.";
-            goto out;
-        }
-
-        for (long long fileOffset = 0; fileOffset < fileSize;)
-        {
-            map->fm_start = fileOffset;
-            map->fm_length = fileSize - fileOffset;
-            map->fm_extent_count = extentMax;
-            map->fm_flags = 0;
-
-            if (::ioctl(fd, FS_IOC_FIEMAP, map))
-            {
-                ret = errno;
-                errMessage = "Failed to call FS_IOC_FIEMAP.";
-                goto out;
-            }
-
-            for (int i = 0; i < map->fm_mapped_extents; ++i)
-            {
-                struct blksnap_sectors rg;
-                struct fiemap_extent* extent = map->fm_extents + i;
-
-                if (extent->fe_physical & (SECTOR_SIZE - 1))
-                {
-                    ret = EINVAL;
-                    errMessage = "File location is not ordered by sector size.";
-                    goto out;
-                }
-
-                rg.offset = extent->fe_physical >> SECTOR_SHIFT;
-                rg.count = extent->fe_length >> SECTOR_SHIFT;
-                ranges.push_back(rg);
-
-                fileOffset = extent->fe_logical + extent->fe_length;
-
-                // std::cout << "allocate range: ofs=" << rg.offset << " cnt=" << rg.count << std::endl;
-            }
-        }
-
-    out:
-        if (map)
-            ::free(map);
-        if (fd >= 0)
-            ::close(fd);
-        if (ret)
-            throw std::system_error(ret, std::generic_category(), errMessage);
-    }
-
-    static void FallocateStorage(const std::string& filename, const off_t filesize)
-    {
-        int fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, 0600);
-        if (fd < 0)
-            throw std::system_error(errno, std::generic_category(), "[TBD]Failed to create file for diff storage.");
-
-        if (::fallocate64(fd, 0, 0, filesize))
-        {
-            int err = errno;
-
-            ::remove(filename.c_str());
-            ::close(fd);
-            throw std::system_error(err, std::generic_category(), "[TBD]Failed to allocate file for diff storage.");
-        }
-        ::close(fd);
-    }
+    return std::make_shared<CSession>(devices, diffStorageFilePath, limit);
 }
 
 static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<SState> ptrState)
@@ -215,18 +104,6 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
         {
             switch (ev.code)
             {
-            case blksnap_event_code_low_free_space:
-            {
-                fs::path filepath(ptrState->diffStorage);
-                filepath += std::string("diff_storage#" + std::to_string(diffStorageNumber++));
-                if (fs::exists(filepath))
-                    fs::remove(filepath);
-                std::string filename = filepath.string();
-
-                FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-                ptrCtl->AppendDiffStorage(ptrState->id, filename);
-            }
-            break;
             case blksnap_event_code_corrupted:
                 throw std::system_error(ev.corrupted.errorCode, std::generic_category(),
                                         std::string("Snapshot corrupted for device " +
@@ -246,7 +123,7 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
     }
 }
 
-CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorage)
+CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorageFilePath, const unsigned long long limit)
 {
     m_ptrCtl = std::make_shared<CSnapshotCtl>();
 
@@ -254,7 +131,7 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
         CTrackerCtl(name).Attach();
 
     // Create snapshot
-    m_id = m_ptrCtl->Create();
+    m_id = m_ptrCtl->Create(diffStorageFilePath, limit);
 
     // Add devices to snapshot
     for (const auto& name : devices)
@@ -263,8 +140,6 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
     // Prepare state structure for thread
     m_ptrState = std::make_shared<SState>();
     m_ptrState->stop = false;
-    if (!diffStorage.empty())
-        m_ptrState->diffStorage = diffStorage;
     m_ptrState->id = m_id;
 
     // Append first portion for diff storage
@@ -273,18 +148,6 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
     {
         switch (ev.code)
         {
-        case blksnap_event_code_low_free_space:
-        {
-            fs::path filepath(m_ptrState->diffStorage);
-            filepath += std::string("diff_storage#" + std::to_string(0));
-            if (fs::exists(filepath))
-                fs::remove(filepath);
-            std::string filename = filepath.string();
-
-            FallocateStorage(filename, ev.lowFreeSpace.requestedSectors << SECTOR_SHIFT);
-            m_ptrCtl->AppendDiffStorage(m_id, filename);
-        }
-        break;
         case blksnap_event_code_corrupted:
             throw std::system_error(ev.corrupted.errorCode, std::generic_category(),
                                     std::string("Failed to create snapshot for device "

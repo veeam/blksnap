@@ -122,7 +122,7 @@ namespace blksnap
         CSnapshotCtl();
         ~CSnapshotCtl();
 
-        CSnapshotId Create();
+        CSnapshotId Create(const std::string& filePath, const unsigned long long limit);
         void Destroy(const CSnapshotId& id);
         void Collect(std::vector<CSnapshotId>& ids);
         void AppendDiffStorage(const CSnapshotId& id, const std::string& filePath);
@@ -130,13 +130,7 @@ namespace blksnap
         bool WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlksnapEvent& ev);
 
         void Version(struct blksnap_version& version);
-#ifdef BLK_SNAP_MODIFICATION
-        /* Additional functional */
-        bool Modification(struct blksnap_mod& mod);
-#    ifdef BLK_SNAP_DEBUG_SECTOR_STATE
-        void GetSectorState(struct blksnap_dev image_dev_id, off_t offset, struct blksnap_sector_state& state);
-#    endif
-#endif
+
     private:
         int m_fd;
     };

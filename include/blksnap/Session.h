@@ -34,11 +34,10 @@ namespace blksnap
 
         virtual bool GetError(std::string& errorMessage) = 0;
 
-        // TODO: add limits
-        static std::shared_ptr<ISession> Create(const std::vector<std::string>& devices,
-                                                const std::string& diffStorage);
-        static std::shared_ptr<ISession> Create(const std::vector<std::string>& devices,
-                                                const SStorageRanges& diffStorageRanges);
+        static std::shared_ptr<ISession> Create(
+            const std::vector<std::string>& devices,
+            const std::string& diffStorageFilePath,
+            const unsigned long long limit);
     };
 
 }

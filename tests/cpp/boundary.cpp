@@ -122,8 +122,9 @@ static inline int randomInt(const int upLimit, const int order)
     return (std::rand() % upLimit) & ~(order - 1);
 }
 
-void CheckBoundary(const std::string& origDevName, const std::string& diffStorage, const int durationLimitSec,
-                 const bool isSync, const int chunkSize)
+void CheckBoundary(const std::string& origDevName, const std::string& diffStorage,
+                   const unsigned long long diffStorageLimit, const int durationLimitSec,
+                   const bool isSync, const int chunkSize)
 {
     std::srand(std::time(nullptr));
 
@@ -131,6 +132,7 @@ void CheckBoundary(const std::string& origDevName, const std::string& diffStorag
     logger.Info("version: " + blksnap::Version());
     logger.Info("device: " + origDevName);
     logger.Info("diffStorage: " + diffStorage);
+    logger.Info("diffStorageLimit: " + std::to_string(diffStorageLimit));
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
     logger.Info("chunkSize: " + std::to_string(chunkSize) + " bytes");
 
@@ -154,7 +156,7 @@ void CheckBoundary(const std::string& origDevName, const std::string& diffStorag
         logger.Info("-- Create snapshot");
 
         {
-            auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+            auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
 
             int testSeqNumber = ptrGen->GetSequenceNumber();
             ptrGen->IncSequence();
@@ -232,7 +234,7 @@ void CheckBoundary(const std::string& origDevName, const std::string& diffStorag
         }
 
         {
-            auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+            auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
 
             int testSeqNumber = ptrGen->GetSequenceNumber();
             clock_t testSeqTime = std::clock();
@@ -305,7 +307,7 @@ void CheckBoundary(const std::string& origDevName, const std::string& diffStorag
         }
 
         {
-            auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+            auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
 
             int testSeqNumber = ptrGen->GetSequenceNumber();
             clock_t testSeqTime = std::clock();
@@ -362,7 +364,9 @@ void Main(int argc, char* argv[])
         ("log,l", po::value<std::string>(),"Detailed log of all transactions.")
         ("device,d", po::value<std::string>(),"Device name.")
         ("diff_storage,s", po::value<std::string>(),
-            "Directory name for allocating diff storage files.")
+            "The name of the file to allocate the difference storage.")
+        ("diff_storage_limit,l", po::value<std::string>()->default_value("1G"),
+            "The available limit for the size of the difference storage file. The suffixes M, K and G is allowed.")
         ("duration,u", po::value<int>(), "The test duration limit in minutes.")
         ("sync", "Use O_SYNC for access to original device.")
         ("blksz", po::value<int>()->default_value(512), "Align reads and writes to the block size.")
@@ -394,6 +398,22 @@ void Main(int argc, char* argv[])
         throw std::invalid_argument("Argument 'diff_storage' is missed.");
     std::string diffStorage = vm["diff_storage"].as<std::string>();
 
+    unsigned long long diffStorageLimit = 0;
+    unsigned long long multiple = 1;
+    std::string limit_str = vm["diff_storage_limit"].as<std::string>();
+    switch (limit_str.back())
+    {
+        case 'G':
+            multiple *= 1024;
+        case 'M':
+            multiple *= 1024;
+        case 'K':
+            multiple *= 1024;
+            limit_str.back() = '\0';
+        default:
+            diffStorageLimit = std::stoll(limit_str.c_str()) * multiple;
+    }
+
     int duration = 1;
     if (vm.count("duration"))
         duration = vm["duration"].as<int>();
@@ -411,7 +431,8 @@ void Main(int argc, char* argv[])
 
     try
     {
-        CheckBoundary(origDevName, diffStorage, duration * 60, isSync, chunkSize);
+        CheckBoundary(origDevName, diffStorage, diffStorageLimit,
+                      duration * 60, isSync, chunkSize);
     }
     catch (std::exception& ex)
     {
