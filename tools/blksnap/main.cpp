@@ -107,7 +107,7 @@ namespace
         {
             m_fd = ::open(devicePath.c_str(), O_DIRECT, 0600);
             if (m_fd < 0)
-                throw std::system_error(errno, std::generic_category(), "Failed to open block device ["+devicePath+"].");
+                throw std::system_error(errno, std::generic_category(), "Failed to open block device ["+devicePath+"]");
         };
 
         virtual ~CDeviceCtl()
@@ -200,7 +200,7 @@ namespace
         {
             int fd = mode ? ::open(filename.c_str(), flags, mode) : ::open(filename.c_str(), flags);
             if (fd < 0)
-                throw std::system_error(errno, std::generic_category(), "Cannot open file.");
+                throw std::system_error(errno, std::generic_category(), "Cannot open file");
             m_fd = fd;
         };
         ~OpenFileHolder()
@@ -790,7 +790,7 @@ public:
         uuid_copy(param.b, Uuid(vm["id"].as<std::string>()).Get());
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_TAKE, &param))
-            throw std::system_error(errno, std::generic_category(), "Failed to take snapshot.");
+            throw std::system_error(errno, std::generic_category(), "Failed to take snapshot");
     };
 };
 
@@ -844,7 +844,7 @@ public:
 
                 std::cout << "result=not found" << std::endl;
             } else
-                throw std::system_error(errno, std::generic_category(), "Failed to get event from snapshot.");
+                throw std::system_error(errno, std::generic_category(), "Failed to get event from snapshot");
         }
         else
         {
@@ -876,7 +876,7 @@ private:
         struct blksnap_snapshot_collect param = {0};
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
-            throw std::system_error(errno, std::generic_category(), "Failed to get list of active snapshots.");
+            throw std::system_error(errno, std::generic_category(), "Failed to get list of active snapshots");
 
         if (param.count == 0)
             return;
@@ -885,7 +885,7 @@ private:
         param.ids = (__u64)id_array.data();
 
         if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
-            throw std::system_error(errno, std::generic_category(), "Failed to get list of snapshots.");
+            throw std::system_error(errno, std::generic_category(), "Failed to get list of snapshots");
 
         for (size_t inx = 0; inx < param.count; inx++)
             ids.emplace_back(id_array[inx].b);
@@ -962,7 +962,7 @@ public:
                     if ((err == ENOENT) || (err == EINTR))
                         continue;
 
-                    throw std::system_error(err, std::generic_category(), "Failed to get event from snapshot.");
+                    throw std::system_error(err, std::generic_category(), "Failed to get event from snapshot");
                 }
 
                 switch (param.code)
