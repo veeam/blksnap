@@ -20,7 +20,7 @@ then
 	echo "Should use loop device"
 
 	#echo "Create original loop device"
-	LOOPFILE=~/blksnap-original.img
+	LOOPFILE=${HOME}/blksnap-original.img
 	dd if=/dev/zero of=${LOOPFILE} count=1024 bs=1M
 
 	DEVICE=$(loop_device_attach ${LOOPFILE})

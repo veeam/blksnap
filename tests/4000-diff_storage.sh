@@ -16,7 +16,7 @@ blksnap_version
 
 if [ -z $1 ]
 then
-	TEST_DIR=$(realpath ~/blksnap-test)
+	TEST_DIR=${HOME}/blksnap-test
 else
 	TEST_DIR=$(realpath $1"/blksnap-test")
 fi

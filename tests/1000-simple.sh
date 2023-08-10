@@ -22,7 +22,7 @@ blksnap_load
 # check module is ready
 blksnap_version
 
-TESTDIR=/tmp/blksnap-test
+TESTDIR=${HOME}/blksnap-test
 rm -rf ${TESTDIR}
 mkdir -p ${TESTDIR}
 

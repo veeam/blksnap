@@ -14,9 +14,9 @@ blksnap_load "diff_storage_minimum=262144"
 # check module is ready
 blksnap_version
 
-TESTDIR=~/blksnap-test
+TESTDIR=${HOME}/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE_DIR="~"
+DIFF_STORAGE_DIR=${HOME}
 DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
 
 rm -rf ${TESTDIR}

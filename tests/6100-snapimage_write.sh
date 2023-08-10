@@ -20,7 +20,7 @@ blksnap_version
 
 echo "Should use loop device"
 
-TESTDIR="~/blksnap-test"
+TESTDIR="${HOME}/blksnap-test"
 rm -rf ${TESTDIR}
 mkdir -p ${TESTDIR}
 
