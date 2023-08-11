@@ -35,7 +35,8 @@ OpenFileHolder::OpenFileHolder(const std::string& filename, int flags)
 {
     int fd = ::open(filename.c_str(), flags);
     if (fd < 0)
-        throw std::system_error(errno, std::generic_category(), "Cannot open file.");
+        throw std::system_error(errno, std::generic_category(),
+            "Cannot open file [" + filename + "]");
     m_fd = fd;
 };
 OpenFileHolder::~OpenFileHolder()
@@ -54,7 +55,8 @@ CSnapshotCtl::CSnapshotCtl()
 {
     int fd = ::open(blksnap_filename, O_RDWR);
     if (fd < 0)
-        throw std::system_error(errno, std::generic_category(), blksnap_filename);
+        throw std::system_error(errno, std::generic_category(),
+            "Failed to open file [" + blksnap_filename + "]");
 
     m_fd = fd;
 }
