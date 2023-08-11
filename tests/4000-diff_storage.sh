@@ -38,13 +38,14 @@ generate_block_MB ${TEST_DIR} "before" 10
 check_files ${TEST_DIR}
 
 DIFF_STORAGE=${TEST_DIR}/diff_storage
-fallocate --length 1GiB ${DIFF_STORAGE}
+rm -f ${DIFF_STORAGE}
+fallocate --length 1KiB ${DIFF_STORAGE}
 
 blksnap_snapshot_create "${DEVICE}" "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_watcher
 blksnap_snapshot_take
 
-generate_block_MB ${TEST_DIR} "after" 1000
+generate_block_MB ${TEST_DIR} "after" 100
 check_files ${TEST_DIR}
 
 IMAGE=${MP_DIR}/image0

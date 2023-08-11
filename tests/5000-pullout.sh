@@ -60,7 +60,8 @@ echo "Block device prepared"
 #read -n 1
 
 DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
-fallocate --length 1GiB ${DIFF_STORAGE}
+rm -f ${DIFF_STORAGE}
+fallocate --length 256MiB ${DIFF_STORAGE}
 blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}" "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_take
 
