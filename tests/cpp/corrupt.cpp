@@ -239,7 +239,7 @@ void CheckCorruption(const std::string& origDevName,
     logger.Info("version: " + blksnap::Version());
     logger.Info("device: " + origDevName);
     logger.Info("diffStorage: " + diffStorage);
-    logger.Info("diffStorageLimit: " + diffStorageLimit);
+    logger.Info("diffStorageLimit: " + std::to_string(diffStorageLimit) + " MiB");
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>(false);
@@ -746,10 +746,11 @@ void Main(int argc, char* argv[])
             multiple *= 1024;
         case 'K':
             multiple *= 1024;
-            limit_str.back() = '\0';
+            limit_str.resize(limit_str.size()-1);
         default:
             diffStorageLimit = std::stoll(limit_str.c_str()) * multiple;
     }
+    logger.Info("diff_storage_limit: " + std::to_string(diffStorageLimit));
 
     int duration = vm["duration"].as<int>();
     logger.Info("duration: " + std::to_string(duration));
