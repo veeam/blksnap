@@ -77,6 +77,7 @@ generate_block_MB()
 	local SZ_MB=$3
 	local ITER_SZ_MB=0
 	local ITER=0
+	local TOTAL_MB=0
 
 	echo "generate files in ${TARGET_DIR}"
 
@@ -93,9 +94,10 @@ generate_block_MB()
 		ITER_SZ_MB=$((SZ + ITER_SZ_MB))
 		ITER=$((ITER + 1))
 
-		# echo "processed ${ITER_SZ_MB} MiB"
+		TOTAL_MB=$((TOTAL_MB + SZ))
 	done
 	echo "generate complete"
+	echo "was created ${TOTAL_MB} MiB"
 }
 
 check_files()

@@ -38,6 +38,7 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 generate_files direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
+rm -f ${DIFF_STORAGE}
 fallocate --length 1GiB ${DIFF_STORAGE}
 
 # full

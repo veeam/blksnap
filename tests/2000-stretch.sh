@@ -38,8 +38,9 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 generate_files direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
-fallocate --length 1GiB ${DIFF_STORAGE}
-blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE}" "1G"
+rm -f ${DIFF_STORAGE}
+fallocate --length 128MiB ${DIFF_STORAGE}
+blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE}" "512M"
 
 generate_files direct ${MOUNTPOINT_1} "tracked" 5
 drop_cache
@@ -65,7 +66,7 @@ check_files ${IMAGE_1}
 
 echo "Try to make snapshot overflow."
 #echo "press..."
-generate_block_MB ${MOUNTPOINT_1} "overflow" 300
+generate_block_MB ${MOUNTPOINT_1} "overflow" 768
 
 echo "Umount images"
 #echo "press..."
