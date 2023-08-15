@@ -23,7 +23,7 @@
 #include <linux/uuid.h>
 
 #define BLK_SNAP_MODULE_NAME "veeamblksnap"
-#define BLK_SNAP_IMAGE_NAME "veeamblksnap-image"
+#define BLK_SNAP_IMAGE_NAME "veeamblksnapimg"
 #define BLK_SNAP 'V'
 
 #ifdef BLK_SNAP_MODIFICATION
