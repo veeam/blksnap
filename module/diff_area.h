@@ -124,6 +124,8 @@ struct diff_area {
 #ifdef STANDALONE_BDEVFILTER
 	atomic64_t stat_processed;
 	atomic64_t stat_copied;
+	atomic64_t stat_image_read;
+	atomic64_t stat_image_written;
 #endif
 };
 

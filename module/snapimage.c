@@ -99,9 +99,18 @@ static void snapimage_queue_work(struct kthread_work *work)
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
 				 op_is_write(req_op(rq)));
 	rq_for_each_segment(bvec, rq, iter) {
+#ifdef STANDALONE_BDEVFILTER
+		sector_t len_sect = bvec.bv_len >> SECTOR_SHIFT;
+#endif
 		status = diff_area_image_io(&io_ctx, &bvec, &pos);
 		if (unlikely(status != BLK_STS_OK))
 			break;
+
+#ifdef STANDALONE_BDEVFILTER
+		atomic64_add(len_sect, io_ctx.is_write ?
+			     &snapimage->diff_area->stat_image_written :
+			     &snapimage->diff_area->stat_image_read);
+#endif
 	}
 	diff_area_image_ctx_done(&io_ctx);
 

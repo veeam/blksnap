@@ -130,6 +130,8 @@ void diff_area_free(struct kref *kref)
 		MINOR(diff_area->orig_bdev->bd_dev));
 	pr_info("%llu MiB was processed\n", atomic64_read(&diff_area->stat_processed) >> (20 - SECTOR_SHIFT));
 	pr_info("%llu MiB was copied\n", atomic64_read(&diff_area->stat_copied) >> (20 - SECTOR_SHIFT));
+	pr_info("%llu MiB was read from image\n", atomic64_read(&diff_area->stat_image_read) >> (20 - SECTOR_SHIFT));
+	pr_info("%llu MiB was written to image\n", atomic64_read(&diff_area->stat_image_written) >> (20 - SECTOR_SHIFT));
 #endif
 
 	if (diff_area->orig_bdev) {
@@ -354,6 +356,8 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 #ifdef STANDALONE_BDEVFILTER
 	atomic64_set(&diff_area->stat_processed, 0);
 	atomic64_set(&diff_area->stat_copied, 0);
+	atomic64_set(&diff_area->stat_processed, 0);
+	atomic64_set(&diff_area->stat_image_written, 0);
 #endif
 
 	if (ret) {
