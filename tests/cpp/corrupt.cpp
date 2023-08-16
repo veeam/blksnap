@@ -226,6 +226,124 @@ void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ra
     }
 }
 
+void SimpleCorruption(const std::string& origDevName,
+                      const std::string& diffStorage,
+                      const unsigned long long diffStorageLimit,
+                      const bool isSync)
+{
+    bool isErrorFound = false;
+    std::vector<SCorruptInfo> corrupts;
+
+    logger.Info("--- Test: check corruption ---");
+    logger.Info("version: " + blksnap::Version());
+    logger.Info("device: " + origDevName);
+    logger.Info("diffStorage: " + diffStorage);
+    logger.Info("diffStorageLimit: " + std::to_string(diffStorageLimit) + " MiB");
+
+    auto ptrGen = std::make_shared<CTestSectorGenetor>(true);
+    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync);
+
+    logger.Info("device size: " + std::to_string(ptrOrininal->Size()));
+    logger.Info("device block size: " + std::to_string(g_blksz));
+
+    logger.Info("-- Fill original device collection by test pattern");
+    FillAll(ptrGen, ptrOrininal);
+
+    std::vector<std::string> devices;
+    devices.push_back(origDevName);
+
+    {// single test circle
+        size_t size;
+        off_t offset;
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
+        auto ptrCbt = blksnap::ICbt::Create(origDevName);
+        std::stringstream ss;
+
+        int testSeqNumber = ptrGen->GetSequenceNumber();
+        clock_t testSeqTime = std::clock();
+        logger.Info("test sequence time " + std::to_string(testSeqTime));
+
+        std::string imageDevName = ptrCbt->GetImage();
+        logger.Info("Found image block device [" + imageDevName + "]");
+        auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
+
+        logger.Info("- Check image content before writing to original device");
+        CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
+        if (ptrGen->Fails() > 0)
+        {
+            isErrorFound = true;
+            const std::vector<SRange>& ranges = ptrGen->GetFails();
+            corrupts.emplace_back(origDevName, ranges);
+
+            LogCurruptedSectors(ptrImage->Name(), ranges);
+        }
+
+        // Write first sector, like superblock
+        offset = 0;
+        size = g_blksz;
+        FillBlocks(ptrGen, ptrOrininal, offset, size);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        // second chunk
+        offset = 1ULL << (SECTOR_SHIFT + 9);
+        size = g_blksz * 2;
+        FillBlocks(ptrGen, ptrOrininal, offset, size);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        // next chunk
+        offset = 2ULL << (SECTOR_SHIFT + 9);
+        size = g_blksz * 3;
+        FillBlocks(ptrGen, ptrOrininal, 2ULL << (SECTOR_SHIFT + 9), g_blksz * 3);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        //Write random block
+        off_t sizeBdev = ptrOrininal->Size();
+        size_t blkszSectors = g_blksz >> SECTOR_SHIFT;
+        offset = static_cast<off_t>(std::rand()) * blkszSectors * SECTOR_SIZE;
+        size = static_cast<size_t>((std::rand() & 0x1F) + blkszSectors) * blkszSectors * SECTOR_SIZE;
+        if (offset > (sizeBdev - size))
+            offset = offset % (sizeBdev - size);
+        FillBlocks(ptrGen, ptrOrininal, offset, size);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        logger.Detail(ss);
+
+#if 1
+        // write some random blocks
+        logger.Info("- Fill some random blocks");
+        ptrGen->IncSequence();
+        FillRandomBlocks(ptrGen, ptrOrininal, 2);
+#endif
+        logger.Info("- Check image corruption");
+
+        CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
+        if (ptrGen->Fails() > 0)
+        {
+            isErrorFound = true;
+
+            const std::vector<SRange>& ranges = ptrGen->GetFails();
+            corrupts.emplace_back(origDevName, ranges);
+
+            LogCurruptedSectors(ptrImage->Name(), ranges);
+        }
+
+        std::string errorMessage;
+        while (ptrSession->GetError(errorMessage))
+        {
+            isErrorFound = true;
+            logger.Err(errorMessage);
+        }
+
+        logger.Info("-- Destroy blksnap session");
+        ptrSession.reset();
+    }
+
+    if (isErrorFound)
+        throw std::runtime_error("--- Failed: singlethread check corruption ---");
+
+    logger.Info("--- Success: check corruption ---");
+}
+
 void CheckCorruption(const std::string& origDevName,
                      const std::string& diffStorage,
                      const unsigned long long diffStorageLimit,
@@ -699,6 +817,7 @@ void Main(int argc, char* argv[])
             "The available limit for the size of the difference storage file. The suffixes M, K and G is allowed.")
         ("multithread",
             "Testing mode in which writings to the original devices and their checks are performed in parallel.")
+        ("simple", "Testing mode in which only one test cycle is performed with a very limited number of checks.")
         ("duration,u", po::value<int>()->default_value(5), "The test duration limit in minutes.")
         ("sync", "Use O_SYNC for access to original device.")
         ("blksz", po::value<int>()->default_value(512), "Align reads and writes to the block size.")
@@ -768,13 +887,17 @@ void Main(int argc, char* argv[])
     if (!!vm.count("multithread"))
         MultithreadCheckCorruption(origDevNames, diffStorage,
                                    diffStorageLimit, duration * 60);
-    else
-    {
+    else {
         if (origDevNames.size() > 1)
             logger.Err("In singlethread test mode used only first device.");
 
-        CheckCorruption(origDevNames[0], diffStorage, diffStorageLimit,
-                        duration * 60, isSync, blocksCountMax);
+        if (!!vm.count("simple"))
+            SimpleCorruption(origDevNames[0], diffStorage, diffStorageLimit,
+                            isSync);
+        else
+            CheckCorruption(origDevNames[0], diffStorage, diffStorageLimit,
+                            duration * 60, isSync, blocksCountMax);
+
     }
 }
 
