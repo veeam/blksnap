@@ -34,8 +34,8 @@ struct chunk;
  * @in_memory:
  *	A sign that difference storage is not prepared and all differences are
  *	stored in RAM.
- * @caches_lock:
- *	This spinlock guarantees consistency of the linked lists of chunk
+ * @chunk_map_lock:
+ *	This spinlock guarantees consistency of maps and linked lists of chunk
  *	caches.
  * @read_cache_queue:
  *	Queue for the read cache.
@@ -104,10 +104,10 @@ struct diff_area {
 	unsigned long chunk_shift;
 	unsigned long chunk_count;
 	struct xarray chunk_map;
+	spinlock_t chunk_map_lock;
 #ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	bool in_memory;
 #endif
-	spinlock_t caches_lock;
 	struct list_head read_cache_queue;
 	atomic_t read_cache_count;
 	struct list_head write_cache_queue;

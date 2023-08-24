@@ -44,9 +44,11 @@ void chunk_store_failed(struct chunk *chunk, int error)
 	diff_storage_free_region(chunk->diff_region);
 	chunk->diff_region = NULL;
 
-	up(&chunk->lock);
-	if (error)
+	chunk_release(chunk);
+	if (error) {
+		pr_err("Failed to store chunk\n");
 		diff_area_set_corrupted(diff_area, error);
+	}
 };
 
 int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
@@ -59,7 +61,7 @@ int chunk_schedule_storing(struct chunk *chunk, bool is_nowait)
 
 #ifdef CONFIG_BLK_SNAP_ALLOW_DIFF_STORAGE_IN_MEMORY
 	if (diff_area->in_memory) {
-		up(&chunk->lock);
+		chunk_release(chunk);
 		return 0;
 	}
 #endif
@@ -88,7 +90,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 
 	might_sleep();
 
-	spin_lock(&diff_area->caches_lock);
+	spin_lock(&diff_area->chunk_map_lock);
 
 	/*
 	 * The locked chunk cannot be in the cache.
@@ -97,7 +99,7 @@ void chunk_schedule_caching(struct chunk *chunk)
 	 */
 	if (WARN(!list_is_first(&chunk->cache_link, &chunk->cache_link),
 		 "The chunk already in the cache")) {
-		spin_unlock(&diff_area->caches_lock);
+		spin_unlock(&diff_area->chunk_map_lock);
 
 		chunk_store_failed(chunk, 0);
 		return;
@@ -117,9 +119,10 @@ void chunk_schedule_caching(struct chunk *chunk)
 		in_cache_count =
 			atomic_inc_return(&diff_area->read_cache_count);
 	}
-	spin_unlock(&diff_area->caches_lock);
+	chunk_get(chunk);
+	spin_unlock(&diff_area->chunk_map_lock);
 
-	up(&chunk->lock);
+	chunk_release(chunk);
 
 	/* Initiate the cache clearing process */
 #ifdef BLK_SNAP_DEBUG_IMAGE_WRITE
@@ -159,7 +162,7 @@ static void chunk_notify_load(void *ctx)
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
 		pr_err("Chunk in a failed state\n");
-		up(&chunk->lock);
+		chunk_release(chunk);
 		goto out;
 	}
 
@@ -179,7 +182,7 @@ static void chunk_notify_load(void *ctx)
 	}
 
 	pr_err("invalid chunk state 0x%x\n", atomic_read(&chunk->state));
-	up(&chunk->lock);
+	chunk_release(chunk);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
 }
@@ -232,7 +235,7 @@ static void chunk_notify_store(void *ctx)
 		}
 	} else
 		pr_err("invalid chunk state 0x%x\n", atomic_read(&chunk->state));
-	up(&chunk->lock);
+	chunk_release(chunk);
 out:
 	atomic_dec(&chunk->diff_area->pending_io_count);
 }
@@ -246,6 +249,7 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 		return NULL;
 	memory_object_inc(memory_object_chunk);
 
+	kref_init(&chunk->kref);
 	INIT_LIST_HEAD(&chunk->cache_link);
 	sema_init(&chunk->lock, 1);
 	chunk->diff_area = diff_area;
@@ -264,14 +268,18 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 	return chunk;
 }
 
-void chunk_free(struct chunk *chunk)
+void chunk_free(struct kref *kref)
 {
+	struct chunk *chunk = container_of(kref, struct chunk, kref);
+
 	down(&chunk->lock);
 	chunk_diff_buffer_release(chunk);
 	diff_storage_free_region(chunk->diff_region);
 	chunk_state_set(chunk, CHUNK_ST_FAILED);
 	up(&chunk->lock);
-
+#ifdef DEBUG
+	memset(chunk, 0xFF, sizeof(struct chunk));
+#endif
 	kfree(chunk);
 	memory_object_dec(memory_object_chunk);
 }

@@ -91,6 +91,7 @@ enum chunk_st {
  * diff_buffer, the semaphore must be locked.
  */
 struct chunk {
+	struct kref kref;
 	struct list_head cache_link;
 	struct diff_area *diff_area;
 
@@ -121,7 +122,21 @@ static inline bool chunk_state_check(struct chunk *chunk, int st)
 };
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
-void chunk_free(struct chunk *chunk);
+void chunk_free(struct kref *kref);
+static inline void chunk_put(struct chunk *chunk)
+{
+	if (chunk)
+		kref_put(&chunk->kref, chunk_free);
+};
+static inline void chunk_get(struct chunk *chunk)
+{
+	kref_get(&chunk->kref);
+};
+static inline void chunk_release(struct chunk *chunk)
+{
+	up(&chunk->lock);
+	kref_put(&chunk->kref, chunk_free);
+};
 
 int chunk_schedule_storing(struct chunk *chunk, bool is_nowait);
 void chunk_diff_buffer_release(struct chunk *chunk);
