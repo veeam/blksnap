@@ -39,52 +39,5 @@ std::string blksnap::Version()
     std::stringstream ss;
     ss << version.major << "." << version.minor << "." << version.revision << "." << version.build;
 
-#ifdef BLKSNAP_MODIFICATION
-    struct blksnap_mod mod;
-
-    if (ctl.Modification(mod))
-    {
-        if (mod.compatibility_flags)
-            ss << "-0x" << std::hex << mod.compatibility_flags << std::dec;
-
-        std::string modification;
-        for (int inx = 0; inx < BLKSNAP_MOD_NAME_LIMIT; inx++)
-        {
-            if (!mod.name[inx])
-                break;
-            modification += mod.name[inx];
-        }
-        if (!modification.empty())
-            ss << "-" << modification;
-    }
-#endif
     return ss.str();
-}
-
-void blksnap::GetSectorState(const std::string& image, off_t offset, SectorState& state)
-{
-#ifdef BLKSNAP_MODIFICATION
-    CSnapshotCtl ctl;
-    struct blksnap_mod mod;
-
-    if (!ctl.Modification(mod))
-        throw std::runtime_error("Failed to get sector state. Modification is not supported in blksnap module");
-
-#    ifdef BLKSNAP_DEBUG_SECTOR_STATE
-    if (!(mod.compatibility_flags & (1 << blksnap_compat_flag_debug_sector_state)))
-        throw std::runtime_error(
-          "Failed to get sector state. Sectors state getting is not supported in blksnap module");
-
-    struct blksnap_sector_state st = {0};
-    ctl.GetSectorState(image, offset, st);
-
-    state.snapNumberPrevious = st.snap_number_prev;
-    state.snapNumberCurrent = st.snap_number_curr;
-    state.chunkState = st.chunk_state;
-#    else
-    throw std::runtime_error("Failed to get sector state. It's not allowed");
-#    endif
-#else
-    throw std::runtime_error("Failed to get sector state. It's not implemented");
-#endif
 }

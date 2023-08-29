@@ -27,14 +27,6 @@
 #include <uuid/uuid.h>
 #include <vector>
 
-#if 0
-#ifndef BLKSNAP_MODIFICATION
-/* Allow to use additional IOCTL from module modification */
-#    define BLKSNAP_MODIFICATION
-/* Allow to get any sector state. Can be used only for debug purpose */
-#    define BLKSNAP_DEBUG_SECTOR_STATE
-#endif
-#endif
 #include "Sector.h"
 #include <linux/blk-filter.h>
 #include <linux/blksnap.h>

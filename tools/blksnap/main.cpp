@@ -352,10 +352,6 @@ protected:
     std::string m_usage;
 };
 
-#ifdef BLKSNAP_MODIFICATION
-#pragma message "BLKSNAP_MODIFICATION defined"
-#endif
-
 class VersionArgsProc : public IArgsProc
 {
 public:
@@ -364,48 +360,18 @@ public:
     {
         m_usage = std::string("Print module version.");
         m_desc.add_options()
-#ifdef BLKSNAP_MODIFICATION
-          ("modification,m", "Print module modification name.")
-          ("compatibility,c", "Print compatibility flag value in decimal form.")
-#endif
           ("json,j", "Use json format for output.");
     };
 
     void Execute(po::variables_map& vm) override
     {
         CBlksnapFileWrap blksnapFd;
-#ifdef BLKSNAP_MODIFICATION
-        bool isModification = (vm.count("modification") != 0);
-        bool isCompatibility = (vm.count("compatibility") != 0);
+        struct blksnap_version param = {0};
 
-        if (isModification || isCompatibility)
-        {
-            struct blksnap_mod param = {0};
+        if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_VERSION, &param))
+            throw std::system_error(errno, std::generic_category(), "Failed to get version.");
 
-            if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_MOD, &param))
-                throw std::system_error(errno, std::generic_category(), "Failed to get modification or compatibility information.");
-
-            if (isModification)
-                std::cout << param.name << std::endl;
-
-            if (isCompatibility) {
-                if (param.compatibility_flags & (1ull << blksnap_compat_flag_debug_sector_state))
-                    std::cout << "debug_sector_state" << std::endl;
-
-                if (param.compatibility_flags & (1ull << blksnap_compat_flag_setlog))
-                    std::cout << "setlog" << std::endl;
-            }
-            return;
-        }
-#endif
-        {
-            struct blksnap_version param = {0};
-
-            if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_VERSION, &param))
-                throw std::system_error(errno, std::generic_category(), "Failed to get version.");
-
-            std::cout << param.major << "." << param.minor << "." << param.revision << "." << param.build << std::endl;
-        }
+        std::cout << param.major << "." << param.minor << "." << param.revision << "." << param.build << std::endl;
     };
 };
 

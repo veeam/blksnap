@@ -210,13 +210,7 @@ void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ra
         ss << "Ranges of corrupted sectors:" << std::endl;
         for (const SRange& range : ranges)
         {
-            blksnap::SectorState state = {0};
-
             ss << range.sector << ":" << range.count << std::endl;
-            blksnap::GetSectorState(image, range.sector << SECTOR_SHIFT, state);
-            ss << "prev= " + std::to_string(state.snapNumberPrevious) + " "
-               << "curr= " + std::to_string(state.snapNumberCurrent) + " "
-               << "state= " + std::to_string(state.chunkState) << std::endl;
         }
         logger.Err(ss);
     }
