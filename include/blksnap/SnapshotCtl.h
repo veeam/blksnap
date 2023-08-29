@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "Sector.h"
-#include <linux/blk-filter.h>
+#include <linux/fs.h>
 #include <linux/blksnap.h>
 
 namespace blksnap

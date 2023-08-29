@@ -22,6 +22,8 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 
+#ifndef BLKFILTER_ATTACH
+
 #define BLKFILTER_ATTACH        _IOWR(0x12, 140, struct blkfilter_name)
 #define BLKFILTER_DETACH        _IOWR(0x12, 141, struct blkfilter_name)
 #define BLKFILTER_CTL           _IOWR(0x12, 142, struct blkfilter_ctl)
@@ -46,5 +48,7 @@ struct blkfilter_ctl {
         __u32 optlen;
         __u64 opt;
 };
+
+#endif
 
 #endif

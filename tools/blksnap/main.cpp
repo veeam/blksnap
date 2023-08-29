@@ -18,7 +18,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <uuid/uuid.h>
-#include <linux/blk-filter.h>
 #include <linux/blksnap.h>
 #include <time.h>
 
