@@ -194,7 +194,6 @@ enum blksnap_ioctl {
 	blksnap_ioctl_version,
 	blksnap_ioctl_snapshot_create,
 	blksnap_ioctl_snapshot_destroy,
-	blksnap_ioctl_snapshot_append_storage,
 	blksnap_ioctl_snapshot_take,
 	blksnap_ioctl_snapshot_collect,
 	blksnap_ioctl_snapshot_wait_event,
@@ -283,18 +282,6 @@ struct blksnap_snapshot_create {
 #define IOCTL_BLKSNAP_SNAPSHOT_DESTROY						\
 	_IOW(BLKSNAP, blksnap_ioctl_snapshot_destroy,				\
 	     struct blksnap_uuid)
-
-/**
- * define IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE - Append storage to the
- *	difference storage of the snapshot.
- *
- *
- *
- * Return: 0 if succeeded, negative errno otherwise.
- */
-#define IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE					\
-	_IOW(BLKSNAP, blksnap_ioctl_snapshot_append_storage,			\
-	     struct blksnap_snapshot_append_storage)
 
 /**
  * define IOCTL_BLKSNAP_SNAPSHOT_TAKE - Take snapshot.
