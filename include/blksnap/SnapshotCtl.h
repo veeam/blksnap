@@ -34,11 +34,6 @@
 
 namespace blksnap
 {
-    struct SBlksnapEventLowFreeSpace
-    {
-        unsigned long long requestedSectors;
-    };
-
     struct SBlksnapEventCorrupted
     {
         unsigned int origDevIdMj;
@@ -50,11 +45,7 @@ namespace blksnap
     {
         unsigned int code;
         long long time;
-        union
-        {
-            SBlksnapEventLowFreeSpace lowFreeSpace;
-            SBlksnapEventCorrupted corrupted;
-        };
+        SBlksnapEventCorrupted corrupted;
     };
 
     class CSnapshotId
