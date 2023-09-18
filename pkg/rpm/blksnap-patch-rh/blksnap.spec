@@ -60,7 +60,4 @@ done
 %clean
 %{__rm} -rf %{buildroot}
 
-%preun -n kmod-%{name}-patch
-/usr/sbin/%{name}-loader --unload
-
 %changelog
