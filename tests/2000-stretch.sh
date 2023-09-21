@@ -8,7 +8,7 @@
 echo "---"
 echo "Stretch snapshot test"
 
-# diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB dikk_storage portion size
+# diff_storage_minimum=262144 - set 256 K sectors, it's 128MiB diff_storage portion size
 blksnap_load "diff_storage_minimum=262144"
 
 # check module is ready
