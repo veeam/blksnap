@@ -344,13 +344,9 @@ struct blksnap_snapshot_collect {
  *	that the backup process was interrupted with an error. If the snapshot
  *	image has been read to the end by this time, the backup process is
  *	considered successful.
- * @blksnap_event_code_diff_storage_loss:
- *	The block device of the difference storage has been removed from the
- *	system.
  */
 enum blksnap_event_codes {
 	blksnap_event_code_corrupted,
-	blksnap_event_code_diff_storage_loss,
 };
 
 /**

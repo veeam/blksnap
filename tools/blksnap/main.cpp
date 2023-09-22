@@ -847,9 +847,6 @@ public:
             case blksnap_event_code_corrupted:
                 std::cout << "event=corrupted" << std::endl;
                 break;
-            case blksnap_event_code_diff_storage_loss:
-                std::cout << "event=diff_storage_loss" << std::endl;
-                break;
             default:
                 std::cout << "event=" << param.code << std::endl;
             }
@@ -917,10 +914,6 @@ private:
         std::cout << time_label << " - The snapshot was corrupted for device [" << data->dev_id_mj << ":"
                   << data->dev_id_mn << "] with error \"" << std::strerror(data->err_code) << "\"." << std::endl;
     };
-    void ProcessEventDiffStorageLoss(unsigned int time_label)
-    {
-        std::cout << time_label << " - The block device of the difference storage has been lost from the system." << std::endl;
-    };
 public:
     SnapshotWatcherArgsProc()
         : IArgsProc()
@@ -964,10 +957,6 @@ public:
                 case blksnap_event_code_corrupted:
                     ProcessEventCorrupted(param.time_label,
                             (struct blksnap_event_corrupted*)param.data);
-                    terminate = true;
-                    break;
-                case blksnap_event_code_diff_storage_loss:
-                    ProcessEventDiffStorageLoss(param.time_label);
                     terminate = true;
                     break;
                 default:
