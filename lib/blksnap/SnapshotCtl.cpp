@@ -23,17 +23,21 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <system_error>
 #include <memory>
+#include <boost/filesystem.hpp>
+
+namespace fs = boost::filesystem;
 
 static const char* blksnap_filename = "/dev/" BLKSNAP_CTL;
 
 using namespace blksnap;
 
-OpenFileHolder::OpenFileHolder(const std::string& filename, int flags)
+OpenFileHolder::OpenFileHolder(const std::string& filename, int flags, int mode/* = 0 */)
 {
-    int fd = ::open(filename.c_str(), flags);
+    int fd = mode ? ::open(filename.c_str(), flags, mode) : ::open(filename.c_str(), flags);
     if (fd < 0)
         throw std::system_error(errno, std::generic_category(),
             "Cannot open file [" + filename + "]");
@@ -49,6 +53,15 @@ int OpenFileHolder::Get()
     return m_fd;
 };
 
+static inline bool isBlockFile(const std::string& path)
+{
+    struct stat st;
+
+    if (::stat(path.c_str(), &st))
+        throw std::system_error(errno, std::generic_category(), "Failed to get status for '"+path+"'.");
+
+    return S_ISBLK(st.st_mode);
+}
 
 CSnapshotCtl::CSnapshotCtl()
     : m_fd(0)
@@ -76,7 +89,14 @@ void CSnapshotCtl::Version(struct blksnap_version& version)
 
 CSnapshotId CSnapshotCtl::Create(const std::string& filePath, const unsigned long long limit)
 {
-    OpenFileHolder fd(filePath, O_RDWR);
+    int flags = O_RDWR | O_EXCL;
+
+    if (fs::is_directory(filePath))
+            flags |= O_TMPFILE;
+    else if (!fs::is_regular_file(filePath) && !isBlockFile(filePath))
+        throw std::invalid_argument("The filePath should have been either the name of a regular file, the name of a block device, or the directory for creating a temporary file.");
+
+    OpenFileHolder fd(filePath, flags, 0600);
 
     struct blksnap_snapshot_create param = {0};
     param.diff_storage_limit_sect = limit / 512;

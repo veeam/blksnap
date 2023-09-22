@@ -91,7 +91,7 @@ namespace blksnap
     class OpenFileHolder
     {
     public:
-        OpenFileHolder(const std::string& filename, int flags);
+        OpenFileHolder(const std::string& filename, int flags, int mode = 0);
         ~OpenFileHolder();
         int Get();
 
