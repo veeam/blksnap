@@ -61,8 +61,7 @@ fi
 IMAGE=/mnt/blksnap-image0
 mkdir -p ${IMAGE}
 
-DIFF_STORAGE="${ORIGINAL}/diff_storage"
-fallocate --length 1GiB ${DIFF_STORAGE}
+DIFF_STORAGE="/dev/shm"
 
 generate_files direct ${ORIGINAL} "original-it#0" 5
 drop_cache
