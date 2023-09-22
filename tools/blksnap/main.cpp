@@ -313,6 +313,16 @@ namespace
         if (ret)
             throw std::system_error(ret, std::generic_category(), errMessage);
     }
+
+    bool isBlockFile(const std::string& path)
+    {
+        struct stat st;
+
+        if (::stat(path.c_str(), &st))
+            throw std::system_error(errno, std::generic_category(), "Failed to get status for '"+path+"'.");
+
+        return S_ISBLK(st.st_mode);
+    }
 } // namespace
 
 class IArgsProc
@@ -669,7 +679,20 @@ public:
 
         if (!vm.count("file"))
             throw std::invalid_argument("Argument 'file' is missed.");
-        OpenFileHolder fd(vm["file"].as<std::string>(), O_RDWR);
+
+        int flags = O_RDWR | O_EXCL;
+        std::string filename = vm["file"].as<std::string>();
+
+        if (fs::is_directory(filename)) {
+            /* A temporary file (flag O_TMPFILE) is being created.
+             * Not available for all file systems.
+             * See: man open.
+             */
+            flags |= O_TMPFILE;
+        } else if (!fs::is_regular_file(filename) && !isBlockFile(filename))
+            throw std::invalid_argument("The value '"+filename+"' for the argument '--file' should have been either the name of a regular file, the name of a block device, or the directory for creating a temporary file.");
+
+        OpenFileHolder fd(filename, flags, 0600);
 
         unsigned long long limit = 0;
         unsigned long long multiple = 1;
