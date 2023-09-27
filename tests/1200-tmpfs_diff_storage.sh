@@ -33,7 +33,7 @@ rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
 mkdir -p ${DIFF_STORAGE_DIR}
-mount -t tmpfs -o size=${BLK_SZ}M dummy ${DIFF_STORAGE_DIR}
+mount -t tmpfs -o size=${BLK_SZ}M diff_st ${DIFF_STORAGE_DIR}
 
 DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
 fallocate --length 32MiB ${DIFF_STORAGE}
