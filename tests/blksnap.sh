@@ -115,9 +115,6 @@ blksnap_snapshot_watcher()
 {
 	${BLKSNAP} snapshot_watcher --id=${ID} &
 	STRETCH_PROCESS_PID=$!
-
-	echo "Waiting for creating first portion"
-	sleep 2s
 }
 blksnap_watcher_wait()
 {
