@@ -42,7 +42,7 @@ MOUNTPOINT_1=${MPDIR}/simple_1
 mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
-generate_files direct ${MOUNTPOINT_1} "before" 9
+generate_files_direct ${MOUNTPOINT_1} "before" 9
 drop_cache
 
 #echo "Block device prepared, press ..."
@@ -56,7 +56,7 @@ blksnap_snapshot_take
 
 #echo "Write something" > ${MOUNTPOINT_1}/something.txt
 echo "Write to original"
-generate_files direct ${MOUNTPOINT_1} "after" 3
+generate_files_direct ${MOUNTPOINT_1} "after" 3
 drop_cache
 
 check_files ${MOUNTPOINT_1}
@@ -71,7 +71,7 @@ mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Write to snapshot"
-generate_files direct ${IMAGE_1} "snapshot" 3
+generate_files_direct ${IMAGE_1} "snapshot" 3
 
 drop_cache
 umount ${DEVICE_IMAGE_1}

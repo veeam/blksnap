@@ -24,7 +24,12 @@ loop_device_attach()
 	local FILEPATH=$1
 	local DEVICE=""
 
-	DEVICE=$(losetup -f --show ${FILEPATH})
+	if [ -z $2 ]
+	then
+		DEVICE=$(losetup --sector-size 4096 --direct-io=on -f --show ${FILEPATH})
+	else
+		DEVICE=$(losetup --sector-size $2 --direct-io=on -f --show ${FILEPATH})
+	fi
 	echo "${DEVICE}"
 }
 
@@ -48,12 +53,13 @@ generate_file_magic()
 	done
 }
 
-generate_files()
+generate_files_direct()
 {
-	local FLAGS=$1
-	local TARGET_DIR=$2
-	local PREFIX=$3
-	local CNT=$4
+	local TARGET_DIR=$1
+	local PREFIX=$2
+	local CNT=$3
+	local DEVICE=$(findmnt -n -o SOURCE -T ${TARGET_DIR})
+	local BLKSZ=$(lsblk -n -o PHY-SEC ${DEVICE} | sed 's/[[:space:]]//g')
 
 	echo "generate files in ${TARGET_DIR}"
 
@@ -64,7 +70,29 @@ generate_files()
 
 		let "SZ = ${SZ} % 100 + 8"
 		echo "file: ${FILE} size: ${SZ} KiB"
-		dd if=/dev/urandom of=${FILE} count=${SZ} bs=1024 status=none oflag=${FLAGS}
+		let "SZ = ${SZ} * 1024 / ${BLKSZ}"
+		dd if=/dev/urandom of=${FILE} count=${SZ} bs=${BLKSZ} status=none oflag=direct
+		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
+	done
+	echo "generate complete"
+}
+
+generate_files_sync()
+{
+	local TARGET_DIR=$1
+	local PREFIX=$2
+	local CNT=$3
+
+	echo "generate files in ${TARGET_DIR}"
+
+	for ((ITER = 0 ; ITER < ${CNT} ; ITER++))
+	do
+		local FILE="${TARGET_DIR}/${PREFIX}-${ITER}"
+		local SZ=$RANDOM
+
+		let "SZ = ${SZ} % 100 + 8"
+		echo "file: ${FILE} size: ${SZ} KiB"
+		dd if=/dev/urandom of=${FILE} count=${SZ} bs=1024 status=none oflag=sync
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 	done
 	echo "generate complete"
@@ -88,7 +116,7 @@ generate_block_MB()
 
 		SZ=$((SZ + 1))
 		echo "file: ${FILE} size: "$((SZ * 1024))" KiB"
-		dd if=/dev/urandom of=${FILE} count=$((SZ * 1024)) bs=1024 oflag=direct status=none
+		dd if=/dev/urandom of=${FILE} count=${SZ} bs=1M oflag=direct status=none
 		md5sum ${FILE} >> ${TARGET_DIR}/hash.md5
 
 		ITER_SZ_MB=$((SZ + ITER_SZ_MB))
@@ -116,4 +144,12 @@ check_files()
 drop_cache()
 {
 	echo 3 > /proc/sys/vm/drop_caches
+}
+
+block_size_mnt()
+{
+	local DIR=$1
+	local DEVICE=$(findmnt -n -o SOURCE -T ${DIR})
+
+	lsblk -n -o PHY-SEC ${DEVICE}
 }

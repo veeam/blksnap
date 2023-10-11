@@ -2,8 +2,17 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
+if [ -z $1 ]
+then
+	DIFF_STORAGE_DIR=${HOME}
+else
+	DIFF_STORAGE_DIR=$1
+fi
+echo "Diff storage directory ${DIFF_STORAGE_DIR}"
+
 . ./functions.sh
 . ./blksnap.sh
+BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
 
 echo "---"
 echo "Snapshot direct write test"
@@ -28,7 +37,7 @@ mkdir -p ${TESTDIR}
 LOOPFILE="${TESTDIR}/blksnap-original.img"
 dd if=/dev/zero of=${LOOPFILE} count=256 bs=1M
 
-DEVICE=$(loop_device_attach ${LOOPFILE})
+DEVICE=$(loop_device_attach ${LOOPFILE} ${BLOCK_SIZE})
 
 if [ -z $1 ]
 then
@@ -37,7 +46,7 @@ else
 	ITERATION_CNT="$1"
 fi
 
-DIFF_STORAGE="${TESTDIR}/diff_storage"
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
 fallocate --length 1GiB ${DIFF_STORAGE}
 
 for ITERATOR in $(seq 1 $ITERATION_CNT)

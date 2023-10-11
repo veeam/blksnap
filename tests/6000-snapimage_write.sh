@@ -63,7 +63,7 @@ mkdir -p ${IMAGE}
 
 DIFF_STORAGE="/dev/shm"
 
-generate_files direct ${ORIGINAL} "original-it#0" 5
+generate_files_direct ${ORIGINAL} "original-it#0" 5
 drop_cache
 
 for ITERATOR in $(seq 1 $ITERATION_CNT)

@@ -13,6 +13,7 @@ echo "Diff storage directory ${DIFF_STORAGE_DIR}"
 
 . ./functions.sh
 . ./blksnap.sh
+BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
 
 echo "---"
 echo "Destroy test start"
@@ -35,7 +36,7 @@ mkdir -p ${MPDIR}
 IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 128
 
-DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
+DEVICE_1=$(loop_device_attach ${IMAGEFILE_1} ${BLOCK_SIZE})
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1
@@ -43,7 +44,7 @@ mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
 echo "Write to original before taking snapshot"
-generate_files direct ${MOUNTPOINT_1} "before" 9
+generate_files_sync ${MOUNTPOINT_1} "before" 9
 drop_cache
 
 DIFF_STORAGE=${DIFF_STORAGE_DIR}/diff_storage
@@ -60,13 +61,13 @@ mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 set +e
 
 echo "Write to original after taking snapshot"
-generate_files direct ${MOUNTPOINT_1} "after" 4 &
+generate_files_sync ${MOUNTPOINT_1} "after" 4 &
 PID_GEN1=$!
 dd if=${DEVICE_IMAGE_1} of=/dev/zero &
 PID_DD1=$!
 
 echo "Write to snapshot"
-generate_files direct ${IMAGE_1} "snapshot" 4 &
+generate_files_sync ${IMAGE_1} "snapshot" 4 &
 PID_GEN2=$!
 dd if=${DEVICE_IMAGE_1} of=/dev/zero &
 PID_DD2=$!

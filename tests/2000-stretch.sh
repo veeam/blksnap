@@ -2,8 +2,16 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
+if [ -z $1 ]
+then
+	DIFF_STORAGE_DIR=${HOME}
+else
+	DIFF_STORAGE_DIR=$1
+fi
+
 . ./functions.sh
 . ./blksnap.sh
+BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
 
 echo "---"
 echo "Stretch snapshot test"
@@ -16,7 +24,6 @@ blksnap_version
 
 TESTDIR=${HOME}/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE_DIR=${HOME}
 DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
 
 rm -rf ${TESTDIR}
@@ -28,21 +35,21 @@ mkdir -p ${MPDIR}
 IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 4096
 
-DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
+DEVICE_1=$(loop_device_attach ${IMAGEFILE_1} ${BLOCK_SIZE})
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1
 mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
-generate_files direct ${MOUNTPOINT_1} "before" 5
+generate_files_direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
 rm -f ${DIFF_STORAGE}
 fallocate --length 128MiB ${DIFF_STORAGE}
 blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE}" "512M"
 
-generate_files direct ${MOUNTPOINT_1} "tracked" 5
+generate_files_direct ${MOUNTPOINT_1} "tracked" 5
 drop_cache
 
 blksnap_snapshot_watcher
