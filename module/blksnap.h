@@ -3,6 +3,7 @@
 #define _UAPI_LINUX_BLK_SNAP_H
 
 #include <linux/types.h>
+#include <linux/version.h>
 
 #define BLK_SNAP_CTL "blksnap-control"
 #define BLK_SNAP_IMAGE_NAME "blksnap-image"
@@ -10,6 +11,13 @@
 
 #ifdef BLK_SNAP_MODIFICATION
 #define IOCTL_MOD 32
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+#define HOLDER_OPS , NULL
+#else
+#define HOLDER_OPS
+#endif
+
 #endif
 
 enum blk_snap_ioctl {

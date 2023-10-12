@@ -174,7 +174,7 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 	struct block_device *bdev;
 	struct storage_bdev *storage_bdev;
 
-	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
+	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL HOLDER_OPS);
 	if (IS_ERR(bdev)) {
 		pr_err("Failed to open device. errno=%d\n",
 		       abs((int)PTR_ERR(bdev)));
