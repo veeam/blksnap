@@ -30,7 +30,7 @@ struct event {
 	ktime_t time;
 	int code;
 	int data_size;
-	char data[1]; /* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
+	char data[]; /* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
 };
 
 /**
