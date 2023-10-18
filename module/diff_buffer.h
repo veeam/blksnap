@@ -29,7 +29,7 @@ struct diff_buffer {
 	int number;
 #endif
 	size_t page_count;
-	struct page *pages[0];
+	struct page *pages[];
 };
 
 /**

@@ -6,7 +6,7 @@
 
 struct big_buffer {
 	size_t pg_cnt;
-	u8 *pg[0];
+	u8 *pg[];
 };
 
 struct big_buffer *big_buffer_alloc(size_t count, int gfp_opt);
