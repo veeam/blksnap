@@ -336,9 +336,11 @@ def dist_os_release():
 	d = {}
 	with open("/etc/os-release") as file:
 		for line in file:
-			stripped = line.rstrip()
-			if stripped:
+			stripped = line.strip()
+			if stripped and not stripped.startswith("#"):
 				key, val = stripped.split("=")
+				key = key.strip()
+				val = val.strip()
 				d[key] = val
 	return d["ID"].strip("\""), d["VERSION_ID"].strip("\"")
 
