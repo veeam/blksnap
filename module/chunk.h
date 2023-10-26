@@ -6,6 +6,7 @@
 #include <linux/blkdev.h>
 #include <linux/rwsem.h>
 #include <linux/atomic.h>
+#include "diff_area.h"
 
 struct diff_area;
 struct diff_region;
@@ -55,7 +56,7 @@ enum chunk_st {
 /**
  * struct chunk - Minimum data storage unit.
  *
- * @cache_link:
+ * @link:
  *	The list header allows to create caches of chunks.
  * @diff_area:
  *	Pointer to the difference area - the storage of changes for a specific device.
@@ -91,8 +92,7 @@ enum chunk_st {
  * diff_buffer, the semaphore must be locked.
  */
 struct chunk {
-	struct kref kref;
-	struct list_head cache_link;
+	struct list_head link;
 	struct diff_area *diff_area;
 
 	unsigned long number;
@@ -104,6 +104,15 @@ struct chunk {
 	struct diff_buffer *diff_buffer;
 	struct diff_region *diff_region;
 	struct diff_io *diff_io;
+};
+
+static inline void chunk_up(struct chunk *chunk)
+{
+        struct diff_area *diff_area = chunk->diff_area;
+
+        chunk->diff_area = NULL;
+        up(&chunk->lock);
+        diff_area_put(diff_area);
 };
 
 static inline void chunk_state_set(struct chunk *chunk, int st)
@@ -122,24 +131,10 @@ static inline bool chunk_state_check(struct chunk *chunk, int st)
 };
 
 struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
-void chunk_free(struct kref *kref);
-static inline void chunk_put(struct chunk *chunk)
-{
-	if (chunk)
-		kref_put(&chunk->kref, chunk_free);
-};
-static inline void chunk_get(struct chunk *chunk)
-{
-	kref_get(&chunk->kref);
-};
-static inline void chunk_release(struct chunk *chunk)
-{
-	up(&chunk->lock);
-	kref_put(&chunk->kref, chunk_free);
-};
+void chunk_free(struct diff_area *diff_area, struct chunk *chunk);
 
 int chunk_schedule_storing(struct chunk *chunk, bool is_nowait);
-void chunk_diff_buffer_release(struct chunk *chunk);
+void chunk_diff_buffer_release(struct diff_area *diff_area, struct chunk *chunk);
 void chunk_store_failed(struct chunk *chunk, int error);
 
 void chunk_schedule_caching(struct chunk *chunk);

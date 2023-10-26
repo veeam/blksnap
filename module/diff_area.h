@@ -60,9 +60,6 @@ struct chunk;
  *	The flag is set if an error occurred in the operation of the data
  *	saving mechanism in the diff area. In this case, an error will be
  *	generated when reading from the snapshot image.
- * @pending_io_count:
- *	Counter of incomplete I/O operations. Allows to wait for all I/O
- *	operations to be completed before releasing this structure.
  *
  * The &struct diff_area is created for each block device in the snapshot.
  * It is used to save the differences between the original block device and
@@ -119,7 +116,6 @@ struct diff_area {
 	atomic_t free_diff_buffers_count;
 
 	atomic_t corrupt_flag;
-	atomic_t pending_io_count;
 
 #ifdef STANDALONE_BDEVFILTER
 	atomic64_t stat_processed;
@@ -132,9 +128,10 @@ struct diff_area {
 struct diff_area *diff_area_new(dev_t dev_id,
 				struct diff_storage *diff_storage);
 void diff_area_free(struct kref *kref);
-static inline void diff_area_get(struct diff_area *diff_area)
+static inline struct diff_area *diff_area_get(struct diff_area *diff_area)
 {
-	kref_get(&diff_area->kref);
+        kref_get(&diff_area->kref);
+        return diff_area;
 };
 static inline void diff_area_put(struct diff_area *diff_area)
 {
