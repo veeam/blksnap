@@ -86,4 +86,14 @@ void log_printk(const int level, const char *fmt, ...);
 
 #endif
 
+#define LIMIT_BEGIN(_N) 							\
+{										\
+	static volatile int _limit = _N;					\
+	if (_limit > 0) {							\
+		_limit --;
+
+#define LIMIT_END()								\
+	}									\
+}
+
 #endif /* __BLK_SNAP_LOG_H */
