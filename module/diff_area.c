@@ -173,6 +173,7 @@ get_chunk_from_cache_and_write_lock(struct diff_area *diff_area, int wr)
 		atomic_dec(cache_count);
 		list_del_init(&chunk->link);
 		chunk->diff_area = diff_area_get(diff_area);
+		atomic_inc(&chunk->refcount);
 	}
 	spin_unlock(&diff_area->chunk_map_lock);
 
@@ -269,11 +270,7 @@ static void diff_area_cache_release(struct diff_area *diff_area)
 				 * Such a chunk was created to read data from a
 				 * snapshot image and does not require storage.
 				 */
-				spin_lock(&diff_area->chunk_map_lock);
-				xa_erase(&diff_area->chunk_map, chunk->number);
-				spin_unlock(&diff_area->chunk_map_lock);
-
-				chunk_up(chunk);
+				chunk_up_and_free(chunk);
 			}
 		}
 	}
@@ -403,6 +400,8 @@ struct chunk *diff_area_chunk_take(struct diff_area *diff_area,
 
 	spin_lock(&diff_area->chunk_map_lock);
 	chunk = xa_load(&diff_area->chunk_map, nr);
+	if (chunk)
+		atomic_inc(&chunk->refcount);
 	spin_unlock(&diff_area->chunk_map_lock);
 	if (chunk)
 		return chunk;
@@ -423,8 +422,10 @@ struct chunk *diff_area_chunk_take(struct diff_area *diff_area,
 		/* another chunk has just been created */
 		chunk_free(diff_area, new_chunk);
 		chunk = xa_load(&diff_area->chunk_map, nr);
-		if (likely(chunk))
+		if (likely(chunk)) {
+			atomic_inc(&chunk->refcount);
 			ret = 0;
+		}
 	}
 	spin_unlock(&diff_area->chunk_map_lock);
 
@@ -549,6 +550,8 @@ int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
 	     	spin_lock(&diff_area->chunk_map_lock);
 		chunk = xa_load(&diff_area->chunk_map,
 				diff_area_chunk_number(diff_area, offset));
+		if (chunk)
+			atomic_inc(&chunk->refcount);
 		spin_unlock(&diff_area->chunk_map_lock);
 		if (!chunk) {
 			pr_err("Could not get a chunk from chunk map\n");
@@ -557,12 +560,16 @@ int diff_area_wait(struct diff_area *diff_area, sector_t sector, sector_t count,
 		}
 		WARN_ON(diff_area_chunk_number(diff_area, offset) != chunk->number);
 		if (is_nowait) {
-			if (down_trylock(&chunk->lock))
+			if (down_trylock(&chunk->lock)) {
+				atomic_dec(&chunk->refcount);
 				return -EAGAIN;
+			}
 		} else {
 			ret = down_killable(&chunk->lock);
-			if (unlikely(ret))
+			if (unlikely(ret)) {
+				atomic_dec(&chunk->refcount);
 				return ret;
+			}
 		}
 		chunk->diff_area = diff_area_get(diff_area);
 
@@ -664,8 +671,10 @@ static struct chunk *diff_area_image_context_get_chunk(
 	chunk = diff_area_chunk_take(diff_area, nr);
 
 	ret = down_killable(&chunk->lock);
-	if (ret)
+	if (ret) {
+		atomic_dec(&chunk->refcount);
 		return ERR_PTR(ret);
+	}
 	chunk->diff_area = diff_area_get(diff_area);
 
 	if (unlikely(chunk_state_check(chunk, CHUNK_ST_FAILED))) {
@@ -795,7 +804,11 @@ int diff_area_get_sector_state(struct diff_area *diff_area, sector_t sector,
 	sector_t chunk_sectors = diff_area_chunk_sectors(diff_area);
 	sector_t offset = round_down(sector, chunk_sectors);
 
+	spin_lock(&diff_area->chunk_map_lock);
 	chunk = xa_load(&diff_area->chunk_map, diff_area_chunk_number(diff_area, offset));
+	if (chunk)
+		atomic_inc(&chunk->refcount);
+	spin_unlock(&diff_area->chunk_map_lock);
 	if (!chunk)
 		return -EINVAL;
 

@@ -43,6 +43,8 @@ struct diff_io;
  * Write to snapshot image:
  *	0 -> LOADING -> BUFFER_READY | DIRTY -> DIRTY | STORING ->
  *	BUFFER_READY | STORE_READY -> STORE_READY
+ * Read from snapshot image
+ *	0 > LOADING -> BUFFER_READY -> 0
  */
 enum chunk_st {
 	CHUNK_ST_FAILED = (1 << 0),
@@ -78,6 +80,9 @@ enum chunk_st {
  *	on the difference storage.
  * @diff_io:
  *	Provides I/O operations for a chunk.
+ * @refcount:
+ *	The counter ensures the removal of a chunk from the diff_area.chunk_map
+ *	and its safe free.
  *
  * This structure describes the block of data that the module operates
  * with when executing the copy-on-write algorithm and when performing I/O
@@ -104,16 +109,12 @@ struct chunk {
 	struct diff_buffer *diff_buffer;
 	struct diff_region *diff_region;
 	struct diff_io *diff_io;
+
+	atomic_t refcount;
 };
 
-static inline void chunk_up(struct chunk *chunk)
-{
-        struct diff_area *diff_area = chunk->diff_area;
-
-        chunk->diff_area = NULL;
-        up(&chunk->lock);
-        diff_area_put(diff_area);
-};
+void chunk_up_and_free(struct chunk *chunk);
+void chunk_up(struct chunk *chunk);
 
 static inline void chunk_state_set(struct chunk *chunk, int st)
 {

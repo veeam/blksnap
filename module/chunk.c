@@ -24,6 +24,38 @@ static inline sector_t bdev_nr_sectors(struct block_device *bdev)
 };
 #endif
 
+void chunk_up_and_free(struct chunk *chunk)
+{
+	bool is_erase = false;
+	struct diff_area *diff_area = chunk->diff_area;
+
+	spin_lock(&diff_area->chunk_map_lock);
+	if (atomic_dec_and_test(&chunk->refcount)) {
+		xa_erase(&diff_area->chunk_map, chunk->number);
+		is_erase = true;
+	}
+	spin_unlock(&diff_area->chunk_map_lock);
+
+	chunk->diff_area = NULL;
+	up(&chunk->lock);
+
+	if (is_erase)
+		chunk_free(diff_area, chunk);
+	diff_area_put(diff_area);
+}
+
+void chunk_up(struct chunk *chunk)
+{
+	struct diff_area *diff_area = chunk->diff_area;
+
+	atomic_dec(&chunk->refcount);
+
+	chunk->diff_area = NULL;
+	up(&chunk->lock);
+
+	diff_area_put(diff_area);
+};
+
 void chunk_diff_buffer_release(struct diff_area *diff_area, struct chunk *chunk)
 {
 	if (unlikely(!chunk->diff_buffer))
@@ -257,6 +289,8 @@ struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number)
 		chunk->sector_count = bdev_nr_sectors(diff_area->orig_bdev) -
 					(chunk->sector_count * number);
 	}
+
+	atomic_set(&chunk->refcount, 1);
 
 	return chunk;
 }
