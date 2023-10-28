@@ -42,13 +42,24 @@ and the control interface was redesigned.
 
 A "v3" patch on [patchwork](https://patchwork.kernel.org/project/linux-block/list/?series=737222) or [lore](https://lore.kernel.org/linux-block/20230404140835.25166-1-sergei.shtepa@veeam.com/) was posted at 4 April 2023.
 
+Thanks for preparing v4 patch:
+- Christoph Hellwig for his significant contribution to the project.
+- Fabio Fantoni for his participation in the project, useful advice and faith in the success of the project.
+- Donald Buczek for researching the module and user-space tool. His fresh look revealed a number of flaw.
+- Bagas Sanjaya for comments on the documentation.
+
+A "v4" patch ([cover](https://lore.kernel.org/lkml/20230609115206.4649-1-sergei.shtepa@veeam.com/) - [patches](https://lore.kernel.org/lkml/20230609115858.4737-1-sergei.shtepa@veeam.com/)) was posted at 9 June 2023.
+
+[A "v5" patch](https://lore.kernel.org/linux-block/ZIcsijGWeyk%2FFjHs@infradead.org/T/#mc6b9e9bb70021d25decba816766a80fe54911539) done immediately afterwards and which contains the majority of response emails, is only a rebase on latest linux-block, was posted at 12 June 2023.
+
+
 ## Work in progress and news
 
-There is a work in progress for "v4",
+There is a work in progress for "v6",
 is possible view/test it from [this branch](https://github.com/SergeiShtepa/linux/tree/blksnap-master) of a linux fork git.
 
-For testing this version, that have interface changes, [the blksnap branch stable-2.0](https://github.com/veeam/blksnap/tree/stable-v2.0) must be used,
-have updated library, tools and tests working with new upstream version.
+For testing this version, that have important changes, [the blksnap branch stable-2.0](https://github.com/veeam/blksnap/tree/stable-v2.0) must be used updated with the latest commits,
+to have library, tools and tests working with new upstream version.
 
 Latest news are also visible from [here](https://github.com/veeam/blksnap/issues/2)
 
