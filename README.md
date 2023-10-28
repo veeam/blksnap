@@ -1,3 +1,9 @@
+| :warning: Important note |
+|:---------------------------|
+| Master branch was recently updated only about readme and patches posted for upstream kernel |
+| Latest work for upstream is in [stable-2.0](https://github.com/veeam/blksnap/tree/stable-v2.0) branch, for more details check [Upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md) |
+| For older blksnap version based on external module (actually used in production) see these branches: [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1), [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0), [stable-1.0](https://github.com/veeam/blksnap/tree/stable-v1.0) |
+
 # BLKSNAP - Block Devices Snapshots Module
 
 * [Extended description and features](doc/blksnap.md)
