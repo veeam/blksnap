@@ -26,6 +26,7 @@ jobs:
     name: ${{ matrix.arch }}
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: aarch64
