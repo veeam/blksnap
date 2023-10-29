@@ -23,6 +23,7 @@
  * flexibility. Uses structures that are directly passed to the kernel module.
  */
 
+#include <stdint.h>
 #include <string>
 #include <uuid/uuid.h>
 #include <vector>
