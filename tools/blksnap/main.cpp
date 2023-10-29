@@ -641,7 +641,7 @@ public:
     SnapshotAddArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("Add device fo snapshot.");
+        m_usage = std::string("Add device for snapshot.");
         m_desc.add_options()
             ("device,d", po::value<std::string>(), "Device name.")
             ("id,i", po::value<std::string>(), "Snapshot uuid.");
