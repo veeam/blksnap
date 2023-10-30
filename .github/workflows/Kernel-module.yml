@@ -32,9 +32,11 @@ jobs:
             image: "library/debian:bullseye"
           - kversion: "6.1"
             image: "library/debian:bookworm"
+          - kversion: "last stable"
+            image: "library/debian:sid"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install packages required
         run: |
