@@ -22,10 +22,11 @@ on:
 jobs:
   build_job:
     # The host should always be linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     name: ${{ matrix.arch }}
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: aarch64
@@ -33,7 +34,7 @@ jobs:
           - arch: s390x
           - arch: armv7
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: uraimo/run-on-arch-action@v2
         name: Build
         id: build

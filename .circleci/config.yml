@@ -61,10 +61,10 @@ jobs:
         <<: *shared
         docker:
             - image: library/ubuntu:jammy
-    ubuntu2210:
+    ubuntu2310:
         <<: *shared
         docker:
-            - image: library/ubuntu:kinetic
+            - image: library/ubuntu:mantic
 
 workflows:
   build-deb:
@@ -74,4 +74,4 @@ workflows:
       - debian12
       - ubuntu2004
       - ubuntu2204
-      - ubuntu2210
+      - ubuntu2310
