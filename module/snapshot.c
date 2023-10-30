@@ -190,6 +190,10 @@ static void snapshot_release(struct snapshot *snapshot)
 			diff_area_put(tracker->diff_area);
 			tracker->diff_area = NULL;
 
+			tracker_lock();
+			uuid_copy(&tracker->owner_id, &uuid_null);
+			tracker_unlock();
+
 			tracker_put(tracker);
 			snapshot->tracker_array[inx] = NULL;
 		}
@@ -380,9 +384,8 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
 			MKDEV(dev_id_array[inx].mj, dev_id_array[inx].mn);
 		struct tracker *tracker;
 
-		tracker = tracker_create_or_get(dev_id);
+		tracker = tracker_create_or_get(dev_id, &snapshot->id);
 		if (IS_ERR(tracker)) {
-			pr_err("Unable to create snapshot\n");
 			pr_err("Failed to add device [%u:%u] to snapshot tracking\n",
 			       MAJOR(dev_id), MINOR(dev_id));
 			ret = PTR_ERR(tracker);

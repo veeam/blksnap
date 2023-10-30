@@ -45,6 +45,7 @@ struct tracker {
 
 	struct percpu_rw_semaphore submit_lock;
 	atomic_t snapshot_is_taken;
+	uuid_t owner_id;
 
 	struct cbt_map *cbt_map;
 	struct diff_area *diff_area;
@@ -64,7 +65,7 @@ struct tracker *tracker_get_by_dev(struct block_device *bdev);
 int tracker_init(void);
 void tracker_done(void);
 
-struct tracker *tracker_create_or_get(dev_t dev_id);
+struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id);
 int tracker_remove(dev_t dev_id);
 int tracker_collect(int max_count, struct blk_snap_cbt_info *cbt_info,
 		    int *pcount);

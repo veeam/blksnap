@@ -335,6 +335,7 @@ static struct tracker *tracker_new(struct block_device *bdev)
 	INIT_LIST_HEAD(&tracker->link);
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->dev_id = bdev->bd_dev;
+	uuid_copy(&tracker->owner_id, &uuid_null);
 
 	pr_info("Create tracker for device [%u:%u]. Capacity 0x%llx sectors\n",
 		MAJOR(tracker->dev_id), MINOR(tracker->dev_id),
@@ -466,7 +467,7 @@ void tracker_done(void)
 	tracker_wait_for_release();
 }
 
-struct tracker *tracker_create_or_get(dev_t dev_id)
+struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 {
 	struct tracker *tracker;
 	struct block_device *bdev;
@@ -492,8 +493,23 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		goto put_bdev;
 	}
 	if (tracker) {
+		int err = 0;
 		pr_debug("Device [%u:%u] is already under tracking\n",
 			 MAJOR(dev_id), MINOR(dev_id));
+
+		tracker_lock();
+		if (uuid_is_null(&tracker->owner_id))
+			uuid_copy(&tracker->owner_id, owner_id);
+		else
+			err = -EALREADY;
+		tracker_unlock();
+
+		if (err) {
+			tracker_put(tracker);
+			tracker = ERR_PTR(err);
+			pr_err("Tracker for the device [%u:%u] already belongs to another snapshot\n",
+				MAJOR(dev_id), MINOR(dev_id));
+		}
 		goto put_bdev;
 	}
 
@@ -520,11 +536,15 @@ struct tracker *tracker_create_or_get(dev_t dev_id)
 		 * a ref counter value of 2. This allows not to detach
 		 * the filter when the snapshot is released.
 		 */
-	        bdev_filter_get(&tracker->flt);
+		bdev_filter_get(&tracker->flt);
 
 		spin_lock(&tracked_device_lock);
 		list_add_tail(&tr_dev->link, &tracked_device_list);
 		spin_unlock(&tracked_device_lock);
+
+		tracker_lock();
+		uuid_copy(&tracker->owner_id, owner_id);
+		tracker_unlock();
 	}
 put_bdev:
 #if defined(HAVE_BLK_HOLDER_OPS)
