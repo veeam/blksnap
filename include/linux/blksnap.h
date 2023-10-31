@@ -379,7 +379,7 @@ struct blksnap_snapshot_event {
  * While holding the snapshot, the kernel module can transmit information about
  * changes in its state in the form of events to the user level.
  * It is very important to receive these events as quickly as possible, so the
- * user's thread is in the state of interruptable sleep.
+ * user's thread is in the state of interruptible sleep.
  *
  * Return: 0 if succeeded, negative errno otherwise.
  */
