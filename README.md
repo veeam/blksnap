@@ -1,15 +1,39 @@
-# blksnap
+# BLKSNAP - Block Devices Snapshots Module
 
-* doc/ - documentation
-* include/ - libraries public headers
-* lib/ - libraries sources
-* module/ - blksnap kernel module sources
-* patches/ - patches for thelinux kernel
-* pkg/ - scripts for building packages
-* tests/ - Test scripts and test source codes.
-* tools/ - source files of tools for working with blksnap
+* [Extended description and features](doc/blksnap.md)
+* [Repository structure](#repository-structure)
+* [Licensing](#licensing)
+* [Kernel module](#kernel-module)
+* [Upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
+* [Tools](#tools)
+* [Library](#library)
+* [Tests](#tests)
+  - Details:
+    * [Boundary](doc/tests/boundary.md)
+    * [Corrupt](doc/tests/corrupt.md)
+    * [Diff storage](doc/tests/diff_storage.md)
+* [Compatibility notes](#compatibility-notes)
 
-## kernel module blksnap
+## Repository structure
+
+* doc/ - Documentation
+* include/ - Libraries public headers
+* lib/ - Libraries sources
+* module/ - Sources of kernel module
+* patches/ - Patches for the upstream linux kernel
+* pkg/ - Scripts for building deb and rpm packages
+* tests/ - Test scripts and tests source code
+* tools/ - Source files of tools for working with blksnap
+
+## Licensing
+
+Kernel module is GPL-2 only, tools and tests are GPL-2+, library and include are LGPL-3+.
+
+Copyright (C) 2022 Veeam Software Group GmbH
+
+This project use [SPDX License Identifier](https://spdx.dev/ids/) in source files header.
+
+## Kernel module
 This kernel module implements snapshot and changed block tracking functionality.
 The module is developed with the condition of simply adding it to the upstream.
 Therefore, the module is divided into two parts: bdevfilter and blksnap.
@@ -17,39 +41,43 @@ bdevfilter provides the ability to intercept I/O units (bio). The main logic
 is concentrated in blksnap. The upstream variant does not contain a bdevfilter,
 but accesses the kernel to attach and detach the block device filter.
 
+Relating the work in progress for integration in upstream kernel see the specific [README](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
+
 ### How to build
 Installing the necessary deb packages.
 ``` bash
-sudo apt install gcc linux-headers
+sudo apt install gcc linux-headers-$(uname -r)
 ```
 Or installing the necessary rpm packages.
 ``` bash
 sudo yum install gcc kernel-devel
 ```
 ``` bash
-cd ./mobule
+cd ./module
 mk.sh build
 ```
 In directory current directory you can found bdevfilter.ko and blksnap.ko.
 
 ### How to install
 ``` bash
-cd ./mobule
+cd ./module
 mk.sh install-flt
 mk.sh install
 ```
 ### How to create deb package
 ``` bash
-sudo apt install debhelper
+sudo apt install debhelper dkms
+# on debian >=12 and ubuntu >= 23.04 is needed dh-dkms, not installed anymore as dkms dep.
+sudo apt install dh-dkms
 cd ./pkg/deb/blksnap-dkms
 build.sh ${VERSION}
 ```
 ### How to create rpm package
 There are several variants, look in the ./pkg/rpm directory.
 
-## blksnap tool
-The blksnap tool allows to manage the module from the command line.
-The program allows to execute individual ioctls of the blksnap module.
+## Tools
+The blksnap tools allows you to manage the module from the command line.
+The program allows for execution of individual ioctls of the blksnap module.
 The interface of the program may seem inconvenient to the user,
 since it is assumed that it will be called by other applications.
 ### How to build
@@ -77,7 +105,7 @@ cd ./pkg/deb/blksnap-tools
 build.sh ${VERSION}
 ```
 
-## library
+## Library
 The dynamic C library is not needed to work with blksnap. File
 ./include/blksnap/blk_snap.h contains everything you need to work with blksnap.
 But to demonstrate how to call the ioctl, a static c++ library was created.
@@ -107,7 +135,7 @@ cd ./pkg/deb/blksnap-dev
 build.sh ${VERSION}
 ```
 
-## tests
+## Tests
 The test scripts are written in bash and use the blksnap tool to control
 the blksnap module. The test scripts allow to check the main functions of
 the module. To implement complex test algorithms, С++ tests are implemented.
@@ -136,3 +164,9 @@ sudo apt install debhelper
 cd ./pkg/deb/blksnap-tests
 build.sh ${VERSION}
 ```
+
+## Compatibility notes
+- blksnap kernel module support kernel versions from 5.10 up to 6.5
+- all supported debian and ubuntu supported versions are supported but with some notes:
+  - not all have debian/ubuntu versions have official packages of kernel >= 5.10, so an unofficial or custom ones more updated are needed, with blksnap-dkms should be still possible easy/fast build/install blksnap module on them (is also possible build/install it manually without dkms)
+  - debian 8 and ubuntu 14.04 needs to install cmake 3 from backports to build
