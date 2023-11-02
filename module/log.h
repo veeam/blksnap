@@ -92,6 +92,10 @@ void log_printk(const int level, const char *fmt, ...);
 	if (_limit > 0) {							\
 		_limit --;
 
+#define LIMIT_STOP() 								\
+	} else if (_limit == 0) {						\
+		_limit --;
+
 #define LIMIT_END()								\
 	}									\
 }

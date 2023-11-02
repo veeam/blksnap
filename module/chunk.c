@@ -77,7 +77,11 @@ void chunk_store_failed(struct chunk *chunk, int error)
 
 	chunk_up(chunk);
 	if (error) {
-		pr_err("Failed to store chunk\n");
+		LIMIT_BEGIN(7)
+		pr_err("Failed to store chunk #%lu\n", chunk->number);
+		LIMIT_STOP()
+		pr_err("Too many chunk have failed, stop flooding\n");
+		LIMIT_END()
 		diff_area_set_corrupted(diff_area, error);
 	}
 	diff_area_put(diff_area);
