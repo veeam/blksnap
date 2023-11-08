@@ -67,7 +67,7 @@ body:
 - type: textarea
   id: additional-info
   attributes:
-      label: Additional informations
+      label: Additional information
       description: Add any additional information related to the issue here.
 
 

@@ -17,7 +17,7 @@ kernel documentation, comments in source code etc...
 
 Testing is important to have a quality software, see related part in [README](README.md#tests)
 and the [README](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md) related to upstream kernel integration
-for some informations.
+for some information.
 
 ## Contributing to Source Code
 
