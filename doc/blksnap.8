@@ -1,7 +1,7 @@
-.TH BLKSNAP 8 "6 April 2023"
+.TH BLKSNAP 8 "9 November 2023"
 
 .SH NAME
-blksnap \- creating snapshots of block devices
+blksnap \- Snapshots of block devices.
 
 .SH SYNOPSIS
 
@@ -18,95 +18,164 @@ The tool for creating snapshots of block devices using the blksnap kernel module
 
 .SH COMMANDS, ARGUMENTS
 
-.HP 5
-HELP - Print usage.
+.SS HELP
+Print usage.
+.TP
+.B blksnap { help | \-\-help | \-h }
+Prints a list of all available commands and information about them.
+.TP
+The \-\-help parameter is available for each command. Enter 'blksnap \fICOMMAND\fR --help' and get help about the parameters of this command.
 
-.B blksnap help
+.SS ATTACH
+Attach blksnap tracker to block device.
+.TP
+.B blksnap attach \-\-device \fIDEVICE\fR
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Block device name.
+.TP
+The blksnap block device filter is attached and the change tracker tables are initiated.
 
-.B blksnap --help
+.SS CBTINFO
+Get change tracker information.
+.TP
+.B blksnap cbtinfo \-\-device \fIDEVICE\fR
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Block device name.
+.TP
+Prints the block size and their count in the table, the generation ID and the current change number. The change number increases every time a snapshot is taken. It's a byte, and its value cannot exceed 255. When the change number reaches its maximum value, the change table is reset and a new generation ID is generated.
 
-.B blksnap -h
+.SS DETACH
+Detach blksnap tracker from block device.
+.TP
+.B blksnap detach --device \fIDEVICE\fR
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Block device name.
+.TP
+The blksnap block device filter is detached, and the change tracker tables are being released.
 
-.HP 5
-ATTACH - Attach blksnap tracker to block device.
+.SS MARKDIRTYBLOCK
+Mark blocks as changed in change tracking map.
+.TP
+.B blksnap markdirtyblock  {--file \fIFILE\fR | --device \fIDEVICE\fR --range \fIRANGE\fR
+.TP
+.BR \-f ", " \-\-file " " \fIFILE\fR
+File name. Specifies that the contents of this file should be considered changed for the next snapshot. The tool recognizes the block device on which this file is located and the ranges of sectors that this file occupies.
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+The name of the block device for which the change tracker table is being modified.
+.TP
+.BR \-r ", " \-\-range " " \fIRANGE\fR
+Sectors range in format 'sector:count' is multitoken argument.
+.TP
+The command allows to mark the regions of the block device that must be read in the next incremental or differential backup.
 
-.B blksnap attach --device <device name>
+.SS READCBTMAP
+Read change tracking map.
+.TP
+.B blksnap readcbtmap --device \fIDEVICE\fR --file \fIFILE\fR
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Block device name.
+.TP
+.BR \-f ", " \-\-file " " \fIFILE\fR
+The name of the file to which the change tracker table will be written.
+.TP
+The table is an array, each byte of which is the change number of each block. A block is considered to have changed since the previous backup if it contains a number greater than the number of changes in the previous backup.
 
-.HP 5
-CBTINFO - Get change tracker information.
+.SS SNAPSHOT_ADD
+Add device fo snapshot.
+.TP
+.B blksnap snapshot_add \-\-id \fIUUID\fR \-\-device \fIDEVICE\fR
+.TP
+.BR \-i ", " \-\-id " " \fIUUID\fR
+Snapshot unique identifier.
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Block device name.
+.TP
+The command can be called after the \fISNAPSHOT_CREATE\fR command.
 
-.B blksnap cbtinfo --device <device name>
-
-.HP 5
-DETACH - Detach blksnap tracker from block device.
-
-.B blksnap detach --device <device name>
-
-.HP 5
-MARKDIRTYBLOCK - Mark blocks as changed in change tracking map. Sectors range in format 'sector:count' is multitoken argument.
-
-.B blksnap markdirtyblock  {--file <file name> | --device <device name> --range <sectors range>}
-
-.HP 5
-READCBTMAP - Read change tracking map.
-
-.B blksnap readcbtmap --device <device name> --file <file name>
-
-.HP 5
-SNAPSHOT_ADD - Create snapshot object structure.
-
-.B blksnap snapshot_add --id <snapshot uuid> --device <device name>
-
-.HP 5
-SNAPSHOT_APPENDSTORAGE - Append space in difference storage for snapshot.
-
-.B blksnap snapshot_appendstorage --id <snapshot uuid> {--file <file name> | --device <device name> --range <sectors range>}
-
-.B WARNING:
-When using a file to store snapshot data, it is important that the file is not writable by other programs, has not been deleted, and its location on disk should not change. Otherwise, it may cause the snapshot data to be corrupted or the data on the original file system to be corrupted. To avoid changing the file location, in particular due to defragmentation, the blksnap tool sets the 'immutable' attribute for the file.
-
-.HP 5
-SNAPSHOT_COLLECT - Get collection of snapshots.
-
+.SS SNAPSHOT_COLLECT
+Get collection of snapshots.
+.TP
 .B blksnap snapshot_collect
+.TP
+Prints the UUIDs of all available snapshots.
 
-.HP 5
-SNAPSHOT_CREATE - Create snapshot object structure. Device name for snapshot is multitoken argument.
+.SS SNAPSHOT_CREATE
+Create snapshot.
+.TP
+.B blksnap snapshot_create --device \fIDEVICE\fR --file \fIFILE\fR --limit \fIBYTES_COUNT\fR
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Block device name. It's a multitoken optional argument. Allows to set a list of block devices for which a snapshot will be created. If no block device is specified, then should be used \fISNAPSHOT_ADD\fR command.
+.TP
+.BR \-f ", " \-\-file " " \fIFILE\fR
+The name of file or directory. The file name defines the file that will be used as a difference storage for snapshot. If a directory name is specified, an unnamed file with the O_TMPFILE flag is created in this directory. If an unnamed file is used, the kernel module releases it when the snapshot is destroyed.
+.TP
+.BR \-l ", " \-\-limit " " \fIBYTES_COUNT\fR
+The allowable limit for the size of the difference storage file. The suffixes M, K and G is allowed.
 
-.B blksnap snapshot_create --device <device name>
+.SS SNAPSHOT_DESTROY
+Release snapshot.
+.TP
+.B blksnap snapshot_destroy --id \fIUUID\fR
+.TP
+.BR \-i ", " \-\-id " " \fIUUID\fR
+Snapshot unique identifier.
 
-.HP 5
-SNAPSHOT_DESTROY - Release snapshot and destroy snapshot object.
+.SS SNAPSHOT_INFO
+Get information about block device snapshot image.
+.TP
+.B blksnap snapshot_info --device \fIDEVICE\fR --field \fIFIELD_NAME\fR
+.TP
+.BR \-d ", " \-\-device " " \fIDEVICE\fR
+Block device name.
+.TP
+.BR \-f ", " --field " " \fIFIELD_NAME\fR
+Optional argument. Allow print only selected field 'image' or 'error_code'.
 
-.B blksnap snapshot_destroy --id <snapshot uuid>
+.SS SNAPSHOT_TAKE
+Take snapshot.
+.TP
+.B blksnap snapshot_take --id \fIUUID\fR
+.TP
+.BR \-i ", " \-\-id " " \fIUUID\fR
+Snapshot unique identifier.
+.TP
+Before taking a snapshot, it must be created using the \fISNAPSHOT_CREATE\fR command and the necessary block devices are added to it using the \fISNAPSHOT_ADD\fR command.
 
-.HP 5
-SNAPSHOT_INFO - Get information about block device snapshot image.
+.SS SNAPSHOT_WAITEVENT
+Wait and read event from snapshot.
+.TP
+.B blksnap snapshot_waitevent --id \fIUUID\fR --timeout \fIMILLISECONDS\fR
+.TP
+.BR \-i ", " \-\-id " " \fIUUID\fR
+Snapshot unique identifier.
+.TP
+.BR -t ", " \-\-timeout " " \fIMILLISECONDS\fR
+The allowed waiting time for the event in milliseconds.
+.TP
+Allow wait and read only one event.
 
-.B blksnap snapshot_info --device <device name> --field {image | error_code}
+.SS SNAPSHOT_WATCHER
+Start snapshot watcher service.
+.TP
+.B blksnap snapshot_watcher --id \fIUUID\fR
+.TP
+.BR \-i ", " \-\-id " " \fIUUID\fR
+Snapshot unique identifier.
+.TP
+Start the process that is waiting for the events from the snapshot and prints snapshots state when the it's damaged or destroyed.
 
-.HP 5
-SNAPSHOT_TAKE - Take snapshot.
-
-.B blksnap snapshot_take --id <snapshot uuid>
-
-.HP 5
-SNAPSHOT_WAIT_EVENT - Wait and read event from snapshot.
-
-.B blksnap snapshot_waitevent --id <snapshot uuid> --timeout <milliseconds>
-
-.HP 5
-STRETCH_SNAPSHOT - Start stretch snapshot service.
-
-.B blksnap stretch_snapshot --id <snapshot uuid> --path <path for difference storage> --limit <difference storage size in MiB>
-
-.HP 5
-VERSION - Show module version.
-
+.SS VERSION
+Show module version.
 .B blksnap version
 
 .SH REPORTING BUGS
-
 Report bugs to sergei.shtepa@veeam.com
 
 .SH COPYRIGHT
