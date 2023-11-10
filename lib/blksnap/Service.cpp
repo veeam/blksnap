@@ -33,8 +33,7 @@ std::string blksnap::Version()
 {
     struct blksnap_version version;
 
-    CSnapshotCtl ctl;
-    ctl.Version(version);
+    CSnapshotCtl::Version(version);
 
     std::stringstream ss;
     ss << version.major << "." << version.minor << "." << version.revision << "." << version.build;

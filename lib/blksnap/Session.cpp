@@ -46,7 +46,6 @@ struct SState
 {
     std::atomic<bool> stop;
     std::string diffStorage;
-    CSnapshotId id;
     std::mutex lock;
     std::list<std::string> errorMessage;
 };
@@ -87,7 +86,7 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
     {
         try
         {
-            is_eventReady = ptrCtl->WaitEvent(ptrState->id, 100, ev);
+            is_eventReady = ptrCtl->WaitEvent(100, ev);
         }
         catch (std::exception& ex)
         {
@@ -122,26 +121,23 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
 
 CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorageFilePath, const unsigned long long limit)
 {
-    m_ptrCtl = std::make_shared<CSnapshotCtl>();
-
     for (const auto& name : devices)
         CTrackerCtl(name).Attach();
 
     // Create snapshot
-    m_id = m_ptrCtl->Create(diffStorageFilePath, limit);
+    auto snapshot = CSnapshotCtl::Create(diffStorageFilePath, limit);
 
     // Add devices to snapshot
     for (const auto& name : devices)
-        CTrackerCtl(name).SnapshotAdd(m_id.Get());
+        CTrackerCtl(name).SnapshotAdd(snapshot->Id());
 
     // Prepare state structure for thread
     m_ptrState = std::make_shared<SState>();
     m_ptrState->stop = false;
-    m_ptrState->id = m_id;
 
     // Append first portion for diff storage
     struct SBlksnapEvent ev;
-    if (m_ptrCtl->WaitEvent(m_id, 100, ev))
+    if (snapshot->WaitEvent(100, ev))
     {
         switch (ev.code)
         {
@@ -162,8 +158,7 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
 
 
     // Take snapshot
-    m_ptrCtl->Take(m_id);
-
+    snapshot->Take();
 }
 
 CSession::~CSession()
@@ -177,7 +172,7 @@ CSession::~CSession()
     // Destroy snapshot
     try
     {
-        m_ptrCtl->Destroy(m_id);
+        m_ptrCtl->Destroy();
     }
     catch (std::exception& ex)
     {

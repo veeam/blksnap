@@ -23,6 +23,7 @@
  * flexibility. Uses structures that are directly passed to the kernel module.
  */
 
+#include <memory>
 #include <string>
 #include <uuid/uuid.h>
 #include <cstring>
@@ -102,20 +103,27 @@ namespace blksnap
     class CSnapshotCtl
     {
     public:
-        CSnapshotCtl();
-        ~CSnapshotCtl();
+        static void Collect(std::vector<CSnapshotId>& ids);
+        static void Version(struct blksnap_version& version);
+        static std::shared_ptr<CSnapshotCtl> Create(const std::string& filePath, const unsigned long long limit);
+        static std::shared_ptr<CSnapshotCtl> Open(const CSnapshotId& id);
 
-        CSnapshotId Create(const std::string& filePath, const unsigned long long limit);
-        void Destroy(const CSnapshotId& id);
-        void Collect(std::vector<CSnapshotId>& ids);
-        void AppendDiffStorage(const CSnapshotId& id, const std::string& filePath);
-        void Take(const CSnapshotId& id);
-        bool WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlksnapEvent& ev);
+    public:
+        virtual ~CSnapshotCtl() {};
 
-        void Version(struct blksnap_version& version);
+        void Take();
+        void Destroy();
+        bool WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev);
 
+        const uuid_t& Id() const
+        {
+            return m_id.Get();
+        }
     private:
-        int m_fd;
+        CSnapshotCtl(const CSnapshotId& id, const std::shared_ptr<OpenFileHolder>& ctl);
+
+        CSnapshotId m_id;
+        std::shared_ptr<OpenFileHolder> m_ctl;
     };
 
 }

@@ -63,31 +63,25 @@ static inline bool isBlockFile(const std::string& path)
     return S_ISBLK(st.st_mode);
 }
 
-CSnapshotCtl::CSnapshotCtl()
-    : m_fd(0)
+static inline std::shared_ptr<OpenFileHolder> OpenBlksnapCtl()
 {
-    int fd = ::open(blksnap_filename, O_RDWR);
-    if (fd < 0)
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to open file [" + std::string(blksnap_filename) + "]");
-
-    m_fd = fd;
+    return std::make_shared<OpenFileHolder>(blksnap_filename, O_RDWR);
 }
 
-CSnapshotCtl::~CSnapshotCtl()
-{
-    if (m_fd)
-        ::close(m_fd);
-}
+CSnapshotCtl::CSnapshotCtl(const CSnapshotId& id, const std::shared_ptr<OpenFileHolder>& ctl)
+    : m_id(id)
+    , m_ctl(ctl)
+{ }
 
 void CSnapshotCtl::Version(struct blksnap_version& version)
 {
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_VERSION, &version))
+    auto ctl = OpenBlksnapCtl();
+    if (::ioctl(ctl->Get(), IOCTL_BLKSNAP_VERSION, &version))
         throw std::system_error(errno, std::generic_category(),
             "Failed to get version.");
 }
 
-CSnapshotId CSnapshotCtl::Create(const std::string& filePath, const unsigned long long limit)
+std::shared_ptr<CSnapshotCtl> CSnapshotCtl::Create(const std::string& filePath, const unsigned long long limit)
 {
     int flags = O_RDWR | O_EXCL;
 
@@ -101,30 +95,27 @@ CSnapshotId CSnapshotCtl::Create(const std::string& filePath, const unsigned lon
     struct blksnap_snapshot_create param = {0};
     param.diff_storage_limit_sect = limit / 512;
     param.diff_storage_fd = fd.Get();
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
+
+    auto ctl = OpenBlksnapCtl();
+    if (::ioctl(ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to create snapshot object.");
 
-    return CSnapshotId(param.id.b);
+    return std::shared_ptr<CSnapshotCtl>(new CSnapshotCtl(CSnapshotId(param.id.b), ctl));
 }
 
-void CSnapshotCtl::Destroy(const CSnapshotId& id)
+std::shared_ptr<CSnapshotCtl> CSnapshotCtl::Open(const CSnapshotId& id)
 {
-    struct blksnap_uuid param;
-
-    uuid_copy(param.b, id.Get());
-
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_DESTROY, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to destroy snapshot.");
+    return std::shared_ptr<CSnapshotCtl>(new CSnapshotCtl(id, OpenBlksnapCtl()));
 }
 
 void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
 {
     struct blksnap_snapshot_collect param = {0};
+    auto ctl = OpenBlksnapCtl();
 
     ids.clear();
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
+    if (::ioctl(ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to get list of active snapshots.");
 
@@ -134,7 +125,7 @@ void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
     std::vector<struct blksnap_uuid> id_array(param.count);
     param.ids = (__u64)id_array.data();
 
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
+    if (::ioctl(ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_COLLECT, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to get list of snapshots.");
 
@@ -142,25 +133,34 @@ void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
         ids.emplace_back(id_array[inx].b);
 }
 
-void CSnapshotCtl::Take(const CSnapshotId& id)
+void CSnapshotCtl::Take()
 {
     struct blksnap_uuid param;
 
-    uuid_copy(param.b, id.Get());
-
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_TAKE, &param))
+    uuid_copy(param.b, m_id.Get());
+    if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_TAKE, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to take snapshot.");
 }
 
-bool CSnapshotCtl::WaitEvent(const CSnapshotId& id, unsigned int timeoutMs, SBlksnapEvent& ev)
+void CSnapshotCtl::Destroy()
+{
+    struct blksnap_uuid param;
+
+    uuid_copy(param.b, m_id.Get());
+    if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_DESTROY, &param))
+        throw std::system_error(errno, std::generic_category(),
+            "Failed to destroy snapshot.");
+}
+
+bool CSnapshotCtl::WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev)
 {
     struct blksnap_snapshot_event param;
 
-    uuid_copy(param.id.b, id.Get());
+    uuid_copy(param.id.b, m_id.Get());
     param.timeout_ms = timeoutMs;
 
-    if (::ioctl(m_fd, IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT, &param))
+    if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT, &param))
     {
         if ((errno == ENOENT) || (errno == EINTR))
             return false;
