@@ -18,8 +18,8 @@
  */
 #include <atomic>
 
-#include <blksnap/TrackerCtl.h>
-#include <blksnap/SnapshotCtl.h>
+#include <blksnap/Tracker.h>
+#include <blksnap/Snapshot.h>
 #include <blksnap/Session.h>
 #include <boost/filesystem.hpp>
 #include <errno.h>
@@ -63,7 +63,7 @@ public:
 private:
     CSnapshotId m_id;
 
-    std::shared_ptr<CSnapshotCtl> m_ptrCtl;
+    std::shared_ptr<CSnapshot> m_ptrCtl;
     std::shared_ptr<SState> m_ptrState;
     std::shared_ptr<std::thread> m_ptrThread;
 };
@@ -76,7 +76,7 @@ std::shared_ptr<ISession> ISession::Create(
     return std::make_shared<CSession>(devices, diffStorageFilePath, limit);
 }
 
-static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<SState> ptrState)
+static void BlksnapThread(std::shared_ptr<CSnapshot> ptrCtl, std::shared_ptr<SState> ptrState)
 {
     struct SBlksnapEvent ev;
     int diffStorageNumber = 1;
@@ -122,14 +122,14 @@ static void BlksnapThread(std::shared_ptr<CSnapshotCtl> ptrCtl, std::shared_ptr<
 CSession::CSession(const std::vector<std::string>& devices, const std::string& diffStorageFilePath, const unsigned long long limit)
 {
     for (const auto& name : devices)
-        CTrackerCtl(name).Attach();
+        CTracker(name).Attach();
 
     // Create snapshot
-    auto snapshot = CSnapshotCtl::Create(diffStorageFilePath, limit);
+    auto snapshot = CSnapshot::Create(diffStorageFilePath, limit);
 
     // Add devices to snapshot
     for (const auto& name : devices)
-        CTrackerCtl(name).SnapshotAdd(snapshot->Id());
+        CTracker(name).SnapshotAdd(snapshot->Id());
 
     // Prepare state structure for thread
     m_ptrState = std::make_shared<SState>();

@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-#include <blksnap/TrackerCtl.h>
+#include <blksnap/Tracker.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -31,14 +31,14 @@ using namespace blksnap;
 
 #define BLKSNAP_FILTER_NAME {'b','l','k','s','n','a','p','\0'}
 
-CTrackerCtl::CTrackerCtl(const std::string& devicePath)
+CTracker::CTracker(const std::string& devicePath)
 {
     m_fd = ::open(devicePath.c_str(), O_DIRECT, 0600);
     if (m_fd < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to open block device ["+devicePath+"].");
 }
-CTrackerCtl::~CTrackerCtl()
+CTracker::~CTracker()
 {
     if (m_fd > 0) {
         ::close(m_fd);
@@ -46,7 +46,7 @@ CTrackerCtl::~CTrackerCtl()
     }
 }
 
-bool CTrackerCtl::Attach()
+bool CTracker::Attach()
 {
     struct blkfilter_name name = {
         .name = BLKSNAP_FILTER_NAME,
@@ -61,7 +61,7 @@ bool CTrackerCtl::Attach()
     }
     return true;
 }
-void CTrackerCtl::Detach()
+void CTracker::Detach()
 {
     struct blkfilter_name name = {
         .name = BLKSNAP_FILTER_NAME,
@@ -73,7 +73,7 @@ void CTrackerCtl::Detach()
 
 }
 
-void CTrackerCtl::CbtInfo(struct blksnap_cbtinfo& cbtInfo)
+void CTracker::CbtInfo(struct blksnap_cbtinfo& cbtInfo)
 {
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
@@ -86,7 +86,7 @@ void CTrackerCtl::CbtInfo(struct blksnap_cbtinfo& cbtInfo)
         throw std::system_error(errno, std::generic_category(),
             "Failed to get CBT information.");
 }
-void CTrackerCtl::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* buff)
+void CTracker::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* buff)
 {
     struct blksnap_cbtmap arg = {
         .offset = offset,
@@ -104,7 +104,7 @@ void CTrackerCtl::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* 
             "Failed to read CBT map.");
 
 }
-void CTrackerCtl::MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges)
+void CTracker::MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges)
 {
     struct blksnap_cbtdirty arg = {
         .count = static_cast<unsigned int>(ranges.size()),
@@ -121,7 +121,7 @@ void CTrackerCtl::MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges)
         throw std::system_error(errno, std::generic_category(),
             "Failed to mark block as 'dirty' in CBT map.");
 }
-void CTrackerCtl::SnapshotAdd(const uuid_t& id)
+void CTracker::SnapshotAdd(const uuid_t& id)
 {
     struct blksnap_snapshotadd arg;
     uuid_copy(arg.id.b, id);
@@ -137,7 +137,7 @@ void CTrackerCtl::SnapshotAdd(const uuid_t& id)
         throw std::system_error(errno, std::generic_category(),
             "Failed to add device to snapshot.");
 }
-void CTrackerCtl::SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo)
+void CTracker::SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo)
 {
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,

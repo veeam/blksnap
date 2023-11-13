@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-#include <blksnap/SnapshotCtl.h>
+#include <blksnap/Snapshot.h>
 #include <blksnap/Service.h>
 #include <iostream>
 #include <sstream>
@@ -33,7 +33,7 @@ std::string blksnap::Version()
 {
     struct blksnap_version version;
 
-    CSnapshotCtl::Version(version);
+    CSnapshot::Version(version);
 
     std::stringstream ss;
     ss << version.major << "." << version.minor << "." << version.revision << "." << version.build;

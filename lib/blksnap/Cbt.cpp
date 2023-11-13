@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-#include <blksnap/TrackerCtl.h>
+#include <blksnap/Tracker.h>
 #include <blksnap/Cbt.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -80,7 +80,7 @@ public:
         return ptrCbtMap;
     };
 private:
-    CTrackerCtl m_ctl;
+    CTracker m_ctl;
 };
 
 std::shared_ptr<ICbt> ICbt::Create(const std::string& devicePath)

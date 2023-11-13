@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-#include <blksnap/SnapshotCtl.h>
+#include <blksnap/Snapshot.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -68,12 +68,12 @@ static inline std::shared_ptr<OpenFileHolder> OpenBlksnapCtl()
     return std::make_shared<OpenFileHolder>(blksnap_filename, O_RDWR);
 }
 
-CSnapshotCtl::CSnapshotCtl(const CSnapshotId& id, const std::shared_ptr<OpenFileHolder>& ctl)
+CSnapshot::CSnapshot(const CSnapshotId& id, const std::shared_ptr<OpenFileHolder>& ctl)
     : m_id(id)
     , m_ctl(ctl)
 { }
 
-void CSnapshotCtl::Version(struct blksnap_version& version)
+void CSnapshot::Version(struct blksnap_version& version)
 {
     auto ctl = OpenBlksnapCtl();
     if (::ioctl(ctl->Get(), IOCTL_BLKSNAP_VERSION, &version))
@@ -81,7 +81,7 @@ void CSnapshotCtl::Version(struct blksnap_version& version)
             "Failed to get version.");
 }
 
-std::shared_ptr<CSnapshotCtl> CSnapshotCtl::Create(const std::string& filePath, const unsigned long long limit)
+std::shared_ptr<CSnapshot> CSnapshot::Create(const std::string& filePath, const unsigned long long limit)
 {
     int flags = O_RDWR | O_EXCL;
 
@@ -101,15 +101,15 @@ std::shared_ptr<CSnapshotCtl> CSnapshotCtl::Create(const std::string& filePath, 
         throw std::system_error(errno, std::generic_category(),
             "Failed to create snapshot object.");
 
-    return std::shared_ptr<CSnapshotCtl>(new CSnapshotCtl(CSnapshotId(param.id.b), ctl));
+    return std::shared_ptr<CSnapshot>(new CSnapshot(CSnapshotId(param.id.b), ctl));
 }
 
-std::shared_ptr<CSnapshotCtl> CSnapshotCtl::Open(const CSnapshotId& id)
+std::shared_ptr<CSnapshot> CSnapshot::Open(const CSnapshotId& id)
 {
-    return std::shared_ptr<CSnapshotCtl>(new CSnapshotCtl(id, OpenBlksnapCtl()));
+    return std::shared_ptr<CSnapshot>(new CSnapshot(id, OpenBlksnapCtl()));
 }
 
-void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
+void CSnapshot::Collect(std::vector<CSnapshotId>& ids)
 {
     struct blksnap_snapshot_collect param = {0};
     auto ctl = OpenBlksnapCtl();
@@ -133,7 +133,7 @@ void CSnapshotCtl::Collect(std::vector<CSnapshotId>& ids)
         ids.emplace_back(id_array[inx].b);
 }
 
-void CSnapshotCtl::Take()
+void CSnapshot::Take()
 {
     struct blksnap_uuid param;
 
@@ -143,7 +143,7 @@ void CSnapshotCtl::Take()
             "Failed to take snapshot.");
 }
 
-void CSnapshotCtl::Destroy()
+void CSnapshot::Destroy()
 {
     struct blksnap_uuid param;
 
@@ -153,7 +153,7 @@ void CSnapshotCtl::Destroy()
             "Failed to destroy snapshot.");
 }
 
-bool CSnapshotCtl::WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev)
+bool CSnapshot::WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev)
 {
     struct blksnap_snapshot_event param;
 

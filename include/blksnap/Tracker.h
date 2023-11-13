@@ -34,11 +34,11 @@
 
 namespace blksnap
 {
-    class CTrackerCtl
+    class CTracker
     {
     public:
-        CTrackerCtl(const std::string& devicePath);
-        ~CTrackerCtl();
+        CTracker(const std::string& devicePath);
+        ~CTracker();
 
         bool Attach();
         void Detach();

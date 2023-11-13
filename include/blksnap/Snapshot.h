@@ -100,16 +100,16 @@ namespace blksnap
         int m_fd;
     };
 
-    class CSnapshotCtl
+    class CSnapshot
     {
     public:
         static void Collect(std::vector<CSnapshotId>& ids);
         static void Version(struct blksnap_version& version);
-        static std::shared_ptr<CSnapshotCtl> Create(const std::string& filePath, const unsigned long long limit);
-        static std::shared_ptr<CSnapshotCtl> Open(const CSnapshotId& id);
+        static std::shared_ptr<CSnapshot> Create(const std::string& filePath, const unsigned long long limit);
+        static std::shared_ptr<CSnapshot> Open(const CSnapshotId& id);
 
     public:
-        virtual ~CSnapshotCtl() {};
+        virtual ~CSnapshot() {};
 
         void Take();
         void Destroy();
@@ -120,7 +120,7 @@ namespace blksnap
             return m_id.Get();
         }
     private:
-        CSnapshotCtl(const CSnapshotId& id, const std::shared_ptr<OpenFileHolder>& ctl);
+        CSnapshot(const CSnapshotId& id, const std::shared_ptr<OpenFileHolder>& ctl);
 
         CSnapshotId m_id;
         std::shared_ptr<OpenFileHolder> m_ctl;
