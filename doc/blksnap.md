@@ -145,7 +145,7 @@ The static method *Create* creates an instance of the class that creates, takes 
 The class *blksnap::ICbt* from ([include/blksnap/Cbt.h](../include/blksnap/Cbt.h)) allows to access the data of the change tracker.
 The static method *Create* creates an object to interact with the block device change tracker.
 
-Метод класса:
+Methods of the class:
 - *GetCbtInfo* - provides information about the current state of the change tracker for a block device
 - *GetCbtData* - allow to read the table of changes
 - *GetImage* - provide the name of the block device for the snapshot image
