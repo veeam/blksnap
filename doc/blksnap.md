@@ -174,5 +174,5 @@ C++ tests implement more complex verification algorithms. Documentation for C++ 
 ## License
 
 The kernel module, like the Linux kernel, has a GPL-2 license.
-The blksnap GPL-2+ console tool.
-The libraries are licensed LGPL-3+
+The blksnap console tool has a GPL-2+ license.
+The libraries are licensed LGPL-3+.
