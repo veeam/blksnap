@@ -1,8 +1,9 @@
 # BLKSNAP - Block Devices Snapshots
 
+* [Extended description and features](doc/blksnap.md)
 * [Repository structure](#repository-structure)
 * [Licensing](#licensing)
-* [Kernel integration](#kernel-integration)
+* [Upstream kernel integration](#kernel-integration)
 * [Tools](#tools)
 * [Library](#library)
 * [Tests](#tests)
@@ -101,7 +102,6 @@ cd ./pkg/deb
 ```
 
 ## Compatibility notes
-- blksnap kernel module support kernel versions >= 5.10, support only X86 archs, blksnap for upstream instead can support any arch (other archs need to be tested)
+- blksnap kernel module for upstream can support any arch (other archs beyond X86 archs needs more testing)
 - all supported debian and ubuntu supported versions are supported but with some notes:
-  - not all have debian/ubuntu versions have official packages of kernel >= 5.10, so an unofficial or custom ones more updated are needed, with blksnap-dkms should be still possible easy/fast build/install blksnap module on them (is also possible build/install it manually without dkms)
   - debian 8 and ubuntu 14.04 needs to install cmake 3 from backports to build
