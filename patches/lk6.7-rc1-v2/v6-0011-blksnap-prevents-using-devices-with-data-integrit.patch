@@ -1,0 +1,89 @@
+From e6e7a6261134ca91bd4768a70ecc7dd31c2388e1 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@veeam.com>
+Date: Thu, 16 Nov 2023 12:00:44 +0100
+Subject: [PATCH v6 11/11] blksnap: prevents using devices with data integrity
+ or inline encryption
+
+There is an opinion that the use of the blksnap module may violate the
+security of encrypted data. The difference storage file may be located
+on an unreliable disk or even network storage. To implement secure
+compatibility with hardware inline encrypted devices will require
+discussion of algorithms and restrictions. For example, a restriction
+on the location of the difference storage only in virtual memory might
+help. Currently, there is no need for compatibility of the blksnap
+module and hardware inline encryption.
+
+I see no obstacles to ensuring the compatibility of the blksnap module
+and block devices with data integrity. However, this functionality was
+not planned or tested. Perhaps in the future this compatibility can be
+implemented.
+
+Theoretically possible that the block device was added to the snapshot
+before crypto_profile and integrity.profile were initialized.
+Checking the values of bi_crypt_context and bi_integrity ensures that
+the blksnap will not perform any actions with I/O units with which it
+is not compatible.
+
+Reported-by: Eric Biggers <ebiggers@kernel.org>
+Signed-off-by: Sergei Shtepa <sergei.shtepa@veeam.com>
+---
+ drivers/block/blksnap/snapshot.c | 17 +++++++++++++++++
+ drivers/block/blksnap/tracker.c  | 14 ++++++++++++++
+ 2 files changed, 31 insertions(+)
+
+diff --git a/drivers/block/blksnap/snapshot.c b/drivers/block/blksnap/snapshot.c
+index 21d94f12b5fc..a7675fdcf359 100644
+--- a/drivers/block/blksnap/snapshot.c
++++ b/drivers/block/blksnap/snapshot.c
+@@ -149,6 +149,23 @@ int snapshot_add_device(const uuid_t *id, struct tracker *tracker)
+ 	int ret = 0;
+ 	struct snapshot *snapshot = NULL;
+ 
++#ifdef CONFIG_BLK_DEV_INTEGRITY
++	if (tracker->orig_bdev->bd_disk->queue->integrity.profile) {
++		pr_err("Blksnap is not compatible with data integrity\n");
++		ret = -EPERM;
++		goto out_up;
++	} else
++		pr_debug("Data integrity not found\n");
++#endif
++
++#ifdef CONFIG_BLK_INLINE_ENCRYPTION
++	if (tracker->orig_bdev->bd_disk->queue->crypto_profile) {
++		pr_err("Blksnap is not compatible with hardware inline encryption\n");
++		ret = -EPERM;
++		goto out_up;
++	} else
++		pr_debug("Inline encryption not found\n");
++#endif
+ 	snapshot = snapshot_get_by_id(id);
+ 	if (!snapshot)
+ 		return -ESRCH;
+diff --git a/drivers/block/blksnap/tracker.c b/drivers/block/blksnap/tracker.c
+index 2b8978a2f42e..b38ead9afa69 100644
+--- a/drivers/block/blksnap/tracker.c
++++ b/drivers/block/blksnap/tracker.c
+@@ -57,6 +57,20 @@ static bool tracker_submit_bio(struct bio *bio)
+ 	if (diff_area_is_corrupted(tracker->diff_area))
+ 		return false;
+ 
++#ifdef CONFIG_BLK_INLINE_ENCRYPTION
++	if (bio->bi_crypt_context) {
++		pr_err_once("Hardware inline encryption is not supported\n");
++		diff_area_set_corrupted(tracker->diff_area, -EPERM);
++		return false;
++	}
++#endif
++#ifdef CONFIG_BLK_DEV_INTEGRITY
++	if (bio->bi_integrity) {
++		pr_err_once("Data integrity is not supported\n");
++		diff_area_set_corrupted(tracker->diff_area, -EPERM);
++		return false;
++	}
++#endif
+ 	return diff_area_cow(bio, tracker->diff_area, &copy_iter);
+ }
+ 
+-- 
+2.20.1
+
