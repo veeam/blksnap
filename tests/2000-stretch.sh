@@ -2,56 +2,59 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
+if [ -z $1 ]
+then
+	DIFF_STORAGE_DIR=${HOME}
+else
+	DIFF_STORAGE_DIR=$1
+fi
+
 . ./functions.sh
 . ./blksnap.sh
+BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
 
 echo "---"
 echo "Stretch snapshot test"
 
-# diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB dikk_storage portion size
-modprobe blksnap diff_storage_minimum=262144
-sleep 2s
+# diff_storage_minimum=262144 - set 256 K sectors, it's 128MiB diff_storage portion size
+blksnap_load "diff_storage_minimum=262144"
 
 # check module is ready
 blksnap_version
 
-TESTDIR=~/blksnap-test
+TESTDIR=${HOME}/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE=~/diff_storage/
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
+
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
-rm -rf ${DIFF_STORAGE}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
-mkdir -p ${DIFF_STORAGE}
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 4096
-echo "new image file ${IMAGEFILE_1}"
 
-DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
+DEVICE_1=$(loop_device_attach ${IMAGEFILE_1} ${BLOCK_SIZE})
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1
 mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
-generate_files ${MOUNTPOINT_1} "before" 5
+generate_files_direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
-blksnap_snapshot_create "${DEVICE_1}"
+rm -f ${DIFF_STORAGE}
+fallocate --length 128MiB ${DIFF_STORAGE}
+blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE}" "512M"
 
-generate_files ${MOUNTPOINT_1} "tracked" 5
+generate_files_direct ${MOUNTPOINT_1} "tracked" 5
 drop_cache
 
-#fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
-#blksnap_snapshot_append "${DIFF_STORAGE}/diff_storage"
-
-#echo "Call: ${BLKSNAP} stretch_snapshot --id=${ID} --path=${DIFF_STORAGE} --limit=1024"
-blksnap_stretch_snapshot ${DIFF_STORAGE} 1024
-echo "Press for taking snapshot..."
-read -n 1
+blksnap_snapshot_watcher
+#echo "Press for taking snapshot..."
+#read -n 1
 
 blksnap_snapshot_take
 
@@ -59,8 +62,8 @@ generate_block_MB ${MOUNTPOINT_1} "after" 100
 check_files ${MOUNTPOINT_1}
 
 echo "Check snapshot before overflow."
-echo "press..."
-read -n 1
+#echo "press..."
+#read -n 1
 
 DEVICE_IMAGE_1=$(blksnap_get_image ${DEVICE_1})
 IMAGE_1=${MPDIR}/image0
@@ -69,29 +72,30 @@ mount ${DEVICE_IMAGE_1} ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Try to make snapshot overflow."
-echo "press..."
-read -n 1
-generate_block_MB ${MOUNTPOINT_1} "overflow" 300
+#echo "press..."
+generate_block_MB ${MOUNTPOINT_1} "overflow" 768
 
 echo "Umount images"
-echo "press..."
+#echo "press..."
 umount ${IMAGE_1}
 
 echo "Destroy snapshot"
-echo "press..."
+#echo "press..."
 blksnap_snapshot_destroy
 
 #echo "Check generated data"
 #check_files ${MOUNTPOINT_1}
 
 echo "Destroy first device"
-echo "press..."
+#echo "press..."
+blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
 
-echo "Unload module"
-modprobe -r blksnap
+blksnap_watcher_wait
+
+blksnap_unload
 
 echo "Stretch snapshot test finish"
 echo "---"

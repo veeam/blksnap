@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-#include <blksnap/Blksnap.h>
+#include <blksnap/Tracker.h>
 #include <blksnap/Cbt.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -28,59 +28,63 @@ using namespace blksnap;
 class CCbt : public ICbt
 {
 public:
-    CCbt();
-    ~CCbt() override{};
+    CCbt(const std::string& devicePath)
+        : m_ctl(devicePath)
+    {};
+    ~CCbt() override
+    {};
 
-    std::shared_ptr<SCbtInfo> GetCbtInfo(const std::string& original) override;
-    std::shared_ptr<SCbtData> GetCbtData(const std::shared_ptr<SCbtInfo>& ptrCbtInfo) override;
+    std::string GetImage() override
+    {
+        struct blksnap_snapshotinfo snapshotinfo;
 
+        m_ctl.SnapshotInfo(snapshotinfo);
+
+        std::string name("/dev/");
+        for (int inx = 0; (inx < IMAGE_DISK_NAME_LEN) && (snapshotinfo.image[inx] != '\0'); inx++)
+            name += static_cast<char>(snapshotinfo.image[inx]);
+
+        return name;
+    }
+
+    int GetError() override
+    {
+        struct blksnap_snapshotinfo snapshotinfo;
+
+        m_ctl.SnapshotInfo(snapshotinfo);
+        return snapshotinfo.error_code;
+    };
+
+    std::shared_ptr<SCbtInfo> GetCbtInfo() override
+    {
+        struct blksnap_cbtinfo cbtInfo;
+
+        m_ctl.CbtInfo(cbtInfo);
+
+        return std::make_shared<SCbtInfo>(
+            cbtInfo.block_size,
+            cbtInfo.block_count,
+            cbtInfo.device_capacity,
+            cbtInfo.generation_id.b,
+            cbtInfo.changes_number);
+    };
+
+    std::shared_ptr<SCbtData> GetCbtData() override
+    {
+        struct blksnap_cbtinfo cbtInfo;
+        m_ctl.CbtInfo(cbtInfo);
+
+        auto ptrCbtMap = std::make_shared<SCbtData>(cbtInfo.block_count);
+        m_ctl.ReadCbtMap(0, ptrCbtMap->vec.size(), ptrCbtMap->vec.data());
+
+        return ptrCbtMap;
+    };
 private:
-    const struct blk_snap_cbt_info& GetCbtInfoInternal(unsigned int mj, unsigned int mn);
-
-private:
-    CBlksnap m_blksnap;
-    std::vector<struct blk_snap_cbt_info> m_cbtInfos;
+    CTracker m_ctl;
 };
 
-std::shared_ptr<ICbt> ICbt::Create()
+std::shared_ptr<ICbt> ICbt::Create(const std::string& devicePath)
 {
-    return std::make_shared<CCbt>();
+    return std::make_shared<CCbt>(devicePath);
 }
 
-CCbt::CCbt()
-{
-    m_blksnap.CollectTrackers(m_cbtInfos);
-}
-
-const struct blk_snap_cbt_info& CCbt::GetCbtInfoInternal(unsigned int mj, unsigned int mn)
-{
-    for (const struct blk_snap_cbt_info& cbtInfo : m_cbtInfos)
-        if ((mj == cbtInfo.dev_id.mj) && (mn == cbtInfo.dev_id.mn))
-            return cbtInfo;
-
-    throw std::runtime_error("The device [" + std::to_string(mj) + ":" + std::to_string(mn)
-                             + "] was not found in the CBT table");
-}
-
-std::shared_ptr<SCbtInfo> CCbt::GetCbtInfo(const std::string& original)
-{
-    struct stat st;
-
-    if (::stat(original.c_str(), &st))
-        throw std::system_error(errno, std::generic_category(), original);
-
-    const struct blk_snap_cbt_info& cbtInfo = GetCbtInfoInternal(major(st.st_rdev), minor(st.st_rdev));
-
-    return std::make_shared<SCbtInfo>(major(st.st_rdev), minor(st.st_rdev), cbtInfo.blk_size, cbtInfo.blk_count,
-                                      cbtInfo.device_capacity, cbtInfo.generation_id.b, cbtInfo.snap_number);
-}
-
-std::shared_ptr<SCbtData> CCbt::GetCbtData(const std::shared_ptr<SCbtInfo>& ptrCbtInfo)
-{
-    struct blk_snap_dev originalDevId = {.mj = ptrCbtInfo->originalMajor, .mn = ptrCbtInfo->originalMinor};
-    auto ptrCbtMap = std::make_shared<SCbtData>(ptrCbtInfo->blockCount);
-
-    m_blksnap.ReadCbtMap(originalDevId, 0, ptrCbtMap->vec.size(), ptrCbtMap->vec.data());
-
-    return ptrCbtMap;
-}

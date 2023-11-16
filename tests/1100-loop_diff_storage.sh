@@ -2,23 +2,16 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
-
-if [ -z $1 ]
-then
-	DIFF_STORAGE_DIR=${HOME}
-else
-	DIFF_STORAGE_DIR=$1
-fi
-echo "Diff storage directory ${DIFF_STORAGE_DIR}"
-
 . ./functions.sh
 . ./blksnap.sh
-BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
+
+BLk_SZ=128
 
 echo "---"
 echo "Simple test start"
 
-blksnap_load
+# diff_storage_minimum=65536 - set 64 K sectors, it's 32MiB diff_storage portion size
+blksnap_load "diff_storage_minimum=65536"
 
 # check module is ready
 blksnap_version
@@ -31,30 +24,23 @@ MPDIR=/mnt/blksnap-test
 rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
-DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
-fallocate --length 4KiB ${DIFF_STORAGE}
+# create first device
+DIFF_STOGAGE_FILE=${TESTDIR}/diff_storage.img
+imagefile_make ${DIFF_STOGAGE_FILE} ${BLk_SZ}
+
+DIFF_STOGAGE_DEVICE=$(loop_device_attach ${DIFF_STOGAGE_FILE})
+echo "new device ${DIFF_STOGAGE_DEVICE}"
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
-imagefile_make ${IMAGEFILE_1} 64
+imagefile_make ${IMAGEFILE_1} ${BLk_SZ}
 
-DEVICE_1=$(loop_device_attach ${IMAGEFILE_1} ${BLOCK_SIZE})
+DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1
 mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
-
-# create second device
-IMAGEFILE_2=${TESTDIR}/simple_2.img
-imagefile_make ${IMAGEFILE_2} 128
-
-DEVICE_2=$(loop_device_attach ${IMAGEFILE_2} ${BLOCK_SIZE})
-echo "new device ${DEVICE_2}"
-
-MOUNTPOINT_2=${MPDIR}/simple_2
-mkdir -p ${MOUNTPOINT_2}
-mount ${DEVICE_2} ${MOUNTPOINT_2}
 
 generate_files_direct ${MOUNTPOINT_1} "before" 9
 drop_cache
@@ -62,7 +48,7 @@ drop_cache
 #echo "Block device prepared, press ..."
 #read -n 1
 
-blksnap_snapshot_create "${DEVICE_1} ${DEVICE_2}" "${DIFF_STORAGE}" "2G"
+blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STOGAGE_DEVICE}" "${BLk_SZ}M"
 blksnap_snapshot_take
 
 #echo "Snapshot was token, press ..."
@@ -108,17 +94,15 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 
 check_files ${MOUNTPOINT_1}
 
-echo "Destroy second device"
-blksnap_detach ${DEVICE_2}
-umount ${MOUNTPOINT_2}
-loop_device_detach ${DEVICE_2}
-imagefile_cleanup ${IMAGEFILE_2}
-
 echo "Destroy first device"
 blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
+
+echo "Destroy diff storage device"
+loop_device_detach ${DIFF_STOGAGE_DEVICE}
+imagefile_cleanup ${DIFF_STOGAGE_FILE}
 
 blksnap_unload
 

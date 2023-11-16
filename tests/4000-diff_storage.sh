@@ -8,18 +8,21 @@
 echo "---"
 echo "Diff storage test"
 
-# diff_storage_minimum=262144 - set 256 K sectors, it's 125MiB diff_storage portion size
-modprobe blksnap diff_storage_minimum=262144
+# diff_storage_minimum=262144 - set 256 K sectors, it's 128MiB diff_storage portion size
+blksnap_load "diff_storage_minimum=262144"
 
 # check module is ready
 blksnap_version
 
 if [ -z $1 ]
 then
-	TEST_DIR=$(realpath ~/blksnap-test)
+	TEST_DIR=${HOME}/blksnap-test
 else
-	TEST_DIR=$(realpath $1)
+	TEST_DIR=$(realpath $1"/blksnap-test")
 fi
+mkdir -p ${TEST_DIR}
+rm -rf ${TEST_DIR}/*
+
 MP_TEST_DIR=$(stat -c %m ${TEST_DIR})
 DEVICE="/dev/block/"$(mountpoint -d ${MP_TEST_DIR})
 echo "Test directory [${TEST_DIR}] on device [${DEVICE}] selected"
@@ -27,28 +30,20 @@ echo "Test directory [${TEST_DIR}] on device [${DEVICE}] selected"
 RELATIVE_TEST_DIR=${TEST_DIR#${MP_TEST_DIR}}
 
 MP_DIR=/mnt/blksnap-test
-DIFF_STORAGE=${TEST_DIR}/diff_storage/
 
-rm -rf ${TEST_DIR}
 rm -rf ${MP_DIR}
-rm -rf ${DIFF_STORAGE}
-mkdir -p ${TEST_DIR}
 mkdir -p ${MP_DIR}
-mkdir -p ${DIFF_STORAGE}
-
 
 generate_block_MB ${TEST_DIR} "before" 10
 check_files ${TEST_DIR}
 
-blksnap_snapshot_create "${DEVICE}"
+DIFF_STORAGE=/dev/shm
 
-blksnap_stretch_snapshot ${DIFF_STORAGE} 1024
-echo "Waiting for creating first portion"
-sleep 2s
-
+blksnap_snapshot_create "${DEVICE}" "${DIFF_STORAGE}" "1G"
+blksnap_snapshot_watcher
 blksnap_snapshot_take
 
-generate_block_MB ${TEST_DIR} "after" 1000
+generate_block_MB ${TEST_DIR} "after" 100
 check_files ${TEST_DIR}
 
 IMAGE=${MP_DIR}/image0
@@ -68,11 +63,11 @@ umount ${IMAGE}
 echo "Destroy snapshot"
 blksnap_snapshot_destroy
 
-echo "Waiting for streach process terminate"
-sleep 2s
+blksnap_detach ${DEVICE}
 
-echo "Unload module"
-modprobe -r blksnap
+blksnap_watcher_wait
+
+blksnap_unload
 
 echo "Diff storage test finish"
 echo "---"

@@ -18,26 +18,39 @@
  */
 #pragma once
 /*
- * The hi-level abstraction for the blksnap kernel module.
- * Allows to create snapshot session.
+ * The low-level abstraction over ioctl for the blksnap kernel module.
+ * Allows to interact with the module with minimal overhead and maximum
+ * flexibility. Uses structures that are directly passed to the kernel module.
  */
-#include <memory>
+
+#include <stdint.h>
 #include <string>
+#include <uuid/uuid.h>
 #include <vector>
+
 #include "Sector.h"
+#include <linux/fs.h>
+#include <linux/blksnap.h>
 
 namespace blksnap
 {
-    struct ISession
+    class CTracker
     {
-        virtual ~ISession() = default;
+    public:
+        CTracker(const std::string& devicePath);
+        ~CTracker();
 
-        virtual bool GetError(std::string& errorMessage) = 0;
+        bool Attach();
+        void Detach();
 
-        static std::shared_ptr<ISession> Create(
-            const std::vector<std::string>& devices,
-            const std::string& diffStorageFilePath,
-            const unsigned long long limit);
+        void CbtInfo(struct blksnap_cbtinfo& cbtInfo);
+        void ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* buff);
+        void MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges);
+        void SnapshotAdd(const uuid_t& id);
+        void SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo);
+
+    private:
+        int m_fd;
     };
 
 }

@@ -1,18 +1,9 @@
-| :warning: Important note |
-|:---------------------------|
-| Master branch was recently updated only about readme and patches posted for upstream kernel |
-| Latest work for upstream is in [stable-2.0](https://github.com/veeam/blksnap/tree/stable-v2.0) branch, for more details check [Upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md#work-in-progress-and-news) |
-| For older blksnap version based on external module (actually used in production) see these branches: [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1), [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0), [stable-1.0](https://github.com/veeam/blksnap/tree/stable-v1.0) |
-| :information_source: To Veeam agent for linux users: |
-| If you need only kernel module updated with latest kernel versions support and latest fixes for it [build kernel module](#how-to-build) from [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0) or [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1) based on your Veeam agent for linux version |
-
-# BLKSNAP - Block Devices Snapshots Module
+# BLKSNAP - Block Devices Snapshots
 
 * [Extended description and features](doc/blksnap.md)
 * [Repository structure](#repository-structure)
 * [Licensing](#licensing)
-* [Kernel module](#kernel-module)
-* [Upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
+* [Upstream kernel integration](#kernel-integration)
 * [Tools](#tools)
 * [Library](#library)
 * [Tests](#tests)
@@ -28,8 +19,6 @@
 * doc/ - Documentation
 * include/ - Libraries public headers
 * lib/ - Libraries sources
-* module/ - Sources of kernel module
-* patches/ - Patches for the upstream linux kernel
 * pkg/ - Scripts for building deb and rpm packages
 * tests/ - Test scripts and tests source code
 * tools/ - Source files of tools for working with blksnap
@@ -42,48 +31,9 @@ Copyright (C) 2022 Veeam Software Group GmbH
 
 This project use [SPDX License Identifier](https://spdx.dev/ids/) in source files header.
 
-
-## Kernel module
-This kernel module implements snapshot and changed block tracking functionality.
-The module is developed with the condition of simply adding it to the upstream.
-Therefore, the module is divided into two parts: bdevfilter and blksnap.
-bdevfilter provides the ability to intercept I/O units (bio). The main logic
-is concentrated in blksnap. The upstream variant does not contain a bdevfilter,
-but accesses the kernel to attach and detach the block device filter.
-
-Relating the work in progress for integration in upstream kernel see the specific [README](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
-
-### How to build
-Installing the necessary deb packages.
-``` bash
-sudo apt install gcc linux-headers-$(uname -r)
-```
-Or installing the necessary rpm packages.
-``` bash
-sudo yum install gcc kernel-devel
-```
-``` bash
-cd ./module
-mk.sh build
-```
-In directory current directory you can found bdevfilter.ko and blksnap.ko.
-
-### How to install
-``` bash
-cd ./module
-mk.sh install-flt
-mk.sh install
-```
-### How to create deb package
-``` bash
-sudo apt install debhelper dkms
-# on debian >=12 and ubuntu >= 23.04 is needed dh-dkms, not installed anymore as dkms dep.
-sudo apt install dh-dkms
-cd ./pkg/deb
-./build-blksnap-dkms.sh ${VERSION}
-```
-### How to create rpm package
-There are several variants, look in the ./pkg/rpm directory.
+## Kernel integration
+Relating the work in progress for integration in upstream kernel see the
+specific [README](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
 
 ## Tools
 The blksnap tools allows you to manage the module from the command line.
@@ -152,7 +102,6 @@ cd ./pkg/deb
 ```
 
 ## Compatibility notes
-- blksnap kernel module support kernel versions >= 5.10, support only X86 archs, blksnap for upstream instead can support any arch (other archs need to be tested)
+- blksnap kernel module for upstream can support any arch (other archs beyond X86 archs needs more testing)
 - all supported debian and ubuntu supported versions are supported but with some notes:
-  - not all have debian/ubuntu versions have official packages of kernel >= 5.10, so an unofficial or custom ones more updated are needed, with blksnap-dkms should be still possible easy/fast build/install blksnap module on them (is also possible build/install it manually without dkms)
   - debian 8 and ubuntu 14.04 needs to install cmake 3 from backports to build
