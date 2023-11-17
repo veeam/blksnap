@@ -3,7 +3,7 @@ on: [pull_request]
 
 jobs:
   codespell:
-    name: codespell
+    name: check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

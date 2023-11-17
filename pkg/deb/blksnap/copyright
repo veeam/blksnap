@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: blksnap
 Source: https://github.org/veeam/blksnap
-Files-Excluded: pkg/
+Files-Excluded: patches/ pkg/
 
 Files: *
 Copyright: 2022 Veeam Software Group GmbH <veeam_team@veeam.com>
