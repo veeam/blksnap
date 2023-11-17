@@ -3,7 +3,7 @@
 | Master branch is compatible only with latest work for [upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md#work-in-progress-and-news) |
 | For older blksnap version based on external module (actually used in production) see these branches: [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1), [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0), [stable-1.0](https://github.com/veeam/blksnap/tree/stable-v1.0) |
 | :information_source: To Veeam agent for linux users: |
-| If you need only kernel module updated with latest kernel versions support and latest fixes for it [build kernel module](#how-to-build) from [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0) or [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1) based on your Veeam agent for linux version |
+| If you need only kernel module updated with latest kernel versions support and latest fixes for it build kernel module from [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0#how-to-build) or [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1#how-to-build) branches based on your Veeam agent for linux version |
 
 # BLKSNAP - Block Devices Snapshots
 
