@@ -1,3 +1,10 @@
+| :warning: Important note |
+|:---------------------------|
+| Master branch is compatible only with latest work for [upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md#work-in-progress-and-news) |
+| For older blksnap version based on external module (actually used in production) see these branches: [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1), [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0), [stable-1.0](https://github.com/veeam/blksnap/tree/stable-v1.0) |
+| :information_source: To Veeam agent for linux users: |
+| If you need only kernel module updated with latest kernel versions support and latest fixes for it [build kernel module](#how-to-build) from [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0) or [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1) based on your Veeam agent for linux version |
+
 # BLKSNAP - Block Devices Snapshots
 
 * [Extended description and features](doc/blksnap.md)
@@ -19,6 +26,7 @@
 * doc/ - Documentation
 * include/ - Libraries public headers
 * lib/ - Libraries sources
+* patches/ - Patches for the upstream linux kernel
 * pkg/ - Scripts for building deb and rpm packages
 * tests/ - Test scripts and tests source code
 * tools/ - Source files of tools for working with blksnap
@@ -32,7 +40,7 @@ Copyright (C) 2022 Veeam Software Group GmbH
 This project use [SPDX License Identifier](https://spdx.dev/ids/) in source files header.
 
 ## Kernel integration
-Relating the work in progress for integration in upstream kernel see the
+For details about the work in progress for integration in upstream kernel see the
 specific [README](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md)
 
 ## Tools
