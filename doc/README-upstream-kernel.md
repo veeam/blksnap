@@ -58,7 +58,7 @@ A "v4" patch ([cover](https://lore.kernel.org/lkml/20230609115206.4649-1-sergei.
 There is a work in progress for "v6",
 is possible view/test it from [this branch](https://github.com/SergeiShtepa/linux/tree/blksnap-master) of a linux fork git.
 
-For testing this version, that have important changes, [the blksnap branch stable-2.0](https://github.com/veeam/blksnap/tree/stable-v2.0) must be used updated with the latest commits,
+For testing this version, that have important changes, [the blksnap branch master](https://github.com/veeam/blksnap/tree/master) must be used updated with the latest commits,
 to have library, tools and tests working with new upstream version.
 
 Latest news are also visible from [here](https://github.com/veeam/blksnap/issues/2)

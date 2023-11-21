@@ -5,20 +5,20 @@ Subject: [PATCH v6 00/11] blksnap - block devices snapshots module
 
 Hi all.
 
-I am happy to offer a improved version of the Block Devices Snapshots
-Module. It allows to create non-persistent snapshots of any block devices.
+I am happy to offer an improved version of the Block Devices Snapshots
+Module. It allows creating non-persistent snapshots of any block devices.
 The main purpose of such snapshots is to provide backups of block devices.
 See more in Documentation/block/blksnap.rst.
 
 The Block Device Filtering Mechanism is added to the block layer. This
-allows to attach and detach block device filters to the block layer.
-Filters allow to extend the functionality of the block layer.
+allows attaching and detach block device filters to the block layer.
+Filters allow extending the functionality of the block layer.
 See more in Documentation/block/blkfilter.rst.
 
 The tool, library and tests for working with blksnap can be found on github.
 Link: https://github.com/veeam/blksnap/tree/stable-v2.0
 
-In the new version, the method of saving shapshot difference has been
+In the new version, the method of saving snapshot difference has been
 changed. Why this should have been done, Dave Chinner <david@fromorbit.com>
 described in detail in the comments to the previous version.
 Link: https://lore.kernel.org/lkml/20230612135228.10702-1-sergei.shtepa@veeam.com/T/#mfe9b8f46833011deea4b24714212230ac38db978
@@ -36,10 +36,10 @@ v6 changes:
   device in these sector ranges. Now saving and reading data is done using
   'VFS' using vfs_iter_write() and vfs_iter_read() functions. This allows
   not to depend on the filesystem and use, for example, tmpfs. Using an
-  unnamed temporary file allows to hide it from other processes and
+  unnamed temporary file allows hiding it from other processes and
   automatically release it when the snapshot is closed.
-  However, now the module does not allow to add a block device to the
-  snapshot on which the difference stoarge is located. There is no way to
+  However, now the module does not allow adding a block device to the
+  snapshot on which the difference storage is located. There is no way to
   ensure the immutability of file metadata when writing data to a file.
   This means that the metadata of the filesystem may change, which may
   cause damage to the snapshot.
@@ -66,7 +66,7 @@ v4 changes:
 - Fixed a problem with the lack of protection against re-adding a block
   device to a snapshot.
 - Fixed a bug in the algorithm of allocating the next bio for a chunk.
-  This problem was accurred on large disks, for which a chunk consists of
+  This problem was occurred on large disks, for which a chunk consists of
   at least two bio.
 - The ownership mechanism of the diff_area structure has been changed.
   This fixed the error of prematurely releasing the diff_area structure
@@ -78,8 +78,8 @@ v4 changes:
 v3 changes:
 - New block device I/O controls BLKFILTER_ATTACH and BLKFILTER_DETACH allow
   to attach and detach filters.
-- New block device I/O control BLKFILTER_CTL allow send command to attached
-  block device filter.
+- New block device I/O control BLKFILTER_CTL allow sending command to
+  attached block device filter.
 - The copy-on-write algorithm for processing I/O units has been optimized
   and has become asynchronous.
 - The snapshot image reading algorithm has been optimized and has become
