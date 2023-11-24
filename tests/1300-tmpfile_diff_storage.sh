@@ -17,6 +17,7 @@ BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
 
 echo "---"
 echo "Simple test start"
+echo "devices block size ${BLOCK_SIZE}"
 
 blksnap_load
 
@@ -36,6 +37,7 @@ IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 64
 
 DEVICE_1=$(loop_device_attach ${IMAGEFILE_1} ${BLOCK_SIZE})
+mkfs.ext4 ${DEVICE_1}
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1

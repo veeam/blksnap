@@ -43,6 +43,7 @@ IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} ${BLK_SZ}
 
 DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
+mkfs.ext4 ${DEVICE_1}
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1

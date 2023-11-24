@@ -39,6 +39,7 @@ IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 64
 
 DEVICE_1=$(loop_device_attach ${IMAGEFILE_1} ${BLOCK_SIZE})
+mkfs.ext4 ${DEVICE_1}
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1
@@ -50,6 +51,7 @@ IMAGEFILE_2=${TESTDIR}/simple_2.img
 imagefile_make ${IMAGEFILE_2} 128
 
 DEVICE_2=$(loop_device_attach ${IMAGEFILE_2} ${BLOCK_SIZE})
+mkfs.ext4 ${DEVICE_2}
 echo "new device ${DEVICE_2}"
 
 MOUNTPOINT_2=${MPDIR}/simple_2
