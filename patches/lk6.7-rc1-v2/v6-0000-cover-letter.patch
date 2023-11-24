@@ -11,12 +11,14 @@ The main purpose of such snapshots is to provide backups of block devices.
 See more in Documentation/block/blksnap.rst.
 
 The Block Device Filtering Mechanism is added to the block layer. This
-allows attaching and detach block device filters to the block layer.
-Filters allow extending the functionality of the block layer.
-See more in Documentation/block/blkfilter.rst.
+allows attaching and detaching block device filters to the block layer.
+Filters allow extending the functionality of the block layer. See more
+in Documentation/block/blkfilter.rst.
 
 The tool, library and tests for working with blksnap can be found on github.
 Link: https://github.com/veeam/blksnap/tree/stable-v2.0
+From the documentation, it is possible to learn how to manage the module
+using the library and console tool.
 
 In the new version, the method of saving snapshot difference has been
 changed. Why this should have been done, Dave Chinner <david@fromorbit.com>
@@ -24,10 +26,23 @@ described in detail in the comments to the previous version.
 Link: https://lore.kernel.org/lkml/20230612135228.10702-1-sergei.shtepa@veeam.com/T/#mfe9b8f46833011deea4b24714212230ac38db978
 
 The module is incompatible with features hardware inline encryption and
-data integrity.
+data integrity. Thanks to Eric Biggers <ebiggers@kernel.org>.
 Link: https://lore.kernel.org/lkml/20230612135228.10702-1-sergei.shtepa@veeam.com/T/#m3f13e580876bff1d283eb2a79d1ecdef3b98cc42
+Unfortunately, I didn't have a chance to check it, since I don't have such
+equipment.
 
-Based on LK v6.7-rc1.
+And it is impossible to determine the presence of a blk-crypto-fallback at
+the block layer filter level. The filter receives already encrypted data.
+The original device continues to work without problems, but the data in
+the snapshot is encrypted. Perhaps they can be decrypted if specify the
+correct key when mounting the file system for snapshot image.
+
+Tested on amd64 and ppc64le with a page size of 64KiB and a storage block
+size of 4KiB.
+
+Based on LK v6.7-rc2.
+Compatible with branch 'for-next'.
+link: https://git.kernel.org/pub/scm/linux/kernel/git/axboe/linux-block.git 
 
 v6 changes:
 - The difference storage has been changed.
