@@ -8,7 +8,6 @@ imagefile_make()
 	local SIZE=$2
 
 	dd if=/dev/zero of=${FILEPATH} count=${SIZE} bs=1M status=none
-	mkfs.ext4 ${FILEPATH}
 	echo "new image file ${FILEPATH}"
 }
 

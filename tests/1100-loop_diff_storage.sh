@@ -24,7 +24,7 @@ MPDIR=/mnt/blksnap-test
 rm -rf ${MPDIR}
 mkdir -p ${MPDIR}
 
-# create first device
+# create difference storage device
 DIFF_STOGAGE_FILE=${TESTDIR}/diff_storage.img
 imagefile_make ${DIFF_STOGAGE_FILE} ${BLk_SZ}
 
@@ -36,6 +36,7 @@ IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} ${BLk_SZ}
 
 DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
+mkfs.ext4 ${DEVICE_1}
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1
