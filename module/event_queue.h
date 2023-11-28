@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#ifndef __BLK_SNAP_EVENT_QUEUE_H
-#define __BLK_SNAP_EVENT_QUEUE_H
+/* Copyright (C) 2023 Veeam Software Group GmbH */
+#ifndef __BLKSNAP_EVENT_QUEUE_H
+#define __BLKSNAP_EVENT_QUEUE_H
 
 #include <linux/types.h>
 #include <linux/ktime.h>
@@ -23,14 +24,14 @@
  *
  * Events can be different, so they contain different data. The size of the
  * data array is not defined exactly, but it has limitations. The size of
- * the event structure may exceed the PAGE_SIZE.
+ * the event structure is limited by the PAGE_SIZE (4096 bytes).
  */
 struct event {
 	struct list_head link;
 	ktime_t time;
 	int code;
 	int data_size;
-	char data[]; /* up to PAGE_SIZE - sizeof(struct blk_snap_snapshot_event) */
+	char data[];
 };
 
 /**
@@ -59,7 +60,5 @@ struct event *event_wait(struct event_queue *event_queue,
 static inline void event_free(struct event *event)
 {
 	kfree(event);
-	if (event)
-		memory_object_dec(memory_object_event);
 };
-#endif /* __BLK_SNAP_EVENT_QUEUE_H */
+#endif /* __BLKSNAP_EVENT_QUEUE_H */

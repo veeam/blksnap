@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#ifndef __BLK_SNAP_CHUNK_H
-#define __BLK_SNAP_CHUNK_H
+/* Copyright (C) 2023 Veeam Software Group GmbH */
+#ifndef __BLKSNAP_CHUNK_H
+#define __BLKSNAP_CHUNK_H
 
 #include <linux/blk_types.h>
 #include <linux/blkdev.h>
@@ -9,59 +10,37 @@
 #include "diff_area.h"
 
 struct diff_area;
-struct diff_region;
-struct diff_io;
 
 /**
  * enum chunk_st - Possible states for a chunk.
  *
+ * @CHUNK_ST_NEW:
+ *	No data is associated with the chunk.
+ * @CHUNK_ST_IN_MEMORY:
+ *	The data of the chunk is ready to be read from the RAM buffer.
+ *	The flag is removed when a chunk is removed from the store queue
+ *	and its buffer is released.
+ * @CHUNK_ST_STORED:
+ *	The data of the chunk has been written to the difference storage.
  * @CHUNK_ST_FAILED:
  *	An error occurred while processing the chunk data.
- * @CHUNK_ST_DIRTY:
- *	The chunk is in the dirty state. The chunk is marked dirty in case
- *	there was a write operation to the snapshot image.
- *	The flag is removed when the data of the chunk is stored in the
- *	difference storage.
- * @CHUNK_ST_BUFFER_READY:
- *	The data of the chunk is ready to be read from the RAM buffer.
- *	The flag is removed when a chunk is removed from the cache and its
- *	buffer is released.
- * @CHUNK_ST_STORE_READY:
- *	The data of the chunk has been written to the difference storage.
- *	The flag cannot be removed.
- * @CHUNK_ST_LOADING:
- *	The data is being read from the original block device.
- *	The flag is replaced with the CHUNK_ST_BUFFER_READY flag.
- * @CHUNK_ST_STORING:
- *	The data is being saved to the difference storage.
- *	The flag is replaced with the CHUNK_ST_STORE_READY flag.
  *
- * Chunks life circle.
- * Copy-on-write when writing to original:
- *	0 -> LOADING -> BUFFER_READY -> BUFFER_READY | STORING ->
- *	BUFFER_READY | STORE_READY -> STORE_READY
- * Write to snapshot image:
- *	0 -> LOADING -> BUFFER_READY | DIRTY -> DIRTY | STORING ->
- *	BUFFER_READY | STORE_READY -> STORE_READY
- * Read from snapshot image
- *	0 > LOADING -> BUFFER_READY -> 0
+ * Chunks life circle:
+ *	CHUNK_ST_NEW -> CHUNK_ST_IN_MEMORY <-> CHUNK_ST_STORED
  */
+
 enum chunk_st {
-	CHUNK_ST_FAILED = (1 << 0),
-	CHUNK_ST_DIRTY = (1 << 1),
-	CHUNK_ST_BUFFER_READY = (1 << 2),
-	CHUNK_ST_STORE_READY = (1 << 3),
-	CHUNK_ST_LOADING = (1 << 4),
-	CHUNK_ST_STORING = (1 << 5),
+	CHUNK_ST_NEW,
+	CHUNK_ST_IN_MEMORY,
+	CHUNK_ST_STORED,
+	CHUNK_ST_FAILED,
 };
 
 /**
  * struct chunk - Minimum data storage unit.
  *
  * @link:
- *	The list header allows to create caches of chunks.
- * @diff_area:
- *	Pointer to the difference area - the storage of changes for a specific device.
+ *	The list header allows to create queue of chunks.
  * @number:
  *	Sequential number of the chunk.
  * @sector_count:
@@ -69,82 +48,95 @@ enum chunk_st {
  *	for the	last chunk.
  * @lock:
  *	Binary semaphore. Syncs access to the chunks fields: state,
- *	diff_buffer, diff_region and diff_io.
+ *	diff_buffer, diff_file and diff_ofs_sect.
+ * @diff_area:
+ *	Pointer to the difference area - the difference storage area for a
+ *	specific device. This field is only available when the chunk is locked.
+ *	Allows to protect the difference area from early release.
  * @state:
- *	Defines the state of a chunk. May contain CHUNK_ST_* bits.
+ *	Defines the state of a chunk.
+ * @diff_bdev:
+ *      The difference storage block device.
+ * @diff_file:
+ *	The difference storage file.
+ * @diff_ofs_sect:
+ *	The sector offset of the region's first sector.
  * @diff_buffer:
  *	Pointer to &struct diff_buffer. Describes a buffer in the memory
  *	for storing the chunk data.
- * @diff_region:
- *	Pointer to &struct diff_region. Describes a copy of the chunk data
  *	on the difference storage.
- * @diff_io:
- *	Provides I/O operations for a chunk.
- * @refcount:
- *	The counter ensures the removal of a chunk from the diff_area.chunk_map
- *	and its safe free.
  *
  * This structure describes the block of data that the module operates
  * with when executing the copy-on-write algorithm and when performing I/O
  * to snapshot images.
  *
- * If the data of the chunk has been changed or has just been read, then
- * the chunk gets into cache.
+ * If the data of the chunk has been changed, then the chunk gets into store
+ * queue. The queue provides caching of chunks. Saving chunks to the storage is
+ * performed in a separate working thread. This ensures the best system
+ * performance.
  *
  * The semaphore is blocked for writing if there is no actual data in the
  * buffer, since a block of data is being read from the original device or
- * from a diff storage. If data is being read from or written to the
+ * from a difference storage. If data is being read from or written to the
  * diff_buffer, the semaphore must be locked.
  */
 struct chunk {
 	struct list_head link;
-	struct diff_area *diff_area;
-
 	unsigned long number;
 	sector_t sector_count;
 
 	struct semaphore lock;
+	struct diff_area *diff_area;
 
-	atomic_t state;
+	enum chunk_st state;
+
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+	struct block_device *diff_bdev;
+#endif
+	struct file *diff_file;
+	sector_t diff_ofs_sect;
+
 	struct diff_buffer *diff_buffer;
-	struct diff_region *diff_region;
-	struct diff_io *diff_io;
-
-	atomic_t refcount;
 };
 
-void chunk_up_and_free(struct chunk *chunk);
-void chunk_up(struct chunk *chunk);
-
-static inline void chunk_state_set(struct chunk *chunk, int st)
+static inline void chunk_up(struct chunk *chunk)
 {
-	atomic_or(st, &chunk->state);
+	struct diff_area *diff_area = chunk->diff_area;
+
+	chunk->diff_area = NULL;
+	up(&chunk->lock);
+	diff_area_put(diff_area);
 };
 
-static inline void chunk_state_unset(struct chunk *chunk, int st)
-{
-	atomic_and(~st, &chunk->state);
+struct chunk_io_ctx {
+	struct list_head link;
+#ifdef CONFIG_BLKSNAP_CHUNK_DIFF_BIO_SYNC
+	loff_t pos;
+#else
+	struct kiocb iocb;
+#endif
+	struct iov_iter iov_iter;
+	struct chunk *chunk;
+	struct bio *bio;
 };
+void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx);
 
-static inline bool chunk_state_check(struct chunk *chunk, int st)
-{
-	return !!(atomic_read(&chunk->state) & st);
-};
-
-struct chunk *chunk_alloc(struct diff_area *diff_area, unsigned long number);
-void chunk_free(struct diff_area *diff_area, struct chunk *chunk);
-
-int chunk_schedule_storing(struct chunk *chunk, bool is_nowait);
-void chunk_diff_buffer_release(struct diff_area *diff_area, struct chunk *chunk);
 void chunk_store_failed(struct chunk *chunk, int error);
+struct bio *chunk_alloc_clone(struct block_device *bdev, struct bio *bio);
 
-void chunk_schedule_caching(struct chunk *chunk);
+void chunk_copy_bio(struct chunk *chunk, struct bio *bio,
+		    struct bvec_iter *iter);
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio);
+void chunk_store_tobdev(struct chunk *chunk);
+#endif
+int chunk_diff_bio(struct chunk *chunk, struct bio *bio);
+void chunk_diff_write(struct chunk *chunk);
+bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio);
+int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio);
+void chunk_load_and_postpone_io_finish(struct list_head *chunks,
+				struct bio *chunk_bio, struct bio *orig_bio);
 
-/* Asynchronous operations are used to implement the COW algorithm. */
-int chunk_async_store_diff(struct chunk *chunk, bool is_nowait);
-int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait);
-
-/* Synchronous operations are used to implement reading and writing to the snapshot image. */
-int chunk_load_orig(struct chunk *chunk);
-int chunk_load_diff(struct chunk *chunk);
-#endif /* __BLK_SNAP_CHUNK_H */
+int __init chunk_init(void);
+void chunk_done(void);
+#endif /* __BLKSNAP_CHUNK_H */

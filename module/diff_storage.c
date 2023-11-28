@@ -1,60 +1,96 @@
 // SPDX-License-Identifier: GPL-2.0
+/* Copyright (C) 2023 Veeam Software Group GmbH */
 #define pr_fmt(fmt) KBUILD_MODNAME "-diff-storage: " fmt
+
 #include <linux/slab.h>
 #include <linux/sched/mm.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-#ifdef STANDALONE_BDEVFILTER
-#include "blk_snap.h"
-#else
-#include <linux/blk_snap.h>
-#endif
-#include "memory_checker.h"
-#include "params.h"
+#include <linux/file.h>
+#include <linux/blkdev.h>
+#include <linux/build_bug.h>
+#include <uapi/linux/blksnap.h>
 #include "chunk.h"
-#include "diff_io.h"
 #include "diff_buffer.h"
 #include "diff_storage.h"
-#ifdef STANDALONE_BDEVFILTER
-#include "log.h"
-#endif
+#include "params.h"
 
-#ifndef PAGE_SECTORS
-#define PAGE_SECTORS	(1 << (PAGE_SHIFT - SECTOR_SHIFT))
-#endif
-
-/**
- * struct storage_bdev - Information about the opened block device.
- */
-struct storage_bdev {
-	struct list_head link;
-	dev_t dev_id;
-	struct block_device *bdev;
-};
-
-/**
- * struct storage_block - A storage unit reserved for storing differences.
- *
- */
-struct storage_block {
-	struct list_head link;
-	struct block_device *bdev;
-	sector_t sector;
-	sector_t count;
-	sector_t used;
-};
-
-static inline void diff_storage_event_low(struct diff_storage *diff_storage)
+static void diff_storage_reallocate_work(struct work_struct *work)
 {
-	struct blk_snap_event_low_free_space data = {
-		.requested_nr_sect = diff_storage_minimum,
-	};
+	int ret;
+	sector_t req_sect;
+	struct diff_storage *diff_storage = container_of(
+		work, struct diff_storage, reallocate_work);
+	bool complete = false;
 
-	diff_storage->requested += data.requested_nr_sect;
-	pr_debug("Diff storage low free space. Portion: %llu sectors, requested: %llu\n",
-		data.requested_nr_sect, diff_storage->requested);
-	event_gen(&diff_storage->event_queue, GFP_NOIO,
-		  blk_snap_event_code_low_free_space, &data, sizeof(data));
+	do {
+		spin_lock(&diff_storage->lock);
+		req_sect = diff_storage->requested;
+		spin_unlock(&diff_storage->lock);
+
+		ret = vfs_fallocate(diff_storage->file, 0, 0,
+				    (loff_t)(req_sect << SECTOR_SHIFT));
+		if (ret) {
+			pr_err("Failed to fallocate difference storage file\n");
+			break;
+		}
+
+		spin_lock(&diff_storage->lock);
+		diff_storage->capacity = req_sect;
+		complete = (diff_storage->capacity >= diff_storage->requested);
+		if (complete)
+			atomic_set(&diff_storage->low_space_flag, 0);
+		spin_unlock(&diff_storage->lock);
+
+		pr_debug("Diff storage reallocate. Capacity: %llu sectors\n",
+			 req_sect);
+	} while (!complete);
+}
+
+static bool diff_storage_calculate_requested(struct diff_storage *diff_storage)
+{
+	bool ret = false;
+
+	spin_lock(&diff_storage->lock);
+	if (diff_storage->capacity < diff_storage->limit) {
+		diff_storage->requested += min(get_diff_storage_minimum(),
+				diff_storage->limit - diff_storage->capacity);
+		ret = true;
+	}
+	pr_debug("The size of the difference storage was %llu MiB\n",
+		 diff_storage->capacity >> (20 - SECTOR_SHIFT));
+	pr_debug("The limit is %llu MiB\n",
+		 diff_storage->limit >> (20 - SECTOR_SHIFT));
+	spin_unlock(&diff_storage->lock);
+
+	return ret;
+}
+
+static inline bool is_halffull(const sector_t sectors_left)
+{
+	return sectors_left <= (get_diff_storage_minimum() / 2);
+}
+
+static inline void check_halffull(struct diff_storage *diff_storage,
+				  const sector_t sectors_left)
+{
+	if (is_halffull(sectors_left) &&
+	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
+
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+		if (diff_storage->bdev) {
+			pr_warn("Reallocating is allowed only for a regular file\n");
+			return;
+		}
+#endif
+		if (!diff_storage_calculate_requested(diff_storage)) {
+			pr_info("The limit size of the difference storage has been reached\n");
+			return;
+		}
+
+		pr_debug("Diff storage low free space.\n");
+		queue_work(system_wq, &diff_storage->reallocate_work);
+	}
 }
 
 struct diff_storage *diff_storage_new(void)
@@ -64,284 +100,192 @@ struct diff_storage *diff_storage_new(void)
 	diff_storage = kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
 	if (!diff_storage)
 		return NULL;
-	memory_object_inc(memory_object_diff_storage);
 
 	kref_init(&diff_storage->kref);
 	spin_lock_init(&diff_storage->lock);
-	INIT_LIST_HEAD(&diff_storage->storage_bdevs);
-	INIT_LIST_HEAD(&diff_storage->empty_blocks);
-	INIT_LIST_HEAD(&diff_storage->filled_blocks);
+	diff_storage->limit = 0;
 
+	INIT_WORK(&diff_storage->reallocate_work, diff_storage_reallocate_work);
 	event_queue_init(&diff_storage->event_queue);
-	diff_storage_event_low(diff_storage);
 
 	return diff_storage;
 }
 
-static inline struct storage_block *
-first_empty_storage_block(struct diff_storage *diff_storage)
-{
-	return list_first_entry_or_null(&diff_storage->empty_blocks,
-					struct storage_block, link);
-};
-
-static inline struct storage_block *
-first_filled_storage_block(struct diff_storage *diff_storage)
-{
-	return list_first_entry_or_null(&diff_storage->filled_blocks,
-					struct storage_block, link);
-};
-
-static inline struct storage_bdev *
-first_storage_bdev(struct diff_storage *diff_storage)
-{
-	return list_first_entry_or_null(&diff_storage->storage_bdevs,
-					struct storage_bdev, link);
-};
-
 void diff_storage_free(struct kref *kref)
 {
-	struct diff_storage *diff_storage =
-		container_of(kref, struct diff_storage, kref);
-	struct storage_block *blk;
-	struct storage_bdev *storage_bdev;
+	struct diff_storage *diff_storage;
 
-	while ((blk = first_empty_storage_block(diff_storage))) {
-		list_del(&blk->link);
-		kfree(blk);
-		memory_object_dec(memory_object_storage_block);
-	}
+	diff_storage = container_of(kref, struct diff_storage, kref);
+	flush_work(&diff_storage->reallocate_work);
 
-	while ((blk = first_filled_storage_block(diff_storage))) {
-		list_del(&blk->link);
-		kfree(blk);
-		memory_object_dec(memory_object_storage_block);
-	}
-
-	while ((storage_bdev = first_storage_bdev(diff_storage))) {
-#if defined(HAVE_BLK_HOLDER_OPS)
-		blkdev_put(storage_bdev->bdev, NULL);
-#else
-		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+	if (diff_storage->bdev)
+		blkdev_put(diff_storage->bdev, NULL);
 #endif
-		list_del(&storage_bdev->link);
-		kfree(storage_bdev);
-		memory_object_dec(memory_object_storage_bdev);
-	}
+	if (diff_storage->file)
+		fput(diff_storage->file);
 	event_queue_done(&diff_storage->event_queue);
-
 	kfree(diff_storage);
-	memory_object_dec(memory_object_diff_storage);
 }
 
-static struct block_device *
-diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
+static inline bool unsupported_mode(const umode_t m)
 {
-	struct block_device *bdev = NULL;
-	struct storage_bdev *storage_bdev;
+	return (S_ISCHR(m) || S_ISFIFO(m) || S_ISSOCK(m));
+}
 
-	spin_lock(&diff_storage->lock);
-	list_for_each_entry(storage_bdev, &diff_storage->storage_bdevs, link) {
-		if (storage_bdev->dev_id == dev_id) {
-			bdev = storage_bdev->bdev;
-			break;
-		}
+static inline bool unsupported_flags(const unsigned int flags)
+{
+	if (!(flags | O_RDWR)) {
+		pr_err("Read and write access is required\n");
+		return true;
 	}
-	spin_unlock(&diff_storage->lock);
-
-	return bdev;
-}
-
-static inline struct block_device *
-diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
-{
-	struct block_device *bdev;
-	struct storage_bdev *storage_bdev;
-
-#if defined(HAVE_BLK_HOLDER_OPS)
-	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
-#else
-	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
-#endif
-	if (IS_ERR(bdev)) {
-		pr_err("Failed to open device. errno=%d\n",
-		       abs((int)PTR_ERR(bdev)));
-		return bdev;
+	if (!(flags | O_EXCL)) {
+		pr_err("Exclusive access is required\n");
+		return true;
 	}
 
-	storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
-	if (!storage_bdev) {
-#if defined(HAVE_BLK_HOLDER_OPS)
-		blkdev_put(bdev, NULL);
-#else
-		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
-#endif
-		return ERR_PTR(-ENOMEM);
-	}
-	memory_object_inc(memory_object_storage_bdev);
-
-	storage_bdev->bdev = bdev;
-	storage_bdev->dev_id = dev_id;
-	INIT_LIST_HEAD(&storage_bdev->link);
-
-	spin_lock(&diff_storage->lock);
-	list_add_tail(&storage_bdev->link, &diff_storage->storage_bdevs);
-	spin_unlock(&diff_storage->lock);
-
-	return bdev;
+	return false;
 }
 
-static inline int diff_storage_add_range(struct diff_storage *diff_storage,
-					 struct block_device *bdev,
-					 sector_t sector, sector_t count)
-{
-	struct storage_block *storage_block;
-
-	pr_debug("Add range to diff storage: [%u:%u] %llu:%llu\n",
-		 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), sector, count);
-
-	storage_block = kzalloc(sizeof(struct storage_block), GFP_KERNEL);
-	if (!storage_block)
-		return -ENOMEM;
-	memory_object_inc(memory_object_storage_block);
-
-	INIT_LIST_HEAD(&storage_block->link);
-	storage_block->bdev = bdev;
-	storage_block->sector = sector;
-	storage_block->count = count;
-
-	spin_lock(&diff_storage->lock);
-	list_add_tail(&storage_block->link, &diff_storage->empty_blocks);
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	atomic_inc(&diff_storage->free_block_count);
-#endif
-	diff_storage->capacity += count;
-	spin_unlock(&diff_storage->lock);
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	pr_debug("free storage blocks %d\n",
-		 atomic_read(&diff_storage->free_block_count));
-#endif
-
-	return 0;
-}
-
-int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
-			      struct big_buffer *ranges,
-			      unsigned int range_count)
-{
-	int ret;
-	int inx;
-	struct block_device *bdev;
-	struct blk_snap_block_range *range;
-
-	pr_debug("Append %u blocks\n", range_count);
-
-	bdev = diff_storage_bdev_by_id(diff_storage, dev_id);
-	if (!bdev) {
-		bdev = diff_storage_add_storage_bdev(diff_storage, dev_id);
-		if (IS_ERR(bdev))
-			return PTR_ERR(bdev);
-	}
-
-	for (inx = 0; inx < range_count; inx++) {
-		range = big_buffer_get_element(
-			ranges, inx, sizeof(struct blk_snap_block_range));
-		if (unlikely(!range))
-			return -EINVAL;
-
-		ret = diff_storage_add_range(diff_storage, bdev,
-					     range->sector_offset,
-					     range->sector_count);
-		if (unlikely(ret))
-			return ret;
-	}
-
-	if (atomic_read(&diff_storage->low_space_flag) &&
-	    (diff_storage->capacity >= diff_storage->requested))
-		atomic_set(&diff_storage->low_space_flag, 0);
-
-	return 0;
-}
-
-static inline bool is_halffull(const sector_t sectors_left)
-{
-	return sectors_left <= ((diff_storage_minimum >> 1) & ~(PAGE_SECTORS - 1));
-}
-
-struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
-					   sector_t count)
+int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
+				  unsigned int fd, sector_t limit)
 {
 	int ret = 0;
-	struct diff_region *diff_region;
+	struct file *file;
+
+	file = fget(fd);
+	if (!file) {
+		pr_err("Invalid file descriptor\n");
+		return -EINVAL;
+	}
+
+	if (unsupported_mode(file_inode(file)->i_mode)) {
+		pr_err("The difference storage can only be a regular file or a block device\n");
+		ret = -EINVAL;
+		goto fail_fput;
+	}
+
+	if (unsupported_flags(file->f_flags)) {
+		pr_err("Invalid flags 0x%x with which the file was opened\n",
+			file->f_flags);
+		ret = -EINVAL;
+		goto fail_fput;
+	}
+
+	if (S_ISBLK(file_inode(file)->i_mode)) {
+		struct block_device *bdev;
+		dev_t dev_id = file_inode(file)->i_rdev;
+
+		pr_debug("Open a block device %d:%d\n",
+			MAJOR(dev_id), MINOR(dev_id));
+		/*
+		 * The block device is opened non-exclusively.
+		 * It should be exclusive to open the file whose descriptor is
+		 * passed to the module.
+		 */
+		bdev = blkdev_get_by_dev(dev_id,
+					 BLK_OPEN_READ | BLK_OPEN_WRITE,
+					 NULL, NULL);
+		if (IS_ERR(bdev)) {
+			pr_err("Cannot open a block device %d:%d\n",
+				MAJOR(dev_id), MINOR(dev_id));
+			ret = PTR_ERR(bdev);
+			bdev = NULL;
+			goto fail_fput;
+		}
+
+		pr_debug("A block device is selected for difference storage\n");
+		diff_storage->dev_id = file_inode(file)->i_rdev;
+		diff_storage->capacity = bdev_nr_sectors(bdev);
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+		diff_storage->bdev = bdev;
+#else
+		blkdev_put(bdev, NULL);
+#endif
+	} else {
+		pr_debug("A regular file is selected for difference storage\n");
+		diff_storage->dev_id = file_inode(file)->i_sb->s_dev;
+		diff_storage->capacity =
+				i_size_read(file_inode(file)) >> SECTOR_SHIFT;
+	}
+
+	diff_storage->file = get_file(file);
+	diff_storage->requested = diff_storage->capacity;
+	diff_storage->limit = limit;
+
+	if (is_halffull(diff_storage->requested)) {
+		sector_t req_sect;
+
+		if (diff_storage->capacity == diff_storage->limit) {
+			pr_info("The limit size of the difference storage has been reached\n");
+			ret = 0;
+			goto fail_fput;
+		}
+		if (diff_storage->capacity > diff_storage->limit) {
+			pr_err("The limit size of the difference storage has been exceeded\n");
+			ret = -ENOSPC;
+			goto fail_fput;
+		}
+
+		diff_storage->requested += min(get_diff_storage_minimum(),
+				diff_storage->limit - diff_storage->capacity);
+		req_sect = diff_storage->requested;
+
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+		if (diff_storage->bdev) {
+			pr_warn("Difference storage on block device is not large enough\n");
+			pr_warn("Requested: %llu sectors\n", req_sect);
+			ret = 0;
+			goto fail_fput;
+		}
+#endif
+		pr_debug("Difference storage is not large enough\n");
+		pr_debug("Requested: %llu sectors\n", req_sect);
+
+		ret = vfs_fallocate(diff_storage->file, 0, 0,
+				    (loff_t)(req_sect << SECTOR_SHIFT));
+		if (ret) {
+			pr_err("Failed to fallocate difference storage file\n");
+			pr_warn("The difference storage is not large enough\n");
+			goto fail_fput;
+		}
+		diff_storage->capacity = req_sect;
+	}
+fail_fput:
+	fput(file);
+	return ret;
+}
+
+int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+			struct block_device **bdev,
+#endif
+			struct file **file, sector_t *sector)
+
+{
 	sector_t sectors_left;
 
 	if (atomic_read(&diff_storage->overflow_flag))
-		return ERR_PTR(-ENOSPC);
-
-	diff_region = kzalloc(sizeof(struct diff_region), GFP_NOIO);
-	if (!diff_region)
-		return ERR_PTR(-ENOMEM);
-	memory_object_inc(memory_object_diff_region);
+		return -ENOSPC;
 
 	spin_lock(&diff_storage->lock);
-	do {
-		struct storage_block *storage_block;
-		sector_t available;
-
-		storage_block = first_empty_storage_block(diff_storage);
-		if (unlikely(!storage_block)) {
-			atomic_inc(&diff_storage->overflow_flag);
-			ret = -ENOSPC;
-			break;
-		}
-
-		available = storage_block->count - storage_block->used;
-		if (likely(available >= count)) {
-			diff_region->bdev = storage_block->bdev;
-			diff_region->sector =
-				storage_block->sector + storage_block->used;
-			diff_region->count = count;
-
-			storage_block->used += count;
-			diff_storage->filled += count;
-			break;
-		}
-
-		list_del(&storage_block->link);
-		list_add_tail(&storage_block->link,
-			      &diff_storage->filled_blocks);
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-		atomic_dec(&diff_storage->free_block_count);
-		atomic_inc(&diff_storage->user_block_count);
-#endif
-		/*
-		 * If there is still free space in the storage block, but
-		 * it is not enough to store a piece, then such a block is
-		 * considered used.
-		 * We believe that the storage blocks are large enough
-		 * to accommodate several pieces entirely.
-		 */
-		diff_storage->filled += available;
-	} while (1);
-	sectors_left = diff_storage->requested - diff_storage->filled;
-	spin_unlock(&diff_storage->lock);
-
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	pr_debug("free storage blocks %d\n",
-		 atomic_read(&diff_storage->free_block_count));
-	pr_debug("user storage blocks %d\n",
-		 atomic_read(&diff_storage->user_block_count));
-#endif
-
-	if (ret) {
-		pr_err("Cannot get empty storage block\n");
-		diff_storage_free_region(diff_region);
-		return ERR_PTR(ret);
+	if ((diff_storage->filled + count) > diff_storage->requested) {
+		atomic_inc(&diff_storage->overflow_flag);
+		spin_unlock(&diff_storage->lock);
+		return -ENOSPC;
 	}
 
-	if (is_halffull(sectors_left) &&
-	    (atomic_inc_return(&diff_storage->low_space_flag) == 1))
-		diff_storage_event_low(diff_storage);
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+	*bdev = diff_storage->bdev;
+#endif
+	*file = diff_storage->file;
+	*sector = diff_storage->filled;
 
-	return diff_region;
+	diff_storage->filled += count;
+	sectors_left = diff_storage->requested - diff_storage->filled;
+
+	spin_unlock(&diff_storage->lock);
+
+	check_halffull(diff_storage, sectors_left);
+	return 0;
 }

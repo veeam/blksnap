@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+/* Copyright (C) 2023 Veeam Software Group GmbH */
 #define pr_fmt(fmt) KBUILD_MODNAME "-log: " fmt
 #include <linux/module.h>
 #include <linux/fs.h>

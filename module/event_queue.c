@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
+/* Copyright (C) 2023 Veeam Software Group GmbH */
 #define pr_fmt(fmt) KBUILD_MODNAME "-event_queue: " fmt
+
 #include <linux/slab.h>
 #include <linux/sched.h>
-#include "memory_checker.h"
 #include "event_queue.h"
-#ifdef STANDALONE_BDEVFILTER
-#include "log.h"
-#endif
 
 void event_queue_init(struct event_queue *event_queue)
 {
@@ -34,10 +32,9 @@ int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
 {
 	struct event *event;
 
-	event = kzalloc(sizeof(struct event) + data_size, flags);
+	event = kzalloc(sizeof(struct event) + data_size + 1, flags);
 	if (!event)
 		return -ENOMEM;
-	memory_object_inc(memory_object_event);
 
 	event->time = ktime_get();
 	event->code = code;
@@ -61,25 +58,19 @@ struct event *event_wait(struct event_queue *event_queue,
 	int ret;
 
 	ret = wait_event_interruptible_timeout(event_queue->wq_head,
-					       !list_empty(&event_queue->list),
-					       timeout_ms);
-
-	if (ret > 0) {
-		struct event *event;
+				!list_empty(&event_queue->list), timeout_ms);
+	if (ret >= 0) {
+		struct event *event = ERR_PTR(-ENOENT);
 
 		spin_lock(&event_queue->lock);
-		event = list_first_entry(&event_queue->list, struct event,
-					 link);
-		list_del(&event->link);
+		if (!list_empty(&event_queue->list)) {
+			event = list_first_entry(&event_queue->list,
+						 struct event, link);
+			list_del(&event->link);
+		}
 		spin_unlock(&event_queue->lock);
-
-		pr_debug("Event received: time=%lld code=%d\n", event->time,
-			 event->code);
 		return event;
 	}
-	if (ret == 0)
-		return ERR_PTR(-ENOENT);
-
 	if (ret == -ERESTARTSYS) {
 		pr_debug("event waiting interrupted\n");
 		return ERR_PTR(-EINTR);

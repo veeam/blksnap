@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#ifndef __BLK_SNAP_DIFF_STORAGE_H
-#define __BLK_SNAP_DIFF_STORAGE_H
+/* Copyright (C) 2023 Veeam Software Group GmbH */
+#ifndef __BLKSNAP_DIFF_STORAGE_H
+#define __BLKSNAP_DIFF_STORAGE_H
 
 #include "event_queue.h"
-#include "big_buffer.h"
 
-struct diff_region;
+struct blksnap_sectors;
 
 /**
  * struct diff_storage - Difference storage.
@@ -13,21 +13,20 @@ struct diff_region;
  * @kref:
  *	The reference counter.
  * @lock:
- *	Spinlock allows to guarantee the safety of linked lists.
- * @storage_bdevs:
- *	List of opened block devices. Blocks for storing snapshot data can be
- *	located on different block devices. So, all opened block devices are
- *	located in this list. Blocks on opened block devices are allocated for
- *	storing the chunks data.
- * @empty_blocks:
- *	List of empty blocks on storage. This list can be updated while
- *	holding a snapshot. This allows us to dynamically increase the
- *	storage size for these snapshots.
- * @filled_blocks:
- *	List of filled blocks. When the blocks from the list of empty blocks are filled,
- *	we move them to the list of filled blocks.
+ *	Spinlock allows to safely change structure fields in a multithreaded
+ *	environment.
+ * @dev_id:
+ *	ID of the block device on which the difference storage file is located.
+ * @bdev:
+ *	A pointer to the block device that has been selected for the
+ *	difference storage. Available only if configuration BLKSNAP_DIFF_BLKDEV
+ *	is enabled.
+ * @file:
+ *	A pointer to the file that was selected for the difference storage.
  * @capacity:
- *	Total amount of available storage space.
+ *	Total amount of available difference storage space.
+ * @limit:
+ *	The limit to which the difference storage can be allowed to grow.
  * @filled:
  *	The number of sectors already filled in.
  * @requested:
@@ -38,37 +37,47 @@ struct diff_region;
  * @overflow_flag:
  *	The request for a free region failed due to the absence of free
  *	regions in the difference storage.
+ * @reallocate_work:
+ *	The working thread in which the difference storage file is growing.
  * @event_queue:
- *	A queue of events to pass events to user space. Diff storage and its
- *	owner can notify its snapshot about events like snapshot overflow,
- *	low free space and snapshot terminated.
+ *	A queue of events to pass events to user space.
  *
- * The difference storage manages the regions of block devices that are used
+ * The difference storage manages the block device or file that are used
  * to store the data of the original block devices in the snapshot.
  * The difference storage is created one per snapshot and is used to store
- * data from all the original snapshot block devices. At the same time, the
- * difference storage itself can contain regions on various block devices.
+ * data from all block devices.
+ *
+ * The difference storage file has the ability to increase while holding the
+ * snapshot as needed within the specified limits. This is done using the
+ * function vfs_fallocate().
+ *
+ * Changing the file size leads to a change in the file metadata in the file
+ * system, which leads to the generation of I/O units for the block device.
+ * Using a separate working thread ensures that metadata changes will be
+ * handled and correctly processed by the block-level filters.
+ *
+ * The event queue allows to inform the user land about changes in the state
+ * of the difference storage.
  */
 struct diff_storage {
 	struct kref kref;
 	spinlock_t lock;
 
-	struct list_head storage_bdevs;
-	struct list_head empty_blocks;
-	struct list_head filled_blocks;
-
+	dev_t dev_id;
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+	struct block_device *bdev;
+#endif
+	struct file *file;
 	sector_t capacity;
+	sector_t limit;
 	sector_t filled;
 	sector_t requested;
 
 	atomic_t low_space_flag;
 	atomic_t overflow_flag;
 
+	struct work_struct reallocate_work;
 	struct event_queue event_queue;
-#ifdef BLK_SNAP_DEBUG_DIFF_STORAGE_LISTS
-	atomic_t free_block_count;
-	atomic_t user_block_count;
-#endif
 };
 
 struct diff_storage *diff_storage_new(void);
@@ -84,16 +93,12 @@ static inline void diff_storage_put(struct diff_storage *diff_storage)
 		kref_put(&diff_storage->kref, diff_storage_free);
 };
 
-int diff_storage_append_block(struct diff_storage *diff_storage, dev_t dev_id,
-			      struct big_buffer *ranges,
-			      unsigned int range_count);
-struct diff_region *diff_storage_new_region(struct diff_storage *diff_storage,
-					    sector_t count);
+int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
+				  unsigned int fd, sector_t limit);
 
-static inline void diff_storage_free_region(struct diff_region *region)
-{
-	kfree(region);
-	if (region)
-		memory_object_dec(memory_object_diff_region);
-}
-#endif /* __BLK_SNAP_DIFF_STORAGE_H */
+int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
+#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
+		       struct block_device **bdev,
+#endif
+		       struct file **file, sector_t *sector);
+#endif /* __BLKSNAP_DIFF_STORAGE_H */

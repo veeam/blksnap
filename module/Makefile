@@ -1,28 +1,21 @@
 # SPDX-License-Identifier: GPL-2.0
-KERNEL_MODULE_NAME := veeamblksnap
+# Copyright (C) 2023 Veeam Software Group GmbH
 
-# for upstream, we don't need any addition makefiles,
-# but for a standalone module the configuration is necessary
-# EXTRA_CFLAGS += "-D DEBUG"
-EXTRA_CFLAGS += "-D STANDALONE_BDEVFILTER"
 include ${M}/Makefile-config
 include ${M}/Makefile-bdevfilter
+
+veeamblksnap-y :=	\
+	cbt_map.o	\
+	chunk.o		\
+	diff_area.o	\
+	diff_buffer.o	\
+	diff_storage.o	\
+	event_queue.o	\
+	main.o		\
+	snapimage.o	\
+	snapshot.o	\
+	tracker.o
+
 include ${M}/Makefile-standalone
 
-$(KERNEL_MODULE_NAME)-y += big_buffer.o
-$(KERNEL_MODULE_NAME)-y += cbt_map.o
-$(KERNEL_MODULE_NAME)-y += chunk.o
-$(KERNEL_MODULE_NAME)-y += ctrl.o
-$(KERNEL_MODULE_NAME)-y += diff_io.o
-$(KERNEL_MODULE_NAME)-y += diff_area.o
-$(KERNEL_MODULE_NAME)-y += diff_buffer.o
-$(KERNEL_MODULE_NAME)-y += diff_storage.o
-$(KERNEL_MODULE_NAME)-y += event_queue.o
-$(KERNEL_MODULE_NAME)-y += main.o
-$(KERNEL_MODULE_NAME)-y += snapimage.o
-$(KERNEL_MODULE_NAME)-y += snapshot.o
-$(KERNEL_MODULE_NAME)-y += sysfs.o
-$(KERNEL_MODULE_NAME)-y += tracker.o
-$(KERNEL_MODULE_NAME)-y += memory_checker.o
-
-obj-m	 += $(KERNEL_MODULE_NAME).o
+obj-m	 += veeamblksnap.o

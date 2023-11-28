@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+/* Copyright (C) 2023 Veeam Software Group GmbH */
 #ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
 #define pr_fmt(fmt) KBUILD_MODNAME "-memory_checker: " fmt
 #include <linux/atomic.h>

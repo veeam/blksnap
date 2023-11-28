@@ -1,5 +1,6 @@
 #!/bin/bash -e
 # SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2023 Veeam Software Group GmbH
 MODULE_NAME=veeamblksnap
 FILTER_NAME=bdevfilter
 CMD=$1
