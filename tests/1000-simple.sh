@@ -83,15 +83,15 @@ check_files ${MOUNTPOINT_1}
 echo "Check snapshots"
 IMAGE_1=${TESTDIR}/image0
 mkdir -p ${IMAGE_1}
-mount /dev/veeamblksnap-image0 ${IMAGE_1}
+mount /dev/veeamblksnapimg0 ${IMAGE_1}
 check_files ${IMAGE_1}
 
 echo "Write to snapshot"
 generate_files ${IMAGE_1} "snapshot" 3
 
 drop_cache
-umount /dev/veeamblksnap-image0
-mount /dev/veeamblksnap-image0 ${IMAGE_1}
+umount /dev/veeamblksnapimg0
+mount /dev/veeamblksnapimg0 ${IMAGE_1}
 
 check_files ${IMAGE_1}
 

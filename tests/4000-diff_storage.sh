@@ -53,9 +53,9 @@ IMAGE=${MP_DIR}/image0
 mkdir -p ${IMAGE}
 
 echo "Mount image"
-mount /dev/veeamblksnap-image0 ${IMAGE}
+mount /dev/veeamblksnapimg0 ${IMAGE}
 # for XFS filesystem nouuid option needed
-#mount -o nouuid /dev/veeamblksnap-image0 ${IMAGE}
+#mount -o nouuid /dev/veeamblksnapimg0 ${IMAGE}
 
 check_files ${IMAGE}/${RELATIVE_TEST_DIR}
 
