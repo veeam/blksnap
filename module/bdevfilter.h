@@ -1,82 +1,43 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /* Copyright (C) 2023 Veeam Software Group GmbH */
-#ifndef __LINUX_BDEVFILTER_H
-#define __LINUX_BDEVFILTER_H
+#ifndef _UAPI_LINUX_BDEVFILTER_H
+#define _UAPI_LINUX_BDEVFILTER_H
 
 #include <linux/types.h>
-#include <linux/list.h>
-#include <linux/blk_types.h>
 
-enum bdev_filter_altitudes {
-	bdev_filter_alt_blksnap = 0,
-	bdev_filter_alt_unidentified,
-	bdev_filter_alt_end
-};
+#define BDEVFILTER_CTL "bdevfilter-control"
 
-enum bdev_filter_result {
-	bdev_filter_res_skip = 0,
-	bdev_filter_res_pass
-};
+#define BDEVFILTER_NAME_LENGTH	32
 
-struct bdev_filter;
-struct bdev_filter_operations {
-	enum bdev_filter_result (*submit_bio_cb)(struct bio *bio,
-						 struct bdev_filter *flt);
-	/*
-	enum bdev_filter_result (*read_page_cb)(struct block_device *bdev,
-				sector_t sector, struct page *page,
-				struct bdev_filter *flt);
-	enum bdev_filter_result (*write_page_cb)(struct block_device *bdev,
-				sector_t sector, struct page *page,
-				struct bdev_filter *flt);
-	*/
-	void (*detach_cb)(struct kref *kref);
+/**
+ * struct bdevfilter_name - parameter for BLKFILTER_ATTACH and BLKFILTER_DETACH
+ *      ioctl.
+ *
+ * @name:       Name of block device filter.
+ */
+struct bdevfilter_name {
+	__u32 bdev_fd;
+	__u8 name[BDEVFILTER_NAME_LENGTH];
 };
 
 /**
- * struct bdev_filter - Description of the block device filter.
- * @kref:
+ * struct bdevfilter_ctl - parameter for bdevfilter_ctl ioctl
  *
- * @fops:
- *
+ * @name:	Name of block device filter.
+ * @cmd:	The filter-specific operation code of the command.
+ * @optlen:	Size of data at @opt.
+ * @opt:	Userspace buffer with options.
  */
-struct bdev_filter {
-	struct kref kref;
-	const struct bdev_filter_operations *fops;
+struct bdevfilter_ctl {
+	__u32 bdev_fd;
+	__u8 name[BLKFILTER_NAME_LENGTH];
+	__u32 cmd;
+	__u32 optlen;
+	__u64 opt;
 };
 
-static inline void bdev_filter_init(struct bdev_filter *flt,
-		const struct bdev_filter_operations *fops)
-{
-	kref_init(&flt->kref);
-	flt->fops = fops;
-};
 
-int bdev_filter_attach(struct block_device *bdev, const char *name,
-		       const enum bdev_filter_altitudes altitude,
-		       struct bdev_filter *flt);
-int bdev_filter_detach(struct block_device *bdev, const char *name,
-		       const enum bdev_filter_altitudes altitude);
-struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
-		       const enum bdev_filter_altitudes altitude);
-static inline void bdev_filter_get(struct bdev_filter *flt)
-{
-	kref_get(&flt->kref);
-};
-static inline void bdev_filter_put(struct bdev_filter *flt)
-{
-	if (likely(flt))
-		kref_put(&flt->kref, flt->fops->detach_cb);
-};
+#define BDEVFILTER_ATTACH	_IOWR('F', 140, struct bdevfilter_name)
+#define BDEVFILTER_DETACH	_IOWR('F', 141, struct bdevfilter_name)
+#define BDEVFILTER_CTL		_IOWR('F', 142, struct bdevfilter_ctl)
 
-/* Only for livepatch version */
-int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
-			   const enum bdev_filter_altitudes altitude);
-
-#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-blk_qc_t submit_bio_noacct_notrace(struct bio *);
-#elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-void submit_bio_noacct_notrace(struct bio *);
-#endif
-
-#endif /* __LINUX_BDEVFILTER_H */
+#endif /* _UAPI_LINUX_BDEVFILTER_H */

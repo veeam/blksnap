@@ -14,27 +14,11 @@
 #include "bdevfilter.h"
 #include "version.h"
 
-#if defined(BLK_SNAP_DEBUGLOG)
-#undef pr_debug
-#define pr_debug(fmt, ...) \
-({ \
-	printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__); \
-})
-#endif
 
 struct bdev_extension {
 	struct list_head link;
-
 	dev_t dev_id;
-#if defined(HAVE_BI_BDISK)
-	struct gendisk *disk;
-	u8 partno;
-#else
-	struct block_device *bdev;
-#endif
-
-	struct bdev_filter *bd_filters[bdev_filter_alt_end];
-	spinlock_t bd_filters_lock;
+	struct bdevfilter *flt;
 };
 
 /* The list of extensions for this block device */
@@ -57,309 +41,328 @@ static inline struct bdev_extension *bdev_extension_find(dev_t dev_id)
 	return NULL;
 }
 
-#if defined(HAVE_BI_BDISK)
-static inline struct bdev_extension *bdev_extension_find_part(struct gendisk *disk,
-							 u8 partno)
+
+static LIST_HEAD(blkfilters);
+static DEFINE_SPINLOCK(blkfilters_lock);
+
+static inline struct blkfilter_operations *__bdevfilter_operations_find(
+							const char *name)
 {
-	struct bdev_extension *ext;
+	struct blkfilter_operations *ops;
 
-	if (list_empty(&bdev_extension_list))
-		return NULL;
-
-	list_for_each_entry (ext, &bdev_extension_list, link)
-		if ((disk == ext->disk) && (partno == ext->partno))
-			return ext;
+	list_for_each_entry(ops, &blkfilters, link)
+		if (strncmp(ops->name, name, BLKFILTER_NAME_LENGTH) == 0)
+			return ops;
 
 	return NULL;
 }
-#else
-static inline struct bdev_extension *bdev_extension_find_bdev(struct block_device *bdev)
+
+static inline struct blkfilter_operations *bdevfilter_operations_get(
+							 const char *name)
 {
-	struct bdev_extension *ext;
+	struct blkfilter_operations *ops;
 
-	if (list_empty(&bdev_extension_list))
-		return NULL;
+	spin_lock(&blkfilters_lock);
+	ops = __bdevfilter_operations_find(name);
+	if (ops && !try_module_get(ops->owner))
+		ops = NULL;
+	spin_unlock(&blkfilters_lock);
 
-	list_for_each_entry (ext, &bdev_extension_list, link)
-		if (bdev == ext->bdev)
-			return ext;
-
-	return NULL;
+	return ops;
 }
-#endif
 
-static inline struct bdev_extension *bdev_extension_append(struct block_device *bdev)
+static inline void bdevfilter_operations_put(
+					const struct blkfilter_operations *ops)
 {
-	bool recreate = false;
-	struct bdev_extension *result = NULL;
-	struct bdev_extension *ext;
-	struct bdev_extension *ext_tmp;
+	if (likely(ops))
+		module_put(ops->owner);
+}
 
-	ext_tmp = kzalloc(sizeof(struct bdev_extension), GFP_NOIO);
-	if (!ext_tmp)
-		return NULL;
+static inline struct block_device *bdev_by_fd(unsigned int fd)
+{
+	struct file *bdev_file;
+	struct block_device *bdev = NULL;
 
-	INIT_LIST_HEAD(&ext_tmp->link);
-	ext_tmp->dev_id = bdev->bd_dev;
-#if defined(HAVE_BI_BDISK)
-	ext_tmp->disk = bdev->bd_disk;
-	ext_tmp->partno = bdev->bd_partno;
-#else
-	ext_tmp->bdev = bdev;
-#endif
-	memset(ext_tmp->bd_filters, 0, sizeof(ext_tmp->bd_filters));
+	bdev_file = fget(kargp->bdev_fd);
+	if (!bdev_file) {
+		pr_err("Invalid file descriptor\n");
+		return ERR_PTR(-EINVAL);
+	}
 
-	spin_lock_init(&ext_tmp->bd_filters_lock);
+	if (!S_ISBLK(file_inode(bdev_file)->i_mode)) {
+		pr_err("Only block device file is allowed\n");
+		bdev = ERR_PTR(-EINVAL);
+	} else {
+
+		bdev = blkdev_get_by_dev(file_inode(file)->i_rdev,
+					 BLK_OPEN_READ | BLK_OPEN_WRITE,
+					 NULL, NULL);
+		if (IS_ERR(bdev))
+			pr_err("Cannot open a block device\n");
+	}
+
+	fput(bdev_file);
+	return bdev;
+}
+
+static int ioctl_attach(struct bdevfilter_name __user *argp)
+{
+	struct bdevfilter_name kargp;
+	struct bdevfilter_operations *ops;
+	struct bdev_extension *ext_tmp, *ext_new;
+	struct blkfilter *flt;
+	struct block_device *bdev;
+	unsigned int task_flags;
+	int ret = 0;
+
+	if (copy_from_user(&kargp, argp, sizeof(kargp)))
+		return -EFAULT;
+
+	bdev = bdev_by_fd(kargp->bdev_fd);
+	if (IS_ERR(bdev))
+		return PTR_ERR(bdev);
+
+	ops = bdevfilter_operations_get(kargp.name);
+	if (!ops) {
+		ret = -ENOENT;
+		goto out_blkdev_put;
+	}
+
+	ext_new = kzalloc(sizeof(struct bdev_extension), GFP_NOIO);
+	if (!ext_new) {
+		ret = -ENOMEM;
+		goto out_ops_put;
+	}
+
+	INIT_LIST_HEAD(&ext_new->link);
+	ext_new->dev_id = bdev->bd_dev;
+
+	mutex_lock(&bdev->bd_disk->open_mutex);
+	if (!disk_live(bdev->bd_disk)) {
+		ret = -ENODEV;
+		goto out_mutex_unlock;
+	}
+	ret = freeze_bdev(bdev);
+	if (ret)
+		goto out_mutex_unlock;
+	blk_mq_freeze_queue(bdev->bd_queue);
+	task_flags = memalloc_noio_save();
+
+	flt = ops->attach(bdev);
+	if (IS_ERR(flt)) {
+		ret = PTR_ERR(flt);
+		goto out_unfreeze;
+	}
+	kref_init(&flt->kref);
 
 	spin_lock(&bdev_extension_list_lock);
-	ext = bdev_extension_find(bdev->bd_dev);
-	if (!ext) {
-		/* add new extension */
-		pr_debug("Add new bdev extension");
-		list_add_tail(&ext_tmp->link, &bdev_extension_list);
-		result = ext_tmp;
-		ext_tmp = NULL;
+	ext_tmp = bdev_extension_find(bdev->bd_dev);
+	if (ext_tmp) {
+		if (ext_tmp->flt->ops == ops)
+			ret = -EALREADY;
+		else
+			ret = -EBUSY;
 	} else {
-#if defined(HAVE_BI_BDISK)
-		if ((ext->disk == bdev->bd_disk) && (ext->partno == bdev->bd_partno)) {
-#else
-		if (ext->bdev == bdev) {
-#endif
-			/* extension already exist */
-			pr_debug("Bdev extension already exist");
-			result = ext;
-		} else {
-			/* extension should be recreated */
-			pr_debug("Bdev extension should be recreated");
-			list_add_tail(&ext_tmp->link, &bdev_extension_list);
-			result = ext_tmp;
-
-			recreate = true;
-			list_del(&ext->link);
-			ext_tmp = ext;
-		}
+		flt->ops = ops;
+		ext_new->flt = flt;
+		list_add_tail(&ext_new->link, &bdev_extension_list);
+		ops = NULL;
+		flt = NULL;
+		ext_new = NULL;
 	}
 	spin_unlock(&bdev_extension_list_lock);
 
-	/* Recreated block device found */
-	if (recreate) {
-		enum bdev_filter_altitudes alt;
-
-		pr_info("Detach all block device filters from %d:%d\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-
-		for (alt = 0; alt < bdev_filter_alt_end; alt++) {
-			struct bdev_filter *flt;
-
-			spin_lock(&ext_tmp->bd_filters_lock);
-			flt = ext_tmp->bd_filters[alt];
-			ext_tmp->bd_filters[alt] = NULL;
-			spin_unlock(&ext_tmp->bd_filters_lock);
-
-			if (flt)
-				bdev_filter_put(flt);
-		}
-	}
-	kfree(ext_tmp);
-
-	return result;
-}
-
-/**
- * bdev_filter_attach - Attach a filter to original block device.
- * @bdev:
- * 	block device
- * @name:
- *	Name of the block device filter.
- * @altitude:
- *	Number of the block device filter.
- * @flt:
- *	Pointer to the filter structure.
- *
- * The bdev_filter_detach() function allows to detach the filter from the block
- * device.
- *
- * Return:
- * 0 - OK
- * -EBUSY - a filter on this altitude already exists
- * -EINVAL - invalid altitude
- */
-int bdev_filter_attach(struct block_device *bdev, const char *name,
-		       const enum bdev_filter_altitudes altitude,
-		       struct bdev_filter *flt)
-{
-	int ret = 0;
-	struct bdev_extension *ext;
-
-	pr_info("Attach block device filter '%s'", name);
-	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
-		return -EINVAL;
-
-	ext = bdev_extension_append(bdev);
-	if (!ext)
-		return -ENOMEM;
-
-	spin_lock(&ext->bd_filters_lock);
-	if (ext->bd_filters[altitude]) {
-		pr_debug("filter busy. 0x%p", ext->bd_filters[altitude]);
-		ret = -EBUSY;
-	} else
-		ext->bd_filters[altitude] = flt;
-	spin_unlock(&ext->bd_filters_lock);
-
-	if (!ret)
-		pr_info("Block device filter '%s' has been attached to %d:%d",
-			name, MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	bdevfilter_put(flt);
+out_unfreeze:
+	memalloc_noio_restore(task_flags);
+	blk_mq_unfreeze_queue(bdev->bd_queue);
+	thaw_bdev(bdev);
+out_mutex_unlock:
+	mutex_unlock(&bdev->bd_disk->open_mutex);
+	kfree(ext_new);
+out_ops_put:
+	bdevfilter_operations_put(ops);
+out_blkdev_put:
+	blkdev_put(bdev, NULL);
 	return ret;
 }
-EXPORT_SYMBOL(bdev_filter_attach);
 
-
-/*
- * Only for livepatch version
- * It is necessary for correct processing of the case when the block device
- * was removed from the system. Unlike the upstream version, we have no way
- * to handle device extension.
- */
-int lp_bdev_filter_detach(const dev_t dev_id, const char *name,
-			  const enum bdev_filter_altitudes altitude)
+static inline void __blkfilter_detach(dev_t dev_id)
 {
 	struct bdev_extension *ext;
-	struct bdev_filter *flt;
-
-	pr_info("Detach block device filter '%s'", name);
-
-	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
-		return -EINVAL;
+	struct bdevfilter *flt = NULL;
+	const struct blkfilter_operations *ops = NULL;
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(dev_id);
+	if (ext) {
+		flt = ext->flt;
+		ops = ext->flt->ops;
+		list_del(&ext->link);
+		kfree(ext);
+	}
 	spin_unlock(&bdev_extension_list_lock);
-	if (!ext)
-		return -ENOENT;
 
-	spin_lock(&ext->bd_filters_lock);
-	flt = ext->bd_filters[altitude];
-	if (flt)
-		ext->bd_filters[altitude] = NULL;
-	spin_unlock(&ext->bd_filters_lock);
-
-	if (!flt)
-		return -ENOENT;
-
-	bdev_filter_put(flt);
-	pr_info("Block device filter '%s' has been detached from %d:%d",
-		name, MAJOR(dev_id), MINOR(dev_id));
-	return 0;
+	bdevfilter_put(flt);
+	bdevfilter_operations_put(ops);
 }
-EXPORT_SYMBOL(lp_bdev_filter_detach);
 
-/**
- * bdev_filter_detach - Detach a filter from the block device.
- * @bdev:
- * 	block device.
- * @name:
- *	Name of the block device filter.
- * @altitude:
- *	Number of the block device filter.
- *
- * The filter should be added using the bdev_filter_attach() function.
- *
- * Return:
- * 0 - OK
- * -ENOENT - the filter was not found in the linked list
- * -EINVAL - invalid altitude
- */
-int bdev_filter_detach(struct block_device *bdev, const char *name,
-		       const enum bdev_filter_altitudes altitude)
+void blkfilter_detach(struct block_device *bdev)
 {
-	return lp_bdev_filter_detach(bdev->bd_dev, name, altitude);
+	blk_mq_freeze_queue(bdev->bd_queue);
+	__blkfilter_detach(bdev->bd_dev);
+	blk_mq_unfreeze_queue(bdev->bd_queue);
 }
-EXPORT_SYMBOL(bdev_filter_detach);
 
-/**
- * bdev_filter_get_by_altitude - Get filters context value.
- * @bdev:
- * 	Block device ID.
- * @altitude:
- * 	Number of the block device filter.
- *
- * Return pointer to &struct bdev_filter or NULL if the filter was not found.
- *
- * Necessary to lock list of filters by calling bdev_filter_read_lock().
- */
-struct bdev_filter *bdev_filter_get_by_altitude(struct block_device *bdev,
-				const enum bdev_filter_altitudes altitude)
+static inline int __blkfilter_detach2(dev_t dev_id, struct blkfilter_name* kargp)
 {
+	int ret = 0;
 	struct bdev_extension *ext;
-	struct bdev_filter *flt = NULL;
-
-	if ((altitude < 0) || (altitude >= bdev_filter_alt_end))
-		return ERR_PTR(-EINVAL);
+	struct bdevfilter *flt = NULL;
+	const struct blkfilter_operations *ops = NULL;
 
 	spin_lock(&bdev_extension_list_lock);
-#if defined(HAVE_BI_BDISK)
-	ext = bdev_extension_find_part(bdev->bd_disk, bdev->bd_partno);
-#else
-	ext = bdev_extension_find_bdev(bdev);
-#endif
-	spin_unlock(&bdev_extension_list_lock);
+	ext = bdev_extension_find(dev_id);
 	if (!ext)
-		return NULL;
+		ret = -ENOENT;
+	else {
+		if (strncmp(ext->flt->ops->name, kargp->name, BLKFILTER_NAME_LENGTH))
+			ret = -EINVAL;
+		else {
+			flt = ext->flt;
+			ops = ext->flt->ops;
+			list_del(&ext->link);
+		}
+	}
+	spin_unlock(&bdev_extension_list_lock);
 
-	spin_lock(&ext->bd_filters_lock);
-	flt = ext->bd_filters[altitude];
-	if (flt)
-		bdev_filter_get(flt);
-	spin_unlock(&ext->bd_filters_lock);
-
-	return flt;
+	kfree(ext);
+	bdevfilter_put(flt);
+	bdevfilter_operations_put(ops);
+	return ret;
 }
-EXPORT_SYMBOL(bdev_filter_get_by_altitude);
+
+static int ioctl_detach(struct bdevfilter_name __user *argp)
+{
+	struct blkfilter_name kargp;
+	struct block_device *bdev;
+	int ret = 0;
+
+	if (copy_from_user(&kargp, argp, sizeof(kargp)))
+		return -EFAULT;
+
+	bdev = bdev_by_fd(kargp->bdev_fd);
+	if (IS_ERR(bdev))
+		return PTR_ERR(bdev);
+
+	mutex_lock(&bdev->bd_disk->open_mutex);
+	if (!disk_live(bdev->bd_disk))
+		ret = -ENODEV;
+	else {
+		blk_mq_freeze_queue(bdev->bd_queue);
+		ret = __blkfilter_detach2(bdev->bd_dev, &kargp);
+		blk_mq_unfreeze_queue(bdev->bd_queue);
+	}
+	mutex_unlock(&bdev->bd_disk->open_mutex);
+	blkdev_put(bdev, NULL);
+	return ret;
+}
+
+static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
+{
+	struct bdevfilter_ctl kargp;
+	struct block_device *bdev;
+	struct blkfilter *flt = NULL;
+	int ret;
+
+	if (copy_from_user(&kargp, argp, sizeof(kargp)))
+		return -EFAULT;
+
+	bdev = bdev_by_fd(kargp->bdev_fd);
+	if (IS_ERR(bdev))
+		return PTR_ERR(bdev);
+
+	mutex_lock(&bdev->bd_disk->open_mutex);
+	if (!disk_live(bdev->bd_disk)) {
+		ret = -ENODEV;
+		goto out_mutex_unlock;
+	}
+	ret = blk_queue_enter(bdev_get_queue(bdev), 0);
+	if (ret)
+		goto out_mutex_unlock;
+
+	spin_lock(&bdev_extension_list_lock);
+	ext = bdev_extension_find(dev_id);
+	if (ext && (strncmp(ext->flt->ops->name, kargp->name, BLKFILTER_NAME_LENGTH) == 0))
+		flt = bdevfilter_get(ext->flt);
+	spin_unlock(&bdev_extension_list_lock);
+
+	if (flt) {
+		ret = flt->ops->ctl(flt, kargp.cmd, u64_to_user_ptr(kargp.opt),
+			    &kargp.optlen);
+		bdevfilter_put(flt);
+	} else
+		ret = -ENOENT;
+out_queue_exit:
+	blk_queue_exit(bdev_get_queue(bdev));
+out_mutex_unlock:
+	mutex_unlock(&bdev->bd_disk->open_mutex);
+	return ret;
+}
+
+int bdevfilter_register(struct bdevfilter_operations *ops)
+{
+	struct bdevfilter_operations *found;
+	int ret = 0;
+
+	spin_lock(&blkfilters_lock);
+	found = __blkfilter_find(ops->name);
+	if (found)
+		ret = -EBUSY;
+	else
+		list_add_tail(&ops->link, &blkfilters);
+	spin_unlock(&blkfilters_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(bdevfilter_register);
+
+
+void bdevfilter_unregister(struct bdevfilter_operations *ops)
+{
+	spin_lock(&blkfilters_lock);
+	list_del(&ops->link);
+	spin_unlock(&blkfilters_lock);
+}
+EXPORT_SYMBOL_GPL(bdevfilter_unregister);
 
 static inline bool bdev_filters_apply(struct bio *bio)
 {
-	enum bdev_filter_altitudes altitude = 0;
+	bool result = true;
 	struct bdev_extension *ext;
+	struct bdevfilter *flt = NULL;
+#if defined(HAVE_BI_BDISK)
+	struct hd_struct *part = disk_get_part(bio->bi_disk, bio->bi_partno);
+	dev_t dev_id = part_devt(part);
+#else
+	dev_t dev_id = bio->bi_bdev->bd_dev;
+#endif
 
 	spin_lock(&bdev_extension_list_lock);
-#if defined(HAVE_BI_BDISK)
-	ext = bdev_extension_find_part(bio->bi_disk, bio->bi_partno);
-#else
-	ext = bdev_extension_find_bdev(bio->bi_bdev);
-#endif
+	ext = bdev_extension_find(dev_id);
+	if (ext)
+		flt = bdev_filter_get(ext->flt);
 	spin_unlock(&bdev_extension_list_lock);
-	if (!ext)
-		return true;
-
-	spin_lock(&ext->bd_filters_lock);
-	while (altitude < bdev_filter_alt_end) {
-		enum bdev_filter_result result;
-		struct bdev_filter *flt;
-
-		flt = ext->bd_filters[altitude];
-		if (!flt) {
-			altitude++;
-			continue;
-		}
-
-		bdev_filter_get(flt);
-		spin_unlock(&ext->bd_filters_lock);
-
+	if (flt) {
 		result = flt->fops->submit_bio_cb(bio, flt);
 		bdev_filter_put(flt);
-
-		if (result != bdev_filter_res_pass)
-			return false;
-
-		altitude++;
-
-		spin_lock(&ext->bd_filters_lock);
-	};
-	spin_unlock(&ext->bd_filters_lock);
-
-	return true;
+	}
+#if defined(HAVE_BI_BDISK)
+	disk_put_part(part);
+#endif
+	return result;
 }
+
 
 /**
  * submit_bio_noacct_notrace() - Execute submit_bio_noacct() without handling.
@@ -378,7 +381,7 @@ notrace void submit_bio_noacct_notrace(struct bio *bio)
 	submit_bio_noacct(bio);
 #endif
 }
-EXPORT_SYMBOL(submit_bio_noacct_notrace);
+EXPORT_SYMBOL_GPL(submit_bio_noacct_notrace);
 
 static notrace __attribute__((optimize("no-optimize-sibling-calls")))
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
@@ -430,6 +433,34 @@ static struct ftrace_ops ops_submit_bio_noacct = {
 		FTRACE_OPS_FL_PERMANENT,
 };
 
+static long unlocked_ioctl(struct file *filp, unsigned int cmd,
+				unsigned long arg)
+{
+	void *argp = (void __user *)arg;
+
+	switch (cmd) {
+	case BDEVFILTER_ATTACH:
+		return ioctl_attach(argp);
+	case BDEVFILTER_DETACH:
+		return ioctl_detach(argp);
+	case BDEVFILTER_CTL:
+		return ioctl_ctl(argp);
+	default:
+		return -ENOTTY;
+	}
+}
+
+static const struct file_operations bdevfilter_ctl_fops = {
+	.owner		= THIS_MODULE,
+	.unlocked_ioctl	= unlocked_ioctl,
+};
+
+static struct miscdevice bdevfilter_ctl = {
+	.minor		= MISC_DYNAMIC_MINOR,
+	.name		= BDEVFILTER_CTL,
+	.fops		= &bdevfilter_ctl_fops,
+};
+
 static int __init bdevfilter_init(void)
 {
 	int ret;
@@ -447,14 +478,23 @@ static int __init bdevfilter_init(void)
 		return ret;
 	}
 
-	pr_debug("Ftrace filter for 'submit_bio_noacct' has been registered\n");
+	ret = misc_register(&bdevfiler_ctl);
+	if (ret) {
+		pr_err("Failed to register control device (%d)\n", ret);
+		ftrace_set_filter(&ops_submit_bio_noacct, NULL, 0, 1);
+		unregister_ftrace_function(&ops_submit_bio_noacct);
+		return ret;
+	}
 
+	pr_debug("Ftrace filter for 'submit_bio_noacct' has been registered\n");
 	return 0;
 }
 
 static void __exit bdevfilter_done(void)
 {
 	struct bdev_extension *ext;
+
+	misc_deregister(&bdevfiler_misc);
 
 	unregister_ftrace_function(&ops_submit_bio_noacct);
 
