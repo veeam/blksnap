@@ -71,3 +71,5 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device.h &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "struct blk_holder_ops" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_HOLDER_OPS)
+
+# EXTRA_CFLAGS += "-D DEBUG"
