@@ -178,6 +178,10 @@ enum blksnap_ioctl {
 	blksnap_ioctl_snapshot_take,
 	blksnap_ioctl_snapshot_collect,
 	blksnap_ioctl_snapshot_wait_event,
+#ifdef BLKSNAP_MODIFICATION
+	blksnap_ioctl_mod = 32,
+	blksnap_ioctl_setlog,
+#endif
 };
 
 /**
@@ -384,5 +388,82 @@ struct blksnap_event_corrupted {
 	__u32 dev_id_mn;
 	__s32 err_code;
 };
+
+
+#ifdef BLKSNAP_MODIFICATION
+enum blksnap_compat_flags {
+	blksnap_compat_flag_debug_sector_state,
+	blksnap_compat_flag_setlog,
+	/*
+	 * Reserved for new features
+	 */
+	blksnap_compat_flags_end
+};
+static_assert(blksnap_compat_flags_end <= 64,
+	      "There are too many compatibility flags.");
+
+#define BLKSNAP_MOD_NAME_LIMIT 32
+
+/**
+ * struct blksnap_modification - Result for &IOCTL_BLKSNAP_VERSION control.
+ *
+ * @compatibility_flags:
+ *	Reserved for new modification specific features.
+ * @name:
+ *	Name of modification of the module (fork name, for example).
+ *	It's should be empty string for upstream module.
+ */
+struct blksnap_mod {
+	__u64 compatibility_flags;
+	__u8 name[BLKSNAP_MOD_NAME_LIMIT];
+};
+
+/**
+ * IOCTL_BLKSNAP_MOD - Get modification name and compatibility flags.
+ *
+ * Linking the product behavior to the version code does not seem to me a very
+ * good idea. However, such an ioctl is good for checking that the module has
+ * loaded and is responding to requests.
+ *
+ * The compatibility flags allows to safely extend the functionality of the
+ * module. When the blksnap kernel module receives new ioctl it will be
+ * enough to add a bit.
+ *
+ * The name of the modification can be used by the authors of forks and branches
+ * of the original module. The module in upstream have not any modifications.
+ */
+#define IOCTL_BLKSNAP_MOD                                                      \
+	_IOR(BLKSNAP, blksnap_ioctl_mod, struct blksnap_mod)
+
+/**
+ * @tz_minuteswest:
+ *	Time zone offset in minutes.
+ *	The system time is in UTC. In order for the module to write local time
+ *	to the log, its offset should be specified.
+ * @level:
+ *	0 - disable logging to file
+ *	3 - only error messages
+ *	4 - log warnings
+ *	6 - log info messages
+ *	7 - log debug messages
+ * @filepath_size:
+ *	Count of bytes in &filepath.
+ * @filename:
+ *	Full path for log file.
+ */
+struct blksnap_setlog {
+	__s32 tz_minuteswest;
+	__u32 level;
+	__u32 filepath_size;
+	__u8 *filepath;
+};
+
+/**
+ * IOCTL_BLKSNAP_SETLOG - Configure private log file
+ */
+#define IOCTL_BLKSNAP_SETLOG                                                   \
+	_IOW(BLKSNAP, blksnap_ioctl_setlog, struct blksnap_setlog)
+
+#endif /* BLKSNAP_MODIFICATION */
 
 #endif /* _UAPI_LINUX_VEEAMBLKSNAP_H */
