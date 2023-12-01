@@ -4,8 +4,7 @@
 
 #include <linux/types.h>
 
-#define BDEVFILTER_CTL "bdevfilter-control"
-
+#define BDEVFILTER "bdevfilter"
 #define BDEVFILTER_NAME_LENGTH	32
 
 /**
@@ -29,7 +28,7 @@ struct bdevfilter_name {
  */
 struct bdevfilter_ctl {
 	__u32 bdev_fd;
-	__u8 name[BLKFILTER_NAME_LENGTH];
+	__u8 name[BDEVFILTER_NAME_LENGTH];
 	__u32 cmd;
 	__u32 optlen;
 	__u64 opt;

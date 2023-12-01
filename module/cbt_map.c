@@ -4,7 +4,11 @@
 
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
+#ifdef BLKSNAP_STANDALONE
+#include "veeamblksnap.h"
+#else
 #include <uapi/linux/blksnap.h>
+#endif
 #include "cbt_map.h"
 #include "params.h"
 

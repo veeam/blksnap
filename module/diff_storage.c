@@ -9,7 +9,11 @@
 #include <linux/file.h>
 #include <linux/blkdev.h>
 #include <linux/build_bug.h>
+#ifdef BLKSNAP_STANDALONE
+#include "veeamblksnap.h"
+#else
 #include <uapi/linux/blksnap.h>
+#endif
 #include "chunk.h"
 #include "diff_buffer.h"
 #include "diff_storage.h"
@@ -119,8 +123,13 @@ void diff_storage_free(struct kref *kref)
 	flush_work(&diff_storage->reallocate_work);
 
 #if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
-	if (diff_storage->bdev)
+	if (diff_storage->bdev) {
+#if defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(diff_storage->bdev, NULL);
+#else
+		blkdev_put(diff_storage->bdev, FMODE_READ | FMODE_WRITE);
+#endif
+	}
 #endif
 	if (diff_storage->file)
 		fput(diff_storage->file);
@@ -183,9 +192,15 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 		 * It should be exclusive to open the file whose descriptor is
 		 * passed to the module.
 		 */
-		bdev = blkdev_get_by_dev(dev_id,
-					 BLK_OPEN_READ | BLK_OPEN_WRITE,
-					 NULL, NULL);
+#if defined(HAVE_BLK_HOLDER_OPS)
+#ifdef HAVE_BLK_OPEN_MODE
+		bdev = blkdev_get_by_dev(dev_id, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
+#else
+		bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#endif
+#else
+		bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
+#endif
 		if (IS_ERR(bdev)) {
 			pr_err("Cannot open a block device %d:%d\n",
 				MAJOR(dev_id), MINOR(dev_id));
@@ -200,7 +215,11 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 #if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 		diff_storage->bdev = bdev;
 #else
+#if defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(bdev, NULL);
+#else
+		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+#endif
 #endif
 	} else {
 		pr_debug("A regular file is selected for difference storage\n");

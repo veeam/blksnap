@@ -6,6 +6,16 @@
 #include "diff_area.h"
 #include "params.h"
 
+#ifndef HAVE_BVEC_SET_PAGE
+static inline void bvec_set_page(struct bio_vec *bv, struct page *page,
+		unsigned int len, unsigned int offset)
+{
+	bv->bv_page = page;
+	bv->bv_len = len;
+	bv->bv_offset = offset;
+}
+#endif
+
 static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	size_t inx = 0;

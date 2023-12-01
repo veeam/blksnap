@@ -5,13 +5,59 @@
 #include <linux/module.h>
 #include <linux/miscdevice.h>
 #include <linux/build_bug.h>
+#ifdef BLKSNAP_STANDALONE
+#include "veeamblksnap.h"
+#else
 #include <uapi/linux/blksnap.h>
+#endif
 #include "snapimage.h"
 #include "snapshot.h"
 #include "tracker.h"
 #include "chunk.h"
 #include "params.h"
+#ifdef STANDALONE_BDEVFILTER
+#include "log.h"
+#endif
 
+#ifdef STANDALONE_BDEVFILTER
+#pragma message("Standalone bdevfilter")
+#endif
+#ifdef HAVE_QC_SUBMIT_BIO_NOACCT
+#pragma message("The blk_qc_t submit_bio_noacct(struct bio *) function was found.")
+#endif
+#ifdef HAVE_VOID_SUBMIT_BIO_NOACCT
+#pragma message("The void submit_bio_noacct(struct bio *) function was found.")
+#endif
+#ifdef HAVE_SUPER_BLOCK_FREEZE
+#pragma message("The freeze_bdev() and thaw_bdev() have struct super_block.")
+#endif
+#ifdef HAVE_BI_BDEV
+#pragma message("The struct bio have pointer to struct block_device.")
+#endif
+#ifdef HAVE_BI_BDISK
+#pragma message("The struct bio have pointer to struct gendisk.")
+#endif
+#ifdef HAVE_BDEV_NR_SECTORS
+#pragma message("The bdev_nr_sectors() function was found.")
+#endif
+#ifdef HAVE_BLK_MQ_ALLOC_DISK
+#pragma message("The blk_mq_alloc_disk() function was found.")
+#endif
+#ifdef HAVE_BIO_MAX_PAGES
+#pragma message("The BIO_MAX_PAGES define was found.")
+#endif
+#ifdef HAVE_ADD_DISK_RESULT
+#pragma message("The function add_disk() has a return code.")
+#endif
+#ifdef HAVE_GENHD_H
+#pragma message("The header file 'genhd.h' was found.")
+#endif
+#ifdef HAVE_BDEV_BIO_ALLOC
+#pragma message("The function bio_alloc_bioset() has a parameter bdev.")
+#endif
+#ifdef HAVE_BLK_CLEANUP_DISK
+#pragma message("The function blk_cleanup_disk() was found.")
+#endif
 /*
  * The power of 2 for minimum tracking block size.
  *
@@ -117,6 +163,20 @@ static const struct blksnap_version version = {
 	.revision = 0,
 	.build = 0,
 };
+
+#ifdef BLKSNAP_MODIFICATION
+static const struct blksnap_mod modification = {
+	.name = "standalone",
+	.compatibility_flags =
+#ifdef BLKSNAP_DEBUG_SECTOR_STATE
+	(1ull << blksnap_compat_flag_debug_sector_state) |
+#endif
+#ifdef BLKSNAP_FILELOG
+	(1ull << blksnap_compat_flag_setlog) |
+#endif
+	0
+};
+#endif
 
 unsigned int get_tracking_block_minimum_shift(void)
 {
@@ -390,6 +450,9 @@ static int __init blksnap_init(void)
 {
 	int ret;
 
+#ifdef BLK_SNAP_FILELOG
+	log_init();
+#endif
 	pr_debug("Loading\n");
 	pr_debug("Version: %s\n", VERSION_STR);
 
@@ -429,7 +492,9 @@ static void __exit blksnap_exit(void)
 	chunk_done();
 	snapshot_done();
 	tracker_done();
-
+#ifdef BLK_SNAP_FILELOG
+	log_done();
+#endif
 	pr_debug("Module was unloaded\n");
 }
 

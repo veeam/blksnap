@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2023 Veeam Software Group GmbH
 
+# EXTRA_CFLAGS += "-D DEBUG"
+EXTRA_CFLAGS += "-D BLKSNAP_STANDALONE"
+EXTRA_CFLAGS += "-D BLKSNAP_MODIFICATION"
+#EXTRA_CFLAGS += "-D BLKSNAP_DEBUG_MEMORY_LEAK"
+EXTRA_CFLAGS += "-D BLKSNAP_FILELOG"
+
 include ${M}/Makefile-config
 include ${M}/Makefile-bdevfilter
 
@@ -16,6 +22,6 @@ veeamblksnap-y :=	\
 	snapshot.o	\
 	tracker.o
 
-include ${M}/Makefile-standalone
+veeamblksnap-y += log.o
 
 obj-m	 += veeamblksnap.o

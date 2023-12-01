@@ -2,8 +2,11 @@
 /* Copyright (C) 2023 Veeam Software Group GmbH */
 #ifndef __BLKSNAP_TRACKER_H
 #define __BLKSNAP_TRACKER_H
-
+#ifdef BLKSNAP_STANDALONE
+#include "bdevfilter-internal.h"
+#else
 #include <linux/blk-filter.h>
+#endif
 #include <linux/kref.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>

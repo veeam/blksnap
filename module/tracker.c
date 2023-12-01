@@ -6,7 +6,12 @@
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
 #include <linux/build_bug.h>
+#ifdef BLKSNAP_STANDALONE
+#include "veeamblksnap.h"
+#include "bdevfilter-internal.h"
+#else
 #include <uapi/linux/blksnap.h>
+#endif
 #include "tracker.h"
 #include "cbt_map.h"
 #include "diff_area.h"
@@ -29,10 +34,14 @@ void tracker_free(struct kref *kref)
 
 	kfree(tracker);
 }
-
+#ifdef BLKSNAP_STANDALONE
+static bool tracker_submit_bio(struct bio *bio, struct blkfilter *flt)
+{
+#else
 static bool tracker_submit_bio(struct bio *bio)
 {
 	struct blkfilter *flt = bio->bi_bdev->bd_filter;
+#endif
 	struct tracker *tracker = container_of(flt, struct tracker, filter);
 	sector_t count = bio_sectors(bio);
 	struct bvec_iter copy_iter;
@@ -272,7 +281,12 @@ static int tracker_ctl(struct blkfilter *flt, const unsigned int cmd,
 	return ret;
 }
 
-static struct blkfilter_operations tracker_ops = {
+#ifdef BLKSNAP_STANDALONE
+static struct bdevfilter_operations tracker_ops =
+#else
+static struct bdevfilter_operations tracker_ops =
+#endif
+{
 	.owner		= THIS_MODULE,
 	.name		= "blksnap",
 	.attach		= tracker_attach,
@@ -346,13 +360,19 @@ void tracker_release_snapshot(struct tracker *tracker)
 int __init tracker_init(void)
 {
 	pr_debug("Register filter '%s'", tracker_ops.name);
-
+#ifdef BLKSNAP_STANDALONE
+	return bdevfilter_register(&tracker_ops);
+#else
 	return blkfilter_register(&tracker_ops);
+#endif
 }
 
 void tracker_done(void)
 {
 	pr_debug("Unregister filter '%s'", tracker_ops.name);
-
+#ifdef BLKSNAP_STANDALONE
+	bdevfilter_unregister(&tracker_ops);
+#else
 	blkfilter_unregister(&tracker_ops);
+#endif
 }

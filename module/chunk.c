@@ -8,6 +8,9 @@
 #include "diff_buffer.h"
 #include "diff_storage.h"
 #include "params.h"
+#ifdef BLKSNAP_STANDALONE
+#include "bdevfilter-internal.h"
+#endif
 
 struct chunk_bio {
 	struct work_struct work;
@@ -179,7 +182,11 @@ void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
 	bio_advance(bio, new_bio->bi_iter.bi_size);
 	bio_inc_remaining(bio);
 
+#ifdef BLKSNAP_STANDALONE
+	submit_bio_noacct_notrace(new_bio);
+#else
 	submit_bio_noacct(new_bio);
+#endif
 }
 #endif
 
@@ -395,7 +402,11 @@ static void notify_load_and_postpone_io(struct work_struct *work)
 	}
 
 	/* submit the original bio fed into the tracker */
+#ifdef BLKSNAP_STANDALONE
+	submit_bio_noacct_notrace(cbio->orig_bio);
+#else
 	submit_bio_noacct_nocheck(cbio->orig_bio);
+#endif
 	bio_put(&cbio->bio);
 }
 
@@ -454,7 +465,11 @@ static void chunk_io_endio(struct bio *bio)
 static void chunk_submit_bio(struct bio *bio)
 {
 	bio->bi_end_io = chunk_io_endio;
+#ifdef BLKSNAP_STANDALONE
+	submit_bio_noacct_notrace(bio);
+#else
 	submit_bio_noacct(bio);
+#endif
 }
 
 static inline unsigned short calc_max_vecs(sector_t left)
@@ -495,7 +510,11 @@ void chunk_store_tobdev(struct chunk *chunk)
 					GFP_NOIO, &chunk_io_bioset);
 		next->bi_iter.bi_sector = bio_end_sector(bio);
 		bio_chain(bio, next);
+#ifdef BLKSNAP_STANDALONE
+		submit_bio_noacct_notrace(bio);
+#else
 		submit_bio_noacct(bio);
+#endif
 		bio = next;
 	}
 
@@ -575,7 +594,11 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 					&chunk_io_bioset);
 		next->bi_iter.bi_sector = bio_end_sector(bio);
 		bio_chain(bio, next);
+#ifdef BLKSNAP_STANDALONE
+		submit_bio_noacct_notrace(bio);
+#else
 		submit_bio_noacct(bio);
+#endif
 		bio = next;
 	}
 

@@ -276,7 +276,7 @@ int log_processor(void *data)
 	}
 
 	log_printk_direct(filp, LOGLEVEL_INFO, "Stop log for module %s\n\n",
-		BLKSNAP_MODULE_NAME);
+		BLKSNAP_CTL);
 	filp = log_close(filp);
 
 	return ret;
@@ -348,7 +348,7 @@ int log_restart(int level, char *filepath, int tz_minuteswest)
 
 	log_printk_direct(filp, LOGLEVEL_INFO,
 		"Start log for module %s version %s loglevel %d\n",
-		BLKSNAP_MODULE_NAME, VERSION_STR, log_level);
+		BLKSNAP_CTL, VERSION_STR, log_level);
 
 	wake_up_process(log_task);
 

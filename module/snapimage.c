@@ -8,7 +8,11 @@
 #include <linux/cdrom.h>
 #include <linux/blk-mq.h>
 #include <linux/build_bug.h>
+#ifdef BLKSNAP_STANDALONE
+#include "veeamblksnap.h"
+#else
 #include <uapi/linux/blksnap.h>
+#endif
 #include "snapimage.h"
 #include "tracker.h"
 #include "chunk.h"
@@ -25,7 +29,9 @@ static void snapimage_submit_bio(struct bio *bio)
 	struct tracker *tracker = bio->bi_bdev->bd_disk->private_data;
 	struct diff_area *diff_area = tracker->diff_area;
 	unsigned int old_nofs;
+#ifndef BLKSNAP_STANDALONE
 	struct blkfilter *prev_filter;
+#endif
 	bool is_success = true;
 
 	/*
@@ -47,15 +53,17 @@ static void snapimage_submit_bio(struct bio *bio)
 	if (op_is_write(bio_op(bio)))
 		cbt_map_set_both(tracker->cbt_map, bio->bi_iter.bi_sector,
 				 bio_sectors(bio));
-
+#ifndef BLKSNAP_STANDALONE
 	prev_filter = current->blk_filter;
 	current->blk_filter = &tracker->filter;
+#endif
 	old_nofs = memalloc_nofs_save();
 	while (bio->bi_iter.bi_size && is_success)
 		is_success = diff_area_submit_chunk(diff_area, bio);
 	memalloc_nofs_restore(old_nofs);
+#ifndef BLKSNAP_STANDALONE
 	current->blk_filter = prev_filter;
-
+#endif
 	if (is_success)
 		bio_endio(bio);
 	else

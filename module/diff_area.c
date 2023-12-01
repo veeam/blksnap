@@ -5,7 +5,11 @@
 #include <linux/blkdev.h>
 #include <linux/slab.h>
 #include <linux/build_bug.h>
+#ifdef BLKSNAP_STANDALONE
+#include "veeamblksnap.h"
+#else
 #include <uapi/linux/blksnap.h>
+#endif
 #include "chunk.h"
 #include "diff_buffer.h"
 #include "diff_storage.h"
@@ -210,14 +214,18 @@ static void diff_area_store_queue_work(struct work_struct *work)
 	struct diff_area *diff_area = container_of(
 		work, struct diff_area, store_queue_work);
 	unsigned int old_nofs;
+#ifndef BLKSNAP_STANDALONE
 	struct blkfilter *prev_filter = current->blk_filter;
 
 	current->blk_filter = &diff_area->tracker->filter;
+#endif
 	old_nofs = memalloc_nofs_save();
 	while (diff_area_store_one(diff_area))
 		;
 	memalloc_nofs_restore(old_nofs);
+#ifndef BLKSNAP_STANDALONE
 	current->blk_filter = prev_filter;
+#endif
 }
 
 static inline struct chunk_io_ctx *chunk_io_ctx_take(
@@ -241,14 +249,18 @@ static void diff_area_image_io_work(struct work_struct *work)
 		work, struct diff_area, image_io_work);
 	struct chunk_io_ctx *io_ctx;
 	unsigned int old_nofs;
+#ifndef BLKSNAP_STANDALONE
 	struct blkfilter *prev_filter = current->blk_filter;
 
 	current->blk_filter = &diff_area->tracker->filter;
+#endif
 	old_nofs = memalloc_nofs_save();
 	while ((io_ctx = chunk_io_ctx_take(diff_area)))
 		chunk_diff_bio_execute(io_ctx);
 	memalloc_nofs_restore(old_nofs);
+#ifndef BLKSNAP_STANDALONE
 	current->blk_filter = prev_filter;
+#endif
 }
 
 struct diff_area *diff_area_new(struct tracker *tracker,
@@ -472,8 +484,11 @@ static void orig_clone_bio(struct diff_area *diff_area, struct bio *bio)
 
 	bio_advance(bio, new_bio->bi_iter.bi_size);
 	bio_inc_remaining(bio);
-
+#ifdef BLKSNAP_STANDALONE
+	submit_bio_noacct_notrace(new_bio);
+#else
 	submit_bio_noacct(new_bio);
+#endif
 }
 
 bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio)

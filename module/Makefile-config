@@ -61,15 +61,21 @@ EXTRA_CFLAGS += $(shell 							\
 		echo -D HAVE_BDEV_BIO_ALLOC)
 
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device/class.h &&	\
-	grep -qw "\#define class_create" $(srctree)/include/linux/device/class.h && \
+	grep -qw "#define class_create" $(srctree)/include/linux/device/class.h && \
 		echo -D HAVE_DEFINE_CLASS_CREATE_H)
 # special for sles 15 sp3
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device.h &&		\
-	grep -qw "\#define class_create" $(srctree)/include/linux/device.h &&	\
+	grep -qw "#define class_create" $(srctree)/include/linux/device.h &&	\
 		echo -D HAVE_DEFINE_CLASS_CREATE_H)
 
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "struct blk_holder_ops" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_HOLDER_OPS)
 
-# EXTRA_CFLAGS += "-D DEBUG"
+
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bvec.h &&		\
+	grep -qw "inline void bvec_set_page" $(srctree)/include/linux/bvec.h &&	\
+		echo -D HAVE_BVEC_SET_PAGE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
+	grep -qw "#define BLK_OPEN_READ" $(srctree)/include/linux/bvec.h &&	\
+		echo -D HAVE_BLK_OPEN_MODE)

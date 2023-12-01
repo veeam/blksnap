@@ -5,7 +5,11 @@
 #include <linux/slab.h>
 #include <linux/sched/mm.h>
 #include <linux/build_bug.h>
+#ifdef BLKSNAP_STANDALONE
+#include "veeamblksnap.h"
+#else
 #include <uapi/linux/blksnap.h>
+#endif
 #include "snapshot.h"
 #include "tracker.h"
 #include "diff_storage.h"
