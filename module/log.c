@@ -6,16 +6,12 @@
 #include <linux/kthread.h>
 #include <linux/slab.h>
 #include <linux/sched/task.h>
-#ifdef STANDALONE_BDEVFILTER
-#include "blk_snap.h"
-#else
-#include <linux/blk_snap.h>
-#endif
+#include "veeamblksnap.h"
 #include "version.h"
 #include "memory_checker.h"
 #include "log.h"
 
-#ifdef BLK_SNAP_FILELOG
+#ifdef BLKSNAP_FILELOG
 
 struct log_request_header {
 	struct timespec64 time;
@@ -280,7 +276,7 @@ int log_processor(void *data)
 	}
 
 	log_printk_direct(filp, LOGLEVEL_INFO, "Stop log for module %s\n\n",
-		BLK_SNAP_MODULE_NAME);
+		BLKSNAP_MODULE_NAME);
 	filp = log_close(filp);
 
 	return ret;
@@ -352,7 +348,7 @@ int log_restart(int level, char *filepath, int tz_minuteswest)
 
 	log_printk_direct(filp, LOGLEVEL_INFO,
 		"Start log for module %s version %s loglevel %d\n",
-		BLK_SNAP_MODULE_NAME, VERSION_STR, log_level);
+		BLKSNAP_MODULE_NAME, VERSION_STR, log_level);
 
 	wake_up_process(log_task);
 
@@ -387,4 +383,4 @@ void log_printk(const int level, const char *fmt, ...)
 	}
 }
 
-#endif /* BLK_SNAP_FILELOG */
+#endif /* BLKSNAP_FILELOG */

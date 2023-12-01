@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (C) 2023 Veeam Software Group GmbH */
-#ifdef CONFIG_BLK_SNAP_DEBUG_MEMORY_LEAK
+#ifdef CONFIG_BLKSNAP_DEBUG_MEMORY_LEAK
 #define pr_fmt(fmt) KBUILD_MODNAME "-memory_checker: " fmt
 #include <linux/atomic.h>
 #include <linux/module.h>
@@ -15,7 +15,7 @@ char *memory_object_names[] = {
 	/*kzalloc*/
 	"cbt_map",
 	"chunk",
-	"blk_snap_snaphot_event",
+	"blksnap_snaphot_event",
 	"diff_area",
 	"big_buffer",
 	"diff_io",
@@ -30,13 +30,13 @@ char *memory_object_names[] = {
 	"tracker",
 	"tracked_device",
 	/*kcalloc*/
-	"blk_snap_cbt_info",
-	"blk_snap_block_range",
-	"blk_snap_dev_t",
+	"blksnap_cbt_info",
+	"blksnap_block_range",
+	"blksnap_dev_t",
 	"tracker_array",
 	"snapimage_array",
 	"superblock_array",
-	"blk_snap_image_info",
+	"blksnap_image_info",
 	"log_filepath",
 	/*end*/
 };

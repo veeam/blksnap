@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* Copyright (C) 2023 Veeam Software Group GmbH */
-#ifndef __BLK_SNAP_LOG_H
-#define __BLK_SNAP_LOG_H
+#ifndef __BLKSNAP_LOG_H
+#define __BLKSNAP_LOG_H
 
-#ifdef BLK_SNAP_FILELOG
+#ifdef BLKSNAP_FILELOG
 
 void log_init(void);
 void log_done(void);
@@ -60,7 +60,7 @@ void log_printk(const int level, const char *fmt, ...);
 })
 
 #undef pr_debug
-#if defined(BLK_SNAP_DEBUGLOG) || defined(DEBUG)
+#if defined(BLKSNAP_DEBUGLOG) || defined(DEBUG)
 #define pr_debug(fmt, ...) \
 ({ \
 	log_printk(LOGLEVEL_DEBUG, fmt, ##__VA_ARGS__); \
@@ -74,10 +74,10 @@ void log_printk(const int level, const char *fmt, ...);
 })
 #endif
 
-#elif defined(BLK_SNAP_DEBUGLOG)
+#elif defined(BLKSNAP_DEBUGLOG)
 
 #undef pr_debug
-#if defined(BLK_SNAP_DEBUGLOG) || defined(DEBUG)
+#if defined(BLKSNAP_DEBUGLOG) || defined(DEBUG)
 #define pr_debug(fmt, ...) \
 	printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
 #else
@@ -101,4 +101,4 @@ void log_printk(const int level, const char *fmt, ...);
 	}									\
 }
 
-#endif /* __BLK_SNAP_LOG_H */
+#endif /* __BLKSNAP_LOG_H */
