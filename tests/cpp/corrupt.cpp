@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 #include <algorithm>
+#include <thread>
 #include <blksnap/Cbt.h>
 #include <blksnap/Service.h>
 #include <blksnap/Session.h>
@@ -9,7 +10,6 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <thread>
 #include <unistd.h>
 
 #include "helpers/AlignedBuffer.hpp"
@@ -183,10 +183,10 @@ void CheckCbtCorrupt(const std::shared_ptr<blksnap::SCbtInfo>& ptrCbtInfoPreviou
         throw std::runtime_error("Failed to check CBT corruption. Corrupts list is empty");
     const std::string& original = corrupts[0].original;
 
-    auto ptrCbt = blksnap::ICbt::Create();
+    auto ptrCbt = blksnap::ICbt::Create(original);
 
-    std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoCurrent = ptrCbt->GetCbtInfo(original);
-    std::shared_ptr<blksnap::SCbtData> ptrCbtDataCurrent = ptrCbt->GetCbtData(ptrCbtInfoCurrent);
+    std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoCurrent = ptrCbt->GetCbtInfo();
+    std::shared_ptr<blksnap::SCbtData> ptrCbtDataCurrent = ptrCbt->GetCbtData();
 
     logger.Info("Previous CBT snap number= " + std::to_string(ptrCbtInfoPrevious->snapNumber));
     logger.Info("Current CBT snap number= " + std::to_string(ptrCbtInfoCurrent->snapNumber));
@@ -210,13 +210,7 @@ void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ra
         ss << "Ranges of corrupted sectors:" << std::endl;
         for (const SRange& range : ranges)
         {
-            blksnap::SectorState state = {0};
-
             ss << range.sector << ":" << range.count << std::endl;
-            blksnap::GetSectorState(image, range.sector << SECTOR_SHIFT, state);
-            ss << "prev= " + std::to_string(state.snapNumberPrevious) + " "
-               << "curr= " + std::to_string(state.snapNumberCurrent) + " "
-               << "state= " + std::to_string(state.chunkState) << std::endl;
         }
         logger.Err(ss);
     }
@@ -226,7 +220,128 @@ void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ra
     }
 }
 
-void CheckCorruption(const std::string& origDevName, const std::string& diffStorage, const int durationLimitSec,
+void SimpleCorruption(const std::string& origDevName,
+                      const std::string& diffStorage,
+                      const unsigned long long diffStorageLimit,
+                      const bool isSync)
+{
+    bool isErrorFound = false;
+    std::vector<SCorruptInfo> corrupts;
+
+    logger.Info("--- Test: check corruption ---");
+    logger.Info("version: " + blksnap::Version());
+    logger.Info("device: " + origDevName);
+    logger.Info("diffStorage: " + diffStorage);
+    logger.Info("diffStorageLimit: " + std::to_string(diffStorageLimit) + " MiB");
+
+    auto ptrGen = std::make_shared<CTestSectorGenetor>(true);
+    auto ptrOrininal = std::make_shared<CBlockDevice>(origDevName, isSync);
+
+    logger.Info("device size: " + std::to_string(ptrOrininal->Size()));
+    logger.Info("device block size: " + std::to_string(g_blksz));
+
+    logger.Info("-- Fill original device collection by test pattern");
+    FillAll(ptrGen, ptrOrininal);
+
+    std::vector<std::string> devices;
+    devices.push_back(origDevName);
+
+    {// single test circle
+        size_t size;
+        off_t offset;
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
+        auto ptrCbt = blksnap::ICbt::Create(origDevName);
+        std::stringstream ss;
+
+        int testSeqNumber = ptrGen->GetSequenceNumber();
+        clock_t testSeqTime = std::clock();
+        logger.Info("test sequence time " + std::to_string(testSeqTime));
+
+        std::string imageDevName = ptrCbt->GetImage();
+        logger.Info("Found image block device [" + imageDevName + "]");
+        auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
+
+        logger.Info("- Check image content before writing to original device");
+        CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
+        if (ptrGen->Fails() > 0)
+        {
+            isErrorFound = true;
+            const std::vector<SRange>& ranges = ptrGen->GetFails();
+            corrupts.emplace_back(origDevName, ranges);
+
+            LogCurruptedSectors(ptrImage->Name(), ranges);
+        }
+
+        // Write first sector, like superblock
+        offset = 0;
+        size = g_blksz;
+        FillBlocks(ptrGen, ptrOrininal, offset, size);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        // second chunk
+        offset = 1ULL << (SECTOR_SHIFT + 9);
+        size = g_blksz * 2;
+        FillBlocks(ptrGen, ptrOrininal, offset, size);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        // next chunk
+        offset = 2ULL << (SECTOR_SHIFT + 9);
+        size = g_blksz * 3;
+        FillBlocks(ptrGen, ptrOrininal, 2ULL << (SECTOR_SHIFT + 9), g_blksz * 3);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        //Write random block
+        off_t sizeBdev = ptrOrininal->Size();
+        size_t blkszSectors = g_blksz >> SECTOR_SHIFT;
+        offset = static_cast<off_t>(std::rand()) * blkszSectors * SECTOR_SIZE;
+        size = static_cast<size_t>((std::rand() & 0x1F) + blkszSectors) * blkszSectors * SECTOR_SIZE;
+        if (offset > (sizeBdev - size))
+            offset = offset % (sizeBdev - size);
+        FillBlocks(ptrGen, ptrOrininal, offset, size);
+        ss << (offset >> SECTOR_SHIFT) << ":" << (size >> SECTOR_SHIFT) << " ";
+
+        logger.Detail(ss);
+
+#if 1
+        // write some random blocks
+        logger.Info("- Fill some random blocks");
+        ptrGen->IncSequence();
+        FillRandomBlocks(ptrGen, ptrOrininal, 2);
+#endif
+        logger.Info("- Check image corruption");
+
+        CheckAll(ptrGen, ptrImage, testSeqNumber, testSeqTime);
+        if (ptrGen->Fails() > 0)
+        {
+            isErrorFound = true;
+
+            const std::vector<SRange>& ranges = ptrGen->GetFails();
+            corrupts.emplace_back(origDevName, ranges);
+
+            LogCurruptedSectors(ptrImage->Name(), ranges);
+        }
+
+        std::string errorMessage;
+        while (ptrSession->GetError(errorMessage))
+        {
+            isErrorFound = true;
+            logger.Err(errorMessage);
+        }
+
+        logger.Info("-- Destroy blksnap session");
+        ptrSession.reset();
+    }
+
+    if (isErrorFound)
+        throw std::runtime_error("--- Failed: singlethread check corruption ---");
+
+    logger.Info("--- Success: check corruption ---");
+}
+
+void CheckCorruption(const std::string& origDevName,
+                     const std::string& diffStorage,
+                     const unsigned long long diffStorageLimit,
+                     const int durationLimitSec,
                      const bool isSync, const int blocksCountMax)
 {
     std::vector<SCorruptInfo> corrupts;
@@ -236,6 +351,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     logger.Info("version: " + blksnap::Version());
     logger.Info("device: " + origDevName);
     logger.Info("diffStorage: " + diffStorage);
+    logger.Info("diffStorageLimit: " + std::to_string(diffStorageLimit) + " MiB");
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     auto ptrGen = std::make_shared<CTestSectorGenetor>(false);
@@ -257,12 +373,12 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     {
         logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
         logger.Info("-- Create snapshot");
-        auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
+        auto ptrCbt = blksnap::ICbt::Create(origDevName);
 
         { // get CBT information
             char generationIdStr[64];
-            auto ptrCbt = blksnap::ICbt::Create();
-            auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
+            auto ptrCbtInfo = ptrCbt->GetCbtInfo();
 
             if (ptrCbtInfoPrevious)
             {
@@ -285,7 +401,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
         clock_t testSeqTime = std::clock();
         logger.Info("test sequence time " + std::to_string(testSeqTime));
 
-        std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+        std::string imageDevName = ptrCbt->GetImage();;
         logger.Info("Found image block device [" + imageDevName + "]");
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
@@ -354,7 +470,7 @@ void CheckCorruption(const std::string& origDevName, const std::string& diffStor
     {
         // Create snapshot and check corrupted ranges and cbt table content.
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
-        auto ptrSession = blksnap::ISession::Create(devices, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(devices, diffStorage, diffStorageLimit);
 
         CheckCbtCorrupt(ptrCbtInfoPrevious, corrupts);
 
@@ -453,39 +569,22 @@ void CheckerThreadFunction(std::shared_ptr<SCheckerContext> ptrCtx)
     ptrCtx->complete = true;
 };
 
-void CheckCbtCorrupt(const std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>>& previousCbtInfoMap,
+void CheckCbtCorrupt(const std::map<std::string,
+                     std::shared_ptr<blksnap::SCbtInfo>>& previousCbtInfoMap,
                      const std::vector<SCorruptInfo>& corrupts)
 {
-    auto ptrCbt = blksnap::ICbt::Create();
+    for (const SCorruptInfo& corruptInfo : corrupts) {
+        for (const SRange& range : corruptInfo.ranges) {
+            auto ptrCbt = blksnap::ICbt::Create(corruptInfo.original);
 
-    std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>> currentCbtInfoMap;
-    std::map<std::string, std::shared_ptr<blksnap::SCbtData>> currentCbtDataMap;
-    for (const SCorruptInfo& corruptInfo : corrupts)
-    {
-        if (currentCbtInfoMap.count(corruptInfo.original) == 0)
-        {
-            auto ptrCbtInfo = ptrCbt->GetCbtInfo(corruptInfo.original);
-
-            currentCbtInfoMap[corruptInfo.original] = ptrCbtInfo;
-            currentCbtDataMap[corruptInfo.original] = ptrCbt->GetCbtData(ptrCbtInfo);
-            ;
-        }
-    }
-
-    for (const SCorruptInfo& corruptInfo : corrupts)
-    {
-        for (const SRange& range : corruptInfo.ranges)
-        {
-            const std::string& device = corruptInfo.original;
-
-            IsChangedRegion(previousCbtInfoMap.at(device), currentCbtInfoMap.at(device), currentCbtDataMap.at(device),
-                            range);
+            IsChangedRegion(previousCbtInfoMap.at(corruptInfo.original),
+                            ptrCbt->GetCbtInfo(), ptrCbt->GetCbtData(), range);
         }
     }
 }
 
 void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, const std::string& diffStorage,
-                                const int durationLimitSec)
+                                const unsigned long long diffStorageLimit, const int durationLimitSec)
 {
     std::map<std::string, std::shared_ptr<CTestSectorGenetor>> genMap;
     std::vector<std::thread> genThreads;
@@ -502,6 +601,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
         logger.Info(mess);
     }
     logger.Info("diffStorage: " + diffStorage);
+    logger.Info("durationLimitSec: " + std::to_string(durationLimitSec));
     logger.Info("duration: " + std::to_string(durationLimitSec) + " seconds");
 
     for (const std::string& origDevName : origDevNames)
@@ -529,16 +629,15 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
         logger.Info("-- Elapsed time: " + std::to_string(elapsed) + " seconds");
 
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
-        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage, diffStorageLimit);
 
         { // get CBT information
             char generationIdStr[64];
-            auto ptrCbt = blksnap::ICbt::Create();
 
             previousCbtInfoMap.clear();
             for (const std::string& origDevName : origDevNames)
             {
-                auto ptrCbtInfo = ptrCbt->GetCbtInfo(origDevName);
+                auto ptrCbtInfo = blksnap::ICbt::Create(origDevName)->GetCbtInfo();
 
                 if (!(previousCbtInfoMap.find(origDevName) == previousCbtInfoMap.end()))
                 {
@@ -565,7 +664,8 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
         for (const std::string& origDevName : origDevNames)
         {
             auto ptrCtx = std::make_shared<SCheckerContext>(
-              std::make_shared<CBlockDevice>(ptrSession->GetImageDevice(origDevName)), genMap[origDevName]);
+                std::make_shared<CBlockDevice>(blksnap::ICbt::Create(origDevName)->GetImage()),
+                genMap[origDevName]);
 
             checkerCtxs.push_back(ptrCtx);
         }
@@ -626,7 +726,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
                             ptrCtx->errorMessages.pop_front();
                         }
                         logger.Err(ss);
-                        corrupts.emplace_back(ptrSession->GetOriginalDevice(ptrCtx->ptrBdev->Name()),
+                        corrupts.emplace_back(ptrCtx->ptrBdev->Name(),
                                               ptrCtx->ptrGen->GetFails());
                     }
                     ptrCtx->processed = true;
@@ -681,7 +781,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
     {
         // Create snapshot and check corrupted ranges and cbt table content.
         logger.Info("-- Create snapshot at " + std::to_string(std::clock()) + " by CPU clock");
-        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage);
+        auto ptrSession = blksnap::ISession::Create(origDevNames, diffStorage, diffStorageLimit);
 
         CheckCbtCorrupt(previousCbtInfoMap, corrupts);
 
@@ -702,16 +802,20 @@ void Main(int argc, char* argv[])
 
     desc.add_options()
         ("help,h", "Show usage information.")
-        ("log,l", po::value<std::string>(),"Detailed log of all transactions.")
+        ("log,L", po::value<std::string>()->default_value("/var/log/blksnap_corrupt.log"),"Detailed log of all transactions.")
         ("device,d", po::value<std::vector<std::string>>()->multitoken(),
             "Device name. It's multitoken for multithread test mod.")
         ("diff_storage,s", po::value<std::string>(),
-            "Directory name for allocating diff storage files.")
+            "The name of the file to allocate the difference storage.")
+        ("diff_storage_limit,l", po::value<std::string>()->default_value("1G"),
+            "The available limit for the size of the difference storage file. The suffixes M, K and G is allowed.")
         ("multithread",
             "Testing mode in which writings to the original devices and their checks are performed in parallel.")
-        ("duration,u", po::value<int>(), "The test duration limit in minutes.")
+        ("simple", "Testing mode in which only one test cycle is performed with a very limited number of checks.")
+        ("duration,u", po::value<int>()->default_value(5), "The test duration limit in minutes.")
         ("sync", "Use O_SYNC for access to original device.")
-        ("blocks", po::value<int>(), "The maximum limit of writting blocks.")
+        ("blksz", po::value<int>()->default_value(512), "Align reads and writes to the block size.")
+        ("blocks", po::value<int>()->default_value(4096), "The maximum limit of writing blocks.")
         ;
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
@@ -725,45 +829,69 @@ void Main(int argc, char* argv[])
         return;
     }
 
-    if (vm.count("log"))
-    {
-        std::string filename = vm["log"].as<std::string>();
-        logger.Open(filename);
-    }
+    logger.Info("Parameters:");
+
+    std::string log = vm["log"].as<std::string>();
+    logger.Info("log: " + log);
+    logger.Open(log);
 
     if (!vm.count("device"))
         throw std::invalid_argument("Argument 'device' is missed.");
     std::vector<std::string> origDevNames = vm["device"].as<std::vector<std::string>>();
+    logger.Info("device:");
+    for (const std::string& dev : origDevNames)
+        logger.Info("\t" + dev);
 
     if (!vm.count("diff_storage"))
         throw std::invalid_argument("Argument 'diff_storage' is missed.");
     std::string diffStorage = vm["diff_storage"].as<std::string>();
+    logger.Info("diff_storage: " + diffStorage);
 
-    int duration = 5;
-    if (vm.count("duration"))
-        duration = vm["duration"].as<int>();
 
-    bool isSync = false;
-    if (vm.count("sync"))
-        isSync = true;
+    unsigned long long diffStorageLimit = 0;
+    unsigned long long multiple = 1;
+    std::string limit_str = vm["diff_storage_limit"].as<std::string>();
+    switch (limit_str.back())
+    {
+        case 'G':
+            multiple *= 1024;
+        case 'M':
+            multiple *= 1024;
+        case 'K':
+            multiple *= 1024;
+            limit_str.resize(limit_str.size()-1);
+        default:
+            diffStorageLimit = std::stoll(limit_str.c_str()) * multiple;
+    }
+    logger.Info("diff_storage_limit: " + std::to_string(diffStorageLimit));
 
-    if (vm.count("blksz"))
-        g_blksz = vm["duration"].as<int>();
+    int duration = vm["duration"].as<int>();
+    logger.Info("duration: " + std::to_string(duration));
 
-    int blocksCountMax = 0x1000;
-    if (vm.count("blocks"))
-        blocksCountMax = vm["blocks"].as<int>();
+    bool isSync = !!(vm.count("sync"));
+    logger.Info("sync: " + std::to_string(isSync));
+
+    g_blksz = vm["blksz"].as<int>();
+    logger.Info("blksz: " + std::to_string(g_blksz));
+
+    int blocksCountMax = vm["blocks"].as<int>();
+    logger.Info("blocks: " + std::to_string(blocksCountMax));
 
     std::srand(std::time(0));
     if (!!vm.count("multithread"))
-        MultithreadCheckCorruption(origDevNames, diffStorage, duration * 60);
-    else
-    {
+        MultithreadCheckCorruption(origDevNames, diffStorage,
+                                   diffStorageLimit, duration * 60);
+    else {
         if (origDevNames.size() > 1)
             logger.Err("In singlethread test mode used only first device.");
 
-        CheckCorruption(origDevNames[0], diffStorage, duration * 60,
-                        isSync, blocksCountMax);
+        if (!!vm.count("simple"))
+            SimpleCorruption(origDevNames[0], diffStorage, diffStorageLimit,
+                            isSync);
+        else
+            CheckCorruption(origDevNames[0], diffStorage, diffStorageLimit,
+                            duration * 60, isSync, blocksCountMax);
+
     }
 }
 

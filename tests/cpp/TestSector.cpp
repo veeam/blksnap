@@ -91,15 +91,17 @@ void CTestSectorGenetor::Check(unsigned char* buffer, size_t size, sector_t sect
                 {
                     failMessage += std::string("Invalid sequence number\n");
                     failMessage += std::string("sector " + std::to_string(t->header.sector) + "\n");
-                    failMessage += std::string("seqNumber " + std::to_string(t->header.seqNumber) + " > "
-                                               + std::to_string(seqNumber) + "\n");
+                    failMessage += std::string("seqNumber " + std::to_string(t->header.seqNumber) +
+                                               (isStrictly ? " != " : " > ") +
+                                               std::to_string(seqNumber) + "\n");
                 }
                 if (isInvalidSeqTime)
                 {
                     failMessage += std::string("Invalid sequence time\n");
                     failMessage += std::string("sector " + std::to_string(t->header.sector) + "\n");
-                    failMessage += std::string("seqTime " + std::to_string(t->header.seqTime) + " > "
-                                               + std::to_string(seqTime) + "\n");
+                    failMessage += std::string("seqTime " + std::to_string(t->header.seqTime) +
+                                               (isStrictly ? " != " : " > ") +
+                                               std::to_string(seqTime) + "\n");
                 }
             }
 

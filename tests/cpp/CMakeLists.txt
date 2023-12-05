@@ -34,11 +34,6 @@ add_executable(${TEST_CBT} cbt.cpp)
 target_link_libraries(${TEST_CBT} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_CBT} PRIVATE ./)
 
-set(TEST_DIFF_STORAGE test_diff_storage)
-add_executable(${TEST_DIFF_STORAGE} TestSector.cpp diff_storage.cpp)
-target_link_libraries(${TEST_DIFF_STORAGE} PRIVATE ${TESTS_LIBS})
-target_include_directories(${TEST_DIFF_STORAGE} PRIVATE ./)
-
 set(TEST_BOUNDARY test_boundary)
 add_executable(${TEST_BOUNDARY} TestSector.cpp boundary.cpp)
 target_link_libraries(${TEST_BOUNDARY} PRIVATE ${TESTS_LIBS})
@@ -49,18 +44,10 @@ add_executable(${TEST_PERFORMANCE} performance.cpp)
 target_link_libraries(${TEST_PERFORMANCE} PRIVATE ${TESTS_LIBS})
 target_include_directories(${TEST_PERFORMANCE} PRIVATE ./)
 
-set_target_properties(${TEST_CORRUPT} ${TEST_CBT} ${TEST_DIFF_STORAGE} ${TEST_BOUNDARY} ${TEST_PERFORMANCE}
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../
-)
-
-#add_custom_target(blksnap-tests DEPENDS ${TEST_CORRUPT} ${TEST_CBT} ${TEST_DIFF_STORAGE} ${TEST_BOUNDARY} ${TEST_PERFORMANCE})
-
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../
         DESTINATION /opt/blksnap/tests
         USE_SOURCE_PERMISSIONS
         PATTERN "*.sh"
-        PATTERN "build_and_install.sh" EXCLUDE
         PATTERN "cpp" EXCLUDE
 )
 

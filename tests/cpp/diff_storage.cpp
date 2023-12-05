@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0+
+#if 0
 #include <algorithm>
 #include <cstdlib>
 #include <blksnap/Service.h>
+#include <blksnap/Cbt.h>
 #include <blksnap/Session.h>
 #include <boost/program_options.hpp>
 #include <errno.h>
@@ -21,6 +23,14 @@ using blksnap::SRange;
 
 int g_blksz = 512;
 
+//#define PAGE_SECTORS_SHIFT  (PAGE_SHIFT - SECTOR_SHIFT)
+//#define PAGE_SECTORS        (1 << PAGE_SECTORS_SHIFT)
+sector_t page_sectors = 4096 / 512;
+
+//#define SECTOR_MASK     (PAGE_SECTORS - 1)
+sector_t sector_mask = (4096 / 512) - 1;
+
+
 void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>& diffStorageRanges,
     const int granularity, const sector_t deviceSize)
 {
@@ -29,7 +39,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
 
     for (int inx=0; inx<granularity; inx++)
     {
-        sector_t sector = static_cast<sector_t>(std::rand() * scaling) & ~7ull;
+        sector_t sector = static_cast<sector_t>(std::rand() * scaling) & ~sector_mask;
 
         if ((sector == 0) || (sector > deviceSize))
             continue;
@@ -48,7 +58,7 @@ void GenerateRangeMap(std::vector<SRange>& availableRanges, std::vector<SRange>&
         if (clipSize <= 16)
             continue;
 
-        int diffStoreRangeSize = (8 + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 1))) & ~7ull;
+        int diffStoreRangeSize = (page_sectors + std::rand() / static_cast<int>((RAND_MAX + 1ull) / (clipSize >> 1))) & ~sector_mask;
 
         availableRanges.emplace_back(prevOffset, clipSize - diffStoreRangeSize);
         diffStorageRanges.emplace_back(currentOffset - diffStoreRangeSize, diffStoreRangeSize);
@@ -195,7 +205,7 @@ static void GenerateRandomRanges(std::shared_ptr<CBlockDevice> ptrOrininal,
         SRange rg;
 
         rg.sector = static_cast<sector_t>(std::rand() * offsetScaling) & blockSizeMask;
-        rg.count = (8 + std::rand() / blockSizeScaling) & blockSizeMask;
+        rg.count = (page_sectors + std::rand() / blockSizeScaling) & blockSizeMask;
 
         if (!NormalizeRange(availableRanges, rg))
             continue;
@@ -290,7 +300,7 @@ static void CheckDiffStorage(const std::string& origDevName, const int durationL
         clock_t testSeqTime = std::clock();
         logger.Info("test sequence time " + std::to_string(testSeqTime));
 
-        std::string imageDevName = ptrSession->GetImageDevice(origDevName);
+        std::string imageDevName = blksnap::ICbt::Create(origDevName)->GetImage();
         logger.Info("Found image block device [" + imageDevName + "]");
         auto ptrImage = std::make_shared<CBlockDevice>(imageDevName);
 
@@ -360,11 +370,11 @@ void Main(int argc, char* argv[])
 
     desc.add_options()
         ("help,h", "Show usage information.")
-        ("log,l", po::value<std::string>(),"Detailed log of all transactions.")
+        ("log,l", po::value<std::string>()->default_value("/var/log/blksnap_diff_storage.log"), "Detailed log of all transactions.")
         ("device,d", po::value<std::string>(), "Device name. ")
-        ("duration,u", po::value<int>(), "The test duration limit in minutes.")
+        ("duration,u", po::value<int>()->default_value(5), "The test duration limit in minutes.")
         ("sync", "Use O_SYNC for access to original device.")
-        ("blksz", po::value<int>(), "Align reads and writes to the block size.");
+        ("blksz", po::value<int>()->default_value(512), "Align reads and writes to the block size.");
     po::variables_map vm;
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
@@ -377,26 +387,31 @@ void Main(int argc, char* argv[])
         return;
     }
 
-    if (vm.count("log"))
-    {
-        std::string filename = vm["log"].as<std::string>();
-        logger.Open(filename);
-    }
+    logger.Info("Parameters:");
+
+    std::string log = vm["log"].as<std::string>();
+    logger.Info("log: " + log);
+    logger.Open(log);
 
     if (!vm.count("device"))
         throw std::invalid_argument("Argument 'device' is missed.");
     std::string origDevName = vm["device"].as<std::string>();
+    logger.Info("device: " + origDevName);
 
-    int duration = 5;
-    if (vm.count("duration"))
-        duration = vm["duration"].as<int>();
+    int duration = vm["duration"].as<int>();
+    logger.Info("duration: " + std::to_string(duration));
 
-    bool isSync = false;
-    if (vm.count("sync"))
-        isSync = true;
+    bool isSync = !!(vm.count("sync"));
+    logger.Info("sync: " + std::to_string(isSync));
 
-    if (vm.count("blksz"))
-        g_blksz = vm["duration"].as<int>();
+    g_blksz = vm["blksz"].as<int>();
+    logger.Info("blksz: " + std::to_string(g_blksz));
+
+    if (g_blksz < getpagesize())
+        throw std::invalid_argument("Block size cannot be less than page size '"+std::to_string(getpagesize())+"'.");
+
+    page_sectors = getpagesize() / 512;
+    sector_mask = page_sectors - 1;
 
     std::srand(std::time(0));
     CheckDiffStorage(origDevName, duration * 60, isSync);
@@ -416,3 +431,4 @@ int main(int argc, char* argv[])
 
     return 0;
 }
+#endif

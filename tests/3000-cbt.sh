@@ -2,8 +2,16 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
+if [ -z $1 ]
+then
+	DIFF_STORAGE_DIR=${HOME}
+else
+	DIFF_STORAGE_DIR=$1
+fi
+
 . ./functions.sh
 . ./blksnap.sh
+BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
 
 echo "---"
 echo "Change tracking test"
@@ -14,37 +22,36 @@ blksnap_load "diff_storage_minimum=262144"
 # check module is ready
 blksnap_version
 
-TESTDIR=~/blksnap-test
+TESTDIR=${HOME}/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE=~/diff_storage/
+DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
+
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
-rm -rf ${DIFF_STORAGE}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
-mkdir -p ${DIFF_STORAGE}
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
 imagefile_make ${IMAGEFILE_1} 4096
-echo "new image file ${IMAGEFILE_1}"
 
-DEVICE_1=$(loop_device_attach ${IMAGEFILE_1})
+DEVICE_1=$(loop_device_attach ${IMAGEFILE_1} ${BLOCK_SIZE})
+mkfs.ext4 ${DEVICE_1}
 echo "new device ${DEVICE_1}"
 
 MOUNTPOINT_1=${MPDIR}/simple_1
 mkdir -p ${MOUNTPOINT_1}
 mount ${DEVICE_1} ${MOUNTPOINT_1}
 
-generate_files ${MOUNTPOINT_1} "before" 5
+generate_files_direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
-fallocate --length 256MiB "${DIFF_STORAGE}/diff_storage"
+rm -f ${DIFF_STORAGE}
+fallocate --length 1GiB ${DIFF_STORAGE}
 
 # full
 echo "First snapshot for just attached devices"
-blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_create ${DEVICE_1} "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt0.map
@@ -59,8 +66,7 @@ cmp -l ${TESTDIR}/cbt0.map ${TESTDIR}/cbt0_.map
 
 # increment 1
 echo "First increment"
-blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_create ${DEVICE_1} "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt1.map
@@ -73,8 +79,7 @@ cmp -l ${TESTDIR}/cbt1.map ${TESTDIR}/cbt1_.map
 
 # increment 2
 echo "Second increment"
-blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_create ${DEVICE_1} "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt2.map
@@ -87,8 +92,7 @@ cmp -l ${TESTDIR}/cbt2.map ${TESTDIR}/cbt2_.map
 
 # increment 3
 echo "Second increment"
-blksnap_snapshot_create ${DEVICE_1}
-blksnap_snapshot_appendstorage "${DIFF_STORAGE}/diff_storage"
+blksnap_snapshot_create ${DEVICE_1} "${DIFF_STORAGE}" "1G"
 blksnap_snapshot_take
 
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3.map
@@ -97,13 +101,14 @@ blksnap_markdirty ${DEVICE_1} "${MOUNTPOINT_1}/dirty_file"
 blksnap_readcbt ${DEVICE_1} ${TESTDIR}/cbt3_.map
 
 blksnap_snapshot_destroy
+
 set +e
 echo "dirty blocks:"
 cmp -l ${TESTDIR}/cbt3.map ${TESTDIR}/cbt3_.map 2>&1
 set -e
 
 echo "Destroy first device"
-
+blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
