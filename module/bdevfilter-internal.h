@@ -4,6 +4,7 @@
 #define __BDEVFILTER_INTERNAL_H
 
 #include <linux/types.h>
+#include <linux/bio.h>
 
 struct bio;
 struct block_device;
@@ -62,9 +63,9 @@ int bdevfilter_register(struct bdevfilter_operations *fops);
 void bdevfilter_unregister(struct bdevfilter_operations *fops);
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-notrace blk_qc_t submit_bio_noacct_notrace(struct bio *bio);
+blk_qc_t submit_bio_noacct_notrace(struct bio *bio);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-notrace void submit_bio_noacct_notrace(struct bio *bio);
+void submit_bio_noacct_notrace(struct bio *bio);
 #endif
 
 

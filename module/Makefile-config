@@ -18,9 +18,6 @@ EXTRA_CFLAGS += $(shell 							\
 		$(srctree)/include/linux/blkdev.h &&				\
 		echo -D HAVE_SUPER_BLOCK_FREEZE)
 EXTRA_CFLAGS += $(shell 							\
-	grep -qw "*bi_bdev;" $(srctree)/include/linux/blk_types.h &&		\
-		echo -D HAVE_BI_BDEV)
-EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -D HAVE_BI_BDISK)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
@@ -29,12 +26,6 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/blkdev.h && \
 		echo -D HAVE_BDEV_NR_SECTORS)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "blk_mq_alloc_disk" $(srctree)/include/linux/blk-mq.h &&	\
-		echo -D HAVE_BLK_MQ_ALLOC_DISK)
-EXTRA_CFLAGS += $(shell 							\
-	grep -qw "BIO_MAX_PAGES" $(srctree)/include/linux/bio.h &&		\
-		echo -D HAVE_BIO_MAX_PAGES)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "int add_disk" $(srctree)/include/linux/genhd.h &&		\
 		echo -D HAVE_ADD_DISK_RESULT)
@@ -55,27 +46,36 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 		echo -D HAVE_BLK_CLEANUP_DISK)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 		echo -D HAVE_GENHD_H)
-EXTRA_CFLAGS += $(shell 							\
-	grep "bio_alloc_bioset" $(srctree)/include/linux/bio.h |		\
-	grep -qw "struct block_device" &&					\
-		echo -D HAVE_BDEV_BIO_ALLOC)
-
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device/class.h &&	\
-	grep -qw "#define class_create" $(srctree)/include/linux/device/class.h && \
-		echo -D HAVE_DEFINE_CLASS_CREATE_H)
-# special for sles 15 sp3
-EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device.h &&		\
-	grep -qw "#define class_create" $(srctree)/include/linux/device.h &&	\
-		echo -D HAVE_DEFINE_CLASS_CREATE_H)
-
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "struct blk_holder_ops" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_HOLDER_OPS)
-
-
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bvec.h &&		\
 	grep -qw "inline void bvec_set_page" $(srctree)/include/linux/bvec.h &&	\
 		echo -D HAVE_BVEC_SET_PAGE)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
-	grep -qw "#define BLK_OPEN_READ" $(srctree)/include/linux/bvec.h &&	\
+	grep -qw "define BLK_OPEN_READ" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_OPEN_MODE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
+	grep -qw "define blk_alloc_disk" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_BLK_ALLOC_DISK)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
+	grep -qw "struct mutex open_mutex" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_GENDISK_OPEN_MUTEX)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
+	grep -qw "static inline bool disk_live" $(srctree)/include/linux/blkdev.h && \
+		echo -D HAVE_DISK_LIVE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/highmem.h  &&		\
+	grep -qw "static inline void memcpy_page" $(srctree)/include/linux/highmem.h && \
+		echo -D HAVE_MEMCPY_PAGE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bio.h  &&		\
+	grep -qw "static inline void bio_advance_iter_single" $(srctree)/include/linux/bio.h && \
+		echo -D HAVE_BIO_ADVANCE_ITER_SIMPLE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bio.h  &&		\
+	grep -qw "struct bio \*bio_alloc_clone" $(srctree)/include/linux/bio.h && \
+		echo -D HAVE_BIO_ALLOC_CLONE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bio.h  &&		\
+	grep -w "bio_alloc_bioset" $(srctree)/include/linux/bio.h | grep -qw "struct block_device"&& \
+		echo -D HAVE_BIO_ALLOC_BIOSET_BDEV)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/fs.h  &&		\
+	grep -w "\*ki_complete" $(srctree)/include/linux/fs.h | grep -qw "long ret2" && \
+		echo -D HAVE_KI_COMPLETE_RET2)

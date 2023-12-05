@@ -6,6 +6,7 @@
 #include <linux/vmalloc.h>
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
+#include "compat.h"
 #else
 #include <uapi/linux/blksnap.h>
 #endif

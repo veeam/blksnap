@@ -8,7 +8,6 @@
 #include <linux/sched/task.h>
 #include "veeamblksnap.h"
 #include "version.h"
-#include "memory_checker.h"
 #include "log.h"
 
 #ifdef BLKSNAP_FILELOG
@@ -77,7 +76,6 @@ static inline void done_filepath(void)
 		return;
 
 	kfree(log_filepath);
-	memory_object_dec(memory_object_log_filepath);
 	log_filepath = NULL;
 }
 
@@ -355,7 +353,6 @@ int log_restart(int level, char *filepath, int tz_minuteswest)
 	return 0;
 fail:
 	kfree(filepath);
-	memory_object_dec(memory_object_log_filepath);
 	return ret;
 }
 

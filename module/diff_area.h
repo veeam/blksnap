@@ -142,6 +142,9 @@ struct diff_area {
 
 	unsigned long corrupt_flag;
 	int error_code;
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	struct super_block *sb;
+#endif
 };
 
 struct diff_area *diff_area_new(struct tracker *tracker,

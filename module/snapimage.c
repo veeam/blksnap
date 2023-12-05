@@ -10,6 +10,7 @@
 #include <linux/build_bug.h>
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
+#include "compat.h"
 #else
 #include <uapi/linux/blksnap.h>
 #endif
@@ -24,9 +25,17 @@
  * be stored only in the difference storage. Therefore, before partially
  * overwriting this data, it should be read from the original block device.
  */
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+static blk_qc_t snapimage_submit_bio(struct bio *bio)
+#else
 static void snapimage_submit_bio(struct bio *bio)
+#endif
 {
+#ifdef HAVE_BI_BDISK
+	struct tracker *tracker = bio->bi_disk->private_data;
+#else
 	struct tracker *tracker = bio->bi_bdev->bd_disk->private_data;
+#endif
 	struct diff_area *diff_area = tracker->diff_area;
 	unsigned int old_nofs;
 #ifndef BLKSNAP_STANDALONE
@@ -42,7 +51,11 @@ static void snapimage_submit_bio(struct bio *bio)
 	 */
 	if (diff_area_is_corrupted(diff_area)) {
 		bio_io_error(bio);
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+		return BLK_QC_T_NONE;
+#else
 		return;
+#endif
 	}
 
 	/*
@@ -68,6 +81,9 @@ static void snapimage_submit_bio(struct bio *bio)
 		bio_endio(bio);
 	else
 		bio_io_error(bio);
+#if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
+	return BLK_QC_T_NONE;
+#endif
 }
 
 static const struct block_device_operations bd_ops = {
@@ -94,18 +110,42 @@ int snapimage_create(struct tracker *tracker)
 	int ret = 0;
 	dev_t dev_id = tracker->dev_id;
 	struct gendisk *disk;
-
+#ifndef HAVE_BLK_ALLOC_DISK
+	struct request_queue *queue;
+#endif
 	pr_info("Create snapshot image device for original device [%u:%u]\n",
 		MAJOR(dev_id), MINOR(dev_id));
 
+
+#ifdef HAVE_BLK_ALLOC_DISK
 	disk = blk_alloc_disk(NUMA_NO_NODE);
 	if (!disk) {
 		pr_err("Failed to allocate disk\n");
 		return -ENOMEM;
 	}
+#else
+	queue = blk_alloc_queue(NUMA_NO_NODE);
+	if (!queue) {
+		pr_err("Failed to allocate disk queue\n");
+		return -ENOMEM;
+	}
 
-	disk->flags = GENHD_FL_NO_PART;
+	disk = alloc_disk(1);
+	if (!disk) {
+		pr_err("Failed to allocate disk structure\n");
+		ret = -ENOMEM;
+		goto fail_cleanup_queue;
+	}
+	disk->queue = queue;
+#endif
+
+#ifdef GENHD_FL_NO_PART_SCAN
+	disk->flags |= GENHD_FL_NO_PART_SCAN;
+#else
+	disk->flags |= GENHD_FL_NO_PART;
+#endif
 	disk->fops = &bd_ops;
+
 	disk->private_data = tracker;
 	set_capacity(disk, tracker->cbt_map->device_capacity);
 	ret = snprintf(disk->disk_name, DISK_NAME_LEN, "%s_%d:%d",
@@ -122,21 +162,33 @@ int snapimage_create(struct tracker *tracker)
 					tracker->diff_area->physical_blksz);
 	blk_queue_logical_block_size(disk->queue,
 					tracker->diff_area->logical_blksz);
-
+#ifdef HAVE_ADD_DISK_RESULT
 	ret = add_disk(disk);
 	if (ret) {
 		pr_err("Failed to add disk [%s] for snapshot image device\n",
 		       disk->disk_name);
 		goto fail_cleanup_disk;
 	}
+#else
+	add_disk(disk);
+#endif
 	tracker->snap_disk = disk;
 
 	pr_debug("Image block device [%d:%d] has been created\n",
 		disk->major, disk->first_minor);
 
 	return 0;
-
 fail_cleanup_disk:
+#ifdef HAVE_BLK_ALLOC_DISK
+#ifdef HAVE_BLK_CLEANUP_DISK
+	blk_cleanup_disk(disk);
+#else
 	put_disk(disk);
+#endif
+#else
+	del_gendisk(disk);
+fail_cleanup_queue:
+	blk_cleanup_queue(queue);
+#endif
 	return ret;
 }

@@ -7,6 +7,7 @@
 #include <linux/build_bug.h>
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
+#include "compat.h"
 #else
 #include <uapi/linux/blksnap.h>
 #endif
@@ -387,7 +388,11 @@ bool diff_area_cow(struct bio *bio, struct diff_area *diff_area,
 		chunk->diff_area = diff_area_get(diff_area);
 
 		len = chunk_limit(chunk, iter);
+#ifdef HAVE_BIO_ADVANCE_ITER_SIMPLE
 		bio_advance_iter_single(bio, iter, len);
+#else
+		bio_advance_iter(bio, iter, len);
+#endif
 
 		if (chunk->state == CHUNK_ST_NEW) {
 			if (nowait) {

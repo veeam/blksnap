@@ -19,45 +19,6 @@
 #include "log.h"
 #endif
 
-#ifdef STANDALONE_BDEVFILTER
-#pragma message("Standalone bdevfilter")
-#endif
-#ifdef HAVE_QC_SUBMIT_BIO_NOACCT
-#pragma message("The blk_qc_t submit_bio_noacct(struct bio *) function was found.")
-#endif
-#ifdef HAVE_VOID_SUBMIT_BIO_NOACCT
-#pragma message("The void submit_bio_noacct(struct bio *) function was found.")
-#endif
-#ifdef HAVE_SUPER_BLOCK_FREEZE
-#pragma message("The freeze_bdev() and thaw_bdev() have struct super_block.")
-#endif
-#ifdef HAVE_BI_BDEV
-#pragma message("The struct bio have pointer to struct block_device.")
-#endif
-#ifdef HAVE_BI_BDISK
-#pragma message("The struct bio have pointer to struct gendisk.")
-#endif
-#ifdef HAVE_BDEV_NR_SECTORS
-#pragma message("The bdev_nr_sectors() function was found.")
-#endif
-#ifdef HAVE_BLK_MQ_ALLOC_DISK
-#pragma message("The blk_mq_alloc_disk() function was found.")
-#endif
-#ifdef HAVE_BIO_MAX_PAGES
-#pragma message("The BIO_MAX_PAGES define was found.")
-#endif
-#ifdef HAVE_ADD_DISK_RESULT
-#pragma message("The function add_disk() has a return code.")
-#endif
-#ifdef HAVE_GENHD_H
-#pragma message("The header file 'genhd.h' was found.")
-#endif
-#ifdef HAVE_BDEV_BIO_ALLOC
-#pragma message("The function bio_alloc_bioset() has a parameter bdev.")
-#endif
-#ifdef HAVE_BLK_CLEANUP_DISK
-#pragma message("The function blk_cleanup_disk() was found.")
-#endif
 /*
  * The power of 2 for minimum tracking block size.
  *

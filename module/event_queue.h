@@ -8,6 +8,7 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/wait.h>
+#include <linux/slab.h>
 
 /**
  * struct event - An event to be passed to the user space.

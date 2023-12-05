@@ -9,6 +9,7 @@
 #include "diff_storage.h"
 #include "params.h"
 #ifdef BLKSNAP_STANDALONE
+#include "compat.h"
 #include "bdevfilter-internal.h"
 #endif
 
@@ -124,7 +125,11 @@ void chunk_copy_bio(struct chunk *chunk, struct bio *bio,
 
 		chunk_ofs += len;
 		chunk_left -= len;
+#ifdef HAVE_BIO_ADVANCE_ITER_SIMPLE
 		bio_advance_iter_single(bio, iter, len);
+#else
+		bio_advance_iter(bio, iter, len);
+#endif
 	}
 }
 
@@ -166,7 +171,15 @@ static inline unsigned int chunk_limit(struct chunk *chunk, struct bio *bio)
 
 struct bio *chunk_alloc_clone(struct block_device *bdev, struct bio *bio)
 {
+#ifdef HAVE_BIO_ALLOC_CLONE
 	return bio_alloc_clone(bdev, bio, GFP_NOIO, &chunk_clone_bioset);
+#else
+	struct bio *clone;
+
+	clone = bio_clone_fast(bio, GFP_NOIO, &chunk_clone_bioset);
+	bio_set_dev(clone, bdev);
+	return clone;
+#endif
 }
 
 #if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
@@ -212,7 +225,12 @@ void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
 	struct file *diff_file = io_ctx->chunk->diff_file;
 	ssize_t len;
 
-	if (io_ctx->iov_iter.data_source) {
+#ifdef BLKSNAP_STANDALONE
+	if (bio_data_dir(io_ctx->bio))
+#else
+	if (io_ctx->iov_iter.data_source)
+#endif
+	{
 		file_start_write(diff_file);
 		len = vfs_iter_write(diff_file, &io_ctx->iov_iter,
 				     &io_ctx->pos, 0);
@@ -225,15 +243,23 @@ void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
 	chunk_io_ctx_free(io_ctx, len);
 }
 #else
+
+#ifdef HAVE_KI_COMPLETE_RET2
+static void chunk_diff_bio_complete_read(struct kiocb *iocb, long ret, long ret2)
+#else
 static void chunk_diff_bio_complete_read(struct kiocb *iocb, long ret)
+#endif
 {
 	struct chunk_io_ctx *io_ctx;
 
 	io_ctx = container_of(iocb, struct chunk_io_ctx, iocb);
 	chunk_io_ctx_free(io_ctx, ret);
 }
-
+#ifdef HAVE_KI_COMPLETE_RET2
+static void chunk_diff_bio_complete_write(struct kiocb *iocb, long ret, long ret2)
+#else
 static void chunk_diff_bio_complete_write(struct kiocb *iocb, long ret)
+#endif
 {
 	struct chunk_io_ctx *io_ctx;
 
@@ -273,7 +299,11 @@ static inline void chunk_diff_bio_execute_read(struct chunk_io_ctx *io_ctx)
 
 void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
 {
+#ifdef BLKSNAP_STANDALONE
+	if (bio_data_dir(io_ctx->bio))
+#else
 	if (io_ctx->iov_iter.data_source)
+#endif
 		chunk_diff_bio_execute_write(io_ctx);
 	else
 		chunk_diff_bio_execute_read(io_ctx);
@@ -487,9 +517,16 @@ void chunk_store_tobdev(struct chunk *chunk)
 	struct bio *bio;
 	struct chunk_bio *cbio;
 
+#ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
 	bio = bio_alloc_bioset(bdev, calc_max_vecs(count),
 			       REQ_OP_WRITE | REQ_SYNC | REQ_FUA, GFP_NOIO,
 			       &chunk_io_bioset);
+#else
+	bio = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+			       &chunk_io_bioset);
+	bio_set_op_attrs(bio, REQ_OP_WRITE, REQ_SYNC | REQ_FUA);
+	bio_set_dev(bio, bdev);
+#endif
 	bio->bi_iter.bi_sector = sector;
 
 	while (count) {
@@ -505,9 +542,16 @@ void chunk_store_tobdev(struct chunk *chunk)
 		}
 
 		/* Create next bio */
+#ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
 		next = bio_alloc_bioset(bdev, calc_max_vecs(count),
 					REQ_OP_WRITE | REQ_SYNC | REQ_FUA,
 					GFP_NOIO, &chunk_io_bioset);
+#else
+		next = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+					&chunk_io_bioset);
+		bio_set_op_attrs(next, REQ_OP_WRITE, REQ_SYNC | REQ_FUA);
+		bio_set_dev(next, bdev);
+#endif
 		next->bi_iter.bi_sector = bio_end_sector(bio);
 		bio_chain(bio, next);
 #ifdef BLKSNAP_STANDALONE
@@ -538,9 +582,13 @@ void chunk_diff_write(struct chunk *chunk)
 	struct iov_iter iov_iter;
 	ssize_t len;
 	int err = 0;
-
+#ifdef ITER_SOURCE
 	iov_iter_bvec(&iov_iter, ITER_SOURCE, chunk->diff_buffer->bvec,
 		      chunk->diff_buffer->nr_pages, length);
+#else
+	iov_iter_bvec(&iov_iter, WRITE, chunk->diff_buffer->bvec,
+		      chunk->diff_buffer->nr_pages, length);
+#endif
 	file_start_write(chunk->diff_file);
 	while (length) {
 		len = vfs_iter_write(chunk->diff_file, &iov_iter, &pos, 0);
@@ -571,9 +619,15 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 
 	bdev = chunk->diff_area->orig_bdev;
 	sector = chunk_sector(chunk);
-
+#ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
 	bio = bio_alloc_bioset(bdev, calc_max_vecs(count),
 			       REQ_OP_READ, GFP_NOIO, &chunk_io_bioset);
+#else
+	bio = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+			       &chunk_io_bioset);
+	bio_set_op_attrs(bio, REQ_OP_READ, 0);
+	bio_set_dev(bio, bdev);
+#endif
 	bio->bi_iter.bi_sector = sector;
 
 	while (count) {
@@ -589,9 +643,16 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 		}
 
 		/* Create next bio */
+#ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
 		next = bio_alloc_bioset(bdev, calc_max_vecs(count),
 					REQ_OP_READ, GFP_NOIO,
 					&chunk_io_bioset);
+#else
+		next = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+					&chunk_io_bioset);
+		bio_set_op_attrs(next, REQ_OP_READ, 0);
+		bio_set_dev(next, bdev);
+#endif
 		next->bi_iter.bi_sector = bio_end_sector(bio);
 		bio_chain(bio, next);
 #ifdef BLKSNAP_STANDALONE
@@ -662,8 +723,13 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 	INIT_WORK(&cbio->work, notify_load_and_schedule_io);
 	cbio->orig_bio = orig_bio;
 	cbio->orig_iter = orig_bio->bi_iter;
+#ifdef HAVE_BIO_ADVANCE_ITER_SIMPLE
 	bio_advance_iter_single(orig_bio, &orig_bio->bi_iter,
 				chunk_limit(chunk, orig_bio));
+#else
+	bio_advance_iter(orig_bio, &orig_bio->bi_iter,
+				chunk_limit(chunk, orig_bio));
+#endif
 	bio_inc_remaining(orig_bio);
 
 	chunk_submit_bio(bio);

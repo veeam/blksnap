@@ -7,6 +7,7 @@
 #include <linux/build_bug.h>
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
+#include "compat.h"
 #else
 #include <uapi/linux/blksnap.h>
 #endif
@@ -262,6 +263,9 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	 * Try to flush and freeze file system on each original block device.
 	 */
 	list_for_each_entry(tracker, &snapshot->trackers, link) {
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_freeze_bdev(tracker->diff_area->orig_bdev, &tracker->diff_area->sb);
+#else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
 			pr_warn("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
@@ -269,6 +273,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 			pr_debug("Device [%u:%u] was frozen\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		}
+#endif
 	}
 
 	/*
@@ -291,12 +296,16 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	 * Thaw file systems on original block devices.
 	 */
 	list_for_each_entry(tracker, &snapshot->trackers, link) {
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		_thaw_bdev(tracker->diff_area->orig_bdev, tracker->diff_area->sb);
+#else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
 			pr_warn("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
 			pr_debug("Device [%u:%u] was unfrozen\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+#endif
 	}
 fail:
 	if (ret) {

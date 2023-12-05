@@ -15,6 +15,7 @@
 #include <linux/miscdevice.h>
 #include "bdevfilter.h"
 #include "bdevfilter-internal.h"
+#include "compat.h"
 #include "version.h"
 
 
@@ -121,6 +122,9 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	struct blkfilter *flt;
 	struct block_device *bdev;
 	unsigned int task_flags;
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	struct super_block *sb = NULL;
+#endif
 	int ret = 0;
 
 	if (copy_from_user(&kargp, argp, sizeof(kargp)))
@@ -144,16 +148,30 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 
 	INIT_LIST_HEAD(&ext_new->link);
 	ext_new->dev_id = bdev->bd_dev;
-
+#ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_lock(&bdev->bd_disk->open_mutex);
-	if (!disk_live(bdev->bd_disk)) {
+#else
+	mutex_lock(&bdev->bd_mutex);
+#endif
+#ifdef HAVE_DISK_LIVE
+	if (!disk_live(bdev->bd_disk))
+#else
+	if (inode_unhashed(bdev->bd_inode))
+#endif
+	{
 		ret = -ENODEV;
 		goto out_mutex_unlock;
 	}
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	_freeze_bdev(bdev, &sb);
+	blk_mq_freeze_queue(bdev->bd_disk->queue);
+#else
 	ret = freeze_bdev(bdev);
 	if (ret)
 		goto out_mutex_unlock;
 	blk_mq_freeze_queue(bdev->bd_queue);
+#endif
 	task_flags = memalloc_noio_save();
 
 	flt = fops->attach(bdev);
@@ -183,10 +201,20 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	bdevfilter_put(flt);
 out_unfreeze:
 	memalloc_noio_restore(task_flags);
-	blk_mq_unfreeze_queue(bdev->bd_queue);
+
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	_thaw_bdev(bdev, sb);
+	blk_mq_unfreeze_queue(bdev->bd_disk->queue);
+#else
 	thaw_bdev(bdev);
+	blk_mq_unfreeze_queue(bdev->bd_queue);
+#endif
 out_mutex_unlock:
+#ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_unlock(&bdev->bd_disk->open_mutex);
+#else
+	mutex_unlock(&bdev->bd_mutex);
+#endif
 	kfree(ext_new);
 out_ops_put:
 	bdevfilter_operations_put(fops);
@@ -221,9 +249,15 @@ static inline void __blkfilter_detach(dev_t dev_id)
 
 void blkfilter_detach(struct block_device *bdev)
 {
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	blk_mq_freeze_queue(bdev->bd_disk->queue);
+	__blkfilter_detach(bdev->bd_dev);
+	blk_mq_unfreeze_queue(bdev->bd_disk->queue);
+#else
 	blk_mq_freeze_queue(bdev->bd_queue);
 	__blkfilter_detach(bdev->bd_dev);
 	blk_mq_unfreeze_queue(bdev->bd_queue);
+#endif
 }
 
 static inline int __blkfilter_detach2(dev_t dev_id, struct bdevfilter_name* kargp)
@@ -266,16 +300,33 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	bdev = bdev_by_fd(kargp.bdev_fd);
 	if (IS_ERR(bdev))
 		return PTR_ERR(bdev);
-
+#ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_lock(&bdev->bd_disk->open_mutex);
+#else
+	mutex_lock(&bdev->bd_mutex);
+#endif
+#ifdef HAVE_DISK_LIVE
 	if (!disk_live(bdev->bd_disk))
+#else
+	if (inode_unhashed(bdev->bd_inode))
+#endif
 		ret = -ENODEV;
 	else {
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+		blk_mq_freeze_queue(bdev->bd_disk->queue);
+		ret = __blkfilter_detach2(bdev->bd_dev, &kargp);
+		blk_mq_unfreeze_queue(bdev->bd_disk->queue);
+#else
 		blk_mq_freeze_queue(bdev->bd_queue);
 		ret = __blkfilter_detach2(bdev->bd_dev, &kargp);
 		blk_mq_unfreeze_queue(bdev->bd_queue);
+#endif
 	}
+#ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_unlock(&bdev->bd_disk->open_mutex);
+#else
+	mutex_unlock(&bdev->bd_mutex);
+#endif
 #if defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
 #else
@@ -298,9 +349,17 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 	bdev = bdev_by_fd(kargp.bdev_fd);
 	if (IS_ERR(bdev))
 		return PTR_ERR(bdev);
-
+#ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_lock(&bdev->bd_disk->open_mutex);
-	if (!disk_live(bdev->bd_disk)) {
+#else
+	mutex_lock(&bdev->bd_mutex);
+#endif
+#ifdef HAVE_DISK_LIVE
+	if (!disk_live(bdev->bd_disk))
+#else
+	if (inode_unhashed(bdev->bd_inode))
+#endif
+	{
 		ret = -ENODEV;
 		goto out_mutex_unlock;
 	}
@@ -324,7 +383,11 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 
 	//blk_queue_exit(bdev_get_queue(bdev));
 out_mutex_unlock:
+#ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_unlock(&bdev->bd_disk->open_mutex);
+#else
+	mutex_unlock(&bdev->bd_mutex);
+#endif
 #if defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
 #else
@@ -366,14 +429,37 @@ void bdevfilter_unregister(struct bdevfilter_operations *fops)
 }
 EXPORT_SYMBOL_GPL(bdevfilter_unregister);
 
+#if defined(HAVE_BI_BDISK)
+static inline struct hd_struct *bdevfilter_disk_get_part(struct gendisk *disk, int partno)
+{
+	struct disk_part_tbl *ptbl = rcu_dereference(disk->part_tbl);
+
+	if (unlikely(partno < 0 || partno >= ptbl->len))
+		return NULL;
+	return rcu_dereference(ptbl->part[partno]);
+}
+static inline dev_t bdevfilter_disk_get_dev(struct gendisk *disk, int partno)
+{
+	dev_t dev_id = 0;
+	struct hd_struct *part;
+
+	rcu_read_lock();
+	part = bdevfilter_disk_get_part(disk, partno);
+	if (part)
+		dev_id = part_devt(part);
+	rcu_read_unlock();
+
+	return dev_id;
+}
+#endif
+
 static inline bool bdev_filters_apply(struct bio *bio)
 {
 	bool result = true;
 	struct bdev_extension *ext;
 	struct blkfilter *flt = NULL;
 #if defined(HAVE_BI_BDISK)
-	struct hd_struct *part = disk_get_part(bio->bi_disk, bio->bi_partno);
-	dev_t dev_id = part_devt(part);
+	dev_t dev_id = bdevfilter_disk_get_dev(bio->bi_disk, bio->bi_partno);
 #else
 	dev_t dev_id = bio->bi_bdev->bd_dev;
 #endif
@@ -387,9 +473,7 @@ static inline bool bdev_filters_apply(struct bio *bio)
 		result = flt->fops->submit_bio(bio, flt);
 		bdevfilter_put(flt);
 	}
-#if defined(HAVE_BI_BDISK)
-	disk_put_part(part);
-#endif
+
 	return result;
 }
 

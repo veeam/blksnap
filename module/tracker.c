@@ -9,6 +9,7 @@
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
 #include "bdevfilter-internal.h"
+#include "compat.h"
 #else
 #include <uapi/linux/blksnap.h>
 #endif
@@ -50,9 +51,12 @@ static bool tracker_submit_bio(struct bio *bio)
 		return false;
 
 	copy_iter = bio->bi_iter;
+#ifdef BLKSNAP_STANDALONE
+	// do nothing - the handling is performed before the remapping
+#else
 	if (bio_flagged(bio, BIO_REMAPPED))
 		copy_iter.bi_sector -= bio->bi_bdev->bd_start_sect;
-
+#endif
 	if (cbt_map_set(tracker->cbt_map, copy_iter.bi_sector, count))
 		return false;
 
@@ -303,7 +307,11 @@ int tracker_take_snapshot(struct tracker *tracker)
 	sector_t capacity;
 	unsigned int current_flag;
 
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	blk_mq_freeze_queue(orig_bdev->bd_disk->queue);
+#else
 	blk_mq_freeze_queue(orig_bdev->bd_queue);
+#endif
 	current_flag = memalloc_noio_save();
 
 	if (tracker->cbt_map->is_corrupted) {
@@ -330,8 +338,11 @@ int tracker_take_snapshot(struct tracker *tracker)
 	atomic_set(&tracker->snapshot_is_taken, true);
 
 	memalloc_noio_restore(current_flag);
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	blk_mq_unfreeze_queue(orig_bdev->bd_disk->queue);
+#else
 	blk_mq_unfreeze_queue(orig_bdev->bd_queue);
-
+#endif
 	return 0;
 }
 
@@ -343,17 +354,21 @@ void tracker_release_snapshot(struct tracker *tracker)
 		return;
 
 	snapimage_free(tracker);
-
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	blk_mq_freeze_queue(tracker->orig_bdev->bd_disk->queue);
+#else
 	blk_mq_freeze_queue(tracker->orig_bdev->bd_queue);
-
+#endif
 	pr_debug("Tracker for device [%u:%u] release snapshot\n",
 		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->diff_area = NULL;
-
+#if defined(HAVE_SUPER_BLOCK_FREEZE)
+	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_disk->queue);
+#else
 	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_queue);
-
+#endif
 	diff_area_put(diff_area);
 }
 
