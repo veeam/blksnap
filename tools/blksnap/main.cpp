@@ -18,8 +18,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <uuid/uuid.h>
-#include <blksnap/bdevfilter.h>
-#include <blksnap/veeamblksnap.h>
+#include <linux/bdevfilter.h>
+#include <linux/veeamblksnap.h>
 #include <time.h>
 
 namespace po = boost::program_options;

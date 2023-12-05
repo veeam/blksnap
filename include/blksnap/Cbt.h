@@ -29,13 +29,12 @@ namespace blksnap
 {
     struct SCbtInfo
     {
-        SCbtInfo(){};
-        SCbtInfo(const unsigned int inOriginalMajor, const unsigned int inOriginalMinor, const uint32_t inBlockSize,
-                 const uint32_t inBlockCount, const uint64_t inDeviceCapacity, const uuid_t& inGenerationId,
+        SCbtInfo()
+        {};
+        SCbtInfo(const uint32_t inBlockSize, const uint32_t inBlockCount,
+                 const uint64_t inDeviceCapacity, const uuid_t& inGenerationId,
                  const uint8_t inSnapNumber)
-            : originalMajor(inOriginalMajor)
-            , originalMinor(inOriginalMinor)
-            , blockSize(inBlockSize)
+            : blockSize(inBlockSize)
             , blockCount(inBlockCount)
             , deviceCapacity(inDeviceCapacity)
             , snapNumber(inSnapNumber)
@@ -44,8 +43,6 @@ namespace blksnap
         };
         ~SCbtInfo(){};
 
-        unsigned int originalMajor;
-        unsigned int originalMinor;
         unsigned int blockSize;
         unsigned int blockCount;
         unsigned long long deviceCapacity;
@@ -66,12 +63,14 @@ namespace blksnap
 
     struct ICbt
     {
-        virtual ~ICbt(){};
+        virtual ~ICbt() = default;
 
-        virtual std::shared_ptr<SCbtInfo> GetCbtInfo(const std::string& original) = 0;
-        virtual std::shared_ptr<SCbtData> GetCbtData(const std::shared_ptr<SCbtInfo>& ptrCbtInfo) = 0;
+        virtual std::string GetImage() = 0;
+        virtual int GetError() = 0;
+        virtual std::shared_ptr<SCbtInfo> GetCbtInfo() = 0;
+        virtual std::shared_ptr<SCbtData> GetCbtData() = 0;
 
-        static std::shared_ptr<ICbt> Create();
+        static std::shared_ptr<ICbt> Create(const std::string& original);
     };
 
 }

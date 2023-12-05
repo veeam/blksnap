@@ -31,7 +31,8 @@ if (NOT LIBUUID_LIBRARY)
 endif ()
 
 set(SOURCE_FILES
-    Blksnap.cpp
+    Snapshot.cpp
+    Tracker.cpp
     Cbt.cpp
     Service.cpp
     Session.cpp
@@ -42,8 +43,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "blksnap")
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
-install(TARGETS ${PROJECT_NAME} DESTINATION lib)
+install(TARGETS ${PROJECT_NAME} DESTINATION /usr/lib)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../include/blksnap
-        DESTINATION include
+        DESTINATION /usr/include/blksnap
         FILES_MATCHING PATTERN "*.h")
