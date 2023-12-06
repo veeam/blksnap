@@ -31,6 +31,7 @@ namespace fs = boost::filesystem;
 #ifndef SECTOR_SIZE
 #    define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
+#define BLKSNAP_FILTER_NAME {'b','l','k','s','n','a','p','\0'}
 
 namespace
 {
@@ -104,9 +105,11 @@ namespace
     public:
         CBlkFilterCtl(const std::string& devicePath)
         {
-            m_bdevfilter = ::open("/dev/" BDEVFILTER, O_DIRECT, 0600);
+            const std::string bdevfilterPath("/dev/" BDEVFILTER);
+
+            m_bdevfilter = ::open(bdevfilterPath.c_str(), O_RDWR);
             if (m_bdevfilter < 0)
-                throw std::system_error(errno, std::generic_category(), "Failed to open ["+std::string(BDEVFILTER)+"] device");
+                throw std::system_error(errno, std::generic_category(), "Failed to open ["+bdevfilterPath+"] device");
 
             m_fd = ::open(devicePath.c_str(), O_DIRECT, 0600);
             if (m_fd < 0)
@@ -124,7 +127,7 @@ namespace
         {
             struct bdevfilter_name name = {
                 .bdev_fd = m_fd,
-                .name = {'v','e','e','a','m','b','l','k','s','n','a','p', '\0'},
+                .name = BLKSNAP_FILTER_NAME,
             };
 
             try
@@ -148,7 +151,7 @@ namespace
         {
             struct bdevfilter_ctl name = {
                 .bdev_fd = m_fd,
-                .name = {'v','e','e','a','m','b','l','k','s','n','a','p', '\0'},
+                .name = BLKSNAP_FILTER_NAME,
             };
 
             try
@@ -168,7 +171,7 @@ namespace
         {
             struct bdevfilter_ctl ctl = {
                 .bdev_fd = m_fd,
-                .name = {'v','e','e','a','m','b','l','k','s','n','a','p', '\0'},
+                .name = BLKSNAP_FILTER_NAME,
                 .cmd = cmd,
                 .optlen = len,
                 .opt = (__u64)buf,

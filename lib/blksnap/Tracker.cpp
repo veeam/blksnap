@@ -29,13 +29,15 @@
 
 using namespace blksnap;
 
-#define BLKSNAP_FILTER_NAME {'v','e','e','a','m','b','l','k','s','n','a','p','\0'}
+#define BLKSNAP_FILTER_NAME {'m','b','l','k','s','n','a','p','\0'}
 
 CTracker::CTracker(const std::string& devicePath)
 {
-    m_bdevfilter = ::open("/dev/" BDEVFILTER, O_DIRECT, 0600);
+    const std::string bdevfilterPath("/dev/" BDEVFILTER);
+
+    m_bdevfilter = ::open(bdevfilterPath.c_str(), O_RDWR);
     if (m_bdevfilter < 0)
-        throw std::system_error(errno, std::generic_category(), "Failed to open ["+std::string(BDEVFILTER)+"] device");
+        throw std::system_error(errno, std::generic_category(), "Failed to open ["+bdevfilterPath+"] device");
     m_fd = ::open(devicePath.c_str(), O_DIRECT, 0600);
     if (m_fd < 0)
         throw std::system_error(errno, std::generic_category(),
