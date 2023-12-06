@@ -130,12 +130,14 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	if (copy_from_user(&kargp, argp, sizeof(kargp)))
 		return -EFAULT;
 
+	pr_debug("Attach '%s'\n", kargp.name);
 	bdev = bdev_by_fd(kargp.bdev_fd);
 	if (IS_ERR(bdev))
 		return PTR_ERR(bdev);
 
 	fops = bdevfilter_operations_get(kargp.name);
 	if (!fops) {
+		pr_debug("Filter '%s' is not registered\n", kargp.name);
 		ret = -ENOENT;
 		goto out_blkdev_put;
 	}
@@ -159,6 +161,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	if (inode_unhashed(bdev->bd_inode))
 #endif
 	{
+		pr_debug("Device is not alive\n");
 		ret = -ENODEV;
 		goto out_mutex_unlock;
 	}
@@ -176,6 +179,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 
 	flt = fops->attach(bdev);
 	if (IS_ERR(flt)) {
+		pr_debug("Failed to attach device to filter '%s'\n", fops->name);
 		ret = PTR_ERR(flt);
 		goto out_unfreeze;
 	}
@@ -184,10 +188,14 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	spin_lock(&bdev_extension_list_lock);
 	ext_tmp = bdev_extension_find(bdev->bd_dev);
 	if (ext_tmp) {
-		if (ext_tmp->flt->fops == fops)
+		if (ext_tmp->flt->fops == fops) {
 			ret = -EALREADY;
-		else
+			pr_debug("Device is already attached\n");
+		}
+		else {
 			ret = -EBUSY;
+			pr_debug("Device is busy\n");
+		}
 	} else {
 		flt->fops = fops;
 		ext_new->flt = flt;
@@ -247,6 +255,9 @@ static inline void __blkfilter_detach(dev_t dev_id)
 	bdevfilter_operations_put(fops);
 }
 
+/*
+ * unused
+ */
 void blkfilter_detach(struct block_device *bdev)
 {
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
@@ -266,6 +277,8 @@ static inline int __blkfilter_detach2(dev_t dev_id, struct bdevfilter_name* karg
 	struct bdev_extension *ext;
 	struct blkfilter *flt = NULL;
 	const struct bdevfilter_operations *fops = NULL;
+
+	pr_debug("Detach '%s'\n", kargp->name);
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(dev_id);
@@ -293,6 +306,8 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	struct bdevfilter_name kargp;
 	struct block_device *bdev;
 	int ret = 0;
+
+	pr_debug("Block device filter detach\n");
 
 	if (copy_from_user(&kargp, argp, sizeof(kargp)))
 		return -EFAULT;
@@ -342,6 +357,8 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 	struct bdev_extension *ext;
 	struct blkfilter *flt = NULL;
 	int ret;
+
+	pr_debug("Block device filter ioctl\n");
 
 	if (copy_from_user(&kargp, argp, sizeof(kargp)))
 		return -EFAULT;
@@ -400,6 +417,8 @@ void bdevfilter_free(struct kref *kref)
 {
 	struct blkfilter *flt = container_of(kref, struct blkfilter, kref);
 
+	pr_debug("Detach filter '%s' registered\n",
+			flt->fops->name);
 	flt->fops->detach(flt);
 }
 
@@ -415,6 +434,13 @@ int bdevfilter_register(struct bdevfilter_operations *fops)
 	else
 		list_add_tail(&fops->link, &bdevfilters);
 	spin_unlock(&bdevfilters_lock);
+
+	if (ret)
+		pr_warn("Failed to register block device filter %s\n",
+			fops->name);
+	else
+		pr_debug("The block device filter '%s' registered\n",
+			fops->name);
 
 	return ret;
 }
