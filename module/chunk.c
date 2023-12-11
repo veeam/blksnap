@@ -679,7 +679,11 @@ int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
 
 	if (prev) {
 		bio_chain(prev, bio);
+#ifdef BLKSNAP_STANDALONE
+		submit_bio_noacct_notrace(prev);
+#else
 		submit_bio_noacct(prev);
+#endif
 	}
 
 	*chunk_bio = bio;
