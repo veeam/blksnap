@@ -52,13 +52,17 @@ A "v4" patch ([cover](https://lore.kernel.org/lkml/20230609115206.4649-1-sergei.
 
 [A "v5" patch](https://lore.kernel.org/linux-block/ZIcsijGWeyk%2FFjHs@infradead.org/T/#mc6b9e9bb70021d25decba816766a80fe54911539) done immediately afterwards and which contains the majority of response emails, is only a rebase on latest linux-block, was posted at 12 June 2023.
 
+In the v6, the method of saving snapshot difference has been changed.
+Why this should have been done, Dave Chinner described in detail in the [comments to the previous version](https://lore.kernel.org/lkml/20230612135228.10702-1-sergei.shtepa@veeam.com/T/#mfe9b8f46833011deea4b24714212230ac38db978).
+
+A "v6" patch on [lore](https://lore.kernel.org/linux-block/14d5d31e-0dbe-8d04-91a6-82a886f8e92a@veeam.com/T/#t) or [patchwork](https://patchwork.kernel.org/project/linux-block/list/?series=804089&archive=both) was posted at 7 December 2023.
 
 ## Work in progress and news
 
-There is a work in progress for "v6",
+There is a work in progress for "v7",
 is possible view/test it from [this branch](https://github.com/SergeiShtepa/linux/tree/blksnap-master) of a linux fork git.
 
-For testing this version, that have important changes, [the blksnap branch master](https://github.com/veeam/blksnap/tree/master) must be used updated with the latest commits,
+For testing this version, [the blksnap branch master](https://github.com/veeam/blksnap/tree/master) must be used updated with the latest commits,
 to have library, tools and tests working with new upstream version.
 
 Latest news are also visible from [here](https://github.com/veeam/blksnap/issues/2)
