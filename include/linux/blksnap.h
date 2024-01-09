@@ -238,14 +238,14 @@ struct blksnap_version {
  *
  * @diff_storage_limit_sect:
  *	The maximum allowed difference storage size in sectors.
- * @diff_storage_fd:
- *	The difference storage file descriptor.
+ * @diff_storage_filename:
+ *	The difference storage file name.
  * @id:
  *	Generated new snapshot ID.
  */
 struct blksnap_snapshot_create {
 	__u64 diff_storage_limit_sect;
-	__u32 diff_storage_fd;
+	__u64 diff_storage_filename;
 	struct blksnap_uuid id;
 };
 
