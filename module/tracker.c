@@ -6,6 +6,7 @@
 #include <linux/blk-mq.h>
 #include <linux/sched/mm.h>
 #include <linux/build_bug.h>
+#include <linux/blk-crypto.h>
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
 #include "bdevfilter-internal.h"
@@ -71,7 +72,7 @@ static bool tracker_submit_bio(struct bio *bio)
 		return false;
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
-	if (bio->bi_crypt_context) {
+	if (bio_has_crypt_ctx(bio) /*|| bio_flagged(bio, BIO_CRYPTO_PREPARED)*/) {
 		pr_err("Inline encryption is not supported\n");
 		diff_area_set_corrupted(tracker->diff_area, -EPERM);
 		return false;

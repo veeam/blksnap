@@ -4,17 +4,20 @@
 
 #include <linux/blkdev.h>
 #include <linux/slab.h>
+#ifdef BLKSNAP_STANDALONE
+#include "compat.h"
+#include "bdevfilter-internal.h"
+#else
+#include <linux/blk-filter.h>
+#endif
 #include "chunk.h"
 #include "diff_buffer.h"
 #include "diff_storage.h"
 #include "params.h"
-#ifdef BLKSNAP_STANDALONE
-#include "compat.h"
-#include "bdevfilter-internal.h"
-#endif
 
 struct chunk_bio {
 	struct work_struct work;
+	struct blkfilter *flt;
 	struct list_head chunks;
 	struct bio *orig_bio;
 	struct bvec_iter orig_iter;
@@ -431,11 +434,11 @@ static void notify_load_and_postpone_io(struct work_struct *work)
 		chunk_schedule_storing(chunk);
 	}
 
-	/* submit the original bio fed into the tracker */
+	/* re submit filtered original bio */
 #ifdef BLKSNAP_STANDALONE
-	submit_bio_noacct_notrace(cbio->orig_bio);
+	bdevfilter_resubmit_bio(cbio->orig_bio, cbio->flt);
 #else
-	submit_bio_noacct_nocheck(cbio->orig_bio);
+	blkfilter_resubmit_bio(cbio->orig_bio, cbio->flt);
 #endif
 	bio_put(&cbio->bio);
 }
@@ -563,8 +566,8 @@ void chunk_store_tobdev(struct chunk *chunk)
 	}
 
 	cbio = container_of(bio, struct chunk_bio, bio);
-
 	INIT_WORK(&cbio->work, chunk_notify_store_tobdev);
+	cbio->flt = NULL;
 	INIT_LIST_HEAD(&cbio->chunks);
 	list_add_tail(&chunk->link, &cbio->chunks);
 	cbio->orig_bio = NULL;
@@ -690,8 +693,8 @@ int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
 	return 0;
 }
 
-void chunk_load_and_postpone_io_finish(struct list_head *chunks,
-				struct bio *chunk_bio, struct bio *orig_bio)
+void chunk_load_and_postpone_io_finish(struct blkfilter *flt,
+	struct list_head *chunks, struct bio *chunk_bio, struct bio *orig_bio)
 {
 	struct chunk_bio *cbio;
 
@@ -706,6 +709,7 @@ void chunk_load_and_postpone_io_finish(struct list_head *chunks,
 		list_add_tail(&it->link, &cbio->chunks);
 	}
 	INIT_WORK(&cbio->work, notify_load_and_postpone_io);
+	cbio->flt = flt;
 	cbio->orig_bio = orig_bio;
 	chunk_submit_bio(chunk_bio);
 }
@@ -725,6 +729,7 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 	INIT_LIST_HEAD(&cbio->chunks);
 	list_add_tail(&chunk->link, &cbio->chunks);
 	INIT_WORK(&cbio->work, notify_load_and_schedule_io);
+	cbio->flt = NULL;
 	cbio->orig_bio = orig_bio;
 	cbio->orig_iter = orig_bio->bi_iter;
 #ifdef HAVE_BIO_ADVANCE_ITER_SIMPLE

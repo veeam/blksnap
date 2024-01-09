@@ -430,7 +430,8 @@ bool diff_area_cow(struct bio *bio, struct diff_area *diff_area,
 
 	if (chunk_bio) {
 		/* Postpone bio processing in a callback. */
-		chunk_load_and_postpone_io_finish(&chunks, chunk_bio, bio);
+		chunk_load_and_postpone_io_finish(&diff_area->tracker->filter,
+						  &chunks, chunk_bio, bio);
 		return true;
 	}
 	/* Pass bio to the low level */
