@@ -53,7 +53,8 @@ struct snapshot {
 
 void __exit snapshot_done(void);
 
-int snapshot_create(struct blksnap_snapshot_create *arg);
+int snapshot_create(const char *filename, sector_t limit_sect,
+		    struct blksnap_uuid *id);
 int snapshot_destroy(const uuid_t *id);
 int snapshot_add_device(const uuid_t *id, struct tracker *tracker);
 int snapshot_take(const uuid_t *id);

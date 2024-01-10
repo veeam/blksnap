@@ -94,7 +94,7 @@ static inline void diff_storage_put(struct diff_storage *diff_storage)
 };
 
 int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
-				  unsigned int fd, sector_t limit);
+				  const char *filename, sector_t limit);
 
 int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 #if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)

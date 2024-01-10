@@ -207,14 +207,20 @@ static_assert(sizeof(uuid_t) == sizeof(struct blksnap_uuid),
 static int ioctl_snapshot_create(struct blksnap_snapshot_create __user *uarg)
 {
 	struct blksnap_snapshot_create karg;
+	char *fname;
 	int ret;
 
 	if (copy_from_user(&karg, uarg, sizeof(karg))) {
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}
+	fname = strndup_user((const char __user *)karg.diff_storage_filename,
+			     PATH_MAX);
+	if (IS_ERR(fname))
+		return PTR_ERR(fname);
 
-	ret = snapshot_create(&karg);
+	ret = snapshot_create(fname, karg.diff_storage_limit_sect, &karg.id);
+	kfree(fname);
 	if (ret)
 		return ret;
 

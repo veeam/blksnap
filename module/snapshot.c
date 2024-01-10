@@ -98,7 +98,8 @@ void __exit snapshot_done(void)
 	} while (snapshot);
 }
 
-int snapshot_create(struct blksnap_snapshot_create *arg)
+int snapshot_create(const char *filename, sector_t limit_sect,
+		    struct blksnap_uuid *id)
 {
 	int ret;
 	struct snapshot *snapshot = NULL;
@@ -109,11 +110,10 @@ int snapshot_create(struct blksnap_snapshot_create *arg)
 		return PTR_ERR(snapshot);
 	}
 
-	export_uuid(arg->id.b, &snapshot->id);
+	export_uuid(id->b, &snapshot->id);
 
 	ret = diff_storage_set_diff_storage(snapshot->diff_storage,
-					    arg->diff_storage_fd,
-					    arg->diff_storage_limit_sect);
+					    filename, limit_sect);
 	if (ret) {
 		pr_err("Unable to create snapshot: invalid difference storage file\n");
 		snapshot_put(snapshot);
@@ -124,7 +124,7 @@ int snapshot_create(struct blksnap_snapshot_create *arg)
 	list_add_tail(&snapshot->link, &snapshots);
 	up_write(&snapshots_lock);
 
-	pr_info("Snapshot %pUb was created\n", arg->id.b);
+	pr_info("Snapshot %pUb was created\n", id->b);
 	return 0;
 }
 
