@@ -63,9 +63,9 @@ int bdevfilter_register(struct bdevfilter_operations *fops);
 void bdevfilter_unregister(struct bdevfilter_operations *fops);
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-blk_qc_t bdevfilter_resubmit_bio(struct bio *bio, struct blkfilter *flt);
+blk_qc_t submit_bio_noacct_notrace(struct bio *bio);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-void bdevfilter_resubmit_bio(struct bio *bio, struct blkfilter *flt);
+void submit_bio_noacct_notrace(struct bio *bio);
 #endif
 
 

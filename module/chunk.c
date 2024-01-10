@@ -433,7 +433,7 @@ static void notify_load_and_postpone_io(struct work_struct *work)
 
 	/* re submit filtered original bio */
 #ifdef BLKSNAP_STANDALONE
-	bdevfilter_resubmit_bio(cbio->orig_bio, cbio->flt);
+	submit_bio_noacct_notrace(cbio->orig_bio);
 #else
 	blkfilter_resubmit_bio(cbio->orig_bio, cbio->flt);
 #endif
