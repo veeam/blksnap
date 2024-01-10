@@ -267,7 +267,6 @@ static void chunk_diff_bio_complete_write(struct kiocb *iocb, long ret)
 	struct chunk_io_ctx *io_ctx;
 
 	io_ctx = container_of(iocb, struct chunk_io_ctx, iocb);
-	file_end_write(io_ctx->iocb.ki_filp);
 	chunk_io_ctx_free(io_ctx, ret);
 }
 
@@ -276,13 +275,11 @@ static inline void chunk_diff_bio_execute_write(struct chunk_io_ctx *io_ctx)
 	struct file *diff_file = io_ctx->chunk->diff_file;
 	ssize_t len;
 
-	file_start_write(diff_file);
 	len = vfs_iocb_iter_write(diff_file, &io_ctx->iocb,  &io_ctx->iov_iter);
 
 	if (len != -EIOCBQUEUED) {
 		if (unlikely(len < 0))
 			pr_err("Failed to write data to difference storage\n");
-		file_end_write(diff_file);
 		chunk_io_ctx_free(io_ctx, len);
 	}
 }
