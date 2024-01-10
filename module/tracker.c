@@ -261,26 +261,32 @@ static int ctl_snapshotinfo(struct tracker *tracker,
 	return 0;
 }
 
-static int (*const ctl_table[])(struct tracker *tracker,
-				__u8 __user *buf, __u32 *plen) = {
-	ctl_cbtinfo,
-	ctl_cbtmap,
-	ctl_cbtdirty,
-	ctl_snapshotadd,
-	ctl_snapshotinfo,
-};
-
 static int tracker_ctl(struct blkfilter *flt, const unsigned int cmd,
 		       __u8 __user *buf, __u32 *plen)
 {
 	int ret = 0;
 	struct tracker *tracker = container_of(flt, struct tracker, filter);
 
-	if (cmd > ARRAY_SIZE(ctl_table))
-		return -ENOTTY;
-
 	mutex_lock(&tracker->ctl_lock);
-	ret = ctl_table[cmd](tracker, buf, plen);
+	switch(cmd) {
+	case blkfilter_ctl_blksnap_cbtinfo:
+		ret = ctl_cbtinfo(tracker, buf, plen);
+		break;
+	case blkfilter_ctl_blksnap_cbtmap:
+		ret = ctl_cbtmap(tracker, buf, plen);
+		break;
+	case blkfilter_ctl_blksnap_cbtdirty:
+		ret = ctl_cbtdirty(tracker, buf, plen);
+		break;
+	case blkfilter_ctl_blksnap_snapshotadd:
+		ret = ctl_snapshotadd(tracker, buf, plen);
+		break;
+	case blkfilter_ctl_blksnap_snapshotinfo:
+		ret = ctl_snapshotinfo(tracker, buf, plen);
+		break;
+	default:
+		ret = -ENOTTY;
+	};
 	mutex_unlock(&tracker->ctl_lock);
 
 	return ret;
