@@ -64,9 +64,7 @@ struct diff_storage {
 	spinlock_t lock;
 
 	dev_t dev_id;
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 	struct block_device *bdev;
-#endif
 	struct file *file;
 	sector_t capacity;
 	sector_t limit;
@@ -97,8 +95,6 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 				  const char *filename, sector_t limit);
 
 int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 		       struct block_device **bdev,
-#endif
 		       struct file **file, sector_t *sector);
 #endif /* __BLKSNAP_DIFF_STORAGE_H */

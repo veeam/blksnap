@@ -82,12 +82,10 @@ static inline void check_halffull(struct diff_storage *diff_storage,
 	if (is_halffull(sectors_left) &&
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
 
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 		if (diff_storage->bdev) {
 			pr_warn("Reallocating is allowed only for a regular file\n");
 			return;
 		}
-#endif
 		if (!diff_storage_calculate_requested(diff_storage)) {
 			pr_info("The limit size of the difference storage has been reached\n");
 			return;
@@ -123,7 +121,6 @@ void diff_storage_free(struct kref *kref)
 	diff_storage = container_of(kref, struct diff_storage, kref);
 	flush_work(&diff_storage->reallocate_work);
 
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 	if (diff_storage->bdev) {
 #if defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(diff_storage->bdev, diff_storage);
@@ -132,7 +129,6 @@ void diff_storage_free(struct kref *kref)
 			   FMODE_EXCL | FMODE_READ | FMODE_WRITE);
 #endif
 	}
-#endif
 	if (diff_storage->file)
 		filp_close(diff_storage->file, NULL);
 	event_queue_done(&diff_storage->event_queue);
@@ -287,9 +283,7 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 }
 
 int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 			struct block_device **bdev,
-#endif
 			struct file **file, sector_t *sector)
 
 {
@@ -305,9 +299,7 @@ int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 		return -ENOSPC;
 	}
 
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 	*bdev = diff_storage->bdev;
-#endif
 	*file = diff_storage->file;
 	*sector = diff_storage->filled;
 

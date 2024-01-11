@@ -178,18 +178,12 @@ static inline bool diff_area_store_one(struct diff_area *diff_area)
 		return true;
 	}
 
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 	if (!chunk->diff_file && !chunk->diff_bdev) {
-#else
-	if (!chunk->diff_file) {
-#endif
 		int ret;
 
 		ret = diff_storage_alloc(diff_area->diff_storage,
 					 diff_area_chunk_sectors(diff_area),
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 					 &chunk->diff_bdev,
-#endif
 					 &chunk->diff_file,
 					 &chunk->diff_ofs_sect);
 		if (ret) {
@@ -200,12 +194,10 @@ static inline bool diff_area_store_one(struct diff_area *diff_area)
 		}
 	}
 
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 	if (chunk->diff_bdev) {
 		chunk_store_tobdev(chunk);
 		return true;
 	}
-#endif
 	chunk_diff_write(chunk);
 	return true;
 }
@@ -563,13 +555,11 @@ bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio)
 		/*
 		 * Data is read from the difference storage or written to it.
 		 */
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 		if (chunk->diff_bdev) {
 			chunk_diff_bio_tobdev(chunk, bio);
 			chunk_up(chunk);
 			return true;
 		}
-#endif
 		ret = chunk_diff_bio(chunk, bio);
 		return (ret == 0);
 	case CHUNK_ST_NEW:

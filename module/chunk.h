@@ -90,9 +90,7 @@ struct chunk {
 
 	enum chunk_st state;
 
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 	struct block_device *diff_bdev;
-#endif
 	struct file *diff_file;
 	sector_t diff_ofs_sect;
 
@@ -126,10 +124,8 @@ struct bio *chunk_alloc_clone(struct block_device *bdev, struct bio *bio);
 
 void chunk_copy_bio(struct chunk *chunk, struct bio *bio,
 		    struct bvec_iter *iter);
-#if defined(CONFIG_BLKSNAP_DIFF_BLKDEV)
 void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio);
 void chunk_store_tobdev(struct chunk *chunk);
-#endif
 int chunk_diff_bio(struct chunk *chunk, struct bio *bio);
 void chunk_diff_write(struct chunk *chunk);
 bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio);
