@@ -481,7 +481,7 @@ static inline dev_t bdevfilter_disk_get_dev(struct gendisk *disk, int partno)
 
 static inline bool bdev_filters_apply(struct bio *bio)
 {
-	bool result = true;
+	bool skip = false;
 	struct bdev_extension *ext;
 	struct blkfilter *flt = NULL;
 #if defined(HAVE_BI_BDISK)
@@ -496,11 +496,11 @@ static inline bool bdev_filters_apply(struct bio *bio)
 		flt = bdevfilter_get(ext->flt);
 	spin_unlock(&bdev_extension_list_lock);
 	if (flt) {
-		result = flt->fops->submit_bio(bio, flt);
+		skip = flt->fops->submit_bio(bio, flt);
 		bdevfilter_put(flt);
 	}
 
-	return result;
+	return skip;
 }
 
 
@@ -530,7 +530,7 @@ blk_qc_t submit_bio_noacct_handler(struct bio *bio)
 void submit_bio_noacct_handler(struct bio *bio)
 #endif
 {
-	if (!bdev_filters_apply(bio)) {
+	if (bdev_filters_apply(bio)) {
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 		return BLK_QC_T_NONE;
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
