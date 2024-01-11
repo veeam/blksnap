@@ -678,19 +678,7 @@ public:
         if (!vm.count("file"))
             throw std::invalid_argument("Argument 'file' is missed.");
 
-        int flags = O_RDWR | O_EXCL;
         std::string filename = vm["file"].as<std::string>();
-
-        if (fs::is_directory(filename)) {
-            /* A temporary file (flag O_TMPFILE) is being created.
-             * Not available for all file systems.
-             * See: man open.
-             */
-            flags |= O_TMPFILE;
-        } else if (!fs::is_regular_file(filename) && !isBlockFile(filename))
-            throw std::invalid_argument("The value '"+filename+"' for the argument '--file' should have been either the name of a regular file, the name of a block device, or the directory for creating a temporary file.");
-
-        OpenFileHolder fd(filename, flags, 0600);
 
         unsigned long long limit = 0;
         unsigned long long multiple = 1;
@@ -711,7 +699,7 @@ public:
         }
 
         param.diff_storage_limit_sect = limit / 512;
-        param.diff_storage_fd = fd.Get();
+        param.diff_storage_filename = (__u64)filename.c_str();
         if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
             throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
 
