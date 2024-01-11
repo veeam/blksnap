@@ -226,12 +226,12 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 	sector_t req_sect;
 
 	file = filp_open(filename, O_RDONLY, S_IRUSR);
-	if (!file) {
+	if (IS_ERR(file)) {
 		pr_err("Failed to open '%s'\n", filename);
-		return -EINVAL;
+		return PTR_ERR(file);
 	}
 	mode = file_inode(file)->i_mode;
-	__fput_sync(file);
+	filp_close(file, NULL);
 
 	if (S_ISBLK(mode))
 		ret = diff_storage_set_bdev(diff_storage, filename);
