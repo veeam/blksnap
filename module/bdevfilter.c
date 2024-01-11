@@ -122,9 +122,6 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	struct blkfilter *flt;
 	struct block_device *bdev;
 	unsigned int task_flags;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	struct super_block *sb = NULL;
-#endif
 	int ret = 0;
 
 	if (copy_from_user(&kargp, argp, sizeof(kargp)))
@@ -166,15 +163,6 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 		goto out_mutex_unlock;
 	}
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_freeze_bdev(bdev, &sb);
-	blk_mq_freeze_queue(bdev->bd_disk->queue);
-#else
-	ret = freeze_bdev(bdev);
-	if (ret)
-		goto out_mutex_unlock;
-	blk_mq_freeze_queue(bdev->bd_queue);
-#endif
 	task_flags = memalloc_noio_save();
 
 	flt = fops->attach(bdev);
@@ -210,13 +198,6 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 out_unfreeze:
 	memalloc_noio_restore(task_flags);
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	_thaw_bdev(bdev, sb);
-	blk_mq_unfreeze_queue(bdev->bd_disk->queue);
-#else
-	thaw_bdev(bdev);
-	blk_mq_unfreeze_queue(bdev->bd_queue);
-#endif
 out_mutex_unlock:
 #ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_unlock(&bdev->bd_disk->open_mutex);
@@ -235,43 +216,7 @@ out_blkdev_put:
 	return ret;
 }
 
-static inline void __blkfilter_detach(dev_t dev_id)
-{
-	struct bdev_extension *ext;
-	struct blkfilter *flt = NULL;
-	const struct bdevfilter_operations *fops = NULL;
-
-	spin_lock(&bdev_extension_list_lock);
-	ext = bdev_extension_find(dev_id);
-	if (ext) {
-		flt = ext->flt;
-		fops = ext->flt->fops;
-		list_del(&ext->link);
-		kfree(ext);
-	}
-	spin_unlock(&bdev_extension_list_lock);
-
-	bdevfilter_put(flt);
-	bdevfilter_operations_put(fops);
-}
-
-/*
- * unused
- */
-void blkfilter_detach(struct block_device *bdev)
-{
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	blk_mq_freeze_queue(bdev->bd_disk->queue);
-	__blkfilter_detach(bdev->bd_dev);
-	blk_mq_unfreeze_queue(bdev->bd_disk->queue);
-#else
-	blk_mq_freeze_queue(bdev->bd_queue);
-	__blkfilter_detach(bdev->bd_dev);
-	blk_mq_unfreeze_queue(bdev->bd_queue);
-#endif
-}
-
-static inline int __blkfilter_detach2(dev_t dev_id, struct bdevfilter_name* kargp)
+static inline int __blkfilter_detach(dev_t dev_id, struct bdevfilter_name* kargp)
 {
 	int ret = 0;
 	struct bdev_extension *ext;
@@ -326,17 +271,8 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	if (inode_unhashed(bdev->bd_inode))
 #endif
 		ret = -ENODEV;
-	else {
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-		blk_mq_freeze_queue(bdev->bd_disk->queue);
-		ret = __blkfilter_detach2(bdev->bd_dev, &kargp);
-		blk_mq_unfreeze_queue(bdev->bd_disk->queue);
-#else
-		blk_mq_freeze_queue(bdev->bd_queue);
-		ret = __blkfilter_detach2(bdev->bd_dev, &kargp);
-		blk_mq_unfreeze_queue(bdev->bd_queue);
-#endif
-	}
+	else
+		ret = __blkfilter_detach(bdev->bd_dev, &kargp);
 #ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_unlock(&bdev->bd_disk->open_mutex);
 #else
