@@ -441,7 +441,7 @@ static_assert(
 
 #ifdef BLK_SNAP_MODIFICATION
 
-int ioctl_mod(unsigned long arg)
+static int ioctl_mod(unsigned long arg)
 {
 	if (copy_to_user((void *)arg, &modification, sizeof(modification))) {
 		pr_err("Unable to get modification: invalid user buffer\n");
@@ -451,7 +451,7 @@ int ioctl_mod(unsigned long arg)
 	return 0;
 }
 
-int ioctl_setlog(unsigned long arg)
+static int ioctl_setlog(unsigned long arg)
 {
 #ifdef BLK_SNAP_FILELOG
 	struct blk_snap_setlog karg;

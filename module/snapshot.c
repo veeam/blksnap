@@ -55,7 +55,11 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &sb);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_freeze(tracker->diff_area->orig_bdev))
+#else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else {
@@ -76,7 +80,11 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 #else
 		if (!is_frozen)
 			continue;
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(tracker->diff_area->orig_bdev))
+#else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
@@ -112,7 +120,11 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 		_freeze_bdev(tracker->diff_area->orig_bdev,
 			     &snapshot->superblock_array[inx]);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_freeze(tracker->diff_area->orig_bdev))
+#else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
@@ -148,7 +160,11 @@ static void snapshot_release_trackers(struct snapshot *snapshot)
 		_thaw_bdev(tracker->diff_area->orig_bdev,
 			   snapshot->superblock_array[inx]);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(tracker->diff_area->orig_bdev))
+#else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
@@ -521,7 +537,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_freeze_bdev(orig_bdev, &sb);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_freeze(orig_bdev))
+#else
 		if (freeze_bdev(orig_bdev))
+#endif
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else {
@@ -561,7 +581,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #else
 		if (!is_frozen)
 			continue;
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(orig_bdev))
+#else
 		if (thaw_bdev(orig_bdev))
+#endif
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
@@ -590,7 +614,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &sb);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_freeze(tracker->diff_area->orig_bdev))
+#else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
@@ -605,7 +633,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(tracker->diff_area->orig_bdev, sb);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(tracker->diff_area->orig_bdev))
+#else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id),
 			       MINOR(tracker->dev_id));
@@ -646,7 +678,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		_freeze_bdev(tracker->diff_area->orig_bdev,
 			     &snapshot->superblock_array[inx]);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_freeze(tracker->diff_area->orig_bdev))
+#else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
@@ -707,7 +743,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 		_thaw_bdev(tracker->diff_area->orig_bdev,
 			   snapshot->superblock_array[inx]);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(tracker->diff_area->orig_bdev))
+#else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else

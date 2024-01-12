@@ -58,7 +58,15 @@
 #ifdef HAVE_BLK_CLEANUP_DISK
 #pragma message("The function blk_cleanup_disk() was found.")
 #endif
-
+#ifdef HAVE_BLK_HOLDER_OPS
+#pragma message("The struct blk_holder_ops was found.")
+#endif
+#ifdef HAVE_BDEV_HANDLE
+#pragma message("The struct bdev_handle was found.")
+#endif
+#ifdef HAVE_BDEV_FREEZE
+#pragma message("The function bdev_freeze() was found.")
+#endif
 static int __init parameters_init(void);
 
 static int __init blk_snap_init(void)

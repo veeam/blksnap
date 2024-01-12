@@ -120,4 +120,8 @@ diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
 
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 	       struct diff_buffer *diff_buffer, const bool is_nowait);
+
+#ifdef STANDALONE_BDEVFILTER
+void diff_io_endio(struct bio *bio);
+#endif
 #endif /* __BLK_SNAP_DIFF_IO_H */

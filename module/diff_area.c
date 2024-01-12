@@ -119,7 +119,10 @@ void diff_area_free(struct kref *kref)
 #endif
 
 	if (diff_area->orig_bdev) {
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+		bdev_release(diff_area->orig_bdev_handler);
+		diff_area->orig_bdev_handler = NULL;
+#elif defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(diff_area->orig_bdev, NULL);
 #else
 		blkdev_put(diff_area->orig_bdev, FMODE_READ | FMODE_WRITE);
@@ -288,11 +291,17 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 {
 	int ret = 0;
 	struct diff_area *diff_area = NULL;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev;
+#else
 	struct block_device *bdev;
+#endif
 
 	pr_debug("Open device [%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
 
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #else
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
@@ -305,7 +314,9 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
 	if (!diff_area) {
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+		bdev_release(bdev);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(bdev, NULL);
 #else
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
@@ -314,7 +325,12 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	}
 	memory_object_inc(memory_object_diff_area);
 
+#if defined(HAVE_BDEV_HANDLE)
+	diff_area->orig_bdev_handler = bdev;
+	diff_area->orig_bdev = bdev->bdev;
+#else
 	diff_area->orig_bdev = bdev;
+#endif
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);
@@ -392,7 +408,7 @@ static void diff_area_take_chunk_from_cache(struct diff_area *diff_area,
 	spin_unlock(&diff_area->chunk_map_lock);
 }
 
-struct chunk *diff_area_chunk_take(struct diff_area *diff_area,
+static struct chunk *diff_area_chunk_take(struct diff_area *diff_area,
 					unsigned long nr)
 {
 	int ret;

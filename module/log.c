@@ -243,7 +243,7 @@ static inline struct file* log_close(struct file* filp)
 	return filp;
 }
 
-int log_processor(void *data)
+static int log_processor(void *data)
 {
 	int ret = 0;
 	struct log_request *rq;

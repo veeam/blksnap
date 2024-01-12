@@ -70,3 +70,9 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/device.h &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "struct blk_holder_ops" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_HOLDER_OPS)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "struct bdev_handle" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_BDEV_HANDLE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "int bdev_freeze" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_BDEV_FREEZE)

@@ -239,7 +239,11 @@ static int tracker_filter_attach(struct block_device *bdev,
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_freeze_bdev(bdev, &superblock);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+	if (bdev_freeze(bdev))
+#else
 	if (freeze_bdev(bdev))
+#endif
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
 		       MINOR(bdev->bd_dev));
 	else {
@@ -256,7 +260,11 @@ static int tracker_filter_attach(struct block_device *bdev,
 	_thaw_bdev(bdev, superblock);
 #else
 	if (is_frozen) {
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(bdev))
+#else
 		if (thaw_bdev(bdev))
+#endif
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
@@ -285,7 +293,11 @@ static int tracker_filter_detach(struct block_device *bdev)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	_freeze_bdev(bdev, &superblock);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+	if (bdev_freeze(bdev))
+#else
 	if (freeze_bdev(bdev))
+#endif
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
 		       MINOR(bdev->bd_dev));
 	else {
@@ -301,7 +313,11 @@ static int tracker_filter_detach(struct block_device *bdev)
 	_thaw_bdev(bdev, superblock);
 #else
 	if (is_frozen) {
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(bdev))
+#else
 		if (thaw_bdev(bdev))
+#endif
 			pr_err("Failed to thaw device [%u:%u]\n",
 			       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 		else
@@ -470,10 +486,16 @@ void tracker_done(void)
 struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 {
 	struct tracker *tracker;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev;
+#else
 	struct block_device *bdev;
+#endif
 	struct tracked_device *tr_dev;
 
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
 #else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
@@ -484,7 +506,11 @@ struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 		return ERR_PTR(PTR_ERR(bdev));
 	}
 
+#if defined(HAVE_BDEV_HANDLE)
+	tracker = tracker_get_by_dev(bdev->bdev);
+#else
 	tracker = tracker_get_by_dev(bdev);
+#endif
 	if (IS_ERR(tracker)) {
 		int err = PTR_ERR(tracker);
 
@@ -523,7 +549,11 @@ struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 	INIT_LIST_HEAD(&tr_dev->link);
 	tr_dev->dev_id = dev_id;
 
+#if defined(HAVE_BDEV_HANDLE)
+	tracker = tracker_new(bdev->bdev);
+#else
 	tracker = tracker_new(bdev);
+#endif
 	if (IS_ERR(tracker)) {
 		int err = PTR_ERR(tracker);
 
@@ -547,7 +577,9 @@ struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 		tracker_unlock();
 	}
 put_bdev:
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev_release(bdev);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
 #else
 	blkdev_put(bdev, 0);
@@ -559,12 +591,18 @@ int tracker_remove(dev_t dev_id)
 {
 	int ret;
 	struct tracker *tracker;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev;
+#else
 	struct block_device *bdev;
+#endif
 
 	pr_info("Removing device [%u:%u] from tracking\n", MAJOR(dev_id),
 		MINOR(dev_id));
 
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
 #else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
@@ -578,8 +616,11 @@ int tracker_remove(dev_t dev_id)
 		return PTR_ERR(bdev);
 #endif
 	}
-
+#if defined(HAVE_BDEV_HANDLE)
+	tracker = tracker_get_by_dev(bdev->bdev);
+#else
 	tracker = tracker_get_by_dev(bdev);
+#endif
 	if (IS_ERR(tracker)) {
 		ret = PTR_ERR(tracker);
 
@@ -601,8 +642,11 @@ int tracker_remove(dev_t dev_id)
 		ret = -EBUSY;
 		goto put_tracker;
 	}
-
+#if defined(HAVE_BDEV_HANDLE)
+	ret = tracker_filter_detach(bdev->bdev);
+#else
 	ret = tracker_filter_detach(bdev);
+#endif
 	if (ret)
 		pr_err("Failed to remove tracker from device [%u:%u]\n",
 		       MAJOR(dev_id), MINOR(dev_id));
@@ -627,7 +671,9 @@ int tracker_remove(dev_t dev_id)
 put_tracker:
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev_release(bdev);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
 #else
 	blkdev_put(bdev, 0);
@@ -640,9 +686,15 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 {
 	int ret;
 	struct tracker *tracker;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev;
+#else
 	struct block_device *bdev;
+#endif
 
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
 #else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
@@ -653,7 +705,11 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 		return PTR_ERR(bdev);
 	}
 
+#if defined(HAVE_BDEV_HANDLE)
+	tracker = tracker_get_by_dev(bdev->bdev);
+#else
 	tracker = tracker_get_by_dev(bdev);
+#endif
 	if (IS_ERR(tracker)) {
 		pr_err("Cannot get tracker for device [%u:%u]\n",
 			 MAJOR(dev_id), MINOR(dev_id));
@@ -680,7 +736,9 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev_release(bdev);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
 #else
 	blkdev_put(bdev, 0);
@@ -691,10 +749,16 @@ put_bdev:
 static inline void collect_cbt_info(dev_t dev_id,
 				    struct blk_snap_cbt_info *cbt_info)
 {
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev;
+#else
 	struct block_device *bdev;
+#endif
 	struct tracker *tracker;
 
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
 #else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
@@ -705,7 +769,11 @@ static inline void collect_cbt_info(dev_t dev_id,
 		return;
 	}
 
+#if defined(HAVE_BDEV_HANDLE)
+	tracker = tracker_get_by_dev(bdev->bdev);
+#else
 	tracker = tracker_get_by_dev(bdev);
+#endif
 	if (IS_ERR_OR_NULL(tracker))
 		goto put_bdev;
 	if (!tracker->cbt_map)
@@ -720,7 +788,9 @@ static inline void collect_cbt_info(dev_t dev_id,
 put_tracker:
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev_release(bdev);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
 #else
 	blkdev_put(bdev, 0);
@@ -779,9 +849,15 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 {
 	int ret = 0;
 	struct tracker *tracker;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev;
+#else
 	struct block_device *bdev;
+#endif
 
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
 #else
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL);
@@ -794,8 +870,11 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 
 	pr_debug("Marking [%d] dirty blocks for device [%u:%u]\n", count,
 		 MAJOR(dev_id), MINOR(dev_id));
-
+#if defined(HAVE_BDEV_HANDLE)
+	tracker = tracker_get_by_dev(bdev->bdev);
+#else
 	tracker = tracker_get_by_dev(bdev);
+#endif
 	if (IS_ERR(tracker)) {
 		pr_err("Failed to get tracker for device [%u:%u]\n",
 		       MAJOR(dev_id), MINOR(dev_id));
@@ -815,7 +894,9 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev_release(bdev);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
 #else
 	blkdev_put(bdev, 0);

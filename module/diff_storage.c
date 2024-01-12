@@ -29,6 +29,9 @@
 struct storage_bdev {
 	struct list_head link;
 	dev_t dev_id;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev_handler;
+#endif
 	struct block_device *bdev;
 };
 
@@ -119,7 +122,9 @@ void diff_storage_free(struct kref *kref)
 	}
 
 	while ((storage_bdev = first_storage_bdev(diff_storage))) {
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+		bdev_release(storage_bdev->bdev_handler);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(storage_bdev->bdev, NULL);
 #else
 		blkdev_put(storage_bdev->bdev, FMODE_READ | FMODE_WRITE);
@@ -155,23 +160,31 @@ diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
 static inline struct block_device *
 diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 {
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev;
+#else
 	struct block_device *bdev;
+#endif
 	struct storage_bdev *storage_bdev;
 
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #else
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL);
 #endif
 	if (IS_ERR(bdev)) {
-		pr_err("Failed to open device. errno=%d\n",
-		       abs((int)PTR_ERR(bdev)));
-		return bdev;
+		int ret = PTR_ERR(bdev);
+		pr_err("Failed to open device. errno=%d\n", abs(ret));
+		return ERR_PTR(ret);
 	}
 
 	storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
 	if (!storage_bdev) {
-#if defined(HAVE_BLK_HOLDER_OPS)
+#if defined(HAVE_BDEV_HANDLE)
+		bdev_release(bdev);
+#elif defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(bdev, NULL);
 #else
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
@@ -179,8 +192,12 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 		return ERR_PTR(-ENOMEM);
 	}
 	memory_object_inc(memory_object_storage_bdev);
-
+#if defined(HAVE_BDEV_HANDLE)
+	storage_bdev->bdev_handler = bdev;
+	storage_bdev->bdev = bdev->bdev;
+#else
 	storage_bdev->bdev = bdev;
+#endif
 	storage_bdev->dev_id = dev_id;
 	INIT_LIST_HEAD(&storage_bdev->link);
 
@@ -188,7 +205,11 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 	list_add_tail(&storage_bdev->link, &diff_storage->storage_bdevs);
 	spin_unlock(&diff_storage->lock);
 
+#if defined(HAVE_BDEV_HANDLE)
+	return bdev->bdev;
+#else
 	return bdev;
+#endif
 }
 
 static inline int diff_storage_add_range(struct diff_storage *diff_storage,
