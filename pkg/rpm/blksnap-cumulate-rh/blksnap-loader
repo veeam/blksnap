@@ -390,7 +390,7 @@ def main(params):
 		distName, distVersion = dist_os_release();
 		unameKernelVersion = platform.uname()[2]
 
-		if not distName in ["oracle", "ol", "redhat", "rhel", "centos"]:
+		if not distName in ["oracle", "ol", "redhat", "rhel", "centos", "rocky", "almalinux"]:
 			raise RuntimeError("Found unsupported distribution [{0}]".format(distName) )
 
 		distVersionWords = distVersion.split(".")
