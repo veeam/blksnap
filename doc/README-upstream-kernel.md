@@ -60,7 +60,7 @@ A "v6" patch on [lore](https://lore.kernel.org/linux-block/14d5d31e-0dbe-8d04-91
 ## Work in progress and news
 
 There is a work in progress for "v7",
-is possible view/test it from [this branch](https://github.com/SergeiShtepa/linux/tree/blksnap-master) of a linux fork git.
+is possible view/test it from branch [blksnap-lk6.8-rc1](https://github.com/SergeiShtepa/linux/tree/blksnap-lk6.8-rc1) of a linux fork git.
 
 For testing this version, [the blksnap branch master](https://github.com/veeam/blksnap/tree/master) must be used updated with the latest commits,
 to have library, tools and tests working with new upstream version.
