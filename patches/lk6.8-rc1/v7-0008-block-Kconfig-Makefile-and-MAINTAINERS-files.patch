@@ -1,0 +1,111 @@
+From 1f6b98dd241c5dec0b81a412d6f38bf2d91ac8b1 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@linux.dev>
+Date: Mon, 22 Jan 2024 12:55:53 +0100
+Subject: [PATCH v7 8/8] block: Kconfig, Makefile and MAINTAINERS files
+
+Allows to build a blksnap module and add it to the kernel tree.
+
+Co-developed-by: Christoph Hellwig <hch@infradead.org>
+Signed-off-by: Christoph Hellwig <hch@infradead.org>
+Signed-off-by: Sergei Shtepa <sergei.shtepa@linux.dev>
+---
+ MAINTAINERS                    | 17 +++++++++++++++++
+ drivers/block/Kconfig          |  2 ++
+ drivers/block/Makefile         |  2 ++
+ drivers/block/blksnap/Kconfig  | 12 ++++++++++++
+ drivers/block/blksnap/Makefile | 15 +++++++++++++++
+ 5 files changed, 48 insertions(+)
+ create mode 100644 drivers/block/blksnap/Kconfig
+ create mode 100644 drivers/block/blksnap/Makefile
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 8d1052fa6a69..84816e7926f0 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -3608,6 +3608,23 @@ M:	Jan-Simon Moeller <jansimon.moeller@gmx.de>
+ S:	Maintained
+ F:	drivers/leds/leds-blinkm.c
+ 
++BLOCK DEVICE FILTERING MECHANISM
++M:	Sergei Shtepa <sergei.shtepa@linux.dev>
++L:	linux-block@vger.kernel.org
++S:	Supported
++F:	Documentation/block/blkfilter.rst
++F:	block/blk-filter.c
++F:	include/linux/blk-filter.h
++F:	include/uapi/linux/blk-filter.h
++
++BLOCK DEVICE SNAPSHOTS MODULE
++M:	Sergei Shtepa <sergei.shtepa@linux.dev>
++L:	linux-block@vger.kernel.org
++S:	Supported
++F:	Documentation/block/blksnap.rst
++F:	drivers/block/blksnap/*
++F:	include/uapi/linux/blksnap.h
++
+ BLOCK LAYER
+ M:	Jens Axboe <axboe@kernel.dk>
+ L:	linux-block@vger.kernel.org
+diff --git a/drivers/block/Kconfig b/drivers/block/Kconfig
+index 5b9d4aaebb81..74d2d55526a3 100644
+--- a/drivers/block/Kconfig
++++ b/drivers/block/Kconfig
+@@ -404,4 +404,6 @@ config BLKDEV_UBLK_LEGACY_OPCODES
+ 
+ source "drivers/block/rnbd/Kconfig"
+ 
++source "drivers/block/blksnap/Kconfig"
++
+ endif # BLK_DEV
+diff --git a/drivers/block/Makefile b/drivers/block/Makefile
+index 101612cba303..9a2a9a56a247 100644
+--- a/drivers/block/Makefile
++++ b/drivers/block/Makefile
+@@ -40,3 +40,5 @@ obj-$(CONFIG_BLK_DEV_NULL_BLK)	+= null_blk/
+ obj-$(CONFIG_BLK_DEV_UBLK)			+= ublk_drv.o
+ 
+ swim_mod-y	:= swim.o swim_asm.o
++
++obj-$(CONFIG_BLKSNAP) += blksnap/
+diff --git a/drivers/block/blksnap/Kconfig b/drivers/block/blksnap/Kconfig
+new file mode 100644
+index 000000000000..ce3e33d52c71
+--- /dev/null
++++ b/drivers/block/blksnap/Kconfig
+@@ -0,0 +1,12 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Snapshots of block devices configuration
++#
++
++config BLKSNAP
++	tristate "Snapshots of block devices (Experimental)"
++	help
++	  Allow to create snapshots and track block changes for block devices.
++	  It can be used to create backups of block devices. Snapshots are
++	  temporary and are released when backup is completed. Change block
++	  tracking allows to create incremental or differential backups.
+diff --git a/drivers/block/blksnap/Makefile b/drivers/block/blksnap/Makefile
+new file mode 100644
+index 000000000000..8d528b95579a
+--- /dev/null
++++ b/drivers/block/blksnap/Makefile
+@@ -0,0 +1,15 @@
++# SPDX-License-Identifier: GPL-2.0
++
++blksnap-y := 		\
++	cbt_map.o	\
++	chunk.o		\
++	diff_area.o	\
++	diff_buffer.o	\
++	diff_storage.o	\
++	event_queue.o	\
++	main.o		\
++	snapimage.o	\
++	snapshot.o	\
++	tracker.o
++
++obj-$(CONFIG_BLKSNAP)	 += blksnap.o
+-- 
+2.34.1
+
