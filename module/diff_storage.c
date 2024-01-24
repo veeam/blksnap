@@ -172,7 +172,18 @@ static inline void ___set_file(struct diff_storage *diff_storage,
 {
 	struct inode *inode = file_inode(file);
 
+#if defined(BLKSNAP_STANDALONE)
+	/*
+	 * There are no restrictions
+	 */
+	diff_storage->dev_id = 0;
+#else
+	/*
+	 * Blocks the ability to place the difference storage on a block
+	 * device under the snapshot.
+	 */
 	diff_storage->dev_id = inode->i_sb->s_dev;
+#endif
 	diff_storage->capacity = i_size_read(inode) >> SECTOR_SHIFT;
 	diff_storage->file = file;
 }
