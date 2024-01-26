@@ -90,6 +90,7 @@ void CTracker::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* buf
 {
     struct blksnap_cbtmap arg = {
         .offset = offset,
+        .length = length,
         .buffer = (__u64)buff
     };
     struct blkfilter_ctl ctl = {
