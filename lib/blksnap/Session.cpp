@@ -63,7 +63,7 @@ public:
 private:
     CSnapshotId m_id;
 
-    std::shared_ptr<CSnapshot> m_ptrCtl;
+    std::shared_ptr<CSnapshot> m_ptrSnapshot;
     std::shared_ptr<SState> m_ptrState;
     std::shared_ptr<std::thread> m_ptrThread;
 };
@@ -125,11 +125,11 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
         CTracker(name).Attach();
 
     // Create snapshot
-    auto snapshot = CSnapshot::Create(diffStorageFilePath, limit);
+    m_ptrSnapshot = CSnapshot::Create(diffStorageFilePath, limit);
 
     // Add devices to snapshot
     for (const auto& name : devices)
-        CTracker(name).SnapshotAdd(snapshot->Id());
+        CTracker(name).SnapshotAdd(m_ptrSnapshot->Id());
 
     // Prepare state structure for thread
     m_ptrState = std::make_shared<SState>();
@@ -137,7 +137,7 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
 
     // Append first portion for diff storage
     struct SBlksnapEvent ev;
-    if (snapshot->WaitEvent(100, ev))
+    if (m_ptrSnapshot->WaitEvent(100, ev))
     {
         switch (ev.code)
         {
@@ -153,12 +153,12 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
     }
 
     // Start stretch snapshot thread
-    m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrCtl, m_ptrState);
+    m_ptrThread = std::make_shared<std::thread>(BlksnapThread, m_ptrSnapshot, m_ptrState);
     ::usleep(0);
 
 
     // Take snapshot
-    snapshot->Take();
+    m_ptrSnapshot->Take();
 }
 
 CSession::~CSession()
@@ -172,7 +172,7 @@ CSession::~CSession()
     // Destroy snapshot
     try
     {
-        m_ptrCtl->Destroy();
+        m_ptrSnapshot->Destroy();
     }
     catch (std::exception& ex)
     {
