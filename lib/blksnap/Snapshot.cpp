@@ -128,7 +128,7 @@ void CSnapshot::Take()
 {
     struct blksnap_uuid param;
 
-    uuid_copy(param.b, m_id.Get());
+    uuid_copy(param.b, Id());
     if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_TAKE, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to take snapshot.");
@@ -138,7 +138,7 @@ void CSnapshot::Destroy()
 {
     struct blksnap_uuid param;
 
-    uuid_copy(param.b, m_id.Get());
+    uuid_copy(param.b, Id());
     if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_DESTROY, &param))
         throw std::system_error(errno, std::generic_category(),
             "Failed to destroy snapshot.");
@@ -146,9 +146,9 @@ void CSnapshot::Destroy()
 
 bool CSnapshot::WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev)
 {
-    struct blksnap_snapshot_event param;
+    struct blksnap_snapshot_event param = {0};
 
-    uuid_copy(param.id.b, m_id.Get());
+    uuid_copy(param.id.b, Id());
     param.timeout_ms = timeoutMs;
 
     if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT, &param))
