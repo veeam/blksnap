@@ -449,7 +449,7 @@ public:
             throw std::invalid_argument("Argument 'json' is not supported yet.");
 
         struct blksnap_cbtinfo info;
-        ctl.Control(blkfilter_ctl_blksnap_cbtinfo, &info, sizeof(info));
+        ctl.Control(BLKFILTER_CTL_BLKSNAP_CBTINFO, &info, sizeof(info));
 
         std::cout << "block_size=" << info.block_size << std::endl;
         std::cout << "device_capacity=" << info.device_capacity << std::endl;
@@ -484,7 +484,7 @@ public:
         CBlkFilterCtl ctl(vm["device"].as<std::string>());
 
         struct blksnap_cbtinfo info;
-        ctl.Control(blkfilter_ctl_blksnap_cbtinfo, &info, sizeof(info));
+        ctl.Control(BLKFILTER_CTL_BLKSNAP_CBTINFO, &info, sizeof(info));
         elapsed = info.block_count;
 
         if (vm.count("json"))
@@ -504,7 +504,7 @@ public:
         while (elapsed) {
             arg.length = std::min(static_cast<unsigned int>(buf.size()), elapsed);
 
-            ctl.Control(blkfilter_ctl_blksnap_cbtmap, &arg, sizeof(struct blksnap_cbtmap));
+            ctl.Control(BLKFILTER_CTL_BLKSNAP_CBTMAP, &arg, sizeof(struct blksnap_cbtmap));
 
             elapsed -= arg.length;
             arg.offset += arg.length;
@@ -557,7 +557,7 @@ public:
             .count = static_cast<unsigned int>(ranges.size()),
             .dirty_sectors = (__u64)ranges.data()
         };
-        ctl.Control(blkfilter_ctl_blksnap_cbtdirty, &arg, sizeof(arg));
+        ctl.Control(BLKFILTER_CTL_BLKSNAP_CBTDIRTY, &arg, sizeof(arg));
     }
 };
 
@@ -585,7 +585,7 @@ public:
             throw std::invalid_argument("Argument 'json' is not supported yet.");
 
         struct blksnap_snapshotinfo param;
-        ctl.Control(blkfilter_ctl_blksnap_snapshotinfo, &param, sizeof(param));
+        ctl.Control(BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO, &param, sizeof(param));
 
         std::vector<char> image(IMAGE_DISK_NAME_LEN + 1);
         strncpy(image.data(), reinterpret_cast<char *>(param.image), IMAGE_DISK_NAME_LEN);
@@ -619,7 +619,7 @@ static inline void SnapshotAdd(const uuid_t& id, const std::string& devicePath)
     do {
         try
         {
-            ctl.Control(blkfilter_ctl_blksnap_snapshotadd, &param, sizeof(param));
+            ctl.Control(BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD, &param, sizeof(param));
             retry = false;
         }
         catch(std::system_error &ex)
