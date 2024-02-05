@@ -77,7 +77,7 @@ void CTracker::CbtInfo(struct blksnap_cbtinfo& cbtInfo)
 {
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_cbtinfo,
+        .cmd = BLKFILTER_CTL_BLKSNAP_CBTINFO,
         .optlen = sizeof(cbtInfo),
         .opt = (__u64)&cbtInfo,
     };
@@ -95,7 +95,7 @@ void CTracker::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* buf
     };
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_cbtmap,
+        .cmd = BLKFILTER_CTL_BLKSNAP_CBTMAP,
         .optlen = sizeof(arg),
         .opt = (__u64)&arg,
     };
@@ -113,7 +113,7 @@ void CTracker::MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges)
     };
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_cbtdirty,
+        .cmd = BLKFILTER_CTL_BLKSNAP_CBTDIRTY,
         .optlen = sizeof(arg),
         .opt = (__u64)&arg,
     };
@@ -129,7 +129,7 @@ void CTracker::SnapshotAdd(const uuid_t& id)
 
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_snapshotadd,
+        .cmd = BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD,
         .optlen = sizeof(arg),
         .opt = (__u64)&arg,
     };
@@ -142,7 +142,7 @@ void CTracker::SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo)
 {
     struct blkfilter_ctl ctl = {
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_snapshotinfo,
+        .cmd = BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO,
         .optlen = sizeof(snapshotinfo),
         .opt = (__u64)&snapshotinfo,
     };
@@ -151,6 +151,3 @@ void CTracker::SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo)
         throw std::system_error(errno, std::generic_category(),
             "Failed to get snapshot information.");
 }
-
-
-
