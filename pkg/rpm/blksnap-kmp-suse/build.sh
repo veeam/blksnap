@@ -8,12 +8,12 @@ PACKAGE_NAME="blksnap"
 PACKAGE_VERSION="$1"
 PACKAGE_VENDOR="Veeam Software Group GmbH"
 #PACKAGE_VENDOR="$2"
-if [ -z ${PACKAGE_VERSION} ]
+if [ -z "${PACKAGE_VERSION}" ]
 then
 	echo >&2 "Version parameters is not set."
 	exit
 fi
-if [ -z ${PACKAGE_VENDOR} ]
+if [ -z "${PACKAGE_VENDOR}" ]
 then
 	echo >&2 "Vendor parameters is not set."
 	exit
@@ -73,5 +73,5 @@ echo "SPECS:"
 ls ${BUILD_DIR}/SPECS
 
 cd ${BUILD_DIR}
-rpmbuild --ba SPECS/${PACKAGE_NAME}.spec
+rpmbuild --define "_topdir ${BUILD_DIR}" --ba SPECS/${PACKAGE_NAME}.spec
 cd ${PROJECT_DIR}
