@@ -334,8 +334,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);
-
-	if (diff_area->chunk_shift > get_chunk_maximum_count()) {
+	if (diff_area->chunk_shift > chunk_maximum_shift) {
 		pr_info("The maximum allowable chunk size has been reached.\n");
 		return ERR_PTR(-EFAULT);
 	}
