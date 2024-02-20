@@ -57,10 +57,14 @@ Why this should have been done, Dave Chinner described in detail in the [comment
 
 A "v6" patch on [lore](https://lore.kernel.org/linux-block/14d5d31e-0dbe-8d04-91a6-82a886f8e92a@veeam.com/T/#t) or [patchwork](https://patchwork.kernel.org/project/linux-block/list/?series=804089&archive=both) was posted at 7 December 2023.
 
+Thanks to Christoph Hellwig attention to the project, it was possible to raise the quality of the code.
+
+A "v7" patch on [lore](https://lore.kernel.org/all/20240209160204.1471421-1-sergei.shtepa@linux.dev/) or [patchwork](https://patchwork.kernel.org/project/linux-block/list/?series=824711&archive=both) was posted at 9 February 2024.
+
 ## Work in progress and news
 
-There is a work in progress for "v7",
-is possible view/test it from branch [blksnap-lk6.8-rc1](https://github.com/SergeiShtepa/linux/tree/blksnap-lk6.8-rc1) of a linux fork git.
+There is a work in progress for "v8",
+is possible view/test it using the most updated blksnap-* branch from [this](https://github.com/SergeiShtepa/linux/branches) fork of the linux git.
 
 For testing this version, [the blksnap branch master](https://github.com/veeam/blksnap/tree/master) must be used updated with the latest commits,
 to have library, tools and tests working with new upstream version.
