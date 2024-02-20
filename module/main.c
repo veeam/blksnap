@@ -141,6 +141,11 @@ unsigned long get_chunk_maximum_count(void)
 	return (1ul << chunk_maximum_count_shift);
 }
 
+static inline sector_t chunk_minimum_sectors(void)
+{
+	return (1ull << (chunk_minimum_shift - SECTOR_SHIFT));
+}
+
 static int __init parameters_init(void)
 {
 	pr_debug("tracking_block_minimum_shift: %d\n",
@@ -169,6 +174,16 @@ static int __init parameters_init(void)
 		chunk_minimum_shift = PAGE_SHIFT;
 		pr_warn("fixed chunk_minimum_shift: %d\n",
 			 chunk_minimum_shift);
+	}
+	if (diff_storage_minimum < (chunk_minimum_sectors() * 2)) {
+		diff_storage_minimum = chunk_minimum_sectors() * 2;
+		pr_warn("fixed diff_storage_minimum: %d\n",
+			 diff_storage_minimum);
+	}
+	if (diff_storage_minimum & (chunk_minimum_sectors() - 1)) {
+		diff_storage_minimum &= ~(chunk_minimum_sectors() - 1);
+		pr_warn("fixed diff_storage_minimum: %d\n",
+			 diff_storage_minimum);
 	}
 
 	if (sizeof(unsigned long) < 8)
