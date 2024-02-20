@@ -154,28 +154,27 @@ static int __init parameters_init(void)
 		 free_diff_buffer_pool_size);
 	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
 
-	if (chunk_maximum_shift < chunk_minimum_shift) {
-		chunk_maximum_shift = chunk_minimum_shift;
-		pr_warn("fixed chunk_maximum_shift: %d\n",
-			 chunk_maximum_shift);
-	}
 	if (tracking_block_maximum_shift < tracking_block_minimum_shift) {
 		tracking_block_maximum_shift = tracking_block_minimum_shift;
 		pr_warn("fixed tracking_block_maximum_shift: %d\n",
 			 tracking_block_maximum_shift);
 	}
 
-	/*
-	 * The XArray is used to store chunks. And 'unsigned long' is used as
-	 * chunk number parameter. So, The number of chunks cannot exceed the
-	 * limits of ULONG_MAX.
-	 */
-	if (sizeof(unsigned long) < 4)
-		chunk_maximum_count_shift = min(16, chunk_maximum_count_shift);
-	else if (sizeof(unsigned long) == 4)
+	if (chunk_minimum_shift > chunk_maximum_shift) {
+		chunk_minimum_shift = chunk_maximum_shift;
+		pr_warn("fixed chunk_minimum_shift: %d\n",
+			 chunk_minimum_shift);
+	}
+	if (chunk_minimum_shift < PAGE_SHIFT) {
+		chunk_minimum_shift = PAGE_SHIFT;
+		pr_warn("fixed chunk_minimum_shift: %d\n",
+			 chunk_minimum_shift);
+	}
+
+	if (sizeof(unsigned long) < 8)
 		chunk_maximum_count_shift = min(32, chunk_maximum_count_shift);
-	else if (sizeof(unsigned long) >= 8)
-		chunk_maximum_count_shift = min(64, chunk_maximum_count_shift);
+	else
+		chunk_maximum_count_shift = min(40, chunk_maximum_count_shift);
 
 	return 0;
 }
