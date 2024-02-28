@@ -346,6 +346,8 @@ out:
 
 #ifdef CONFIG_X86
 #define CALL_INSTRUCTION_LENGTH 5
+#elif defined(CONFIG_ARM64)
+#define CALL_INSTRUCTION_LENGTH 8
 #else
 #error "Current CPU is not supported yet"
 #endif
@@ -440,7 +442,7 @@ module_init(lp_filter_init);
 module_exit(lp_filter_done);
 MODULE_INFO(livepatch, "Y");
 
-#elif defined(CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS)
+#elif defined(CONFIG_HAVE_DYNAMIC_FTRACE_WITH_ARGS) || (defined(CONFIG_HAVE_DYNAMIC_FTRACE_WITH_REGS) && defined(CONFIG_ARM64))
 #pragma message("ftrace filter used")
 
 static notrace void ftrace_handler_submit_bio_noacct(
@@ -455,7 +457,12 @@ static notrace void ftrace_handler_submit_bio_noacct(
 #if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
 	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)submit_bio_noacct_handler);
 #elif defined(HAVE_FTRACE_REGS)
-	ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
+    #ifdef CONFIG_X86
+        ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
+    #endif
+    #ifdef CONFIG_ARM64
+        instruction_pointer_set(&fregs->regs, (unsigned long)_cdp_make_request_fn);
+    #endif
 #else
 	instruction_pointer_set(regs, (unsigned long)submit_bio_noacct_handler);
 #endif
