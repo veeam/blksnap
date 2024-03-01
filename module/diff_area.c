@@ -18,6 +18,7 @@
 #include "diff_io.h"
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
+#include "log_histogram.h"
 #endif
 
 #ifndef HAVE_BDEV_NR_SECTORS
@@ -116,6 +117,12 @@ void diff_area_free(struct kref *kref)
 	pr_info("%llu MiB was copied\n", atomic64_read(&diff_area->stat_copied) >> (20 - SECTOR_SHIFT));
 	pr_info("%llu MiB was read from image\n", atomic64_read(&diff_area->stat_image_read) >> (20 - SECTOR_SHIFT));
 	pr_info("%llu MiB was written to image\n", atomic64_read(&diff_area->stat_image_written) >> (20 - SECTOR_SHIFT));
+
+	pr_info("Reading IO units statistic:\n");
+	log_histogram_show(&diff_area->read_hg);
+
+	pr_info("Redirection IO units statistic:\n");
+	log_histogram_show(&diff_area->redirect_hg);
 #endif
 
 	if (diff_area->orig_bdev) {
@@ -338,7 +345,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 		pr_info("The maximum allowable chunk size has been reached.\n");
 		return ERR_PTR(-EFAULT);
 	}
-	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
+	pr_info("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
 		 (1ull << diff_area->chunk_shift),
 		 MAJOR(diff_area->orig_bdev->bd_dev),
 		 MINOR(diff_area->orig_bdev->bd_dev));
@@ -376,6 +383,9 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	atomic64_set(&diff_area->stat_copied, 0);
 	atomic64_set(&diff_area->stat_processed, 0);
 	atomic64_set(&diff_area->stat_image_written, 0);
+
+	log_histogram_init(&diff_area->read_hg, 4096);
+	log_histogram_init(&diff_area->redirect_hg, 4096);
 #endif
 
 	if (ret) {

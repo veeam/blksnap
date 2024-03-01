@@ -4,7 +4,9 @@
 
 #include <linux/workqueue.h>
 #include <linux/completion.h>
-
+#ifdef STANDALONE_BDEVFILTER
+#include "log_histogram.h"
+#endif
 struct diff_buffer;
 
 /**
@@ -119,6 +121,9 @@ diff_io_new_async_write(void (*notify_cb)(void *ctx), void *ctx, bool is_nowait)
 };
 
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
+#ifdef STANDALONE_BDEVFILTER
+	       struct log_histogram *redirect_hg,
+#endif
 	       struct diff_buffer *diff_buffer, const bool is_nowait);
 
 #ifdef STANDALONE_BDEVFILTER

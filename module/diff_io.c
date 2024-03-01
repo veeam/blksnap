@@ -134,6 +134,9 @@ static inline unsigned int bio_max_segs(unsigned int nr_segs)
  * arguments are incorrect.
  */
 int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
+#ifdef STANDALONE_BDEVFILTER
+	       struct log_histogram *redirect_hg,
+#endif
 	       struct diff_buffer *diff_buffer, const bool is_nowait)
 {
 	struct bio *bio;
@@ -203,7 +206,9 @@ int diff_io_do(struct diff_io *diff_io, struct diff_region *diff_region,
 			current_page_ptr++;
 			offset += bvec_len_sect;
 		}
-
+#ifdef STANDALONE_BDEVFILTER
+		log_histogram_add(redirect_hg, offset << SECTOR_SHIFT);
+#endif
 		bio_list_add(&bio_list_head, bio);
 		atomic_inc(&diff_io->bio_count);
 

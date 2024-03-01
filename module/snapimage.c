@@ -15,6 +15,7 @@
 #include "cbt_map.h"
 #ifdef STANDALONE_BDEVFILTER
 #include "log.h"
+#include "log_histogram.h"
 #endif
 
 #define SNAPIMAGE_MAX_DEVICES 2048
@@ -98,6 +99,9 @@ static void snapimage_queue_work(struct kthread_work *work)
 	diff_area_throttling_io(snapimage->diff_area);
 	diff_area_image_ctx_init(&io_ctx, snapimage->diff_area,
 				 op_is_write(req_op(rq)));
+#ifdef STANDALONE_BDEVFILTER
+	log_histogram_add(&snapimage->diff_area->read_hg, blk_rq_bytes(rq));
+#endif
 	rq_for_each_segment(bvec, rq, iter) {
 #ifdef STANDALONE_BDEVFILTER
 		sector_t len_sect = bvec.bv_len >> SECTOR_SHIFT;

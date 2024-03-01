@@ -11,6 +11,10 @@
 #include <linux/xarray.h>
 #include "event_queue.h"
 
+#ifdef STANDALONE_BDEVFILTER
+#include "log_histogram.h"
+#endif
+
 struct diff_storage;
 struct chunk;
 
@@ -124,6 +128,9 @@ struct diff_area {
 	atomic64_t stat_copied;
 	atomic64_t stat_image_read;
 	atomic64_t stat_image_written;
+
+	struct log_histogram read_hg;
+	struct log_histogram redirect_hg;
 #endif
 };
 

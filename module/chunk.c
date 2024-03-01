@@ -348,7 +348,11 @@ int chunk_async_store_diff(struct chunk *chunk, bool is_nowait)
 	chunk->diff_io = diff_io;
 	chunk_state_set(chunk, CHUNK_ST_STORING);
 
-	ret = diff_io_do(chunk->diff_io, region, chunk->diff_buffer, is_nowait);
+	ret = diff_io_do(chunk->diff_io, region,
+#ifdef STANDALONE_BDEVFILTER
+		&chunk->diff_area->redirect_hg,
+#endif
+		chunk->diff_buffer, is_nowait);
 	if (ret) {
 		diff_io_free(chunk->diff_io);
 		chunk->diff_io = NULL;
@@ -392,7 +396,11 @@ int chunk_async_load_orig(struct chunk *chunk, const bool is_nowait)
 	chunk->diff_io = diff_io;
 	chunk_state_set(chunk, CHUNK_ST_LOADING);
 
-	ret = diff_io_do(chunk->diff_io, &region, chunk->diff_buffer, is_nowait);
+	ret = diff_io_do(chunk->diff_io, &region,
+#ifdef STANDALONE_BDEVFILTER
+		&chunk->diff_area->redirect_hg,
+#endif
+		chunk->diff_buffer, is_nowait);
 	if (ret) {
 		diff_io_free(chunk->diff_io);
 		chunk->diff_io = NULL;
@@ -419,7 +427,11 @@ int chunk_load_orig(struct chunk *chunk)
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	ret = diff_io_do(diff_io, &region, chunk->diff_buffer, false);
+	ret = diff_io_do(diff_io, &region,
+#ifdef STANDALONE_BDEVFILTER
+		&chunk->diff_area->redirect_hg,
+#endif
+		chunk->diff_buffer, false);
 	if (!ret)
 		ret = diff_io->error;
 
@@ -445,7 +457,11 @@ int chunk_load_diff(struct chunk *chunk)
 	if (unlikely(!diff_io))
 		return -ENOMEM;
 
-	ret = diff_io_do(diff_io, region, chunk->diff_buffer, false);
+	ret = diff_io_do(diff_io, region,
+#ifdef STANDALONE_BDEVFILTER
+		&chunk->diff_area->redirect_hg,
+#endif
+		chunk->diff_buffer, false);
 	if (!ret)
 		ret = diff_io->error;
 
