@@ -185,12 +185,11 @@ static int __init parameters_init(void)
 		pr_warn("fixed diff_storage_minimum: %d\n",
 			 diff_storage_minimum);
 	}
-
-	if (sizeof(unsigned long) < 8)
-		chunk_maximum_count_shift = min(32, chunk_maximum_count_shift);
-	else
-		chunk_maximum_count_shift = min(40, chunk_maximum_count_shift);
-
+#ifdef CONFIG_64BIT
+	chunk_maximum_count_shift = min(40, chunk_maximum_count_shift);
+#else
+	chunk_maximum_count_shift = min(32, chunk_maximum_count_shift);
+#endif
 	return 0;
 }
 
