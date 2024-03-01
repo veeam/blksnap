@@ -3,7 +3,7 @@
 #define __BLK_SNAP_LOG_HISTOGRAM_H
 
 struct log_histogram {
-	atomic_t cnt[10];
+	atomic64_t cnt[10];
 	unsigned long min_value;
 };
 

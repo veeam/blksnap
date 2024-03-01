@@ -22,7 +22,7 @@ void log_histogram_add(struct log_histogram *hg, unsigned long value)
 		test_value = test_value << 1;
 		inx++;
 	}
-	atomic_inc(&hg->cnt[inx]);
+	atomic64_inc(&hg->cnt[inx]);
 }
 
 void log_histogram_show(struct log_histogram *hg)
@@ -33,10 +33,10 @@ void log_histogram_show(struct log_histogram *hg)
 	unsigned long prev_test_value = 0;
 
 	while (inx <= last) {
-		pr_info("(%lu : %lu] KiB - %d\n",
+		pr_info("(%lu : %lu] KiB - %lld\n",
 			prev_test_value / 1024,
 			test_value / 1024,
-			atomic_read(&hg->cnt[inx]));
+			atomic64_read(&hg->cnt[inx]));
 
 		prev_test_value = test_value;
 		test_value = test_value << 1;
