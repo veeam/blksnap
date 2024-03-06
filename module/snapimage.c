@@ -37,7 +37,7 @@ static void snapimage_submit_bio(struct bio *bio)
 	struct tracker *tracker = bio->bi_bdev->bd_disk->private_data;
 #endif
 	struct diff_area *diff_area = tracker->diff_area;
-	unsigned int old_nofs;
+	unsigned int flags;
 #ifndef BLKSNAP_STANDALONE
 	struct blkfilter *prev_filter;
 #endif
@@ -58,6 +58,7 @@ static void snapimage_submit_bio(struct bio *bio)
 #endif
 	}
 
+	flags = memalloc_noio_save();
 	/*
 	 * The change tracking table should indicate that the image block device
 	 * is different from the original device. At the next snapshot, such
@@ -70,10 +71,8 @@ static void snapimage_submit_bio(struct bio *bio)
 	prev_filter = current->blk_filter;
 	current->blk_filter = &tracker->filter;
 #endif
-	old_nofs = memalloc_nofs_save();
 	while (bio->bi_iter.bi_size && is_success)
 		is_success = diff_area_submit_chunk(diff_area, bio);
-	memalloc_nofs_restore(old_nofs);
 #ifndef BLKSNAP_STANDALONE
 	current->blk_filter = prev_filter;
 #endif
@@ -81,6 +80,7 @@ static void snapimage_submit_bio(struct bio *bio)
 		bio_endio(bio);
 	else
 		bio_io_error(bio);
+	memalloc_noio_restore(flags);
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 	return BLK_QC_T_NONE;
 #endif
@@ -113,9 +113,9 @@ int snapimage_create(struct tracker *tracker)
 #ifndef HAVE_BLK_ALLOC_DISK
 	struct request_queue *queue;
 #endif
+
 	pr_info("Create snapshot image device for original device [%u:%u]\n",
 		MAJOR(dev_id), MINOR(dev_id));
-
 
 #ifdef HAVE_BLK_ALLOC_DISK
 	disk = blk_alloc_disk(NUMA_NO_NODE);
@@ -140,9 +140,9 @@ int snapimage_create(struct tracker *tracker)
 #endif
 
 #ifdef GENHD_FL_NO_PART_SCAN
-	disk->flags |= GENHD_FL_NO_PART_SCAN;
+	disk->flags = GENHD_FL_NO_PART_SCAN;
 #else
-	disk->flags |= GENHD_FL_NO_PART;
+	disk->flags = GENHD_FL_NO_PART;
 #endif
 	disk->fops = &bd_ops;
 

@@ -17,6 +17,11 @@
 #include "params.h"
 #include "tracker.h"
 
+struct cow_task {
+	struct list_head link;
+	struct bio *bio;
+};
+
 static inline sector_t diff_area_chunk_offset(struct diff_area *diff_area,
 					      sector_t sector)
 {
@@ -59,7 +64,7 @@ static inline struct chunk *chunk_alloc(struct diff_area *diff_area,
 {
 	struct chunk *chunk;
 
-	chunk = kzalloc(sizeof(struct chunk), GFP_NOIO);
+	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
 
@@ -73,11 +78,13 @@ static inline struct chunk *chunk_alloc(struct diff_area *diff_area,
 	/*
 	 * The last chunk has a special size.
 	 */
-	if (unlikely((number + 1) == diff_area->chunk_count)) {
+	if (unlikely((number + 1) == diff_area->chunk_count))
 		chunk->sector_count = bdev_nr_sectors(diff_area->orig_bdev) -
-					(chunk->sector_count * number);
-	}
-
+						(chunk->sector_count * number);
+#ifdef CONFIG_BLKSNAP_CHUNK_DBG
+	chunk->holder_func = NULL;
+	chunk->holder_sector = 0;
+#endif
 	return chunk;
 }
 
@@ -98,7 +105,7 @@ static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
 	sector_t min_io_sect;
 
 	min_io_sect = (sector_t)(bdev_io_min(diff_area->orig_bdev) >>
-		SECTOR_SHIFT);
+								SECTOR_SHIFT);
 	capacity = bdev_nr_sectors(diff_area->orig_bdev);
 	pr_debug("Minimal IO block %llu sectors\n", min_io_sect);
 	pr_debug("Device capacity %llu sectors\n", capacity);
@@ -126,11 +133,10 @@ void diff_area_free(struct kref *kref)
 	might_sleep();
 	diff_area = container_of(kref, struct diff_area, kref);
 
-	flush_work(&diff_area->image_io_work);
-	flush_work(&diff_area->store_queue_work);
-	xa_for_each(&diff_area->chunk_map, inx, chunk)
+	xa_for_each(&diff_area->chunk_map, inx, chunk) {
 		if (chunk)
 			chunk_free(diff_area, chunk);
+	}
 	xa_destroy(&diff_area->chunk_map);
 
 	diff_buffer_cleanup(diff_area);
@@ -177,7 +183,6 @@ static inline bool diff_area_store_one(struct diff_area *diff_area)
 		chunk_store_failed(chunk, 0);
 		return true;
 	}
-
 	if (!chunk->diff_file && !chunk->diff_bdev) {
 		int ret;
 
@@ -193,13 +198,69 @@ static inline bool diff_area_store_one(struct diff_area *diff_area)
 			return true;
 		}
 	}
-
 	if (chunk->diff_bdev) {
 		chunk_store_tobdev(chunk);
 		return true;
 	}
 	chunk_diff_write(chunk);
 	return true;
+}
+
+static int diff_area_cow_schedule(struct diff_area *diff_area, struct bio *bio)
+{
+	struct cow_task *task;
+
+	task = kzalloc(sizeof(struct cow_task), GFP_KERNEL);
+	if (!task)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD(&task->link);
+	task->bio = bio;
+	bio_get(bio);
+
+	spin_lock(&diff_area->cow_queue_lock);
+	list_add_tail(&task->link, &diff_area->cow_queue);
+	spin_unlock(&diff_area->cow_queue_lock);
+
+	blksnap_queue_work(&diff_area->cow_queue_work);
+	return 0;
+}
+
+static inline struct bio *diff_area_cow_get_bio(struct diff_area *diff_area)
+{
+	struct bio *bio = NULL;
+	struct cow_task *task;
+
+	spin_lock(&diff_area->cow_queue_lock);
+	task = list_first_entry_or_null(&diff_area->cow_queue,
+							struct cow_task, link);
+	if (task)
+		list_del(&task->link);
+	spin_unlock(&diff_area->cow_queue_lock);
+
+	if (task) {
+		bio = task->bio;
+		kfree(task);
+	}
+	return bio;
+}
+
+static void diff_area_cow_queue_work(struct work_struct *work)
+{
+	struct diff_area *diff_area = container_of(work, struct diff_area,
+							cow_queue_work);
+	struct bio *bio;
+
+	while ((bio = diff_area_cow_get_bio(diff_area))) {
+		if (!diff_area_cow_process_bio(diff_area, bio)) {
+#ifdef BLKSNAP_STANDALONE
+			submit_bio_noacct_notrace(bio);
+#else
+			resubmit_filtered_bio(bio);
+#endif
+		}
+		bio_put(bio);
+	}
 }
 
 static void diff_area_store_queue_work(struct work_struct *work)
@@ -285,6 +346,10 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 	tracker_get(tracker);
 	diff_area->tracker = tracker;
 
+	spin_lock_init(&diff_area->cow_queue_lock);
+	INIT_LIST_HEAD(&diff_area->cow_queue);
+	INIT_WORK(&diff_area->cow_queue_work, diff_area_cow_queue_work);
+
 	spin_lock_init(&diff_area->store_queue_lock);
 	INIT_LIST_HEAD(&diff_area->store_queue);
 	atomic_set(&diff_area->store_queue_count, 0);
@@ -323,17 +388,23 @@ static inline unsigned int chunk_limit(struct chunk *chunk,
 /*
  * Implements the copy-on-write mechanism.
  */
-bool diff_area_cow(struct bio *bio, struct diff_area *diff_area,
-		   struct bvec_iter *iter)
+bool diff_area_cow_process_bio(struct diff_area *diff_area, struct bio *bio)
 {
+	bool skip_bio = false;
 	bool nowait = bio->bi_opf & REQ_NOWAIT;
+	struct bvec_iter iter = bio->bi_iter;
 	struct bio *chunk_bio = NULL;
 	LIST_HEAD(chunks);
 	int ret = 0;
+	unsigned int flags;
 
-	while (iter->bi_size) {
+	if (bio_flagged(bio, BIO_REMAPPED))
+		iter.bi_sector -= bio->bi_bdev->bd_start_sect;
+
+	flags = memalloc_noio_save();
+	while (iter.bi_size) {
 		unsigned long nr = diff_area_chunk_number(diff_area,
-							  iter->bi_sector);
+								iter.bi_sector);
 		struct chunk *chunk = xa_load(&diff_area->chunk_map, nr);
 		unsigned int len;
 
@@ -346,7 +417,7 @@ bool diff_area_cow(struct bio *bio, struct diff_area *diff_area,
 			}
 
 			ret = xa_insert(&diff_area->chunk_map, nr, chunk,
-					GFP_NOIO);
+					GFP_KERNEL);
 			if (likely(!ret)) {
 				/* new chunk has been added */
 			} else if (ret == -EBUSY) {
@@ -373,17 +444,35 @@ bool diff_area_cow(struct bio *bio, struct diff_area *diff_area,
 				goto fail;
 			}
 		} else {
+#ifdef CONFIG_BLKSNAP_CHUNK_DBG
+			ret = down_timeout(&chunk->lock, HZ * 15);
+			if (unlikely(ret)) {
+				if (ret == -ETIME) {
+					pr_err("%s: Hang on chunk #%lu\n", __func__, nr);
+					pr_err("state %d\n", chunk->state);
+					if (chunk->holder_func) {
+						pr_err("holder %s\n", chunk->holder_func);
+						pr_err("holder sector: %llu\n", chunk->holder_sector);
+						pr_err("current sector: %llu\n", iter.bi_sector);
+					}
+				}
+				goto fail;
+			}
+			chunk->holder_func = __func__;
+			chunk->holder_sector = iter.bi_sector;
+#else
 			ret = down_killable(&chunk->lock);
 			if (unlikely(ret))
 				goto fail;
+#endif
 		}
 		chunk->diff_area = diff_area_get(diff_area);
 
-		len = chunk_limit(chunk, iter);
+		len = chunk_limit(chunk, &iter);
 #ifdef HAVE_BIO_ADVANCE_ITER_SIMPLE
-		bio_advance_iter_single(bio, iter, len);
+		bio_advance_iter_single(bio, &iter, len);
 #else
-		bio_advance_iter(bio, iter, len);
+		bio_advance_iter(bio, &iter, len);
 #endif
 
 		if (chunk->state == CHUNK_ST_NEW) {
@@ -422,12 +511,12 @@ bool diff_area_cow(struct bio *bio, struct diff_area *diff_area,
 
 	if (chunk_bio) {
 		/* Postpone bio processing in a callback. */
-		chunk_load_and_postpone_io_finish(&diff_area->tracker->filter,
-						  &chunks, chunk_bio, bio);
-		return true;
+		chunk_load_and_postpone_io_finish(&chunks, chunk_bio, bio);
+		skip_bio = true;
+
 	}
 	/* Pass bio to the low level */
-	return false;
+	goto out;
 
 fail:
 	if (chunk_bio) {
@@ -443,22 +532,35 @@ fail:
 		 */
 		bio->bi_status = BLK_STS_AGAIN;
 		bio_endio(bio);
-		return true;
-	}
-	/*
-	 * In any other case, the processing of the I/O unit continues.
-	 */
-	return false;
+		skip_bio = true;
+	} else
+		diff_area_set_corrupted(diff_area, ret);
+out:
+	memalloc_noio_restore(flags);
+	return skip_bio;
 }
 
-static void orig_clone_endio(struct bio *bio)
+bool diff_area_cow(struct diff_area *diff_area, struct bio *bio)
 {
-	struct bio *orig_bio = bio->bi_private;
+	int ret;
+	bool skip_bio = true;
+	unsigned int flags;
 
-	if (unlikely(bio->bi_status != BLK_STS_OK))
-		bio_io_error(orig_bio);
-	else
-		bio_endio(orig_bio);
+	if (bio->bi_opf & REQ_NOWAIT) {
+		bio->bi_status = BLK_STS_AGAIN;
+		bio_endio(bio);
+		return skip_bio;
+	}
+
+	flags = memalloc_noio_save();
+	ret = diff_area_cow_schedule(diff_area, bio);
+	if (ret) {
+		diff_area_set_corrupted(diff_area, ret);
+		skip_bio = false;
+	}
+	memalloc_noio_restore(flags);
+
+	return skip_bio;
 }
 
 static void orig_clone_bio(struct diff_area *diff_area, struct bio *bio)
@@ -477,11 +579,8 @@ static void orig_clone_bio(struct diff_area *diff_area, struct bio *bio)
 	new_bio->bi_iter.bi_size = min_t(unsigned int,
 			bio->bi_iter.bi_size, chunk_limit << SECTOR_SHIFT);
 
-	new_bio->bi_end_io = orig_clone_endio;
-	new_bio->bi_private = bio;
-
 	bio_advance(bio, new_bio->bi_iter.bi_size);
-	bio_inc_remaining(bio);
+	bio_chain(new_bio, bio);
 #ifdef BLKSNAP_STANDALONE
 	submit_bio_noacct_notrace(new_bio);
 #else
@@ -492,10 +591,10 @@ static void orig_clone_bio(struct diff_area *diff_area, struct bio *bio)
 bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio)
 {
 	int ret;
+	unsigned long nr;
 	struct chunk *chunk;
-	unsigned long nr = diff_area_chunk_number(diff_area,
-						  bio->bi_iter.bi_sector);
 
+	nr = diff_area_chunk_number(diff_area, bio->bi_iter.bi_sector);
 	chunk = xa_load(&diff_area->chunk_map, nr);
 	/*
 	 * If this chunk is not in the chunk map, then the COW algorithm did
@@ -520,8 +619,7 @@ bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio)
 		if (unlikely(!chunk))
 			return false;
 
-		ret = xa_insert(&diff_area->chunk_map, nr, chunk,
-				GFP_NOIO);
+		ret = xa_insert(&diff_area->chunk_map, nr, chunk,GFP_KERNEL);
 		if (likely(!ret)) {
 			/* new chunk has been added */
 		} else if (ret == -EBUSY) {
@@ -537,9 +635,26 @@ bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio)
 			return false;
 		}
 	}
-
+#ifdef CONFIG_BLKSNAP_CHUNK_DBG
+	ret = down_timeout(&chunk->lock, HZ * 15);
+	if (unlikely(ret)) {
+		if (ret == -ETIME) {
+			pr_err("%s: Hang on chunk #%lu\n", __func__, nr);
+			pr_err("state %d\n", chunk->state);
+			if (chunk->holder_func) {
+				pr_err("holder %s\n", chunk->holder_func);
+				pr_err("holder sector: %llu\n", chunk->holder_sector);
+				pr_err("current sector: %llu\n", bio->bi_iter.bi_sector);
+			}
+		}
+		return false;
+	}
+	chunk->holder_func = __func__;
+	chunk->holder_sector = bio->bi_iter.bi_sector;
+#else
 	if (down_killable(&chunk->lock))
 		return false;
+#endif
 	chunk->diff_area = diff_area_get(diff_area);
 
 	switch (chunk->state) {
@@ -593,8 +708,9 @@ static inline void diff_area_event_corrupted(struct diff_area *diff_area)
 		.err_code = abs(diff_area->error_code),
 	};
 
-	event_gen(&diff_area->diff_storage->event_queue, GFP_NOIO,
-		  blksnap_event_code_corrupted, &data,
+	event_gen(&diff_area->diff_storage->event_queue,
+		  blksnap_event_code_corrupted,
+		  &data,
 		  sizeof(struct blksnap_event_corrupted));
 }
 

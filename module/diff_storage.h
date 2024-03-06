@@ -17,10 +17,12 @@ struct blksnap_sectors;
  *	environment.
  * @dev_id:
  *	ID of the block device on which the difference storage file is located.
+ * @bdev_handle:
+ *	A pointer to the block device handle. This handle allows to keep the
+ *	block device open.
  * @bdev:
  *	A pointer to the block device that has been selected for the
- *	difference storage. Available only if configuration BLKSNAP_DIFF_BLKDEV
- *	is enabled.
+ *	difference storage.
  * @file:
  *	A pointer to the file that was selected for the difference storage.
  * @capacity:
@@ -64,6 +66,9 @@ struct diff_storage {
 	spinlock_t lock;
 
 	dev_t dev_id;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev_handle;
+#endif
 	struct block_device *bdev;
 	struct file *file;
 	sector_t capacity;
@@ -95,6 +100,6 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 				  const char *filename, sector_t limit);
 
 int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
-		       struct block_device **bdev,
-		       struct file **file, sector_t *sector);
+		       struct block_device **bdev, struct file **file,
+		       sector_t *sector);
 #endif /* __BLKSNAP_DIFF_STORAGE_H */

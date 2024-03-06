@@ -95,24 +95,28 @@ struct chunk {
 	sector_t diff_ofs_sect;
 
 	struct diff_buffer *diff_buffer;
+#ifdef CONFIG_BLKSNAP_CHUNK_DBG
+	const char *holder_func;
+	sector_t holder_sector;
+#endif
 };
 
 static inline void chunk_up(struct chunk *chunk)
 {
 	struct diff_area *diff_area = chunk->diff_area;
-
+#ifdef CONFIG_BLKSNAP_CHUNK_DBG
+	chunk->holder_func = NULL;
+	chunk->holder_sector = 0;
+#endif
 	chunk->diff_area = NULL;
 	up(&chunk->lock);
 	diff_area_put(diff_area);
 };
 
 struct chunk_io_ctx {
+	struct kref kref;
 	struct list_head link;
-#ifdef CONFIG_BLKSNAP_CHUNK_DIFF_BIO_SYNC
-	loff_t pos;
-#else
 	struct kiocb iocb;
-#endif
 	struct iov_iter iov_iter;
 	struct chunk *chunk;
 	struct bio *bio;
@@ -130,8 +134,8 @@ int chunk_diff_bio(struct chunk *chunk, struct bio *bio);
 void chunk_diff_write(struct chunk *chunk);
 bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio);
 int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio);
-void chunk_load_and_postpone_io_finish(struct blkfilter *flt,
-	struct list_head *chunks, struct bio *chunk_bio, struct bio *orig_bio);
+void chunk_load_and_postpone_io_finish(struct list_head *chunks,
+				struct bio *chunk_bio, struct bio *orig_bio);
 
 int __init chunk_init(void);
 void chunk_done(void);

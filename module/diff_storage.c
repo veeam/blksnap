@@ -81,7 +81,6 @@ static inline void check_halffull(struct diff_storage *diff_storage,
 {
 	if (is_halffull(sectors_left) &&
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
-
 		if (diff_storage->bdev) {
 			pr_warn("Reallocating is allowed only for a regular file\n");
 			return;
@@ -92,7 +91,7 @@ static inline void check_halffull(struct diff_storage *diff_storage,
 		}
 
 		pr_debug("Diff storage low free space.\n");
-		queue_work(system_wq, &diff_storage->reallocate_work);
+		blksnap_queue_work(&diff_storage->reallocate_work);
 	}
 }
 
@@ -121,14 +120,20 @@ void diff_storage_free(struct kref *kref)
 	diff_storage = container_of(kref, struct diff_storage, kref);
 	flush_work(&diff_storage->reallocate_work);
 
-	if (diff_storage->bdev) {
-#if defined(HAVE_BLK_HOLDER_OPS)
-		blkdev_put(diff_storage->bdev, diff_storage);
+#if defined(HAVE_BDEV_HANDLE)
+	if (diff_storage->bdev_handle)
+		bdev_release(diff_storage->bdev_handle);
 #else
+	if (diff_storage->bdev)
 		blkdev_put(diff_storage->bdev,
-			   FMODE_EXCL | FMODE_READ | FMODE_WRITE);
+#if defined(HAVE_BLK_HOLDER_OPS)
+			diff_storage
+#else
+			FMODE_EXCL | FMODE_READ | FMODE_WRITE
 #endif
-	}
+			);
+#endif
+
 	if (diff_storage->file)
 		filp_close(diff_storage->file, NULL);
 	event_queue_done(&diff_storage->event_queue);
@@ -138,23 +143,34 @@ void diff_storage_free(struct kref *kref)
 static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,
 					const char *devpath)
 {
-	struct block_device *bdev;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev_handle;
 
-#if defined(HAVE_BLK_HOLDER_OPS)
-#ifdef HAVE_BLK_OPEN_MODE
-	bdev = blkdev_get_by_path(devpath,
+	bdev_handle = bdev_open_by_path(devpath,
 				BLK_OPEN_EXCL | BLK_OPEN_READ | BLK_OPEN_WRITE,
 				diff_storage, NULL);
+	if (IS_ERR(bdev_handle)) {
+		pr_err("Failed to open a block device '%s'\n", devpath);
+		return PTR_ERR(bdev_handle);
+	}
+
+	pr_debug("A block device is selected for difference storage\n");
+	diff_storage->bdev_handle = bdev_handle;
+	diff_storage->dev_id = bdev_handle->bdev->bd_dev;
+	diff_storage->capacity = bdev_nr_sectors(bdev_handle->bdev);
+	diff_storage->bdev = bdev_handle->bdev;
 #else
+	struct block_device *bdev;
+
 	bdev = blkdev_get_by_path(devpath,
-				FMODE_EXCL | FMODE_READ | FMODE_WRITE,
-				diff_storage, NULL);
-#endif
+#if defined(HAVE_BLK_HOLDER_OPS)
+				BLK_OPEN_EXCL | BLK_OPEN_READ | BLK_OPEN_WRITE,
+				diff_storage, NULL
 #else
-	bdev = blkdev_get_by_path(devpath,
 				FMODE_EXCL | FMODE_READ | FMODE_WRITE,
-				diff_storage);
+				diff_storage
 #endif
+				);
 	if (IS_ERR(bdev)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
 		return PTR_ERR(bdev);
@@ -164,6 +180,7 @@ static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,
 	diff_storage->dev_id = bdev->bd_dev;
 	diff_storage->capacity = bdev_nr_sectors(bdev);
 	diff_storage->bdev = bdev;
+#endif
 	return 0;
 }
 
@@ -192,10 +209,10 @@ static inline int diff_storage_set_tmpfile(struct diff_storage *diff_storage,
 					   const char *dirname)
 {
 	struct file *file;
-	int flags = O_EXCL | O_RDWR | O_LARGEFILE | O_DIRECT | O_NOATIME |
+	int flags = O_EXCL | O_RDWR | O_LARGEFILE | O_NOATIME | O_DIRECT |
 		    O_TMPFILE;
 
-	file = filp_open(dirname, flags, S_IRUSR | S_IWUSR);
+	file = filp_open(dirname, flags, 00600);
 	if (IS_ERR(file)) {
 		pr_err("Failed to create a temp file in directory '%s'\n",
 			dirname);
@@ -211,9 +228,9 @@ static inline int diff_storage_set_regfile(struct diff_storage *diff_storage,
 					   const char *filename)
 {
 	struct file *file;
-	int flags = O_EXCL | O_RDWR | O_LARGEFILE | O_DIRECT | O_NOATIME;
+	int flags = O_EXCL | O_RDWR | O_LARGEFILE | O_NOATIME | O_DIRECT;
 
-	file = filp_open(filename, flags, S_IRUSR | S_IWUSR);
+	file = filp_open(filename, flags, 00600);
 	if (IS_ERR(file)) {
 		pr_err("Failed to open a regular file '%s'\n", filename);
 		return PTR_ERR(file);
@@ -232,7 +249,7 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 	umode_t mode;
 	sector_t req_sect;
 
-	file = filp_open(filename, O_RDONLY, S_IRUSR);
+	file = filp_open(filename, O_RDONLY, 00400);
 	if (IS_ERR(file)) {
 		pr_err("Failed to open '%s'\n", filename);
 		return PTR_ERR(file);
@@ -294,8 +311,8 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 }
 
 int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
-			struct block_device **bdev,
-			struct file **file, sector_t *sector)
+			struct block_device **bdev, struct file **file,
+			sector_t *sector)
 
 {
 	sector_t sectors_left;

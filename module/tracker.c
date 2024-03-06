@@ -46,19 +46,21 @@ static bool tracker_submit_bio(struct bio *bio)
 #endif
 	struct tracker *tracker = container_of(flt, struct tracker, filter);
 	sector_t count = bio_sectors(bio);
-	struct bvec_iter copy_iter;
+	sector_t sector = bio->bi_iter.bi_sector;
 
+#ifndef BLKSNAP_STANDALONE
+	if (WARN_ON_ONCE(current->blk_filter != flt))
+		return false;
+#endif
 	if (!op_is_write(bio_op(bio)) || !count)
 		return false;
-
-	copy_iter = bio->bi_iter;
 #ifdef BLKSNAP_STANDALONE
 	// do nothing - the handling is performed before the remapping
 #else
 	if (bio_flagged(bio, BIO_REMAPPED))
-		copy_iter.bi_sector -= bio->bi_bdev->bd_start_sect;
+		sector -= bio->bi_bdev->bd_start_sect;
 #endif
-	if (cbt_map_set(tracker->cbt_map, copy_iter.bi_sector, count))
+	if (cbt_map_set(tracker->cbt_map, sector, count))
 		return false;
 
 	if (!atomic_read(&tracker->snapshot_is_taken))
@@ -72,7 +74,7 @@ static bool tracker_submit_bio(struct bio *bio)
 		return false;
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
-	if (bio_has_crypt_ctx(bio) /*|| bio_flagged(bio, BIO_CRYPTO_PREPARED)*/) {
+	if (bio_has_crypt_ctx(bio)) {
 		pr_err("Inline encryption is not supported\n");
 		diff_area_set_corrupted(tracker->diff_area, -EPERM);
 		return false;
@@ -85,7 +87,7 @@ static bool tracker_submit_bio(struct bio *bio)
 		return false;
 	}
 #endif
-	return diff_area_cow(bio, tracker->diff_area, &copy_iter);
+	return diff_area_cow(tracker->diff_area, bio);
 }
 
 static struct blkfilter *tracker_attach(struct block_device *bdev)
@@ -268,20 +270,20 @@ static int tracker_ctl(struct blkfilter *flt, const unsigned int cmd,
 	struct tracker *tracker = container_of(flt, struct tracker, filter);
 
 	mutex_lock(&tracker->ctl_lock);
-	switch(cmd) {
-	case blkfilter_ctl_blksnap_cbtinfo:
+	switch (cmd) {
+	case BLKFILTER_CTL_BLKSNAP_CBTINFO:
 		ret = ctl_cbtinfo(tracker, buf, plen);
 		break;
-	case blkfilter_ctl_blksnap_cbtmap:
+	case BLKFILTER_CTL_BLKSNAP_CBTMAP:
 		ret = ctl_cbtmap(tracker, buf, plen);
 		break;
-	case blkfilter_ctl_blksnap_cbtdirty:
+	case BLKFILTER_CTL_BLKSNAP_CBTDIRTY:
 		ret = ctl_cbtdirty(tracker, buf, plen);
 		break;
-	case blkfilter_ctl_blksnap_snapshotadd:
+	case BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD:
 		ret = ctl_snapshotadd(tracker, buf, plen);
 		break;
-	case blkfilter_ctl_blksnap_snapshotinfo:
+	case BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO:
 		ret = ctl_snapshotinfo(tracker, buf, plen);
 		break;
 	default:
@@ -293,11 +295,10 @@ static int tracker_ctl(struct blkfilter *flt, const unsigned int cmd,
 }
 
 #ifdef BLKSNAP_STANDALONE
-static struct bdevfilter_operations tracker_ops =
+static struct bdevfilter_operations tracker_ops = {
 #else
-static struct bdevfilter_operations tracker_ops =
+static struct blkfilter_operations tracker_ops = {
 #endif
-{
 	.owner		= THIS_MODULE,
 	.name		= "blksnap",
 	.attach		= tracker_attach,
@@ -376,6 +377,10 @@ void tracker_release_snapshot(struct tracker *tracker)
 #else
 	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_queue);
 #endif
+	flush_work(&diff_area->cow_queue_work);
+	flush_work(&diff_area->image_io_work);
+	flush_work(&diff_area->store_queue_work);
+
 	diff_area_put(diff_area);
 }
 

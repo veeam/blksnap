@@ -139,6 +139,8 @@ static const struct blksnap_mod modification = {
 };
 #endif
 
+static struct workqueue_struct *blksnap_wq;
+
 unsigned int get_tracking_block_minimum_shift(void)
 {
 	return tracking_block_minimum_shift;
@@ -189,6 +191,11 @@ unsigned int get_free_diff_buffer_pool_size(void)
 sector_t get_diff_storage_minimum(void)
 {
 	return (sector_t)diff_storage_minimum;
+}
+
+bool blksnap_queue_work(struct work_struct *work)
+{
+	return queue_work(blksnap_wq, work);
 }
 
 static int ioctl_version(struct blksnap_version __user *user_version)
@@ -363,7 +370,7 @@ static struct miscdevice blksnap_ctrl_misc = {
 static inline sector_t chunk_minimum_sectors(void)
 {
 	return (1ull << (chunk_minimum_shift - SECTOR_SHIFT));
-};
+}
 
 static int __init parameters_init(void)
 {
@@ -389,15 +396,15 @@ static int __init parameters_init(void)
 			 tracking_block_maximum_shift);
 	}
 
+	if (chunk_minimum_shift > chunk_maximum_shift) {
+		chunk_minimum_shift = chunk_maximum_shift;
+		pr_warn("fixed chunk_minimum_shift: %d\n",
+			 chunk_minimum_shift);
+	}
 	if (chunk_minimum_shift < PAGE_SHIFT) {
 		chunk_minimum_shift = PAGE_SHIFT;
 		pr_warn("fixed chunk_minimum_shift: %d\n",
 			 chunk_minimum_shift);
-	}
-	if (chunk_maximum_shift < chunk_minimum_shift) {
-		chunk_maximum_shift = chunk_minimum_shift;
-		pr_warn("fixed chunk_maximum_shift: %d\n",
-			 chunk_maximum_shift);
 	}
 	if (diff_storage_minimum < (chunk_minimum_sectors() * 2)) {
 		diff_storage_minimum = chunk_minimum_sectors() * 2;
@@ -409,7 +416,13 @@ static int __init parameters_init(void)
 		pr_warn("fixed diff_storage_minimum: %d\n",
 			 diff_storage_minimum);
 	}
-
+#ifdef CONFIG_64BIT
+	chunk_maximum_count_shift = min((unsigned int)40,
+					chunk_maximum_count_shift);
+#else
+	chunk_maximum_count_shift = min((unsigned int)32,
+					chunk_maximum_count_shift);
+#endif
 	return 0;
 }
 
@@ -431,6 +444,13 @@ static int __init blksnap_init(void)
 	if (ret)
 		goto fail_chunk_init;
 
+	blksnap_wq = alloc_workqueue("blksnap",
+				      WQ_UNBOUND | WQ_HIGHPRI | WQ_SYSFS, 0);
+	if (!blksnap_wq) {
+		ret = -ENOMEM;
+		goto fail_wq_init;
+	}
+
 	ret = tracker_init();
 	if (ret)
 		goto fail_tracker_init;
@@ -444,6 +464,8 @@ static int __init blksnap_init(void)
 fail_misc_register:
 	tracker_done();
 fail_tracker_init:
+	destroy_workqueue(blksnap_wq);
+fail_wq_init:
 	chunk_done();
 fail_chunk_init:
 
@@ -456,9 +478,10 @@ static void __exit blksnap_exit(void)
 
 	misc_deregister(&blksnap_ctrl_misc);
 
-	chunk_done();
 	snapshot_done();
 	tracker_done();
+	destroy_workqueue(blksnap_wq);
+	chunk_done();
 #ifdef BLK_SNAP_FILELOG
 	log_done();
 #endif

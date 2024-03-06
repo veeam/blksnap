@@ -14,7 +14,7 @@
  * @name:       Name of block device filter.
  */
 struct bdevfilter_name {
-	__s32 bdev_fd;
+	__u64 devpath;
 	__u8 name[BDEVFILTER_NAME_LENGTH];
 };
 
@@ -27,7 +27,7 @@ struct bdevfilter_name {
  * @opt:	Userspace buffer with options.
  */
 struct bdevfilter_ctl {
-	__s32 bdev_fd;
+	__u64 devpath;
 	__u8 name[BDEVFILTER_NAME_LENGTH];
 	__u32 cmd;
 	__u32 optlen;

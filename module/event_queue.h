@@ -8,7 +8,6 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/wait.h>
-#include <linux/slab.h>
 
 /**
  * struct event - An event to be passed to the user space.
@@ -54,7 +53,7 @@ struct event_queue {
 void event_queue_init(struct event_queue *event_queue);
 void event_queue_done(struct event_queue *event_queue);
 
-int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
+int event_gen(struct event_queue *event_queue, int code,
 	      const void *data, int data_size);
 struct event *event_wait(struct event_queue *event_queue,
 			 unsigned long timeout_ms);

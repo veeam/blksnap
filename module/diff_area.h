@@ -123,6 +123,10 @@ struct diff_area {
 	unsigned long chunk_count;
 	struct xarray chunk_map;
 
+	spinlock_t cow_queue_lock;
+	struct list_head cow_queue;
+	struct work_struct cow_queue_work;
+
 	spinlock_t store_queue_lock;
 	struct list_head store_queue;
 	atomic_t store_queue_count;
@@ -169,10 +173,9 @@ static inline sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
 {
 	return (sector_t)(1ull << (diff_area->chunk_shift - SECTOR_SHIFT));
 };
-bool diff_area_cow(struct bio *bio, struct diff_area *diff_area,
-		   struct bvec_iter *iter);
-
+bool diff_area_cow(struct diff_area *diff_area, struct bio *bio);
 bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio);
 void diff_area_rw_chunk(struct kref *kref);
+bool diff_area_cow_process_bio(struct diff_area *diff_area, struct bio *bio);
 
 #endif /* __BLKSNAP_DIFF_AREA_H */

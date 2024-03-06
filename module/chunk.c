@@ -17,7 +17,6 @@
 
 struct chunk_bio {
 	struct work_struct work;
-	struct blkfilter *flt;
 	struct list_head chunks;
 	struct bio *orig_bio;
 	struct bvec_iter orig_iter;
@@ -29,8 +28,8 @@ static struct bio_set chunk_clone_bioset;
 
 static inline sector_t chunk_sector(struct chunk *chunk)
 {
-	return (sector_t)(chunk->number)
-	       << (chunk->diff_area->chunk_shift - SECTOR_SHIFT);
+	return (sector_t)(chunk->number) <<
+		(chunk->diff_area->chunk_shift - SECTOR_SHIFT);
 }
 
 static inline sector_t chunk_sector_end(struct chunk *chunk)
@@ -59,15 +58,12 @@ void chunk_store_failed(struct chunk *chunk, int error)
 
 static inline void chunk_io_failed(struct chunk *chunk)
 {
-	struct diff_area *diff_area = diff_area_get(chunk->diff_area);
-
 	if (likely(chunk->diff_buffer)) {
-		diff_buffer_release(diff_area, chunk->diff_buffer);
+		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
 		chunk->diff_buffer = NULL;
 	}
 
 	chunk_up(chunk);
-	diff_area_put(diff_area);
 }
 
 static void chunk_schedule_storing(struct chunk *chunk)
@@ -93,7 +89,7 @@ static void chunk_schedule_storing(struct chunk *chunk)
 
 	if (need_work) {
 		/* Initiate the queue clearing process */
-		queue_work(system_wq, &diff_area->store_queue_work);
+		blksnap_queue_work(&diff_area->store_queue_work);
 	}
 	diff_area_put(diff_area);
 }
@@ -136,16 +132,6 @@ void chunk_copy_bio(struct chunk *chunk, struct bio *bio,
 	}
 }
 
-static void chunk_clone_endio(struct bio *bio)
-{
-	struct bio *orig_bio = bio->bi_private;
-
-	if (unlikely(bio->bi_status != BLK_STS_OK))
-		bio_io_error(orig_bio);
-	else
-		bio_endio(orig_bio);
-}
-
 static inline sector_t chunk_offset(struct chunk *chunk, struct bio *bio)
 {
 	return bio->bi_iter.bi_sector - chunk_sector(chunk);
@@ -175,11 +161,11 @@ static inline unsigned int chunk_limit(struct chunk *chunk, struct bio *bio)
 struct bio *chunk_alloc_clone(struct block_device *bdev, struct bio *bio)
 {
 #ifdef HAVE_BIO_ALLOC_CLONE
-	return bio_alloc_clone(bdev, bio, GFP_NOIO, &chunk_clone_bioset);
+	return bio_alloc_clone(bdev, bio, GFP_KERNEL, &chunk_clone_bioset);
 #else
 	struct bio *clone;
 
-	clone = bio_clone_fast(bio, GFP_NOIO, &chunk_clone_bioset);
+	clone = bio_clone_fast(bio, GFP_KERNEL, &chunk_clone_bioset);
 	bio_set_dev(clone, bdev);
 	return clone;
 #endif
@@ -191,11 +177,9 @@ void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
 
 	new_bio = chunk_alloc_clone(chunk->diff_bdev, bio);
 	chunk_limit_iter(chunk, bio, chunk->diff_ofs_sect, &new_bio->bi_iter);
-	new_bio->bi_end_io = chunk_clone_endio;
-	new_bio->bi_private = bio;
 
 	bio_advance(bio, new_bio->bi_iter.bi_size);
-	bio_inc_remaining(bio);
+	bio_chain(new_bio, bio);
 
 #ifdef BLKSNAP_STANDALONE
 	submit_bio_noacct_notrace(new_bio);
@@ -204,117 +188,65 @@ void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
 #endif
 }
 
-static inline void chunk_io_ctx_free(struct chunk_io_ctx *io_ctx, long ret)
+static void io_ctx_free(struct kref *kref)
 {
-	struct chunk *chunk = io_ctx->chunk;
-	struct bio *bio = io_ctx->bio;
+	kfree(container_of(kref, struct chunk_io_ctx, kref));
+}
 
-	kfree(io_ctx);
+static inline void chunk_io_ctx_complete(struct chunk_io_ctx *io_ctx, long ret)
+{
 	if (ret < 0) {
-		bio_io_error(bio);
-		chunk_io_failed(chunk);
-		return;
-	}
-
-	bio_endio(bio);
-	chunk_up(chunk);
-}
-
-#ifdef CONFIG_BLKSNAP_CHUNK_DIFF_BIO_SYNC
-void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
-{
-	struct file *diff_file = io_ctx->chunk->diff_file;
-	ssize_t len;
-
-#ifdef BLKSNAP_STANDALONE
-	if (bio_data_dir(io_ctx->bio))
-#else
-	if (io_ctx->iov_iter.data_source)
-#endif
-	{
-		file_start_write(diff_file);
-		len = vfs_iter_write(diff_file, &io_ctx->iov_iter,
-				     &io_ctx->pos, 0);
-		file_end_write(diff_file);
+		bio_io_error(io_ctx->bio);
+		chunk_io_failed(io_ctx->chunk);
 	} else {
-		len = vfs_iter_read(diff_file, &io_ctx->iov_iter,
-				    &io_ctx->pos, 0);
+		bio_endio(io_ctx->bio);
+		chunk_up(io_ctx->chunk);
 	}
-
-	chunk_io_ctx_free(io_ctx, len);
+	kref_put(&io_ctx->kref, io_ctx_free);
 }
-#else
-
 #ifdef HAVE_KI_COMPLETE_RET2
-static void chunk_diff_bio_complete_read(struct kiocb *iocb, long ret, long ret2)
+static void chunk_diff_bio_complete(struct kiocb *iocb, long ret, long ret2)
 #else
-static void chunk_diff_bio_complete_read(struct kiocb *iocb, long ret)
+static void chunk_diff_bio_complete(struct kiocb *iocb, long ret)
 #endif
 {
 	struct chunk_io_ctx *io_ctx;
 
-	io_ctx = container_of(iocb, struct chunk_io_ctx, iocb);
-	chunk_io_ctx_free(io_ctx, ret);
-}
-#ifdef HAVE_KI_COMPLETE_RET2
-static void chunk_diff_bio_complete_write(struct kiocb *iocb, long ret, long ret2)
-#else
-static void chunk_diff_bio_complete_write(struct kiocb *iocb, long ret)
-#endif
-{
-	struct chunk_io_ctx *io_ctx;
+	if (unlikely(ret < 0))
+		pr_err("Failed to write data to difference storage\n");
 
 	io_ctx = container_of(iocb, struct chunk_io_ctx, iocb);
-	chunk_io_ctx_free(io_ctx, ret);
-}
-
-static inline void chunk_diff_bio_execute_write(struct chunk_io_ctx *io_ctx)
-{
-	struct file *diff_file = io_ctx->chunk->diff_file;
-	ssize_t len;
-
-	len = vfs_iocb_iter_write(diff_file, &io_ctx->iocb,  &io_ctx->iov_iter);
-
-	if (len != -EIOCBQUEUED) {
-		if (unlikely(len < 0))
-			pr_err("Failed to write data to difference storage\n");
-		chunk_io_ctx_free(io_ctx, len);
-	}
-}
-
-static inline void chunk_diff_bio_execute_read(struct chunk_io_ctx *io_ctx)
-{
-	struct file *diff_file = io_ctx->chunk->diff_file;
-	ssize_t len;
-
-	len = vfs_iocb_iter_read(diff_file, &io_ctx->iocb, &io_ctx->iov_iter);
-	if (len != -EIOCBQUEUED) {
-		if (unlikely(len < 0))
-			pr_err("Failed to read data from difference storage\n");
-		chunk_io_ctx_free(io_ctx, len);
-	}
+	chunk_io_ctx_complete(io_ctx, ret);
 }
 
 void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
 {
+	struct file *diff_file = io_ctx->chunk->diff_file;
+	ssize_t ret;
+
 #ifdef BLKSNAP_STANDALONE
 	if (bio_data_dir(io_ctx->bio))
 #else
 	if (io_ctx->iov_iter.data_source)
 #endif
-		chunk_diff_bio_execute_write(io_ctx);
+		ret = vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
+							&io_ctx->iov_iter);
 	else
-		chunk_diff_bio_execute_read(io_ctx);
+		ret = vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
+							&io_ctx->iov_iter);
+	if (ret != -EIOCBQUEUED)
+		chunk_io_ctx_complete(io_ctx, ret);
+	kref_put(&io_ctx->kref, io_ctx_free);
 }
-#endif
 
 static inline void chunk_diff_bio_schedule(struct diff_area *diff_area,
 					   struct chunk_io_ctx *io_ctx)
 {
+	kref_get(&io_ctx->kref);
 	spin_lock(&diff_area->image_io_queue_lock);
 	list_add_tail(&io_ctx->link, &diff_area->image_io_queue);
 	spin_unlock(&diff_area->image_io_queue_lock);
-	queue_work(system_wq, &diff_area->image_io_work);
+	blksnap_queue_work(&diff_area->image_io_work);
 }
 
 /*
@@ -330,10 +262,11 @@ int chunk_diff_bio(struct chunk *chunk, struct bio *bio)
 	size_t nbytes = 0;
 	struct chunk_io_ctx *io_ctx;
 
-	io_ctx = kzalloc(sizeof(struct chunk_io_ctx), GFP_NOIO);
+	io_ctx = kzalloc(sizeof(struct chunk_io_ctx), GFP_KERNEL);
 	if (!io_ctx)
 		return -ENOMEM;
-
+	INIT_LIST_HEAD(&io_ctx->link);
+	kref_init(&io_ctx->kref);
 	chunk_ofs = (bio->bi_iter.bi_sector - chunk_sector(chunk))
 			<< SECTOR_SHIFT;
 	chunk_left = (chunk->sector_count << SECTOR_SHIFT) - chunk_ofs;
@@ -354,19 +287,14 @@ int chunk_diff_bio(struct chunk *chunk, struct bio *bio)
 	iov_iter_bvec(&io_ctx->iov_iter, is_write ? WRITE : READ,
 		      bio_bvec, nr_segs, nbytes);
 	io_ctx->iov_iter.iov_offset = bio->bi_iter.bi_bvec_done;
-#ifdef CONFIG_BLKSNAP_CHUNK_DIFF_BIO_SYNC
-	io_ctx->pos = (chunk->diff_ofs_sect << SECTOR_SHIFT) + chunk_ofs;
-#else
+
+	init_sync_kiocb(&io_ctx->iocb, chunk->diff_file);
 	io_ctx->iocb.ki_filp = chunk->diff_file;
 	io_ctx->iocb.ki_pos = (chunk->diff_ofs_sect << SECTOR_SHIFT) +
 								chunk_ofs;
-	io_ctx->iocb.ki_flags = IOCB_DIRECT;
 	if (is_write)
 		io_ctx->iocb.ki_flags |= IOCB_WRITE;
-	io_ctx->iocb.ki_ioprio = get_current_ioprio();
-	io_ctx->iocb.ki_complete = is_write ? chunk_diff_bio_complete_write
-					    : chunk_diff_bio_complete_read;
-#endif
+	io_ctx->iocb.ki_complete = chunk_diff_bio_complete;
 	io_ctx->chunk = chunk;
 	io_ctx->bio = bio;
 	bio_inc_remaining(bio);
@@ -433,7 +361,7 @@ static void notify_load_and_postpone_io(struct work_struct *work)
 #ifdef BLKSNAP_STANDALONE
 	submit_bio_noacct_notrace(cbio->orig_bio);
 #else
-	blkfilter_resubmit_bio(cbio->orig_bio, cbio->flt);
+	resubmit_filtered_bio(cbio->orig_bio);
 #endif
 	bio_put(&cbio->bio);
 }
@@ -485,10 +413,10 @@ static void chunk_io_endio(struct bio *bio)
 {
 	struct chunk_bio *cbio = container_of(bio, struct chunk_bio, bio);
 
-	queue_work(system_wq, &cbio->work);
+	blksnap_queue_work(&cbio->work);
 }
 
-static void chunk_submit_bio(struct bio *bio)
+static inline void chunk_submit_bio(struct bio *bio)
 {
 	bio->bi_end_io = chunk_io_endio;
 #ifdef BLKSNAP_STANDALONE
@@ -514,10 +442,10 @@ void chunk_store_tobdev(struct chunk *chunk)
 
 #ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
 	bio = bio_alloc_bioset(bdev, calc_max_vecs(count),
-			       REQ_OP_WRITE | REQ_SYNC | REQ_FUA, GFP_NOIO,
-			       &chunk_io_bioset);
+			       REQ_OP_WRITE | REQ_SYNC | REQ_FUA,
+			       GFP_KERNEL, &chunk_io_bioset);
 #else
-	bio = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+	bio = bio_alloc_bioset(GFP_KERNEL, calc_max_vecs(count),
 			       &chunk_io_bioset);
 	bio_set_op_attrs(bio, REQ_OP_WRITE, REQ_SYNC | REQ_FUA);
 	bio_set_dev(bio, bdev);
@@ -540,9 +468,9 @@ void chunk_store_tobdev(struct chunk *chunk)
 #ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
 		next = bio_alloc_bioset(bdev, calc_max_vecs(count),
 					REQ_OP_WRITE | REQ_SYNC | REQ_FUA,
-					GFP_NOIO, &chunk_io_bioset);
+					GFP_KERNEL, &chunk_io_bioset);
 #else
-		next = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+		next = bio_alloc_bioset(GFP_KERNEL, calc_max_vecs(count),
 					&chunk_io_bioset);
 		bio_set_op_attrs(next, REQ_OP_WRITE, REQ_SYNC | REQ_FUA);
 		bio_set_dev(next, bdev);
@@ -559,7 +487,6 @@ void chunk_store_tobdev(struct chunk *chunk)
 
 	cbio = container_of(bio, struct chunk_bio, bio);
 	INIT_WORK(&cbio->work, chunk_notify_store_tobdev);
-	cbio->flt = NULL;
 	INIT_LIST_HEAD(&cbio->chunks);
 	list_add_tail(&chunk->link, &cbio->chunks);
 	cbio->orig_bio = NULL;
@@ -583,7 +510,6 @@ void chunk_diff_write(struct chunk *chunk)
 	iov_iter_bvec(&iov_iter, WRITE, chunk->diff_buffer->bvec,
 		      chunk->diff_buffer->nr_pages, length);
 #endif
-	file_start_write(chunk->diff_file);
 	while (length) {
 		len = vfs_iter_write(chunk->diff_file, &iov_iter, &pos, 0);
 		if (len < 0) {
@@ -594,7 +520,6 @@ void chunk_diff_write(struct chunk *chunk)
 		}
 		length -= len;
 	}
-	file_end_write(chunk->diff_file);
 	chunk_notify_store(chunk, err);
 }
 
@@ -614,10 +539,10 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 	bdev = chunk->diff_area->orig_bdev;
 	sector = chunk_sector(chunk);
 #ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
-	bio = bio_alloc_bioset(bdev, calc_max_vecs(count),
-			       REQ_OP_READ, GFP_NOIO, &chunk_io_bioset);
+	bio = bio_alloc_bioset(bdev, calc_max_vecs(count), REQ_OP_READ,
+			       GFP_KERNEL, &chunk_io_bioset);
 #else
-	bio = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+	bio = bio_alloc_bioset(GFP_KERNEL, calc_max_vecs(count),
 			       &chunk_io_bioset);
 	bio_set_op_attrs(bio, REQ_OP_READ, 0);
 	bio_set_dev(bio, bdev);
@@ -638,11 +563,10 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 
 		/* Create next bio */
 #ifdef HAVE_BIO_ALLOC_BIOSET_BDEV
-		next = bio_alloc_bioset(bdev, calc_max_vecs(count),
-					REQ_OP_READ, GFP_NOIO,
-					&chunk_io_bioset);
+		next = bio_alloc_bioset(bdev, calc_max_vecs(count), REQ_OP_READ,
+					GFP_KERNEL, &chunk_io_bioset);
 #else
-		next = bio_alloc_bioset(GFP_NOIO, calc_max_vecs(count),
+		next = bio_alloc_bioset(GFP_KERNEL, calc_max_vecs(count),
 					&chunk_io_bioset);
 		bio_set_op_attrs(next, REQ_OP_READ, 0);
 		bio_set_dev(next, bdev);
@@ -684,8 +608,8 @@ int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
 	return 0;
 }
 
-void chunk_load_and_postpone_io_finish(struct blkfilter *flt,
-	struct list_head *chunks, struct bio *chunk_bio, struct bio *orig_bio)
+void chunk_load_and_postpone_io_finish(struct list_head *chunks,
+				struct bio *chunk_bio, struct bio *orig_bio)
 {
 	struct chunk_bio *cbio;
 
@@ -700,7 +624,6 @@ void chunk_load_and_postpone_io_finish(struct blkfilter *flt,
 		list_add_tail(&it->link, &cbio->chunks);
 	}
 	INIT_WORK(&cbio->work, notify_load_and_postpone_io);
-	cbio->flt = flt;
 	cbio->orig_bio = orig_bio;
 	chunk_submit_bio(chunk_bio);
 }
@@ -720,7 +643,6 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 	INIT_LIST_HEAD(&cbio->chunks);
 	list_add_tail(&chunk->link, &cbio->chunks);
 	INIT_WORK(&cbio->work, notify_load_and_schedule_io);
-	cbio->flt = NULL;
 	cbio->orig_bio = orig_bio;
 	cbio->orig_iter = orig_bio->bi_iter;
 #ifdef HAVE_BIO_ADVANCE_ITER_SIMPLE
@@ -728,7 +650,7 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 				chunk_limit(chunk, orig_bio));
 #else
 	bio_advance_iter(orig_bio, &orig_bio->bi_iter,
-				chunk_limit(chunk, orig_bio));
+			 chunk_limit(chunk, orig_bio));
 #endif
 	bio_inc_remaining(orig_bio);
 
@@ -743,9 +665,13 @@ int __init chunk_init(void)
 	ret = bioset_init(&chunk_io_bioset, 64,
 			  offsetof(struct chunk_bio, bio),
 			  BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
-	if (!ret)
-		ret = bioset_init(&chunk_clone_bioset, 64, 0,
-				  BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
+	if (ret)
+		return ret;
+
+	ret = bioset_init(&chunk_clone_bioset, 64, 0,
+			  BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
+	if (ret)
+		bioset_exit(&chunk_io_bioset);
 	return ret;
 }
 

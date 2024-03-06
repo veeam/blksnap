@@ -110,8 +110,11 @@ int snapshot_create(const char *filename, sector_t limit_sect,
 		return PTR_ERR(snapshot);
 	}
 
-	export_uuid(id->b, &snapshot->id);
-
+	if (!filename) {
+		pr_err("Unable to create snapshot: difference storage file is not set\n");
+		snapshot_put(snapshot);
+		return ret;
+	}
 	ret = diff_storage_set_diff_storage(snapshot->diff_storage,
 					    filename, limit_sect);
 	if (ret) {
@@ -119,6 +122,8 @@ int snapshot_create(const char *filename, sector_t limit_sect,
 		snapshot_put(snapshot);
 		return ret;
 	}
+
+	export_uuid(id->b, &snapshot->id);
 
 	down_write(&snapshots_lock);
 	list_add_tail(&snapshot->link, &snapshots);
@@ -266,7 +271,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_freeze_bdev(tracker->diff_area->orig_bdev, &tracker->diff_area->sb);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_freeze(tracker->diff_area->orig_bdev))
+#else
 		if (freeze_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_warn("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else {
@@ -299,7 +308,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(tracker->diff_area->orig_bdev, tracker->diff_area->sb);
 #else
+#if defined(HAVE_BDEV_FREEZE)
+		if (bdev_thaw(tracker->diff_area->orig_bdev))
+#else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
+#endif
 			pr_warn("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else

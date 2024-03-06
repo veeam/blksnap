@@ -22,8 +22,7 @@ static void diff_buffer_free(struct diff_buffer *diff_buffer)
 	kfree(diff_buffer);
 }
 
-static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size,
-					   gfp_t gfp_mask)
+static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 {
 	struct diff_buffer *diff_buffer;
 	size_t inx = 0;
@@ -33,7 +32,7 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size,
 
 	diff_buffer = kzalloc(sizeof(struct diff_buffer) +
 			      nr_pages * sizeof(struct bio_vec),
-			      gfp_mask);
+			      GFP_KERNEL);
 	if (!diff_buffer)
 		return NULL;
 
@@ -42,7 +41,7 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size,
 	diff_buffer->nr_pages = nr_pages;
 
 	for (inx = 0; inx < nr_pages; inx++) {
-		struct page *page = alloc_page(gfp_mask);
+		struct page *page = alloc_page(GFP_KERNEL);
 
 		if (!page)
 			goto fail;
@@ -76,8 +75,8 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area)
 	/* Allocate new buffer */
 	chunk_sectors = diff_area_chunk_sectors(diff_area);
 	page_count = round_up(chunk_sectors, PAGE_SECTORS) / PAGE_SECTORS;
-	diff_buffer = diff_buffer_new(page_count, chunk_sectors << SECTOR_SHIFT,
-				      GFP_NOIO);
+	diff_buffer = diff_buffer_new(page_count,
+				      chunk_sectors << SECTOR_SHIFT);
 	if (unlikely(!diff_buffer))
 		return ERR_PTR(-ENOMEM);
 	return diff_buffer;

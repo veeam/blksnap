@@ -51,23 +51,29 @@ static void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
 
 static int cbt_map_allocate(struct cbt_map *cbt_map)
 {
+	int ret = 0;
+	unsigned int flags;
 	unsigned char *read_map = NULL;
 	unsigned char *write_map = NULL;
 	size_t size = cbt_map->blk_count;
 
-	pr_debug("Allocate CBT map of %zu blocks\n", size);
-
 	if (cbt_map->read_map || cbt_map->write_map)
 		return -EINVAL;
 
-	read_map = __vmalloc(size, GFP_NOIO | __GFP_ZERO);
-	if (!read_map)
-		return -ENOMEM;
+	pr_debug("Allocate CBT map of %zu blocks\n", size);
+	flags = memalloc_noio_save();
 
-	write_map = __vmalloc(size, GFP_NOIO | __GFP_ZERO);
+	read_map = vzalloc(size);
+	if (!read_map) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	write_map = vzalloc(size);
 	if (!write_map) {
 		vfree(read_map);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	cbt_map->read_map = read_map;
@@ -77,28 +83,18 @@ static int cbt_map_allocate(struct cbt_map *cbt_map)
 	cbt_map->snap_number_active = 1;
 	generate_random_uuid(cbt_map->generation_id.b);
 	cbt_map->is_corrupted = false;
-
-	return 0;
-}
-
-static void cbt_map_deallocate(struct cbt_map *cbt_map)
-{
-	cbt_map->is_corrupted = false;
-
-	if (cbt_map->read_map) {
-		vfree(cbt_map->read_map);
-		cbt_map->read_map = NULL;
-	}
-
-	if (cbt_map->write_map) {
-		vfree(cbt_map->write_map);
-		cbt_map->write_map = NULL;
-	}
+out:
+	memalloc_noio_restore(flags);
+	return ret;
 }
 
 int cbt_map_reset(struct cbt_map *cbt_map, sector_t device_capacity)
 {
-	cbt_map_deallocate(cbt_map);
+	cbt_map->is_corrupted = false;
+	vfree(cbt_map->read_map);
+	cbt_map->read_map = NULL;
+	vfree(cbt_map->write_map);
+	cbt_map->write_map = NULL;
 
 	cbt_map->device_capacity = device_capacity;
 	cbt_map_calculate_block_size(cbt_map);
@@ -110,7 +106,8 @@ void cbt_map_destroy(struct cbt_map *cbt_map)
 {
 	pr_debug("CBT map destroy\n");
 
-	cbt_map_deallocate(cbt_map);
+	vfree(cbt_map->read_map);
+	vfree(cbt_map->write_map);
 	kfree(cbt_map);
 }
 

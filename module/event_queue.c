@@ -27,12 +27,12 @@ void event_queue_done(struct event_queue *event_queue)
 	spin_unlock(&event_queue->lock);
 }
 
-int event_gen(struct event_queue *event_queue, gfp_t flags, int code,
+int event_gen(struct event_queue *event_queue, int code,
 	      const void *data, int data_size)
 {
 	struct event *event;
 
-	event = kzalloc(sizeof(struct event) + data_size + 1, flags);
+	event = kzalloc(sizeof(struct event) + data_size + 1, GFP_KERNEL);
 	if (!event)
 		return -ENOMEM;
 

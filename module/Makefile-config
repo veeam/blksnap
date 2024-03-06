@@ -18,6 +18,10 @@ EXTRA_CFLAGS += $(shell 							\
 		$(srctree)/include/linux/blkdev.h &&				\
 		echo -D HAVE_SUPER_BLOCK_FREEZE)
 EXTRA_CFLAGS += $(shell 							\
+	grep -qw "int bdev_freeze"						\
+		$(srctree)/include/linux/blkdev.h &&				\
+		echo -D HAVE_BDEV_FREEZE)
+EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -D HAVE_BI_BDISK)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
@@ -49,6 +53,9 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "struct blk_holder_ops" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_HOLDER_OPS)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "struct bdev_handle" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_BDEV_HANDLE)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bvec.h &&		\
 	grep -qw "inline void bvec_set_page" $(srctree)/include/linux/bvec.h &&	\
 		echo -D HAVE_BVEC_SET_PAGE)

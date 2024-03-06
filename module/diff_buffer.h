@@ -21,7 +21,7 @@ struct diff_area;
  * @bvec:
  *	An array of pages in bio_vec form.
  *
- * Describes the memory buffer for a chunk in the memory.
+ * Describes the buffer in memory for a chunk.
  */
 struct diff_buffer {
 	struct list_head link;
