@@ -122,11 +122,11 @@ struct diff_area {
 	unsigned long chunk_shift;
 	unsigned long chunk_count;
 	struct xarray chunk_map;
-
+#ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 	spinlock_t cow_queue_lock;
 	struct list_head cow_queue;
 	struct work_struct cow_queue_work;
-
+#endif
 	spinlock_t store_queue_lock;
 	struct list_head store_queue;
 	atomic_t store_queue_count;

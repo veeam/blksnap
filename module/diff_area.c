@@ -205,7 +205,7 @@ static inline bool diff_area_store_one(struct diff_area *diff_area)
 	chunk_diff_write(chunk);
 	return true;
 }
-
+#ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 static int diff_area_cow_schedule(struct diff_area *diff_area, struct bio *bio)
 {
 	struct cow_task *task;
@@ -262,7 +262,7 @@ static void diff_area_cow_queue_work(struct work_struct *work)
 		bio_put(bio);
 	}
 }
-
+#endif
 static void diff_area_store_queue_work(struct work_struct *work)
 {
 	struct diff_area *diff_area = container_of(
@@ -345,11 +345,11 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 
 	tracker_get(tracker);
 	diff_area->tracker = tracker;
-
+#ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 	spin_lock_init(&diff_area->cow_queue_lock);
 	INIT_LIST_HEAD(&diff_area->cow_queue);
 	INIT_WORK(&diff_area->cow_queue_work, diff_area_cow_queue_work);
-
+#endif
 	spin_lock_init(&diff_area->store_queue_lock);
 	INIT_LIST_HEAD(&diff_area->store_queue);
 	atomic_set(&diff_area->store_queue_count, 0);
@@ -543,7 +543,9 @@ out:
 
 bool diff_area_cow(struct diff_area *diff_area, struct bio *bio)
 {
+#ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 	int ret;
+#endif
 	bool skip_bio = true;
 	unsigned int flags;
 
@@ -554,11 +556,15 @@ bool diff_area_cow(struct diff_area *diff_area, struct bio *bio)
 	}
 
 	flags = memalloc_noio_save();
+#ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 	ret = diff_area_cow_schedule(diff_area, bio);
 	if (ret) {
 		diff_area_set_corrupted(diff_area, ret);
 		skip_bio = false;
 	}
+#else
+	skip_bio  = diff_area_cow_process_bio(diff_area, bio);
+#endif
 	memalloc_noio_restore(flags);
 
 	return skip_bio;
