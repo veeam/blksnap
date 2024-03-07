@@ -268,7 +268,7 @@ static void diff_area_store_queue_work(struct work_struct *work)
 	struct diff_area *diff_area = container_of(
 		work, struct diff_area, store_queue_work);
 	unsigned int old_nofs;
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	struct blkfilter *prev_filter = current->blk_filter;
 
 	current->blk_filter = &diff_area->tracker->filter;
@@ -277,7 +277,7 @@ static void diff_area_store_queue_work(struct work_struct *work)
 	while (diff_area_store_one(diff_area))
 		;
 	memalloc_nofs_restore(old_nofs);
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	current->blk_filter = prev_filter;
 #endif
 }
@@ -303,7 +303,7 @@ static void diff_area_image_io_work(struct work_struct *work)
 		work, struct diff_area, image_io_work);
 	struct chunk_io_ctx *io_ctx;
 	unsigned int old_nofs;
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	struct blkfilter *prev_filter = current->blk_filter;
 
 	current->blk_filter = &diff_area->tracker->filter;
@@ -312,7 +312,7 @@ static void diff_area_image_io_work(struct work_struct *work)
 	while ((io_ctx = chunk_io_ctx_take(diff_area)))
 		chunk_diff_bio_execute(io_ctx);
 	memalloc_nofs_restore(old_nofs);
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	current->blk_filter = prev_filter;
 #endif
 }
@@ -398,9 +398,10 @@ bool diff_area_cow_process_bio(struct diff_area *diff_area, struct bio *bio)
 	int ret = 0;
 	unsigned int flags;
 
+#if !defined(BLKSNAP_STANDALONE)
 	if (bio_flagged(bio, BIO_REMAPPED))
 		iter.bi_sector -= bio->bi_bdev->bd_start_sect;
-
+#endif
 	flags = memalloc_noio_save();
 	while (iter.bi_size) {
 		unsigned long nr = diff_area_chunk_number(diff_area,

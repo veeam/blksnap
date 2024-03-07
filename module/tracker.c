@@ -48,15 +48,13 @@ static bool tracker_submit_bio(struct bio *bio)
 	sector_t count = bio_sectors(bio);
 	sector_t sector = bio->bi_iter.bi_sector;
 
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	if (WARN_ON_ONCE(current->blk_filter != flt))
 		return false;
 #endif
 	if (!op_is_write(bio_op(bio)) || !count)
 		return false;
-#ifdef BLKSNAP_STANDALONE
-	// do nothing - the handling is performed before the remapping
-#else
+#if !defined(BLKSNAP_STANDALONE)
 	if (bio_flagged(bio, BIO_REMAPPED))
 		sector -= bio->bi_bdev->bd_start_sect;
 #endif

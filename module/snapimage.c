@@ -38,7 +38,7 @@ static void snapimage_submit_bio(struct bio *bio)
 #endif
 	struct diff_area *diff_area = tracker->diff_area;
 	unsigned int flags;
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	struct blkfilter *prev_filter;
 #endif
 	bool is_success = true;
@@ -67,13 +67,13 @@ static void snapimage_submit_bio(struct bio *bio)
 	if (op_is_write(bio_op(bio)))
 		cbt_map_set_both(tracker->cbt_map, bio->bi_iter.bi_sector,
 				 bio_sectors(bio));
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	prev_filter = current->blk_filter;
 	current->blk_filter = &tracker->filter;
 #endif
 	while (bio->bi_iter.bi_size && is_success)
 		is_success = diff_area_submit_chunk(diff_area, bio);
-#ifndef BLKSNAP_STANDALONE
+#if !defined(BLKSNAP_STANDALONE)
 	current->blk_filter = prev_filter;
 #endif
 	if (is_success)
