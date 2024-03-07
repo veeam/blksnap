@@ -243,6 +243,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 {
 	int ret = 0;
 	struct tracker *tracker;
+	unsigned int current_flag;
 
 	down_write(&snapshot->rw_lock);
 
@@ -278,13 +279,13 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 #endif
 			pr_warn("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-		else {
+		else
 			pr_debug("Device [%u:%u] was frozen\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-		}
 #endif
 	}
 
+	current_flag = memalloc_noio_save();
 	/*
 	 * Take snapshot - switch CBT tables and enable COW logic for each
 	 * tracker.
@@ -300,7 +301,7 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 
 	if (!ret)
 		snapshot->is_taken = true;
-
+	memalloc_noio_restore(current_flag);
 	/*
 	 * Thaw file systems on original block devices.
 	 */

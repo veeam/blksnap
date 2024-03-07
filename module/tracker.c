@@ -313,15 +313,12 @@ int tracker_take_snapshot(struct tracker *tracker)
 	bool cbt_reset_needed = false;
 	struct block_device *orig_bdev = tracker->orig_bdev;
 	sector_t capacity;
-	unsigned int current_flag;
 
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	blk_mq_freeze_queue(orig_bdev->bd_disk->queue);
 #else
 	blk_mq_freeze_queue(orig_bdev->bd_queue);
 #endif
-	current_flag = memalloc_noio_save();
-
 	if (tracker->cbt_map->is_corrupted) {
 		cbt_reset_needed = true;
 		pr_warn("Corrupted CBT table detected. CBT fault\n");
@@ -345,7 +342,6 @@ int tracker_take_snapshot(struct tracker *tracker)
 	cbt_map_switch(tracker->cbt_map);
 	atomic_set(&tracker->snapshot_is_taken, true);
 
-	memalloc_noio_restore(current_flag);
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	blk_mq_unfreeze_queue(orig_bdev->bd_disk->queue);
 #else
