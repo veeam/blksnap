@@ -31,7 +31,7 @@ namespace fs = boost::filesystem;
 #ifndef SECTOR_SIZE
 #    define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
-#define BLKSNAP_FILTER_NAME {'b','l','k','s','n','a','p','\0'}
+#define BLKSNAP_FILTER_NAME {'v','e','e','a','m','b','l','k','s','n','a','p','\0'}
 
 namespace
 {
@@ -117,6 +117,14 @@ namespace
             if (m_bdevfilter > 0)
                 ::close(m_bdevfilter);
         };
+
+        unsigned int Ioctl(const unsigned int cmd, void *param)
+        {
+            int ret = ::ioctl(m_bdevfilter, cmd, param);
+            if (ret < 0)
+                throw std::system_error(errno, std::generic_category());
+        };
+
         bool Attach()
         {
             struct bdevfilter_name name = {
@@ -126,9 +134,7 @@ namespace
 
             try
             {
-                int ret = ::ioctl(m_bdevfilter, BDEVFILTER_ATTACH, &name);
-                if (ret < 0)
-                    throw std::system_error(errno, std::generic_category());
+                Ioctl(BDEVFILTER_ATTACH, &name);
             }
             catch (std::system_error &ex)
             {
@@ -150,9 +156,7 @@ namespace
 
             try
             {
-                int ret = ::ioctl(m_bdevfilter, BDEVFILTER_DETACH, &name);
-                if (ret < 0)
-                    throw std::system_error(errno, std::generic_category());
+                Ioctl(BDEVFILTER_DETACH, &name);
             }
             catch (std::exception &ex)
             {
@@ -171,9 +175,7 @@ namespace
                 .opt = (__u64)buf,
             };
 
-            int ret = ::ioctl(m_bdevfilter, BDEVFILTER_CTL, &ctl);
-            if (ret < 0)
-                throw std::system_error(errno, std::generic_category());
+            Ioctl(BDEVFILTER_CTL, &ctl);
 
             return ctl.optlen;
         };
