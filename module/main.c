@@ -15,7 +15,7 @@
 #include "tracker.h"
 #include "chunk.h"
 #include "params.h"
-#ifdef STANDALONE_BDEVFILTER
+#ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
 
@@ -430,7 +430,7 @@ static int __init blksnap_init(void)
 {
 	int ret;
 
-#ifdef BLK_SNAP_FILELOG
+#ifdef BLKSNAP_FILELOG
 	log_init();
 #endif
 	pr_debug("Loading\n");
@@ -482,7 +482,7 @@ static void __exit blksnap_exit(void)
 	tracker_done();
 	destroy_workqueue(blksnap_wq);
 	chunk_done();
-#ifdef BLK_SNAP_FILELOG
+#ifdef BLKSNAP_FILELOG
 	log_done();
 #endif
 	pr_debug("Module was unloaded\n");
