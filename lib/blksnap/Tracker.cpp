@@ -29,27 +29,19 @@
 
 using namespace blksnap;
 
-#define BLKSNAP_FILTER_NAME {'m','b','l','k','s','n','a','p','\0'}
+#define BLKSNAP_FILTER_NAME {'v','e','e','a','m','b','l','k','s','n','a','p','\0'}
 
 CTracker::CTracker(const std::string& devicePath)
+    : m_devicePath(devicePath)
 {
     const std::string bdevfilterPath("/dev/" BDEVFILTER);
 
     m_bdevfilter = ::open(bdevfilterPath.c_str(), O_RDWR);
     if (m_bdevfilter < 0)
         throw std::system_error(errno, std::generic_category(), "Failed to open ["+bdevfilterPath+"] device");
-    m_fd = ::open(devicePath.c_str(), O_DIRECT, 0600);
-    if (m_fd < 0)
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to open block device ["+devicePath+"].");
 }
 CTracker::~CTracker()
 {
-    if (m_fd > 0) {
-        ::close(m_fd);
-        m_fd = 0;
-    }
-
     if (m_bdevfilter > 0) {
         ::close(m_bdevfilter);
         m_bdevfilter = 0;
@@ -59,7 +51,7 @@ CTracker::~CTracker()
 bool CTracker::Attach()
 {
     struct bdevfilter_name name = {
-        .bdev_fd = m_fd,
+        .devpath = (__u64)m_devicePath.c_str(),
         .name = BLKSNAP_FILTER_NAME,
     };
 
@@ -75,7 +67,7 @@ bool CTracker::Attach()
 void CTracker::Detach()
 {
     struct bdevfilter_name name = {
-        .bdev_fd = m_fd,
+        .devpath = (__u64)m_devicePath.c_str(),
         .name = BLKSNAP_FILTER_NAME,
     };
 
@@ -88,9 +80,9 @@ void CTracker::Detach()
 void CTracker::CbtInfo(struct blksnap_cbtinfo& cbtInfo)
 {
     struct bdevfilter_ctl ctl = {
-        .bdev_fd = m_fd,
+        .devpath = (__u64)m_devicePath.c_str(),
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_cbtinfo,
+        .cmd = BLKFILTER_CTL_BLKSNAP_CBTINFO,
         .optlen = sizeof(cbtInfo),
         .opt = (__u64)&cbtInfo,
     };
@@ -106,9 +98,9 @@ void CTracker::ReadCbtMap(unsigned int offset, unsigned int length, uint8_t* buf
         .buffer = (__u64)buff
     };
     struct bdevfilter_ctl ctl = {
-        .bdev_fd = m_fd,
+        .devpath = (__u64)m_devicePath.c_str(),
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_cbtmap,
+        .cmd = BLKFILTER_CTL_BLKSNAP_CBTMAP,
         .optlen = sizeof(arg),
         .opt = (__u64)&arg,
     };
@@ -125,9 +117,9 @@ void CTracker::MarkDirtyBlock(std::vector<struct blksnap_sectors>& ranges)
         .dirty_sectors = (__u64)ranges.data(),
     };
     struct bdevfilter_ctl ctl = {
-        .bdev_fd = m_fd,
+        .devpath = (__u64)m_devicePath.c_str(),
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_cbtdirty,
+        .cmd = BLKFILTER_CTL_BLKSNAP_CBTDIRTY,
         .optlen = sizeof(arg),
         .opt = (__u64)&arg,
     };
@@ -142,9 +134,9 @@ void CTracker::SnapshotAdd(const uuid_t& id)
     uuid_copy(arg.id.b, id);
 
     struct bdevfilter_ctl ctl = {
-        .bdev_fd = m_fd,
+        .devpath = (__u64)m_devicePath.c_str(),
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_snapshotadd,
+        .cmd = BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD,
         .optlen = sizeof(arg),
         .opt = (__u64)&arg,
     };
@@ -156,9 +148,9 @@ void CTracker::SnapshotAdd(const uuid_t& id)
 void CTracker::SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo)
 {
     struct bdevfilter_ctl ctl = {
-        .bdev_fd = m_fd,
+        .devpath = (__u64)m_devicePath.c_str(),
         .name = BLKSNAP_FILTER_NAME,
-        .cmd = blkfilter_ctl_blksnap_snapshotinfo,
+        .cmd = BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO,
         .optlen = sizeof(snapshotinfo),
         .opt = (__u64)&snapshotinfo,
     };

@@ -51,7 +51,7 @@ namespace blksnap
         void SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo);
 
     private:
-        int m_fd;
+        std::string m_devicePath;
         int m_bdevfilter;
     };
 
