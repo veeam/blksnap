@@ -1,9 +1,11 @@
 | :warning: Important note |
 |:---------------------------|
-| Master branch is compatible only with latest work for [upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md#work-in-progress-and-news) |
-| For older blksnap version based on external module (actually used in production) see these branches: [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1), [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0), [stable-1.0](https://github.com/veeam/blksnap/tree/stable-v1.0) |
-| :information_source: To Veeam agent for linux users: |
-| If you need only kernel module updated with latest kernel versions support and latest fixes for it build kernel module from [VAL-6.0](https://github.com/veeam/blksnap/tree/VAL-6.0#how-to-build) or [VAL-6.1](https://github.com/veeam/blksnap/tree/VAL-6.1#how-to-build) branches based on your Veeam agent for linux version |
+| Master branch is compatible only with latest work for [upstream kernel integration](https://github.com/veeam/blksnap/blob/master/doc/README-upstream-kernel.md#work-in-progress-and-news). See patchsets for linux kernel in directory [patches](https://github.com/veeam/blksnap/tree/master/patches) or in Linux kernel fork [branches](https://github.com/SergeiShtepa/linux/branches/all?query=blksnap).
+| :information_source: standalone blksnap module |
+| The standalone blksnap kernel module, which is included in the Veeam Agent for Linux product, is available in [branches](https://github.com/veeam/blksnap/branches/all?query=VAL), whose names correspond to the product version. For example, the VAL-6.0 branch is used to build packages for Veeam Agent for Linux 6.0. It is recommended to use the latest branch, as it is likely to support the latest version of the Linux kernel and implement fixes and improvements. You can use it according to its license. |
+| :information_source: to Veeam Agent for Linux users: |
+| If you have any questions when using Veeam Software products, please contact the official support service. Use the product components received from official Veeam Software representatives in accordance with the user guide. |
+
 
 # BLKSNAP - Block Devices Snapshots
 
