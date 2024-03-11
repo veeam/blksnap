@@ -40,6 +40,21 @@ blksnap_version()
 	${BLKSNAP} version
 }
 
+blksnap_log_debug()
+{
+	${BLKSNAP} setlog --level 7 --filepath "$1"
+}
+
+blksnap_log()
+{
+	${BLKSNAP} setlog --level 4 --filepath "$1"
+}
+
+blksnap_log_disable()
+{
+	${BLKSNAP} setlog --disable
+}
+
 blksnap_snapshot_create()
 {
 	PARAM=""
