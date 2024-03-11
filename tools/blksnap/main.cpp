@@ -31,7 +31,7 @@ namespace fs = boost::filesystem;
 #ifndef SECTOR_SIZE
 #    define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
-#define BLKSNAP_FILTER_NAME {'v','e','e','a','m','b','l','k','s','n','a','p','\0'}
+#define BLKSNAP_FILTER_NAME {'b','l','k','s','n','a','p','\0'}
 
 namespace
 {
@@ -123,6 +123,7 @@ namespace
             int ret = ::ioctl(m_bdevfilter, cmd, param);
             if (ret < 0)
                 throw std::system_error(errno, std::generic_category());
+            return ret;
         };
 
         bool Attach()
