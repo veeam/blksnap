@@ -964,6 +964,85 @@ public:
     };
 };
 
+class ModArgsProc : public IArgsProc
+{
+public:
+    ModArgsProc()
+        : IArgsProc()
+    {
+        m_usage = std::string("Print module modification.");
+    };
+
+    void Execute(po::variables_map& vm) override
+    {
+        CBlksnapFileWrap blksnapFd;
+        struct blksnap_mod param = {0};
+
+        if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_MOD, &param))
+            throw std::system_error(errno, std::generic_category(), "Failed to get modification.");
+
+        std::cout << param.name << " : ";
+        if (param.compatibility_flags & blksnap_compat_flag_debug_sector_state)
+            std::cout << "debug_sector_state ";
+        if (param.compatibility_flags & blksnap_compat_flag_setlog)
+            std::cout << "setlog ";
+        std::cout<< "-" << std::endl;
+    };
+};
+
+class SetlogArgsProc : public IArgsProc
+{
+public:
+    SetlogArgsProc()
+        : IArgsProc()
+    {
+        m_usage = std::string("Set log.");
+        m_desc.add_options()
+            ("filepath,f", po::value<std::string>(), "Log file path.")
+            ("level,l", po::value<std::string>(), "Log level from 0 to 7.")
+            ("disable", "Disable logging.");
+    };
+
+    void Execute(po::variables_map& vm) override
+    {
+        CBlksnapFileWrap blksnapFd;
+        struct blksnap_setlog param = {0};
+        std::vector<__u8> buf;
+
+        if (vm.count("disable"))
+        {
+            param.level = -1;
+            param.filepath = (__u64)NULL;
+        }
+        else
+        {
+            if (vm.count("filepath"))
+            {
+                std::string filepath = vm["filepath"].as<std::string>();
+                size_t sz = filepath.size();
+
+                buf.resize(sz + 1);
+                memcpy(buf.data(), filepath.c_str(), sz);
+                buf[sz] = '\0';
+
+                param.filepath_size = (__u32)sz;
+                param.filepath = (__u64)buf.data();
+            }
+
+            if (vm.count("level"))
+            {
+                int level = std::stoi(vm["level"].as<std::string>());
+
+                param.level = level <= LOGLEVEL_DEBUG ? level : LOGLEVEL_DEBUG;
+            }
+            else
+                param.level = -1;
+        }
+        if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SETLOG, &param))
+            throw std::system_error(errno, std::generic_category(), "Failed to set log.");
+    };
+};
+
 static std::map<std::string, std::shared_ptr<IArgsProc>> argsProcMap{
   {"version", std::make_shared<VersionArgsProc>()},
   {"attach", std::make_shared<AttachArgsProc>()},
@@ -979,6 +1058,8 @@ static std::map<std::string, std::shared_ptr<IArgsProc>> argsProcMap{
   {"snapshot_waitevent", std::make_shared<SnapshotWaitEventArgsProc>()},
   {"snapshot_collect", std::make_shared<SnapshotCollectArgsProc>()},
   {"snapshot_watcher", std::make_shared<SnapshotWatcherArgsProc>()},
+  {"mod", std::make_shared<ModArgsProc>()},
+  {"setlog", std::make_shared<SetlogArgsProc>()},
 };
 
 static void printUsage()
