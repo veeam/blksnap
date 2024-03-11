@@ -59,6 +59,7 @@ static inline void bdevfilter_put(struct blkfilter *flt)
                 kref_put(&flt->kref, bdevfilter_free);
 };
 
+void bdevfilter_detach_all(struct bdevfilter_operations *fops);
 int bdevfilter_register(struct bdevfilter_operations *fops);
 void bdevfilter_unregister(struct bdevfilter_operations *fops);
 

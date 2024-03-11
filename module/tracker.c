@@ -385,7 +385,7 @@ void tracker_release_snapshot(struct tracker *tracker)
 
 int __init tracker_init(void)
 {
-	pr_debug("Register filter '%s'", tracker_ops.name);
+	pr_debug("Register filter '%s'\n", tracker_ops.name);
 #ifdef BLKSNAP_STANDALONE
 	return bdevfilter_register(&tracker_ops);
 #else
@@ -395,8 +395,9 @@ int __init tracker_init(void)
 
 void tracker_done(void)
 {
-	pr_debug("Unregister filter '%s'", tracker_ops.name);
+	pr_debug("Unregister filter '%s'\n", tracker_ops.name);
 #ifdef BLKSNAP_STANDALONE
+	bdevfilter_detach_all(&tracker_ops);
 	bdevfilter_unregister(&tracker_ops);
 #else
 	blkfilter_unregister(&tracker_ops);

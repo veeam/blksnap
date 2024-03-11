@@ -61,25 +61,16 @@ static inline struct bdevfilter_operations *__bdevfilter_operations_find(
 	return NULL;
 }
 
-static inline struct bdevfilter_operations *bdevfilter_operations_get(
+static inline struct bdevfilter_operations *bdevfilter_operations_find(
 							 const char *name)
 {
 	struct bdevfilter_operations *fops;
 
 	spin_lock(&bdevfilters_lock);
 	fops = __bdevfilter_operations_find(name);
-	if (fops && !try_module_get(fops->owner))
-		fops = NULL;
 	spin_unlock(&bdevfilters_lock);
 
 	return fops;
-}
-
-static inline void bdevfilter_operations_put(
-					const struct bdevfilter_operations *fops)
-{
-	if (likely(fops))
-		module_put(fops->owner);
 }
 
 static int ioctl_attach(struct bdevfilter_name __user *argp)
@@ -128,7 +119,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	}
 #endif
 
-	fops = bdevfilter_operations_get(karg.name);
+	fops = bdevfilter_operations_find(karg.name);
 	if (!fops) {
 		pr_debug("Filter '%s' is not registered\n", karg.name);
 		ret = -ENOENT;
@@ -138,7 +129,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	ext_new = kzalloc(sizeof(struct bdev_extension), GFP_NOIO);
 	if (!ext_new) {
 		ret = -ENOMEM;
-		goto out_ops_put;
+		goto out_blkdev_put;
 	}
 
 	INIT_LIST_HEAD(&ext_new->link);
@@ -201,8 +192,6 @@ out_mutex_unlock:
 	mutex_unlock(&bdev->bd_mutex);
 #endif
 	kfree(ext_new);
-out_ops_put:
-	bdevfilter_operations_put(fops);
 out_blkdev_put:
 #if defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev_handle);
@@ -245,7 +234,6 @@ static inline int __blkfilter_detach(dev_t dev_id, struct bdevfilter_name* kargp
 
 	kfree(ext);
 	bdevfilter_put(flt);
-	bdevfilter_operations_put(fops);
 	return ret;
 }
 
@@ -434,6 +422,25 @@ void bdevfilter_free(struct kref *kref)
 			flt->fops->name);
 	flt->fops->detach(flt);
 }
+
+void bdevfilter_detach_all(struct bdevfilter_operations *fops)
+{
+	struct bdev_extension *ext;
+
+	spin_lock(&bdev_extension_list_lock);
+	while ((ext = list_first_entry_or_null(&bdev_extension_list,
+					       struct bdev_extension, link))) {
+		list_del(&ext->link);
+		spin_unlock(&bdev_extension_list_lock);
+
+		bdevfilter_put(ext->flt);
+		kfree(ext);
+
+		spin_lock(&bdev_extension_list_lock);
+	}
+	spin_unlock(&bdev_extension_list_lock);
+}
+EXPORT_SYMBOL_GPL(bdevfilter_detach_all);
 
 int bdevfilter_register(struct bdevfilter_operations *fops)
 {
