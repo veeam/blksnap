@@ -214,9 +214,15 @@ static inline int diff_storage_set_tmpfile(struct diff_storage *diff_storage,
 
 	file = filp_open(dirname, flags, 00600);
 	if (IS_ERR(file)) {
-		pr_err("Failed to create a temp file in directory '%s'\n",
-			dirname);
-		return PTR_ERR(file);
+		if (PTR_ERR(file) == -EINVAL) {
+			pr_warn("Failed to create a temp file '%s' with O_DIRECT flag\n", dirname);
+			file = filp_open(dirname, flags & ~O_DIRECT, 00600);
+		}
+		if (IS_ERR(file)) {
+			pr_err("Failed to create a temp file in directory '%s'\n",
+				dirname);
+			return PTR_ERR(file);
+		}
 	}
 
 	pr_debug("A temp file is selected for difference storage\n");
@@ -230,10 +236,16 @@ static inline int diff_storage_set_regfile(struct diff_storage *diff_storage,
 	struct file *file;
 	int flags = O_EXCL | O_RDWR | O_LARGEFILE | O_NOATIME | O_DIRECT;
 
-	file = filp_open(filename, flags, 00600);
+	file = filp_open(filename, flags, 0);
 	if (IS_ERR(file)) {
-		pr_err("Failed to open a regular file '%s'\n", filename);
-		return PTR_ERR(file);
+		if (PTR_ERR(file) == -EINVAL) {
+			pr_warn("Failed to open a regular file '%s' with O_DIRECT flag\n", filename);
+			file = filp_open(filename, flags & ~O_DIRECT, 0);
+		}
+		if (IS_ERR(file)) {
+			pr_err("Failed to open a regular file '%s'\n", filename);
+			return PTR_ERR(file);
+		}
 	}
 
 	pr_debug("A regular file is selected for difference storage\n");
@@ -249,7 +261,7 @@ int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
 	umode_t mode;
 	sector_t req_sect;
 
-	file = filp_open(filename, O_RDONLY, 00400);
+	file = filp_open(filename, O_RDONLY, 0);
 	if (IS_ERR(file)) {
 		pr_err("Failed to open '%s'\n", filename);
 		return PTR_ERR(file);
