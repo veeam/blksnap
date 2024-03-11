@@ -445,14 +445,19 @@ struct blksnap_mod {
  * @filepath_size:
  *	Count of bytes in &filepath.
  * @filename:
- *	Full path for log file.
+ *	Pointer to full path for log file.
  */
 struct blksnap_setlog {
 	__s32 tz_minuteswest;
-	__u32 level;
+	__s32 level;
 	__u32 filepath_size;
-	__u8 *filepath;
+	__u64 filepath;
 };
+
+#define LOGLEVEL_DISABLE 0
+#define LOGLEVEL_ERR 3
+#define LOGLEVEL_WARN 4
+#define LOGLEVEL_DEBUG 7
 
 /**
  * IOCTL_BLKSNAP_SETLOG - Configure private log file

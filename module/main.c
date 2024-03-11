@@ -332,6 +332,57 @@ out:
 	return ret;
 }
 
+#ifdef BLKSNAP_MODIFICATION
+
+int ioctl_mod(struct blksnap_mod __user *uarg)
+{
+	if (copy_to_user(uarg, &modification, sizeof(modification))) {
+		pr_err("Unable to get modification: invalid user buffer\n");
+		return -ENODATA;
+	}
+
+	return 0;
+}
+
+#ifdef BLKSNAP_FILELOG
+int ioctl_setlog(struct blksnap_setlog __user *uarg)
+{
+	struct blksnap_setlog karg;
+	char *filepath = NULL;
+
+	if (copy_from_user(&karg, uarg, sizeof(karg))) {
+		pr_err("Unable to get log parameters: invalid user buffer\n");
+		return -ENODATA;
+	}
+
+	/*
+	 * logging can be disabled
+	 * To do this, it is enough not to specify a logging file or set
+	 * a negative logging level.
+	 */
+	if ((karg.level < 0) || !karg.filepath)
+		return log_restart(-1, NULL, 0);
+
+	if (karg.filepath_size == 0) {
+		pr_err("Invalid parameters. 'filepath_size' cannot be zero\n");
+		return -EINVAL;
+	}
+	filepath = kzalloc(karg.filepath_size + 1, GFP_KERNEL);
+	if (!filepath)
+		return -ENOMEM;
+
+	if (copy_from_user(filepath, (void *)karg.filepath, karg.filepath_size)) {
+		pr_err("Unable to get log filepath: invalid user buffer\n");
+
+		kfree(filepath);
+		return -ENODATA;
+	}
+
+	return log_restart(karg.level, filepath, karg.tz_minuteswest);
+}
+#endif
+#endif
+
 static long blksnap_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg)
 {
@@ -350,6 +401,10 @@ static long blksnap_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 		return ioctl_snapshot_collect(argp);
 	case IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT:
 		return ioctl_snapshot_wait_event(argp);
+	case IOCTL_BLKSNAP_MOD:
+		return ioctl_mod(argp);
+	case IOCTL_BLKSNAP_SETLOG:
+		return ioctl_setlog(argp);
 	default:
 		return -ENOTTY;
 	}
