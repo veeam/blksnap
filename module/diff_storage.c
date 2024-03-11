@@ -19,6 +19,9 @@
 #include "diff_buffer.h"
 #include "diff_storage.h"
 #include "params.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 static void diff_storage_reallocate_work(struct work_struct *work)
 {

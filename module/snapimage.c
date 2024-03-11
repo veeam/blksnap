@@ -18,6 +18,9 @@
 #include "tracker.h"
 #include "chunk.h"
 #include "cbt_map.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 /*
  * The snapshot supports write operations.  This allows for example to delete

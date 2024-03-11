@@ -12,6 +12,9 @@
 #endif
 #include "cbt_map.h"
 #include "params.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 static inline unsigned long long count_by_shift(sector_t capacity,
 						unsigned long long shift)

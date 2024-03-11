@@ -5,6 +5,9 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include "event_queue.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 void event_queue_init(struct event_queue *event_queue)
 {

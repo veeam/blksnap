@@ -19,6 +19,9 @@
 #include "diff_area.h"
 #include "snapimage.h"
 #include "snapshot.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 void tracker_free(struct kref *kref)
 {

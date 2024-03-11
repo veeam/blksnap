@@ -14,6 +14,9 @@
 #include "diff_buffer.h"
 #include "diff_storage.h"
 #include "params.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 struct chunk_bio {
 	struct work_struct work;

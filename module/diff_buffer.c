@@ -8,6 +8,9 @@
 #ifdef BLKSNAP_STANDALONE
 #include "compat.h"
 #endif
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {

@@ -17,6 +17,9 @@
 #include "diff_area.h"
 #include "snapimage.h"
 #include "cbt_map.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 static LIST_HEAD(snapshots);
 static DECLARE_RWSEM(snapshots_lock);

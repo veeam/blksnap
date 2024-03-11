@@ -16,6 +16,9 @@
 #include "diff_storage.h"
 #include "params.h"
 #include "tracker.h"
+#ifdef BLKSNAP_FILELOG
+#include "log.h"
+#endif
 
 struct cow_task {
 	struct list_head link;
