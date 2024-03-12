@@ -166,8 +166,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 		if (ext_tmp->flt->fops == fops) {
 			ret = -EALREADY;
 			pr_debug("Device is already attached\n");
-		}
-		else {
+		} else {
 			ret = -EBUSY;
 			pr_debug("Device is busy\n");
 		}
@@ -418,8 +417,10 @@ void bdevfilter_free(struct kref *kref)
 {
 	struct blkfilter *flt = container_of(kref, struct blkfilter, kref);
 
-	pr_debug("Detach filter '%s' registered\n",
-			flt->fops->name);
+	if (!flt->fops)
+		return;
+
+	pr_debug("Detach filter '%s' registered\n", flt->fops->name);
 	flt->fops->detach(flt);
 }
 
