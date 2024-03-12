@@ -29,7 +29,7 @@
 
 using namespace blksnap;
 
-#define BLKSNAP_FILTER_NAME {'v','e','e','a','m','b','l','k','s','n','a','p','\0'}
+#define BLKSNAP_FILTER_NAME {'b','l','k','s','n','a','p','\0'}
 
 CTracker::CTracker(const std::string& devicePath)
     : m_devicePath(devicePath)
