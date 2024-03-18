@@ -24,6 +24,8 @@
 #ifndef SECTOR_SIZE
 #    define SECTOR_SIZE (1 << SECTOR_SHIFT)
 #endif
+#include <string>
+#include <vector>
 
 namespace blksnap
 {

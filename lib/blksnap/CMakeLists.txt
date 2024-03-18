@@ -31,6 +31,7 @@ if (NOT LIBUUID_LIBRARY)
 endif ()
 
 set(SOURCE_FILES
+    OpenFileHolder.cpp
     Snapshot.cpp
     Tracker.cpp
     Cbt.cpp
@@ -40,6 +41,7 @@ set(SOURCE_FILES
 
 add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "blksnap")
+target_compile_definitions(${PROJECT_NAME} PUBLIC  BLKSNAP_MODIFICATION)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 

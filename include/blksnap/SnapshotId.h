@@ -17,29 +17,50 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 #pragma once
-/*
- * The hi-level abstraction for the blksnap kernel module.
- * Allows to show module kernel version.
- */
+
 #include <string>
-#include <vector>
-#include "SnapshotId.h"
-#include "OpenFileHolder.h"
+#include <uuid/uuid.h>
+#include <cstring>
 
 namespace blksnap
 {
-    class CService
+    class CSnapshotId
     {
     public:
-        CService();
-        ~CService() {};
+        CSnapshotId()
+        {
+            uuid_clear(m_id);
+        };
+        CSnapshotId(const uuid_t& id)
+        {
+            uuid_copy(m_id, id);
+        };
+        CSnapshotId(const unsigned char buf[16])
+        {
+            memcpy(m_id, buf, sizeof(uuid_t));
+        };
+        CSnapshotId(const std::string& idStr)
+        {
+            uuid_parse(idStr.c_str(), m_id);
+        };
 
-        void Collect(std::vector<CSnapshotId>& ids);
-        void Version(unsigned short& major, unsigned short& minor, unsigned short& revision, unsigned short& build);
-        bool GetModification(unsigned long long& flags, std::string& name);
-        void SetLog(const int tz_minuteswest, const int level, const std::string& filepath);
+        void FromString(const std::string& idStr)
+        {
+            uuid_parse(idStr.c_str(), m_id);
+        };
+        const uuid_t& Get() const
+        {
+            return m_id;
+        };
+        std::string ToString() const
+        {
+            char idStr[64];
 
+            uuid_unparse(m_id, idStr);
+
+            return std::string(idStr);
+        };
     private:
-        COpenFileHolder m_ctl;
+        uuid_t m_id;
     };
 }

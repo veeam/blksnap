@@ -160,6 +160,3 @@ void CTracker::SnapshotInfo(struct blksnap_snapshotinfo& snapshotinfo)
         throw std::system_error(errno, std::generic_category(),
             "Failed to get snapshot information.");
 }
-
-
-

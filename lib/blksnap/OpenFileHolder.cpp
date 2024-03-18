@@ -16,30 +16,32 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-#pragma once
-/*
- * The hi-level abstraction for the blksnap kernel module.
- * Allows to show module kernel version.
- */
-#include <string>
-#include <vector>
-#include "SnapshotId.h"
-#include "OpenFileHolder.h"
 
-namespace blksnap
+#include <blksnap/OpenFileHolder.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+ #include <fcntl.h>
+#include <sys/types.h>
+#include <system_error>
+
+using namespace blksnap;
+
+COpenFileHolder::COpenFileHolder(const std::string& filename, int flags, int mode/* = 0 */)
 {
-    class CService
-    {
-    public:
-        CService();
-        ~CService() {};
+    int fd = mode ? ::open(filename.c_str(), flags, mode) : ::open(filename.c_str(), flags);
+    if (fd < 0)
+        throw std::system_error(errno, std::generic_category(),
+            "Cannot open file [" + filename + "]");
+    m_fd = fd;
+};
+COpenFileHolder::~COpenFileHolder()
+{
+    ::close(m_fd);
+};
 
-        void Collect(std::vector<CSnapshotId>& ids);
-        void Version(unsigned short& major, unsigned short& minor, unsigned short& revision, unsigned short& build);
-        bool GetModification(unsigned long long& flags, std::string& name);
-        void SetLog(const int tz_minuteswest, const int level, const std::string& filepath);
-
-    private:
-        COpenFileHolder m_ctl;
-    };
-}
+int COpenFileHolder::Get()
+{
+    return m_fd;
+};

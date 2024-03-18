@@ -17,29 +17,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 #pragma once
-/*
- * The hi-level abstraction for the blksnap kernel module.
- * Allows to show module kernel version.
- */
+
 #include <string>
-#include <vector>
-#include "SnapshotId.h"
-#include "OpenFileHolder.h"
 
 namespace blksnap
 {
-    class CService
+    class COpenFileHolder
     {
     public:
-        CService();
-        ~CService() {};
-
-        void Collect(std::vector<CSnapshotId>& ids);
-        void Version(unsigned short& major, unsigned short& minor, unsigned short& revision, unsigned short& build);
-        bool GetModification(unsigned long long& flags, std::string& name);
-        void SetLog(const int tz_minuteswest, const int level, const std::string& filepath);
+        COpenFileHolder(const std::string& filename, int flags, int mode = 0);
+        ~COpenFileHolder();
+        int Get();
 
     private:
-        COpenFileHolder m_ctl;
+        int m_fd;
     };
 }
