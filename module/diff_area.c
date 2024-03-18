@@ -126,7 +126,9 @@ void diff_area_free(struct kref *kref)
 #endif
 
 	if (diff_area->orig_bdev) {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+		fput(diff_area->orig_bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(diff_area->orig_bdev_handler);
 		diff_area->orig_bdev_handler = NULL;
 #elif defined(HAVE_BLK_HOLDER_OPS)
@@ -298,7 +300,9 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 {
 	int ret = 0;
 	struct diff_area *diff_area = NULL;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev;
 #else
 	struct block_device *bdev;
@@ -306,7 +310,9 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	pr_debug("Open device [%u:%u]\n", MAJOR(dev_id), MINOR(dev_id));
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev = bdev_file_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
@@ -321,7 +327,9 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 
 	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
 	if (!diff_area) {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+		fput(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(bdev, NULL);
@@ -332,7 +340,10 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	}
 	memory_object_inc(memory_object_diff_area);
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	diff_area->orig_bdev_file = bdev;
+	diff_area->orig_bdev = file_bdev(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	diff_area->orig_bdev_handler = bdev;
 	diff_area->orig_bdev = bdev->bdev;
 #else

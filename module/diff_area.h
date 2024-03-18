@@ -98,7 +98,9 @@ struct chunk;
  */
 struct diff_area {
 	struct kref kref;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *orig_bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *orig_bdev_handler;
 #endif
 	struct block_device *orig_bdev;

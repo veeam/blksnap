@@ -486,14 +486,18 @@ void tracker_done(void)
 struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 {
 	struct tracker *tracker;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev;
 #else
 	struct block_device *bdev;
 #endif
 	struct tracked_device *tr_dev;
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev = bdev_file_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
@@ -506,7 +510,9 @@ struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 		return ERR_PTR(PTR_ERR(bdev));
 	}
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	tracker = tracker_get_by_dev(file_bdev(bdev));
+#elif defined(HAVE_BDEV_HANDLE)
 	tracker = tracker_get_by_dev(bdev->bdev);
 #else
 	tracker = tracker_get_by_dev(bdev);
@@ -549,7 +555,9 @@ struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 	INIT_LIST_HEAD(&tr_dev->link);
 	tr_dev->dev_id = dev_id;
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	tracker = tracker_new(file_bdev(bdev));
+#elif defined(HAVE_BDEV_HANDLE)
 	tracker = tracker_new(bdev->bdev);
 #else
 	tracker = tracker_new(bdev);
@@ -577,7 +585,9 @@ struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 		tracker_unlock();
 	}
 put_bdev:
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	fput(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
@@ -591,7 +601,9 @@ int tracker_remove(dev_t dev_id)
 {
 	int ret;
 	struct tracker *tracker;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev;
 #else
 	struct block_device *bdev;
@@ -600,7 +612,9 @@ int tracker_remove(dev_t dev_id)
 	pr_info("Removing device [%u:%u] from tracking\n", MAJOR(dev_id),
 		MINOR(dev_id));
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev = bdev_file_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
@@ -616,7 +630,9 @@ int tracker_remove(dev_t dev_id)
 		return PTR_ERR(bdev);
 #endif
 	}
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	tracker = tracker_get_by_dev(file_bdev(bdev));
+#elif defined(HAVE_BDEV_HANDLE)
 	tracker = tracker_get_by_dev(bdev->bdev);
 #else
 	tracker = tracker_get_by_dev(bdev);
@@ -642,7 +658,9 @@ int tracker_remove(dev_t dev_id)
 		ret = -EBUSY;
 		goto put_tracker;
 	}
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	ret = tracker_filter_detach(file_bdev(bdev));
+#elif defined(HAVE_BDEV_HANDLE)
 	ret = tracker_filter_detach(bdev->bdev);
 #else
 	ret = tracker_filter_detach(bdev);
@@ -671,7 +689,9 @@ int tracker_remove(dev_t dev_id)
 put_tracker:
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	fput(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
@@ -686,13 +706,17 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 {
 	int ret;
 	struct tracker *tracker;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev;
 #else
 	struct block_device *bdev;
 #endif
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev = bdev_file_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
@@ -705,7 +729,9 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 		return PTR_ERR(bdev);
 	}
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	tracker = tracker_get_by_dev(file_bdev(bdev));
+#elif defined(HAVE_BDEV_HANDLE)
 	tracker = tracker_get_by_dev(bdev->bdev);
 #else
 	tracker = tracker_get_by_dev(bdev);
@@ -736,7 +762,9 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	fput(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
@@ -749,14 +777,18 @@ put_bdev:
 static inline void collect_cbt_info(dev_t dev_id,
 				    struct blk_snap_cbt_info *cbt_info)
 {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev;
 #else
 	struct block_device *bdev;
 #endif
 	struct tracker *tracker;
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev = bdev_file_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
@@ -769,7 +801,9 @@ static inline void collect_cbt_info(dev_t dev_id,
 		return;
 	}
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	tracker = tracker_get_by_dev(file_bdev(bdev));
+#elif defined(HAVE_BDEV_HANDLE)
 	tracker = tracker_get_by_dev(bdev->bdev);
 #else
 	tracker = tracker_get_by_dev(bdev);
@@ -788,7 +822,9 @@ static inline void collect_cbt_info(dev_t dev_id,
 put_tracker:
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	fput(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
@@ -849,13 +885,17 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 {
 	int ret = 0;
 	struct tracker *tracker;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev;
 #else
 	struct block_device *bdev;
 #endif
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev = bdev_file_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, 0, NULL, NULL);
@@ -870,7 +910,9 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 
 	pr_debug("Marking [%d] dirty blocks for device [%u:%u]\n", count,
 		 MAJOR(dev_id), MINOR(dev_id));
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	tracker = tracker_get_by_dev(file_bdev(bdev));
+#elif defined(HAVE_BDEV_HANDLE)
 	tracker = tracker_get_by_dev(bdev->bdev);
 #else
 	tracker = tracker_get_by_dev(bdev);
@@ -894,7 +936,9 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 
 	tracker_put(tracker);
 put_bdev:
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	fput(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);

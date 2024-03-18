@@ -64,6 +64,9 @@
 #ifdef HAVE_BDEV_HANDLE
 #pragma message("The struct bdev_handle was found.")
 #endif
+#ifdef HAVE_BDEV_FILE_OPEN
+#pragma message("The function bdev_file_open_by_dev() was found.")
+#endif
 #ifdef HAVE_BDEV_FREEZE
 #pragma message("The function bdev_freeze() was found.")
 #endif

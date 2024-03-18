@@ -29,7 +29,9 @@
 struct storage_bdev {
 	struct list_head link;
 	dev_t dev_id;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handler;
 #endif
 	struct block_device *bdev;
@@ -122,7 +124,9 @@ void diff_storage_free(struct kref *kref)
 	}
 
 	while ((storage_bdev = first_storage_bdev(diff_storage))) {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+		fput(storage_bdev->bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(storage_bdev->bdev_handler);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(storage_bdev->bdev, NULL);
@@ -160,14 +164,18 @@ diff_storage_bdev_by_id(struct diff_storage *diff_storage, dev_t dev_id)
 static inline struct block_device *
 diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev;
 #else
 	struct block_device *bdev;
 #endif
 	struct storage_bdev *storage_bdev;
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev = bdev_file_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev = bdev_open_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	bdev = blkdev_get_by_dev(dev_id, FMODE_READ | FMODE_WRITE, NULL, NULL);
@@ -182,7 +190,9 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 
 	storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
 	if (!storage_bdev) {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+		fput(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 		blkdev_put(bdev, NULL);
@@ -192,7 +202,10 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 		return ERR_PTR(-ENOMEM);
 	}
 	memory_object_inc(memory_object_storage_bdev);
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	storage_bdev->bdev_file = bdev;
+	storage_bdev->bdev = file_bdev(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	storage_bdev->bdev_handler = bdev;
 	storage_bdev->bdev = bdev->bdev;
 #else
@@ -205,7 +218,9 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 	list_add_tail(&storage_bdev->link, &diff_storage->storage_bdevs);
 	spin_unlock(&diff_storage->lock);
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	return file_bdev(bdev);
+#elif defined(HAVE_BDEV_HANDLE)
 	return bdev->bdev;
 #else
 	return bdev;
