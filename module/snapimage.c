@@ -266,7 +266,11 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 	}
 
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
+#if defined(HAVE_BDEV_QUEUE_LIMITS)
+	disk = blk_mq_alloc_disk(&snapimage->tag_set, NULL, snapimage);
+#else
 	disk = blk_mq_alloc_disk(&snapimage->tag_set, snapimage);
+#endif
 	if (IS_ERR(disk)) {
 		ret = PTR_ERR(disk);
 		pr_err("Failed to allocate disk. errno=%d\n", abs(ret));

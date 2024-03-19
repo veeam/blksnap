@@ -77,5 +77,12 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "bdev_file_open_by_dev" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BDEV_FILE_OPEN)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
-	grep -qw "int bdev_freeze" $(srctree)/include/linux/blkdev.h &&	\
+	grep -qw "int bdev_freeze" $(srctree)/include/linux/blkdev.h &&		\
 		echo -D HAVE_BDEV_FREEZE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep "__blk_alloc_disk" $(srctree)/include/linux/blkdev.h |		\
+	grep -qw "struct queue_limits" &&					\
+		echo -D HAVE_BDEV_QUEUE_LIMITS)
+
+
+
