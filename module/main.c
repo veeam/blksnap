@@ -7,6 +7,7 @@
 #include <linux/build_bug.h>
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
+#include "version.h"
 #else
 #include <uapi/linux/blksnap.h>
 #endif
@@ -117,6 +118,14 @@ static unsigned int free_diff_buffer_pool_size = 128;
  */
 static unsigned int diff_storage_minimum = 2097152;
 
+#if defined(BLKSNAP_STANDALONE)
+static const struct blksnap_version version = {
+	.major = VERSION_MAJOR,
+	.minor = VERSION_MINOR,
+	.revision = VERSION_REVISION,
+	.build = VERSION_BUILD,
+};
+#else
 #define VERSION_STR "2.0.0.0"
 static const struct blksnap_version version = {
 	.major = 2,
@@ -124,6 +133,7 @@ static const struct blksnap_version version = {
 	.revision = 0,
 	.build = 0,
 };
+#endif
 
 #ifdef BLKSNAP_MODIFICATION
 static const struct blksnap_mod modification = {
