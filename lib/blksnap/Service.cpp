@@ -64,7 +64,7 @@ bool CService::GetModification(unsigned long long& flags, std::string& name)
     return true;
 }
 
-void CService::SetLog(const int tz_minuteswest, const int level, const std::string& filepath)
+bool CService::SetLog(const int tz_minuteswest, const int level, const std::string& filepath)
 {
     struct blksnap_setlog param = { 0 };
 
@@ -76,9 +76,14 @@ void CService::SetLog(const int tz_minuteswest, const int level, const std::stri
         param.filepath = (__u64)filepath.c_str();
     }
 
-    if (::ioctl(m_ctl.Get(), BLKSNAP_IOCTL_SETLOG, &param))
-        throw std::system_error(errno, std::generic_category(),
-            "Failed to set log.");
+    if (!::ioctl(m_ctl.Get(), IOCTL_BLKSNAP_SETLOG, &param))
+        return true;
+
+    if (errno == EALREADY)
+        return false;
+
+    throw std::system_error(errno, std::generic_category(),
+        "Failed to set log");
 }
 
 void CService::Collect(std::vector<CSnapshotId>& ids)

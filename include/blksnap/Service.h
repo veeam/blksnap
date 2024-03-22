@@ -37,7 +37,7 @@ namespace blksnap
         void Collect(std::vector<CSnapshotId>& ids);
         void Version(unsigned short& major, unsigned short& minor, unsigned short& revision, unsigned short& build);
         bool GetModification(unsigned long long& flags, std::string& name);
-        void SetLog(const int tz_minuteswest, const int level, const std::string& filepath);
+        bool SetLog(const int tz_minuteswest, const int level, const std::string& filepath);
 
     private:
         COpenFileHolder m_ctl;
