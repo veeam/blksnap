@@ -8,7 +8,9 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/wait.h>
-
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 /**
  * struct event - An event to be passed to the user space.
  * @link:
@@ -59,6 +61,10 @@ struct event *event_wait(struct event_queue *event_queue,
 			 unsigned long timeout_ms);
 static inline void event_free(struct event *event)
 {
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(event);
+#else
 	kfree(event);
+#endif
 };
 #endif /* __BLKSNAP_EVENT_QUEUE_H */

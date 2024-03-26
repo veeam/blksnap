@@ -22,6 +22,9 @@
 #ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 
 static void diff_storage_reallocate_work(struct work_struct *work)
 {
@@ -102,7 +105,11 @@ struct diff_storage *diff_storage_new(void)
 {
 	struct diff_storage *diff_storage;
 
+#ifdef BLKSNAP_MEMSTAT
+	diff_storage = __kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
+#else
 	diff_storage = kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
+#endif
 	if (!diff_storage)
 		return NULL;
 
@@ -140,7 +147,11 @@ void diff_storage_free(struct kref *kref)
 	if (diff_storage->file)
 		filp_close(diff_storage->file, NULL);
 	event_queue_done(&diff_storage->event_queue);
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(diff_storage);
+#else
 	kfree(diff_storage);
+#endif
 }
 
 static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,

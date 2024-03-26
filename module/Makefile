@@ -6,7 +6,7 @@
 # EXTRA_CFLAGS += "-D CONFIG_BLKSNAP_COW_SCHEDULE"
 EXTRA_CFLAGS += "-D BLKSNAP_STANDALONE"
 EXTRA_CFLAGS += "-D BLKSNAP_MODIFICATION"
-#EXTRA_CFLAGS += "-D BLKSNAP_DEBUG_MEMORY_LEAK"
+EXTRA_CFLAGS += "-D BLKSNAP_MEMSTAT"
 EXTRA_CFLAGS += "-D BLKSNAP_FILELOG"
 
 include ${M}/Makefile-config
@@ -25,5 +25,6 @@ veeamblksnap-y :=	\
 	tracker.o
 
 veeamblksnap-y += log.o
+veeamblksnap-y += memstat.o
 
 obj-m	 += veeamblksnap.o

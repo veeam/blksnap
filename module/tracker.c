@@ -22,6 +22,9 @@
 #ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 
 void tracker_free(struct kref *kref)
 {
@@ -37,7 +40,11 @@ void tracker_free(struct kref *kref)
 	if (tracker->cbt_map)
 		cbt_map_destroy(tracker->cbt_map);
 
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(tracker);
+#else
 	kfree(tracker);
+#endif
 }
 #ifdef BLKSNAP_STANDALONE
 static bool tracker_submit_bio(struct bio *bio, struct blkfilter *flt)
@@ -106,8 +113,12 @@ static struct blkfilter *tracker_attach(struct block_device *bdev)
 		return ERR_PTR(-ENOMEM);
 	}
 
+#ifdef BLKSNAP_MEMSTAT
+	tracker = __kzalloc(sizeof(struct tracker), GFP_KERNEL);
+#else
 	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
-	if (tracker == NULL) {
+#endif
+	if (!tracker) {
 		cbt_map_destroy(cbt_map);
 		return ERR_PTR(-ENOMEM);
 	}

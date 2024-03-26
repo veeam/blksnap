@@ -11,6 +11,9 @@
 #ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 
 static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
@@ -22,7 +25,11 @@ static void diff_buffer_free(struct diff_buffer *diff_buffer)
 	for (inx = 0; inx < diff_buffer->nr_pages; inx++)
 		__free_page(diff_buffer->bvec[inx].bv_page);
 
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(diff_buffer);
+#else
 	kfree(diff_buffer);
+#endif
 }
 
 static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
@@ -33,9 +40,13 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	if (unlikely(nr_pages <= 0))
 		return NULL;
 
+#ifdef BLKSNAP_MEMSTAT
+	diff_buffer = __kzalloc(sizeof(struct diff_buffer) +
+			      nr_pages * sizeof(struct bio_vec), GFP_KERNEL);
+#else
 	diff_buffer = kzalloc(sizeof(struct diff_buffer) +
-			      nr_pages * sizeof(struct bio_vec),
-			      GFP_KERNEL);
+			      nr_pages * sizeof(struct bio_vec), GFP_KERNEL);
+#endif
 	if (!diff_buffer)
 		return NULL;
 

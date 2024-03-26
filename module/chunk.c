@@ -17,6 +17,9 @@
 #ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 
 struct chunk_bio {
 	struct work_struct work;
@@ -193,7 +196,11 @@ void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
 
 static void io_ctx_free(struct kref *kref)
 {
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(container_of(kref, struct chunk_io_ctx, kref));
+#else
 	kfree(container_of(kref, struct chunk_io_ctx, kref));
+#endif
 }
 
 static inline void chunk_io_ctx_complete(struct chunk_io_ctx *io_ctx, long ret)
@@ -265,7 +272,11 @@ int chunk_diff_bio(struct chunk *chunk, struct bio *bio)
 	size_t nbytes = 0;
 	struct chunk_io_ctx *io_ctx;
 
+#ifdef BLKSNAP_MEMSTAT
+	io_ctx = __kzalloc(sizeof(struct chunk_io_ctx), GFP_KERNEL);
+#else
 	io_ctx = kzalloc(sizeof(struct chunk_io_ctx), GFP_KERNEL);
+#endif
 	if (!io_ctx)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&io_ctx->link);

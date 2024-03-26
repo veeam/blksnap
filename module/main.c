@@ -20,7 +20,9 @@
 #ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
-
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 /*
  * The power of 2 for minimum tracking block size.
  *
@@ -239,6 +241,9 @@ static int ioctl_snapshot_create(struct blksnap_snapshot_create __user *uarg)
 
 	ret = snapshot_create(fname, karg.diff_storage_limit_sect, &karg.id);
 	kfree(fname);
+#ifdef BLKSNAP_MEMSTAT
+	// fname has been created by strndup_user()
+#endif
 	if (ret)
 		return ret;
 
@@ -303,7 +308,11 @@ static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
 	struct blksnap_snapshot_event *karg;
 	struct event *ev;
 
+#ifdef BLKSNAP_MEMSTAT
+	karg = __kzalloc(sizeof(struct blksnap_snapshot_event), GFP_KERNEL);
+#else
 	karg = kzalloc(sizeof(struct blksnap_snapshot_event), GFP_KERNEL);
+#endif
 	if (!karg)
 		return -ENOMEM;
 
@@ -338,8 +347,11 @@ static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
 		ret = -EINVAL;
 	}
 out:
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(karg);
+#else
 	kfree(karg);
-
+#endif
 	return ret;
 }
 
@@ -355,43 +367,57 @@ int ioctl_mod(struct blksnap_mod __user *uarg)
 	return 0;
 }
 
-#ifdef BLKSNAP_FILELOG
 int ioctl_setlog(struct blksnap_setlog __user *uarg)
 {
+	int ret = -ENOTTY;
 	struct blksnap_setlog karg;
-	char *filepath = NULL;
 
 	if (copy_from_user(&karg, uarg, sizeof(karg))) {
 		pr_err("Unable to get log parameters: invalid user buffer\n");
 		return -ENODATA;
 	}
-
-	/*
-	 * logging can be disabled
-	 * To do this, it is enough not to specify a logging file or set
-	 * a negative logging level.
-	 */
-	if ((karg.level < 0) || !karg.filepath)
-		return log_restart(-1, NULL, 0);
-
-	if (karg.filepath_size == 0) {
-		pr_err("Invalid parameters. 'filepath_size' cannot be zero\n");
-		return -EINVAL;
+#ifdef BLKSNAP_MEMSTAT
+	{
+		memstat_enable((int)(karg.level >= LOGLEVEL_DEBUG));
+		ret = 0;
 	}
-	filepath = kzalloc(karg.filepath_size + 1, GFP_KERNEL);
-	if (!filepath)
-		return -ENOMEM;
-
-	if (copy_from_user(filepath, (void *)karg.filepath, karg.filepath_size)) {
-		pr_err("Unable to get log filepath: invalid user buffer\n");
-
-		kfree(filepath);
-		return -ENODATA;
-	}
-
-	return log_restart(karg.level, filepath, karg.tz_minuteswest);
-}
 #endif
+#ifdef BLKSNAP_FILELOG
+	{
+		char *filepath = NULL;
+		/*
+		 * logging can be disabled
+		 * To do this, it is enough not to specify a logging file or set
+		 * a negative logging level.
+		 */
+		if ((karg.level < 0) || !karg.filepath)
+			return log_restart(-1, NULL, 0);
+
+		if (karg.filepath_size == 0) {
+			pr_err("Invalid parameters. 'filepath_size' cannot be zero\n");
+			return -EINVAL;
+		}
+		filepath = kzalloc(karg.filepath_size + 1, GFP_KERNEL);
+#ifdef BLKSNAP_MEMSTAT
+		// We do not take into account the memory that the logger uses,
+		// since it frees up its resources after displaying statistics
+		// on memory leaks.
+#endif
+		if (!filepath)
+			return -ENOMEM;
+
+		if (copy_from_user(filepath, (void *)karg.filepath, karg.filepath_size)) {
+			pr_err("Unable to get log filepath: invalid user buffer\n");
+
+			kfree(filepath);
+			return -ENODATA;
+		}
+
+		ret = log_restart(karg.level, filepath, karg.tz_minuteswest);
+	}
+#endif
+	return ret;
+}
 #endif
 
 static long blksnap_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
@@ -412,10 +438,12 @@ static long blksnap_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 		return ioctl_snapshot_collect(argp);
 	case IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT:
 		return ioctl_snapshot_wait_event(argp);
+#ifdef BLKSNAP_MODIFICATION
 	case IOCTL_BLKSNAP_MOD:
 		return ioctl_mod(argp);
 	case IOCTL_BLKSNAP_SETLOG:
 		return ioctl_setlog(argp);
+#endif
 	default:
 		return -ENOTTY;
 	}
@@ -548,6 +576,9 @@ static void __exit blksnap_exit(void)
 	tracker_done();
 	destroy_workqueue(blksnap_wq);
 	chunk_done();
+#ifdef BLKSNAP_MEMSTAT
+	memstat_done();
+#endif
 #ifdef BLKSNAP_FILELOG
 	log_done();
 #endif

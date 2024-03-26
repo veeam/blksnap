@@ -15,6 +15,9 @@
 #ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 
 static inline unsigned long long count_by_shift(sector_t capacity,
 						unsigned long long shift)
@@ -111,7 +114,11 @@ void cbt_map_destroy(struct cbt_map *cbt_map)
 
 	vfree(cbt_map->read_map);
 	vfree(cbt_map->write_map);
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(cbt_map);
+#else
 	kfree(cbt_map);
+#endif
 }
 
 struct cbt_map *cbt_map_create(struct block_device *bdev)
@@ -120,8 +127,11 @@ struct cbt_map *cbt_map_create(struct block_device *bdev)
 	int ret;
 
 	pr_debug("CBT map create\n");
-
+#ifdef BLKSNAP_MEMSTAT
+	cbt_map = __kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
+#else
 	cbt_map = kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
+#endif
 	if (cbt_map == NULL)
 		return NULL;
 

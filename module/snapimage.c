@@ -21,6 +21,9 @@
 #ifdef BLKSNAP_FILELOG
 #include "log.h"
 #endif
+#ifdef BLKSNAP_MEMSTAT
+#include "memstat.h"
+#endif
 
 /*
  * The snapshot supports write operations.  This allows for example to delete
