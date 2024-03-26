@@ -172,12 +172,23 @@ int snapshot_add_device(const uuid_t *id, struct tracker *tracker)
 #endif
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
+#if defined(BLKSNAP_STANDALONE)
+#if defined(HAVE_BLK_CRYPTO_PROFILE)
 	if (tracker->orig_bdev->bd_disk->queue->crypto_profile) {
 		pr_err("Blksnap is not compatible with hardware inline encryption\n");
 		ret = -EPERM;
 		goto out_up;
 	} else
 		pr_debug("Inline encryption not found\n");
+#endif
+#else
+	if (tracker->orig_bdev->bd_disk->queue->crypto_profile) {
+		pr_err("Blksnap is not compatible with hardware inline encryption\n");
+		ret = -EPERM;
+		goto out_up;
+	} else
+		pr_debug("Inline encryption not found\n");
+#endif
 #endif
 	snapshot = snapshot_get_by_id(id);
 	if (!snapshot)

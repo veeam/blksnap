@@ -24,6 +24,9 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -D HAVE_BI_BDISK)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blk_types.h &&		\
+	grep -qw "*bd_queue;" $(srctree)/include/linux/blk_types.h &&		\
+		echo -D HAVE_BD_QUEUE)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
 		echo -D HAVE_BDEV_NR_SECTORS)
@@ -62,9 +65,15 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bvec.h &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
 	grep -qw "define BLK_OPEN_READ" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_OPEN_MODE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h  &&		\
+	grep -qw "define blk_alloc_disk" $(srctree)/include/linux/genhd.h &&	\
+		echo -D HAVE_BLK_ALLOC_DISK)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
 	grep -qw "define blk_alloc_disk" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BLK_ALLOC_DISK)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h  &&		\
+	grep -qw "struct mutex open_mutex" $(srctree)/include/linux/genhd.h &&	\
+		echo -D HAVE_GENDISK_OPEN_MUTEX)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h  &&		\
 	grep -qw "struct mutex open_mutex" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_GENDISK_OPEN_MUTEX)
@@ -86,3 +95,6 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bio.h  &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/fs.h  &&		\
 	grep -w "\*ki_complete" $(srctree)/include/linux/fs.h | grep -qw "long ret2" && \
 		echo -D HAVE_KI_COMPLETE_RET2)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blk-crypto-profile.h  &&		\
+	grep -qw "struct blk_crypto_profile" $(srctree)/include/linux/blk-crypto-profile.h &&	\
+		echo -D HAVE_BLK_CRYPTO_PROFILE)

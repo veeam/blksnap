@@ -5,6 +5,7 @@
 #include <linux/module.h>
 #include <linux/miscdevice.h>
 #include <linux/build_bug.h>
+#include <linux/slab.h>
 #ifdef BLKSNAP_STANDALONE
 #include "veeamblksnap.h"
 #include "version.h"

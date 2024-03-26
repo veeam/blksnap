@@ -315,10 +315,10 @@ int tracker_take_snapshot(struct tracker *tracker)
 	struct block_device *orig_bdev = tracker->orig_bdev;
 	sector_t capacity;
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	blk_mq_freeze_queue(orig_bdev->bd_disk->queue);
-#else
+#if defined(HAVE_BD_QUEUE)
 	blk_mq_freeze_queue(orig_bdev->bd_queue);
+#else
+	blk_mq_freeze_queue(orig_bdev->bd_disk->queue);
 #endif
 	if (tracker->cbt_map->is_corrupted) {
 		cbt_reset_needed = true;
@@ -343,10 +343,10 @@ int tracker_take_snapshot(struct tracker *tracker)
 	cbt_map_switch(tracker->cbt_map);
 	atomic_set(&tracker->snapshot_is_taken, true);
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	blk_mq_unfreeze_queue(orig_bdev->bd_disk->queue);
-#else
+#if defined(HAVE_BD_QUEUE)
 	blk_mq_unfreeze_queue(orig_bdev->bd_queue);
+#else
+	blk_mq_unfreeze_queue(orig_bdev->bd_disk->queue);
 #endif
 	return 0;
 }
@@ -359,20 +359,20 @@ void tracker_release_snapshot(struct tracker *tracker)
 		return;
 
 	snapimage_free(tracker);
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	blk_mq_freeze_queue(tracker->orig_bdev->bd_disk->queue);
-#else
+#if defined(HAVE_BD_QUEUE)
 	blk_mq_freeze_queue(tracker->orig_bdev->bd_queue);
+#else
+	blk_mq_freeze_queue(tracker->orig_bdev->bd_disk->queue);
 #endif
 	pr_debug("Tracker for device [%u:%u] release snapshot\n",
 		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->diff_area = NULL;
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_disk->queue);
-#else
+#if defined(HAVE_BD_QUEUE)
 	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_queue);
+#else
+	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_disk->queue);
 #endif
 #ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 	flush_work(&diff_area->cow_queue_work);
