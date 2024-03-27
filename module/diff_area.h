@@ -12,6 +12,10 @@
 #include <linux/xarray.h>
 #include "event_queue.h"
 
+#ifdef BLKSNAP_HISTOGRAM
+#include "log_histogram.h"
+#endif
+
 struct diff_storage;
 struct chunk;
 struct tracker;
@@ -148,6 +152,10 @@ struct diff_area {
 	int error_code;
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *sb;
+#endif
+#ifdef BLKSNAP_HISTOGRAM
+	struct log_histogram read_hg;
+	struct log_histogram redirect_hg;
 #endif
 };
 

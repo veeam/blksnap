@@ -22,7 +22,9 @@
 #ifdef BLKSNAP_MEMSTAT
 #include "memstat.h"
 #endif
-
+#ifdef BLKSNAP_HISTOGRAM
+#include "log_histogram.h"
+#endif
 struct cow_task {
 	struct list_head link;
 	struct bio *bio;
@@ -152,6 +154,14 @@ void diff_area_free(struct kref *kref)
 			chunk_free(diff_area, chunk);
 	}
 	xa_destroy(&diff_area->chunk_map);
+
+#ifdef BLKSNAP_HISTOGRAM
+	pr_info("Reading IO units statistic:\n");
+	log_histogram_show(&diff_area->read_hg);
+
+	pr_info("Redirection IO units statistic:\n");
+	log_histogram_show(&diff_area->redirect_hg);
+#endif
 
 	diff_buffer_cleanup(diff_area);
 	tracker_put(diff_area->tracker);
@@ -398,6 +408,11 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 	diff_area->corrupt_flag = 0;
 	diff_area->store_queue_processing = false;
 
+#ifdef BLKSNAP_HISTOGRAM
+	log_histogram_init(&diff_area->read_hg, 4096);
+	log_histogram_init(&diff_area->redirect_hg, 4096);
+#endif
+
 	if (ret) {
 		diff_area_put(diff_area);
 		return ERR_PTR(ret);
@@ -618,6 +633,9 @@ static void orig_clone_bio(struct diff_area *diff_area, struct bio *bio)
 
 	bio_advance(bio, new_bio->bi_iter.bi_size);
 	bio_chain(new_bio, bio);
+#ifdef BLKSNAP_HISTOGRAM
+	log_histogram_add(&diff_area->redirect_hg, new_bio->bi_iter.bi_size);
+#endif
 #ifdef BLKSNAP_STANDALONE
 	submit_bio_noacct_notrace(new_bio);
 #else

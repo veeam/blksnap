@@ -20,6 +20,9 @@
 #ifdef BLKSNAP_MEMSTAT
 #include "memstat.h"
 #endif
+#ifdef BLKSNAP_HISTOGRAM
+#include "log_histogram.h"
+#endif
 
 struct chunk_bio {
 	struct work_struct work;
@@ -187,6 +190,9 @@ void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
 	bio_advance(bio, new_bio->bi_iter.bi_size);
 	bio_chain(new_bio, bio);
 
+#ifdef BLKSNAP_HISTOGRAM
+	log_histogram_add(&chunk->diff_area->redirect_hg, new_bio->bi_iter.bi_size);
+#endif
 #ifdef BLKSNAP_STANDALONE
 	submit_bio_noacct_notrace(new_bio);
 #else
@@ -587,6 +593,10 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 #endif
 		next->bi_iter.bi_sector = bio_end_sector(bio);
 		bio_chain(bio, next);
+
+#ifdef BLKSNAP_HISTOGRAM
+		log_histogram_add(&chunk->diff_area->redirect_hg, bio->bi_iter.bi_size);
+#endif
 #ifdef BLKSNAP_STANDALONE
 		submit_bio_noacct_notrace(bio);
 #else

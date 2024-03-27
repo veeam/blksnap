@@ -24,6 +24,9 @@
 #ifdef BLKSNAP_MEMSTAT
 #include "memstat.h"
 #endif
+#ifdef BLKSNAP_HISTOGRAM
+#include "log_histogram.h"
+#endif
 
 /*
  * The snapshot supports write operations.  This allows for example to delete
@@ -79,6 +82,10 @@ static void snapimage_submit_bio(struct bio *bio)
 #endif
 	while (bio->bi_iter.bi_size && is_success)
 		is_success = diff_area_submit_chunk(diff_area, bio);
+#ifdef BLKSNAP_HISTOGRAM
+	if (!op_is_write(bio_op(bio)))
+		log_histogram_add(&diff_area->read_hg, bio->bi_iter.bi_size);
+#endif
 #if !defined(BLKSNAP_STANDALONE)
 	current->blk_filter = prev_filter;
 #endif

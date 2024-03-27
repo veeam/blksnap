@@ -23,6 +23,9 @@
 #ifdef BLKSNAP_MEMSTAT
 #include "memstat.h"
 #endif
+#ifdef BLKSNAP_HISTOGRAM
+#include "log_histogram.h"
+#endif
 /*
  * The power of 2 for minimum tracking block size.
  *
@@ -377,10 +380,12 @@ int ioctl_setlog(struct blksnap_setlog __user *uarg)
 		return -ENODATA;
 	}
 #ifdef BLKSNAP_MEMSTAT
-	{
-		memstat_enable((int)(karg.level >= LOGLEVEL_DEBUG));
-		ret = 0;
-	}
+	memstat_enable((int)(karg.level >= LOGLEVEL_DEBUG));
+	ret = 0;
+#endif
+#ifdef BLKSNAP_HISTOGRAM
+	log_histogram_enable((int)(karg.level >= LOGLEVEL_DEBUG));
+	ret = 0;
 #endif
 #ifdef BLKSNAP_FILELOG
 	{

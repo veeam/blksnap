@@ -8,6 +8,7 @@ EXTRA_CFLAGS += "-D BLKSNAP_STANDALONE"
 EXTRA_CFLAGS += "-D BLKSNAP_MODIFICATION"
 EXTRA_CFLAGS += "-D BLKSNAP_MEMSTAT"
 EXTRA_CFLAGS += "-D BLKSNAP_FILELOG"
+EXTRA_CFLAGS += "-D BLKSNAP_HISTOGRAM"
 
 include ${M}/Makefile-config
 include ${M}/Makefile-bdevfilter
@@ -25,6 +26,7 @@ veeamblksnap-y :=	\
 	tracker.o
 
 veeamblksnap-y += log.o
+veeamblksnap-y += log_histogram.o
 veeamblksnap-y += memstat.o
 
 obj-m	 += veeamblksnap.o
