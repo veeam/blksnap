@@ -159,6 +159,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 		goto out_unfreeze;
 	}
 	kref_init(&flt->kref);
+	flt->fops = fops;
 
 	spin_lock(&bdev_extension_list_lock);
 	ext_tmp = bdev_extension_find(bdev->bd_dev);
@@ -171,10 +172,8 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 			pr_debug("Device is busy\n");
 		}
 	} else {
-		flt->fops = fops;
 		ext_new->flt = flt;
 		list_add_tail(&ext_new->link, &bdev_extension_list);
-		fops = NULL;
 		flt = NULL;
 		ext_new = NULL;
 	}
@@ -416,9 +415,6 @@ out_free_devpath:
 void bdevfilter_free(struct kref *kref)
 {
 	struct blkfilter *flt = container_of(kref, struct blkfilter, kref);
-
-	if (!flt->fops)
-		return;
 
 	pr_debug("Detach filter '%s' registered\n", flt->fops->name);
 	flt->fops->detach(flt);
