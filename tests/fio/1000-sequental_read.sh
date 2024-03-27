@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
-. ./functions.sh
-. ./blksnap.sh
+. ../functions.sh
+. ../blksnap.sh
 
 echo "---"
 echo "FIO sequental read test"
