@@ -82,6 +82,12 @@ static void snapimage_submit_bio(struct bio *bio)
 #endif
 	while (bio->bi_iter.bi_size && is_success)
 		is_success = diff_area_submit_chunk(diff_area, bio);
+#ifdef BLKSNAP_STANDALONE
+	atomic64_add(bio->bi_iter.bi_size >> SECTOR_SHIFT,
+		     op_is_write(bio_op(bio)) ?
+		     	&diff_area->stat_image_written :
+			&diff_area->stat_image_read);
+#endif
 #ifdef BLKSNAP_HISTOGRAM
 	if (!op_is_write(bio_op(bio)))
 		log_histogram_add(&diff_area->read_hg, bio->bi_iter.bi_size);

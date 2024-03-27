@@ -153,6 +153,13 @@ struct diff_area {
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *sb;
 #endif
+
+#ifdef BLKSNAP_STANDALONE
+	atomic64_t stat_processed;
+	atomic64_t stat_copied;
+	atomic64_t stat_image_read;
+	atomic64_t stat_image_written;
+#endif
 #ifdef BLKSNAP_HISTOGRAM
 	struct log_histogram read_hg;
 	struct log_histogram redirect_hg;
