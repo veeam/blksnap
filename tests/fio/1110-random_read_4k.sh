@@ -6,7 +6,7 @@
 . ../blksnap.sh
 
 echo "---"
-echo "FIO sequental read test"
+echo "FIO random read test"
 
 fio --version
 blksnap_load
@@ -29,7 +29,7 @@ MP_DIR=/mnt/blksnap-test
 rm -rf ${MP_DIR}
 mkdir -p ${MP_DIR}
 
-fio --directory "${MP_TEST_DIR}" --section sequental_read ./blksnap.fio
+fio --directory "${MP_TEST_DIR}" --section random_read_4k  ./blksnap.fio
 
 blksnap_snapshot_create "${DEVICE}" "/dev/shm" "1G"
 blksnap_snapshot_watcher
@@ -43,7 +43,7 @@ echo "Mount image"
 DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
 mount ${DEVICE_IMAGE} ${IMAGE}
 
-fio --directory "${IMAGE}/${MP_TEST_DIR}" --section sequental_read ./blksnap.fio
+fio --directory "${IMAGE}/${MP_TEST_DIR}" --section random_read_4k ./blksnap.fio
 
 echo "Umount image"
 umount ${IMAGE}
