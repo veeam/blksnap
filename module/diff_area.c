@@ -165,11 +165,11 @@ void diff_area_free(struct kref *kref)
 	pr_info("%llu MiB was written to image\n", atomic64_read(&diff_area->stat_image_written) >> (20 - SECTOR_SHIFT));
 #endif
 #ifdef BLKSNAP_HISTOGRAM
-	pr_info("Reading IO units statistic:\n");
-	log_histogram_show(&diff_area->read_hg);
+	pr_info("Image IO units statistic:\n");
+	log_histogram_show(&diff_area->image_hg);
 
-	pr_info("Redirection IO units statistic:\n");
-	log_histogram_show(&diff_area->redirect_hg);
+	pr_info("Copy-on-write IO units statistic:\n");
+	log_histogram_show(&diff_area->cow_hg);
 #endif
 
 	diff_buffer_cleanup(diff_area);
@@ -424,8 +424,8 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 	atomic64_set(&diff_area->stat_image_written, 0);
 #endif
 #ifdef BLKSNAP_HISTOGRAM
-	log_histogram_init(&diff_area->read_hg, 4096);
-	log_histogram_init(&diff_area->redirect_hg, 4096);
+	log_histogram_init(&diff_area->image_hg, 4096);
+	log_histogram_init(&diff_area->cow_hg, 4096);
 #endif
 
 	if (ret) {
@@ -579,6 +579,9 @@ bool diff_area_cow_process_bio(struct diff_area *diff_area, struct bio *bio)
 
 	if (chunk_bio) {
 		/* Postpone bio processing in a callback. */
+#ifdef BLKSNAP_HISTOGRAM
+		log_histogram_add(&diff_area->cow_hg, chunk_bio->bi_iter.bi_size);
+#endif
 		chunk_load_and_postpone_io_finish(&chunks, chunk_bio, bio);
 		skip_bio = true;
 
@@ -656,7 +659,7 @@ static void orig_clone_bio(struct diff_area *diff_area, struct bio *bio)
 	bio_advance(bio, new_bio->bi_iter.bi_size);
 	bio_chain(new_bio, bio);
 #ifdef BLKSNAP_HISTOGRAM
-	log_histogram_add(&diff_area->redirect_hg, new_bio->bi_iter.bi_size);
+	log_histogram_add(&diff_area->image_hg, new_bio->bi_iter.bi_size);
 #endif
 #ifdef BLKSNAP_STANDALONE
 	submit_bio_noacct_notrace(new_bio);

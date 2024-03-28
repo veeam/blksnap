@@ -191,7 +191,7 @@ void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
 	bio_chain(new_bio, bio);
 
 #ifdef BLKSNAP_HISTOGRAM
-	log_histogram_add(&chunk->diff_area->redirect_hg, new_bio->bi_iter.bi_size);
+	log_histogram_add(&chunk->diff_area->image_hg, new_bio->bi_iter.bi_size);
 #endif
 #ifdef BLKSNAP_STANDALONE
 	submit_bio_noacct_notrace(new_bio);
@@ -543,7 +543,11 @@ void chunk_diff_write(struct chunk *chunk)
 	chunk_notify_store(chunk, err);
 }
 
+#ifdef BLKSNAP_HISTOGRAM
+static struct bio *chunk_origin_load_async(struct chunk *chunk, struct log_histogram *hg)
+#else
 static struct bio *chunk_origin_load_async(struct chunk *chunk)
+#endif
 {
 	struct block_device *bdev;
 	struct bio *bio = NULL;
@@ -595,7 +599,7 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 		bio_chain(bio, next);
 
 #ifdef BLKSNAP_HISTOGRAM
-		log_histogram_add(&chunk->diff_area->redirect_hg, bio->bi_iter.bi_size);
+		log_histogram_add(hg, bio->bi_iter.bi_size);
 #endif
 #ifdef BLKSNAP_STANDALONE
 		submit_bio_noacct_notrace(bio);
@@ -615,12 +619,19 @@ int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
 {
 	struct bio *prev = *chunk_bio, *bio;
 
+#ifdef BLKSNAP_HISTOGRAM
+	bio = chunk_origin_load_async(chunk, &chunk->diff_area->cow_hg);
+#else
 	bio = chunk_origin_load_async(chunk);
+#endif
 	if (IS_ERR(bio))
 		return PTR_ERR(bio);
 
 	if (prev) {
 		bio_chain(prev, bio);
+#ifdef BLKSNAP_HISTOGRAM
+		log_histogram_add(&chunk->diff_area->cow_hg, prev->bi_iter.bi_size);
+#endif
 #ifdef BLKSNAP_STANDALONE
 		submit_bio_noacct_notrace(prev);
 #else
@@ -657,7 +668,11 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 	struct chunk_bio *cbio;
 	struct bio *bio;
 
+#ifdef BLKSNAP_HISTOGRAM
+	bio = chunk_origin_load_async(chunk, &chunk->diff_area->image_hg);
+#else
 	bio = chunk_origin_load_async(chunk);
+#endif
 	if (IS_ERR(bio)) {
 		chunk_up(chunk);
 		return false;
@@ -678,6 +693,10 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 #endif
 	bio_inc_remaining(orig_bio);
 
+
+#ifdef BLKSNAP_HISTOGRAM
+	log_histogram_add(&chunk->diff_area->image_hg, bio->bi_iter.bi_size);
+#endif
 	chunk_submit_bio(bio);
 	return true;
 }

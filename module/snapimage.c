@@ -47,7 +47,9 @@ static void snapimage_submit_bio(struct bio *bio)
 #endif
 	struct diff_area *diff_area = tracker->diff_area;
 	unsigned int flags;
-#if !defined(BLKSNAP_STANDALONE)
+#if defined(BLKSNAP_STANDALONE)
+	unsigned int processed = bio->bi_iter.bi_size;
+#else
 	struct blkfilter *prev_filter;
 #endif
 	bool is_success = true;
@@ -83,14 +85,13 @@ static void snapimage_submit_bio(struct bio *bio)
 	while (bio->bi_iter.bi_size && is_success)
 		is_success = diff_area_submit_chunk(diff_area, bio);
 #ifdef BLKSNAP_STANDALONE
-	atomic64_add(bio->bi_iter.bi_size >> SECTOR_SHIFT,
-		     op_is_write(bio_op(bio)) ?
-		     	&diff_area->stat_image_written :
-			&diff_area->stat_image_read);
-#endif
-#ifdef BLKSNAP_HISTOGRAM
-	if (!op_is_write(bio_op(bio)))
-		log_histogram_add(&diff_area->read_hg, bio->bi_iter.bi_size);
+	processed = processed - bio->bi_iter.bi_size;
+	if (processed) {
+		atomic64_add(processed >> SECTOR_SHIFT,
+			     op_is_write(bio_op(bio)) ?
+		     		&diff_area->stat_image_written :
+				&diff_area->stat_image_read);
+	}
 #endif
 #if !defined(BLKSNAP_STANDALONE)
 	current->blk_filter = prev_filter;
