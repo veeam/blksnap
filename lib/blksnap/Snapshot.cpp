@@ -41,7 +41,16 @@ std::shared_ptr<CSnapshot> CSnapshot::Create(const std::string& filePath, const 
 {
     struct blksnap_snapshot_create param = {0};
     param.diff_storage_limit_sect = limit / 512;
-    param.diff_storage_filename = (__u64)filePath.c_str();
+    if (filePath.empty())
+    {
+#ifdef BLKSNAP_MODIFICATION
+        param.diff_storage_filename = (__u64)NULL;
+#else
+        throw std::exception("The parameter 'filePath' cannot be empty");
+#endif
+    }
+    else
+        param.diff_storage_filename = (__u64)filePath.c_str();
 
     auto ctl = std::make_shared<COpenFileHolder>(blksnap_filename, O_RDWR);
     if (::ioctl(ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
@@ -108,3 +117,18 @@ bool CSnapshot::WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev)
     }
     return true;
 }
+#ifdef BLKSNAP_MODIFICATION
+void CSnapshot::AppendStorage(const std::string& devPath, struct blksnap_sectors* ranges, size_t count)
+{
+    blksnap_snapshot_append_storage param;
+
+    uuid_copy(param.id.b, m_id.Get());
+    param.devpath = (__u64)devPath.c_str();
+    param.count = count;
+    param.ranges = ranges;
+
+    if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
+        throw std::system_error(errno, std::generic_category(),
+            "Failed to append difference storage.");
+}
+#endif

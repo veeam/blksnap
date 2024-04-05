@@ -177,6 +177,7 @@ enum blksnap_ioctl {
 #ifdef BLKSNAP_MODIFICATION
 	BLKSNAP_IOCTL_MOD = 32,
 	BLKSNAP_IOCTL_SETLOG,
+	BLKSNAP_IOCTL_SNAPSHOT_APPEND_STORAGE,
 #endif
 };
 
@@ -465,6 +466,28 @@ struct blksnap_setlog {
 #define IOCTL_BLKSNAP_SETLOG                                                   \
 	_IOW(BLKSNAP, BLKSNAP_IOCTL_SETLOG, struct blksnap_setlog)
 
+ /**
+  * struct blksnap_snapshot_append_storage - Argument for the
+  *	&IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE control.
+  * @id:
+  *	Snapshot ID.
+  * @devpath:
+  *	Device file path.
+  * @count:
+  *	Size of @ranges in the number of &struct blk_snap_block_range.
+  * @ranges:
+  *	Pointer to the array of &struct blk_snap_block_range.
+  */
+struct blksnap_snapshot_append_storage {
+    struct blksnap_uuid id;
+    __u64 devpath;
+    __u32 count;
+    struct blksnap_sectors* ranges;
+};
+
+#define IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE                                   \
+    _IOW(BLKSNAP, BLKSNAP_IOCTL_SNAPSHOT_APPEND_STORAGE,                        \
+    struct blksnap_snapshot_append_storage)
 #endif /* BLKSNAP_MODIFICATION */
 
 #endif /* _UAPI_LINUX_VEEAMBLKSNAP_H */

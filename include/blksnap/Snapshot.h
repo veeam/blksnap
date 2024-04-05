@@ -23,11 +23,13 @@
  * flexibility. Uses structures that are directly passed to the kernel module.
  */
 
+#include <memory>
+#include <string>
+
 #include "Sector.h"
 #include "SnapshotId.h"
 #include "OpenFileHolder.h"
-#include <memory>
-#include <string>
+#include <linux/veeamblksnap.h>
 
 namespace blksnap
 {
@@ -57,7 +59,9 @@ namespace blksnap
         void Take();
         void Destroy();
         bool WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev);
-
+#ifdef BLKSNAP_MODIFICATION
+        void AppendStorage(const std::string& devPath, struct blksnap_sectors* blockRanges, size_t blockCount);
+#endif
         const CSnapshotId& Id() const
         {
             return m_id;
