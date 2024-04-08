@@ -176,7 +176,7 @@ static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
 			       sector_t sector_cnt, u8 snap_number,
 			       unsigned char *map)
 {
-	int res = 0;
+	int ret = 0;
 	u8 num;
 	size_t inx;
 	size_t cbt_block_first = (size_t)(
@@ -190,7 +190,7 @@ static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
 			pr_err("Block index is too large\n");
 			pr_err("Block #%zu was demanded, map size %zu blocks\n",
 			       inx, cbt_map->blk_count);
-			res = -EINVAL;
+			ret = -EINVAL;
 			break;
 		}
 
@@ -198,46 +198,46 @@ static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
 		if (num < snap_number)
 			map[inx] = snap_number;
 	}
-	return res;
+	return ret;
 }
 
 int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
 		sector_t sector_cnt)
 {
-	int res;
+	int ret;
 
 	spin_lock(&cbt_map->locker);
 	if (unlikely(cbt_map->is_corrupted)) {
 		spin_unlock(&cbt_map->locker);
 		return -EINVAL;
 	}
-	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
+	ret = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
-	if (unlikely(res))
+	if (unlikely(ret))
 		cbt_map->is_corrupted = true;
 
 	spin_unlock(&cbt_map->locker);
 
-	return res;
+	return ret;
 }
 
 int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start,
 		     sector_t sector_cnt)
 {
-	int res;
+	int ret;
 
 	spin_lock(&cbt_map->locker);
 	if (unlikely(cbt_map->is_corrupted)) {
 		spin_unlock(&cbt_map->locker);
 		return -EINVAL;
 	}
-	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
+	ret = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
-	if (!res)
-		res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
+	if (!ret)
+		ret = _cbt_map_set(cbt_map, sector_start, sector_cnt,
 				   (u8)cbt_map->snap_number_previous,
 				   cbt_map->read_map);
 	spin_unlock(&cbt_map->locker);
 
-	return res;
+	return ret;
 }
