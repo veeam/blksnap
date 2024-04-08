@@ -482,7 +482,7 @@ struct blksnap_snapshot_append_storage {
     struct blksnap_uuid id;
     __u64 devpath;
     __u32 count;
-    struct blksnap_sectors* ranges;
+    __u64 ranges;
 };
 
 #define IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE                                   \
