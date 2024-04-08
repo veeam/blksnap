@@ -193,16 +193,12 @@ out_mutex_unlock:
 out_blkdev_put:
 #if defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev_handle);
+#elif defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
 #else
+	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+#endif
 
-	blkdev_put(bdev,
-#if defined(HAVE_BLK_HOLDER_OPS)
-		NULL
-#else
-		FMODE_READ | FMODE_WRITE
-#endif
-		);
-#endif
 out_free_devpath:
 	kfree(devpath);
 	return ret;
@@ -296,16 +292,13 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 #else
 	mutex_unlock(&bdev->bd_mutex);
 #endif
+
 #if defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev_handle);
+#elif defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
 #else
-	blkdev_put(bdev,
-#if defined(HAVE_BLK_HOLDER_OPS)
-		NULL
-#else
-		FMODE_READ | FMODE_WRITE
-#endif
-		);
+	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 #endif
 out_free_devpath:
 	kfree(devpath);
@@ -398,14 +391,10 @@ out_mutex_unlock:
 #endif
 #if defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev_handle);
+#elif defined(HAVE_BLK_HOLDER_OPS)
+	blkdev_put(bdev, NULL);
 #else
-	blkdev_put(bdev,
-#if defined(HAVE_BLK_HOLDER_OPS)
-		NULL
-#else
-		FMODE_READ | FMODE_WRITE
-#endif
-		);
+	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 #endif
 out_free_devpath:
 	kfree(devpath);
