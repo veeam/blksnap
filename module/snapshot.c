@@ -130,11 +130,6 @@ int snapshot_create(const char *filename, sector_t limit_sect,
 		return PTR_ERR(snapshot);
 	}
 
-	if (!filename) {
-		pr_err("Unable to create snapshot: difference storage file is not set\n");
-		snapshot_put(snapshot);
-		return ret;
-	}
 	ret = diff_storage_set(snapshot->diff_storage, filename, limit_sect);
 	if (ret) {
 		pr_err("Unable to create snapshot: invalid difference storage file\n");
@@ -595,6 +590,14 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 		}
 		src++;
 	}
+	{
+		struct diff_storage *diff_storage = snapshot->diff_storage;
+
+		if (atomic_read(&diff_storage->low_space_flag) &&
+		    (diff_storage->capacity >= diff_storage->requested))
+			atomic_set(&diff_storage->low_space_flag, 0);
+	}
+
 out_snapshot_put:
 	up_write(&snapshot->rw_lock);
 	snapshot_put(snapshot);

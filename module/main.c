@@ -237,11 +237,20 @@ static int ioctl_snapshot_create(struct blksnap_snapshot_create __user *uarg)
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}
-	fname = strndup_user((const char __user *)karg.diff_storage_filename,
-			     PATH_MAX);
-	if (IS_ERR(fname))
-		return PTR_ERR(fname);
 
+	if (karg.diff_storage_filename) {
+		fname = strndup_user((const char __user *)karg.diff_storage_filename,
+				     PATH_MAX);
+		if (IS_ERR(fname))
+			return PTR_ERR(fname);
+	} else {
+#if defined(BLKSNAP_MODIFICATION)
+		fname = NULL;
+#else
+		pr_err("Unable to create snapshot: difference storage file is not set\n");
+		return -EINVAL;
+#endif
+	}
 	ret = snapshot_create(fname, karg.diff_storage_limit_sect, &karg.id);
 	kfree(fname);
 #ifdef BLKSNAP_MEMSTAT
@@ -251,6 +260,7 @@ static int ioctl_snapshot_create(struct blksnap_snapshot_create __user *uarg)
 		return ret;
 
 	if (copy_to_user(uarg, &karg, sizeof(karg))) {
+		snapshot_destroy((uuid_t *)&karg.id);
 		pr_err("Unable to create snapshot: invalid user buffer\n");
 		return -ENODATA;
 	}

@@ -254,18 +254,11 @@ static inline void ___set_file(struct diff_storage *diff_storage,
 {
 	struct inode *inode = file_inode(file);
 
-#if defined(BLKSNAP_STANDALONE)
-	/*
-	 * There are no restrictions
-	 */
-	diff_storage->dev_id = 0;
-#else
 	/*
 	 * Blocks the ability to place the difference storage on a block
 	 * device under the snapshot.
 	 */
 	diff_storage->dev_id = inode->i_sb->s_dev;
-#endif
 	diff_storage->capacity = i_size_read(inode) >> SECTOR_SHIFT;
 	diff_storage->file = file;
 }
@@ -325,6 +318,17 @@ int diff_storage_set(struct diff_storage *diff_storage, const char *filename,
 	struct file *file;
 	umode_t mode;
 	sector_t req_sect;
+
+#if defined(BLKSNAP_MODIFICATION)
+	if (!filename) {
+ 		diff_storage->dev_id = 0;
+		diff_storage->capacity = 0;
+		diff_storage->file = NULL;
+		diff_storage->requested = min(get_diff_storage_minimum(), limit);
+		diff_storage->limit = limit;
+		return 0;
+	}
+#endif
 
 	file = filp_open(filename, O_RDONLY, 0);
 	if (IS_ERR(file)) {
@@ -388,8 +392,8 @@ int diff_storage_set(struct diff_storage *diff_storage, const char *filename,
 }
 
 int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
-			struct block_device **bdev, struct file **file,
-			sector_t *sector)
+			struct block_device **pbdev, struct file **pfile,
+			sector_t *psector)
 
 {
 	sector_t sectors_left;
@@ -404,9 +408,20 @@ int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 		return -ENOSPC;
 	}
 
-	*bdev = diff_storage->bdev;
-	*file = diff_storage->file;
-	*sector = diff_storage->filled;
+	*pbdev = diff_storage->bdev;
+	*pfile = diff_storage->file;
+	*psector = diff_storage->filled;
+#ifdef BLKSNAP_MODIFICATION
+	if (!*pbdev && ! *pfile) {
+		int ret = diff_storage_get_range(diff_storage, count,
+						 pbdev, psector);
+
+		if (ret) {
+			spin_unlock(&diff_storage->lock);
+			return ret;
+		}
+	}
+#endif
 
 	diff_storage->filled += count;
 	sectors_left = diff_storage->requested - diff_storage->filled;
@@ -485,6 +500,7 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 
 	spin_lock(&diff_storage->ranges_lock);
 	list_add_tail(&rg->link, &diff_storage->free_ranges_list);
+	diff_storage->capacity += range.count;
 	spin_unlock(&diff_storage->ranges_lock);
 	return 0;
 }
@@ -519,7 +535,7 @@ int diff_storage_get_range(struct diff_storage *diff_storage, sector_t count,
 	spin_unlock(&diff_storage->ranges_lock);
 
 	if (dev_id == 0)
-		return -ENODATA;
+		return -ENOSPC;
 
 	diff_storage_bdev = xa_load(&diff_storage->diff_storage_bdev_map, dev_id);
 	if (diff_storage_bdev) {
