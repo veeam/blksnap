@@ -322,7 +322,7 @@ static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
 	/* Copy only snapshot ID and timeout*/
 	if (copy_from_user(karg, uarg, sizeof(uuid_t) + sizeof(__u32))) {
 		pr_err("Unable to get snapshot event. Invalid user buffer\n");
-		ret = -EINVAL;
+		ret = -ENODATA;
 		goto out;
 	}
 
@@ -347,7 +347,7 @@ static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
 
 	if (copy_to_user(uarg, karg, sizeof(struct blksnap_snapshot_event))) {
 		pr_err("Unable to get snapshot event. Invalid user buffer\n");
-		ret = -EINVAL;
+		ret = -ENODATA;
 	}
 out:
 #ifdef BLKSNAP_MEMSTAT
@@ -411,7 +411,8 @@ int ioctl_setlog(struct blksnap_setlog __user *uarg)
 		if (!filepath)
 			return -ENOMEM;
 
-		if (copy_from_user(filepath, (void *)karg.filepath, karg.filepath_size)) {
+		if (copy_from_user(filepath, (void *)karg.filepath,
+				   karg.filepath_size)) {
 			pr_err("Unable to get log filepath: invalid user buffer\n");
 
 			kfree(filepath);
