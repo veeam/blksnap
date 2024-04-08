@@ -3,8 +3,8 @@
 #ifndef __BLKSNAP_DIFF_STORAGE_H
 #define __BLKSNAP_DIFF_STORAGE_H
 
+#include <linux/xarray.h>
 #include "event_queue.h"
-
 struct blksnap_sectors;
 
 /**
@@ -81,6 +81,11 @@ struct diff_storage {
 
 	struct work_struct reallocate_work;
 	struct event_queue event_queue;
+#ifdef BLKSNAP_MODIFICATION
+	struct xarray diff_storage_bdev_map;
+	spinlock_t ranges_lock;
+	struct list_head free_ranges_list;
+#endif
 };
 
 struct diff_storage *diff_storage_new(void);
@@ -96,10 +101,28 @@ static inline void diff_storage_put(struct diff_storage *diff_storage)
 		kref_put(&diff_storage->kref, diff_storage_free);
 };
 
-int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
-				  const char *filename, sector_t limit);
+int diff_storage_set(struct diff_storage *diff_storage, const char *filename,
+		     sector_t limit);
 
 int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 		       struct block_device **bdev, struct file **file,
 		       sector_t *sector);
+
+#ifdef BLKSNAP_MODIFICATION
+
+#if defined(HAVE_BDEV_HANDLE)
+int diff_storage_add_bdev(struct diff_storage *diff_storage,
+			  struct bdev_handle *bdev_handle);
+#else
+int diff_storage_add_bdev(struct diff_storage *diff_storage,
+			  struct block_device *bdev);
+#endif
+
+int diff_storage_add_range(struct diff_storage *diff_storage,
+			      dev_t dev_id,
+			      struct blksnap_sectors range);
+int diff_storage_get_range(struct diff_storage *diff_storage, sector_t count,
+			   struct block_device **pbdev, sector_t *poffset);
+#endif
+
 #endif /* __BLKSNAP_DIFF_STORAGE_H */

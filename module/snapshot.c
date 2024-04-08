@@ -135,8 +135,7 @@ int snapshot_create(const char *filename, sector_t limit_sect,
 		snapshot_put(snapshot);
 		return ret;
 	}
-	ret = diff_storage_set_diff_storage(snapshot->diff_storage,
-					    filename, limit_sect);
+	ret = diff_storage_set(snapshot->diff_storage, filename, limit_sect);
 	if (ret) {
 		pr_err("Unable to create snapshot: invalid difference storage file\n");
 		snapshot_put(snapshot);
@@ -513,3 +512,104 @@ struct event *snapshot_wait_event(const uuid_t *id, unsigned long timeout_ms)
 	snapshot_put(snapshot);
 	return event;
 }
+
+#ifdef BLKSNAP_MODIFICATION
+int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
+			    struct blksnap_sectors* __user ranges)
+{
+	int ret = 0;
+	struct snapshot *snapshot;
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev_handle;
+#else
+	struct block_device *bdev;
+#endif
+	dev_t dev_id;
+	struct blksnap_sectors range;
+	struct blksnap_sectors* __user src;
+
+#if defined(HAVE_BDEV_HANDLE)
+	bdev_handle = bdev_open_by_path(devpath,
+					BLK_OPEN_READ | BLK_OPEN_WRITE,
+					NULL, NULL);
+	if (IS_ERR(bdev_handle))
+		ret = PTR_ERR(bdev_handle);
+	else
+		dev_id = bdev_handle->bdev->bd_dev;
+#else
+#if defined(HAVE_BLK_HOLDER_OPS)
+	bdev = blkdev_get_by_path(devpath, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
+#else
+	bdev = blkdev_get_by_path(devpath, FMODE_READ | FMODE_WRITE, NULL);
+#endif
+	if (IS_ERR(bdev))
+		ret = PTR_ERR(bdev);
+	else
+		dev_id = bdev->bd_dev;
+#endif
+	if (ret) {
+		pr_err("Failed to open a block device '%s'\n", devpath);
+		goto out;;
+	}
+
+	snapshot = snapshot_get_by_id(id);
+	if (!snapshot) {
+		ret = -ESRCH;
+		goto out_bdev_release;
+	}
+	down_write(&snapshot->rw_lock);
+
+#if defined(HAVE_BDEV_HANDLE)
+	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev_handle);
+
+#else
+	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev);
+
+#endif
+	if (ret) {
+		if (ret == -EALREADY)
+			ret = 0;
+		else {
+			pr_err("Failed to add a block device\n");
+			goto out_snapshot_put;
+		}
+	} else {
+#if defined(HAVE_BDEV_HANDLE)
+		bdev_handle = NULL;
+#else
+		bdev = NULL;
+#endif
+	}
+
+	while (src < (ranges + count)) {
+		if (copy_from_user(&range, src, sizeof(range))) {
+			pr_err("Unable to get range: invalid user buffer\n");
+			ret = -ENODATA;
+			break;
+		}
+
+		ret = diff_storage_add_range(snapshot->diff_storage, dev_id, range);
+		if (ret) {
+			pr_err("Failed to add a range\n");
+			break;
+		}
+		src++;
+	}
+out_snapshot_put:
+	up_write(&snapshot->rw_lock);
+	snapshot_put(snapshot);
+out_bdev_release:
+#if defined(HAVE_BDEV_HANDLE)
+	if (bdev_handle)
+		bdev_release(bdev_handle);
+#elif defined(HAVE_BLK_HOLDER_OPS)
+	if (bdev)
+		blkdev_put(bdev, NULL);
+#else
+	if (bdev)
+		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+#endif
+out:
+	return ret;
+}
+#endif

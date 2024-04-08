@@ -360,7 +360,7 @@ out:
 
 #ifdef BLKSNAP_MODIFICATION
 
-int ioctl_mod(struct blksnap_mod __user *uarg)
+static int ioctl_mod(struct blksnap_mod __user *uarg)
 {
 	if (copy_to_user(uarg, &modification, sizeof(modification))) {
 		pr_err("Unable to get modification: invalid user buffer\n");
@@ -370,7 +370,7 @@ int ioctl_mod(struct blksnap_mod __user *uarg)
 	return 0;
 }
 
-int ioctl_setlog(struct blksnap_setlog __user *uarg)
+static int ioctl_setlog(struct blksnap_setlog __user *uarg)
 {
 	int ret = -ENOTTY;
 	struct blksnap_setlog karg;
@@ -424,7 +424,31 @@ int ioctl_setlog(struct blksnap_setlog __user *uarg)
 #endif
 	return ret;
 }
-#endif
+
+static int ioctl_snapshot_append_storage(
+	struct blksnap_snapshot_append_storage __user *uarg)
+{
+	int ret;
+	struct blksnap_snapshot_append_storage karg;
+	char *devpath;
+
+	pr_debug("Append difference storage\n");
+
+	if (copy_from_user(&karg, (void *)uarg, sizeof(karg))) {
+		pr_err("Unable to append difference storage: invalid user buffer\n");
+		return -ENODATA;
+	}
+	devpath = strndup_user((const char __user *)karg.devpath, PATH_MAX);
+	if (IS_ERR(devpath))
+		return PTR_ERR(devpath);
+
+	ret = snapshot_append_storage((uuid_t *)karg.id.b, devpath,
+	       (size_t)karg.count, (struct blksnap_sectors* __user)karg.ranges);
+
+	kfree(devpath);
+	return ret;
+}
+#endif /* BLKSNAP_MODIFICATION */
 
 static long blksnap_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg)
@@ -449,6 +473,8 @@ static long blksnap_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
 		return ioctl_mod(argp);
 	case IOCTL_BLKSNAP_SETLOG:
 		return ioctl_setlog(argp);
+	case IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE:
+		return ioctl_snapshot_append_storage(argp);
 #endif
 	default:
 		return -ENOTTY;

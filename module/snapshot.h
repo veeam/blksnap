@@ -62,4 +62,8 @@ int snapshot_collect(unsigned int *pcount,
 		     struct blksnap_uuid __user *id_array);
 struct event *snapshot_wait_event(const uuid_t *id, unsigned long timeout_ms);
 
+#ifdef BLKSNAP_MODIFICATION
+int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
+			    struct blksnap_sectors* __user ranges);
+#endif
 #endif /* __BLKSNAP_SNAPSHOT_H */

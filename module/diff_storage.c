@@ -26,6 +26,25 @@
 #include "memstat.h"
 #endif
 
+#ifdef BLKSNAP_MODIFICATION
+
+struct diff_storage_bdev {
+#if defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev_handle;
+#else
+	struct block_device *bdev;
+#endif
+};
+
+struct diff_storage_range {
+	struct list_head link;
+	dev_t dev_id;
+	sector_t ofs;
+	sector_t cnt;
+};
+
+#endif
+
 static void diff_storage_reallocate_work(struct work_struct *work)
 {
 	int ret;
@@ -120,6 +139,11 @@ struct diff_storage *diff_storage_new(void)
 	INIT_WORK(&diff_storage->reallocate_work, diff_storage_reallocate_work);
 	event_queue_init(&diff_storage->event_queue);
 
+#ifdef BLKSNAP_MODIFICATION
+	xa_init(&diff_storage->diff_storage_bdev_map);
+	spin_lock_init(&diff_storage->ranges_lock);
+	INIT_LIST_HEAD(&diff_storage->free_ranges_list);
+#endif
 	return diff_storage;
 }
 
@@ -133,20 +157,47 @@ void diff_storage_free(struct kref *kref)
 #if defined(HAVE_BDEV_HANDLE)
 	if (diff_storage->bdev_handle)
 		bdev_release(diff_storage->bdev_handle);
+#elif defined(HAVE_BLK_HOLDER_OPS)
+	if (diff_storage->bdev)
+		blkdev_put(diff_storage->bdev, diff_storage);
 #else
 	if (diff_storage->bdev)
-		blkdev_put(diff_storage->bdev,
-#if defined(HAVE_BLK_HOLDER_OPS)
-			diff_storage
-#else
-			FMODE_EXCL | FMODE_READ | FMODE_WRITE
-#endif
-			);
+		blkdev_put(diff_storage->bdev, FMODE_EXCL | FMODE_READ | FMODE_WRITE);
 #endif
 
 	if (diff_storage->file)
 		filp_close(diff_storage->file, NULL);
 	event_queue_done(&diff_storage->event_queue);
+
+#ifdef BLKSNAP_MODIFICATION
+	while (!list_empty(&diff_storage->free_ranges_list)) {
+		struct diff_storage_range *rg = NULL;
+
+		rg = list_first_entry(&diff_storage->free_ranges_list,
+				      struct diff_storage_range, link);
+		list_del(&rg->link);
+#ifdef BLKSNAP_MEMSTAT
+		__kfree(rg);
+#else
+		kfree(rg);
+#endif
+	}
+	{
+		unsigned long dev_id;
+		struct diff_storage_bdev *diff_storage_bdev;
+
+		xa_for_each(&diff_storage->diff_storage_bdev_map, dev_id,
+							diff_storage_bdev) {
+#ifdef BLKSNAP_MEMSTAT
+			__kfree(diff_storage_bdev);
+#else
+			kfree(diff_storage_bdev);
+#endif
+		}
+	}
+	xa_destroy(&diff_storage->diff_storage_bdev_map);
+#endif /* BLKSNAP_MODIFICATION */
+
 #ifdef BLKSNAP_MEMSTAT
 	__kfree(diff_storage);
 #else
@@ -267,8 +318,8 @@ static inline int diff_storage_set_regfile(struct diff_storage *diff_storage,
 	return 0;
 }
 
-int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
-				  const char *filename, sector_t limit)
+int diff_storage_set(struct diff_storage *diff_storage, const char *filename,
+		     sector_t limit)
 {
 	int ret = 0;
 	struct file *file;
@@ -365,3 +416,123 @@ int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 	check_halffull(diff_storage, sectors_left);
 	return 0;
 }
+
+#ifdef BLKSNAP_MODIFICATION
+
+#if defined(HAVE_BDEV_HANDLE)
+int diff_storage_add_bdev(struct diff_storage *diff_storage,
+			   struct bdev_handle *bdev_handle)
+{
+	dev_t dev_id = bdev_handle->bdev->bd_dev;
+#else
+int diff_storage_add_bdev(struct diff_storage *diff_storage,
+			   struct block_device *bdev)
+{
+	dev_t dev_id = bdev->bd_dev;
+#endif
+	struct diff_storage_bdev *diff_storage_bdev;
+	int ret;
+
+	diff_storage_bdev = xa_load(&diff_storage->diff_storage_bdev_map, dev_id);
+
+	if (diff_storage_bdev)
+		return -EALREADY;
+
+#ifdef BLKSNAP_MEMSTAT
+	diff_storage_bdev = __kzalloc(sizeof(struct diff_storage_bdev), GFP_KERNEL);
+#else
+	diff_storage_bdev = kzalloc(sizeof(struct diff_storage_bdev), GFP_KERNEL);
+#endif
+	if (!diff_storage_bdev)
+		return -ENOMEM;
+
+#if defined(HAVE_BDEV_HANDLE)
+	diff_storage_bdev->bdev_handle = bdev_handle;
+#else
+	diff_storage_bdev->bdev = bdev;
+#endif
+	ret = xa_insert(&diff_storage->diff_storage_bdev_map, dev_id,
+			diff_storage_bdev, GFP_KERNEL);
+	if (ret) {
+#ifdef BLKSNAP_MEMSTAT
+		__kfree(diff_storage_bdev);
+#else
+		kfree(diff_storage_bdev);
+#endif
+	}
+	return ret;
+}
+
+
+int diff_storage_add_range(struct diff_storage *diff_storage,
+			   dev_t dev_id,
+			   struct blksnap_sectors range)
+{
+	struct diff_storage_range *rg;
+
+#ifdef BLKSNAP_MEMSTAT
+	rg = __kzalloc(sizeof(struct diff_storage_range), GFP_KERNEL);
+#else
+	rg = kzalloc(sizeof(struct diff_storage_range), GFP_KERNEL);
+#endif
+	if (!rg)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD(&rg->link);
+	rg->dev_id = dev_id;
+	rg->ofs = range.offset;
+	rg->cnt = range.count;
+
+	spin_lock(&diff_storage->ranges_lock);
+	list_add_tail(&rg->link, &diff_storage->free_ranges_list);
+	spin_unlock(&diff_storage->ranges_lock);
+	return 0;
+}
+
+int diff_storage_get_range(struct diff_storage *diff_storage, sector_t count,
+			   struct block_device **pbdev, sector_t *poffset)
+{
+	dev_t dev_id = 0;
+	struct diff_storage_bdev *diff_storage_bdev;
+	struct diff_storage_range *rg = NULL;
+
+	spin_lock(&diff_storage->ranges_lock);
+	while (!list_empty(&diff_storage->free_ranges_list)) {
+		rg = list_first_entry(&diff_storage->free_ranges_list,
+				      struct diff_storage_range, link);
+		if (rg->cnt >= count) {
+			dev_id = rg->dev_id;
+			*poffset = rg->ofs;
+
+			rg->ofs += count;
+			rg->cnt -= count;
+			break;
+		}
+
+		list_del(&rg->link);
+#ifdef BLKSNAP_MEMSTAT
+		__kfree(rg);
+#else
+		kfree(rg);
+#endif
+	}
+	spin_unlock(&diff_storage->ranges_lock);
+
+	if (dev_id == 0)
+		return -ENODATA;
+
+	diff_storage_bdev = xa_load(&diff_storage->diff_storage_bdev_map, dev_id);
+	if (diff_storage_bdev) {
+		pr_err("Failed to get difference storage block device\n");
+		return -EFAULT;
+	}
+
+#if defined(HAVE_BDEV_HANDLE)
+	*pbdev = diff_storage_bdev->bdev_handle->bdev;
+#else
+	*pbdev = diff_storage_bdev->bdev;
+#endif
+	return 0;
+}
+
+#endif
