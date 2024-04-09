@@ -559,7 +559,7 @@ int diff_storage_get_range(struct diff_storage *diff_storage, sector_t count,
 		return -ENOSPC;
 
 	diff_storage_bdev = xa_load(&diff_storage->diff_storage_bdev_map, dev_id);
-	if (diff_storage_bdev) {
+	if (!diff_storage_bdev) {
 		pr_err("Failed to get difference storage block device\n");
 		return -EFAULT;
 	}
