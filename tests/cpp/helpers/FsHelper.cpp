@@ -11,7 +11,7 @@ CAllocatedFile::CAllocatedFile(const std::string& name, const off_t size)
     : m_name(name)
     , m_size(size)
 {
-        int fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE);
+        int fd = ::open(filename.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, 0644);
         if (fd < 0)
             throw std::system_error(errno, std::generic_category(),
                                     "Failed to create file for diff storage.");

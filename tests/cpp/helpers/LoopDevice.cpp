@@ -23,7 +23,7 @@ LoopDevice::Ptr LoopDevice::Create(boost::filesystem::path directory, size_t siz
     boost::filesystem::path image = directory / (Uuid::GenerateRandom().ToStr() + std::string(".loop_image"));
     try
     {
-        fd = open(image.c_str(), O_CREAT | O_EXCL | O_RDWR, S_IRWXU);
+        fd = open(image.c_str(), O_CREAT | O_EXCL | O_RDWR, S_IRWXU, 0644);
         if (fd == -1)
             throw std::system_error(errno, std::generic_category(), "Failed to create loop image file");
 
