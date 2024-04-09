@@ -125,7 +125,7 @@ void CSnapshot::AppendStorage(const std::string& devPath, struct blksnap_sectors
     uuid_copy(param.id.b, m_id.Get());
     param.devpath = (__u64)devPath.c_str();
     param.count = count;
-    param.ranges = ranges;
+    param.ranges = (__u64)ranges;
 
     if (::ioctl(m_ctl->Get(), IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
         throw std::system_error(errno, std::generic_category(),
