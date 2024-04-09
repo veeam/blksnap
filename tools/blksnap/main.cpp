@@ -264,7 +264,6 @@ namespace
         devicePath = std::string("/dev/block/") +
             std::to_string(major(st.st_dev)) + ":" +
             std::to_string(minor(st.st_dev));
-        std::cout << "device path: '" << devicePath << "'" << std::endl;
 
         fd = ::open(filename.c_str(), O_RDONLY | O_EXCL | O_LARGEFILE);
         if (fd < 0)
@@ -313,8 +312,6 @@ namespace
                 ranges.push_back(rg);
 
                 fileOffset = extent->fe_logical + extent->fe_length;
-
-                std::cout << "allocate range: ofs=" << rg.offset << " cnt=" << rg.count << std::endl;
             }
         }
 
