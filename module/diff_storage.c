@@ -43,6 +43,21 @@ struct diff_storage_range {
 	sector_t cnt;
 };
 
+static inline void diff_storage_event_low(struct diff_storage *diff_storage)
+{
+	struct blksnap_event_low_free_space data = {
+		.requested_nr_sect = get_diff_storage_minimum(),
+	};
+
+	diff_storage->requested += data.requested_nr_sect;
+	pr_debug("Diff storage low free space. Portion: %llu sectors, requested: %llu\n",
+		data.requested_nr_sect, diff_storage->requested);
+	event_gen(&diff_storage->event_queue,
+		  blksnap_event_code_low_free_space,
+		  &data,
+		  sizeof(data));
+}
+
 #endif
 
 static void diff_storage_reallocate_work(struct work_struct *work)
@@ -106,6 +121,12 @@ static inline void check_halffull(struct diff_storage *diff_storage,
 {
 	if (is_halffull(sectors_left) &&
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
+#ifdef BLKSNAP_MODIFICATION
+		if (!diff_storage->bdev && !diff_storage->file) {
+			diff_storage_event_low(diff_storage);
+			return;
+		}
+#endif
 		if (diff_storage->bdev) {
 			pr_warn("Reallocating is allowed only for a regular file\n");
 			return;

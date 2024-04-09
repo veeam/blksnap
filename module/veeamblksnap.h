@@ -329,6 +329,9 @@ struct blksnap_snapshot_collect {
  */
 enum blksnap_event_codes {
 	blksnap_event_code_corrupted,
+#ifdef BLKSNAP_MODIFICATION
+	blksnap_event_code_low_free_space,
+#endif
 };
 
 /**
@@ -388,6 +391,16 @@ struct blksnap_event_corrupted {
 
 
 #ifdef BLKSNAP_MODIFICATION
+/**
+ * struct blksnap_event_low_free_space - Data for the
+ *	&blksnap_event_code_low_free_space event.
+ * @requested_nr_sect:
+ *	The required number of sectors.
+ */
+struct blksnap_event_low_free_space {
+	__u64 requested_nr_sect;
+};
+
 enum blksnap_compat_flags {
 	blksnap_compat_flag_debug_sector_state,
 	blksnap_compat_flag_setlog,
