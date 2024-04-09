@@ -576,7 +576,7 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 #endif
 	}
 
-	while (src < (ranges + count)) {
+	for (src = ranges; src < (ranges + count); src++) {
 		if (copy_from_user(&range, src, sizeof(range))) {
 			pr_err("Unable to get range: invalid user buffer\n");
 			ret = -ENODATA;
@@ -588,7 +588,6 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 			pr_err("Failed to add a range\n");
 			break;
 		}
-		src++;
 	}
 	{
 		struct diff_storage *diff_storage = snapshot->diff_storage;
