@@ -233,14 +233,14 @@ namespace
         int fd = ::open(name.c_str(), O_CREAT | O_RDWR | O_EXCL | O_LARGEFILE, 0644);
         if (fd < 0)
             throw std::system_error(errno, std::generic_category(),
-                                    "Failed to create file for diff storage.");
+                                    "Failed to create file ["+name+"] for diff storage");
 
         if (::fallocate64(fd, 0, 0, size))
         {
             int err = errno;
 
             ::close(fd);
-            throw std::system_error(err, std::generic_category(), "Failed to allocate file for diff storage.");
+            throw std::system_error(err, std::generic_category(), "Failed to allocate file ["+name+"] for diff storage");
         }
 
         ::close(fd);
@@ -324,6 +324,23 @@ namespace
             throw std::system_error(ret, std::generic_category(), errMessage);
     }
 
+#ifdef BLKSNAP_MODIFICATION
+
+    void AppendStorage(const int blksnapFd,
+                       const Uuid& id,
+                       const std::string& bdevPath,
+                       const std::vector<struct blksnap_sectors>& ranges)
+    {
+        struct blksnap_snapshot_append_storage param;
+
+        memcpy(param.id.b, id.Get(), sizeof(struct blksnap_uuid));
+        param.devpath = (__u64)bdevPath.c_str();
+        param.count = static_cast<unsigned int>(ranges.size());
+        param.ranges = (__u64)ranges.data();
+        if (::ioctl(blksnapFd, IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
+            throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object");
+    }
+#endif
 } // namespace
 
 class IArgsProc
@@ -660,38 +677,64 @@ public:
     };
 };
 
+/*
+ * There are same possible ways to create a snapshot.
+ * 1. "File common snapshot" - the difference storage is a file or a block
+ *  device. In this case, the file has already been created and is passed by the
+ *  "file" parameter. The "limit" parameter is not required, or it contains the
+ *  size of a file or a block device.
+ * 2. "File stretch snapshot" - the difference storage is a file whose size has
+ *  not yet been determined. The file will increase in size as needed. In this
+ *  case, the "limit" parameter must contain the allowed size of the difference
+ *  storage. If the "file" parameter is the path to the directory, then the
+ *  kernel module will create a temporary file in this directory, which will not
+ *  be displayed on the file system and will be deleted automatically when the
+ *  snapshot is released.
+ * 3. "Сommon snapshot" - modification of the "File common snapshot" mode, but
+ *  the kernel module receives not the path to the file, but the path to the
+ *  block device and the range of sectors on which this file is located.
+ *  Available for the BLKSNAP_MODIFICATION configuration.
+ *  The "diff_storage" parameter must be the path to a file on a file system
+ *  that supports FS_IOC_FIEMAP. The "limit" parameter is not required.
+ * 4. "Stretch snapshot" - modification of the "File stretch snapshot" mode, but
+ *  the kernel module receives not the path to the file, but the path to the
+ *  block device and the range of sectors on which this file is located.
+ *  Available for the BLKSNAP_MODIFICATION configuration.
+ *  The "file" and "diff_storage" parameters do not need to be specified, but
+ *  the "limit" parameter is required. In this case, after creating the
+ *  snapshot, the module will generate a request to expand the difference
+ *  storage.
+ */
 class SnapshotCreateArgsProc : public IArgsProc
 {
 public:
     SnapshotCreateArgsProc()
         : IArgsProc()
     {
-        m_usage = std::string("Create snapshot.");
+        m_usage = std::string("Create snapshot.\n ");
         m_desc.add_options()
             ("device,d", po::value<std::vector<std::string>>()->multitoken(), "Device name for snapshot. It's multitoken argument.")
-            ("file,s", po::value<std::string>(), "File or directory or block device name for difference storage.")
+            ("file,s", po::value<std::string>(), "File or directory or block device name for difference storage. Optional.")
 #ifdef BLKSNAP_MODIFICATION
-            ("diff_storage,s", po::value<std::string>(), "File or directory or block device name for difference storage and use an additional system call IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE.")
+            ("diff_storage,s", po::value<std::string>(), "File name for common difference storage and use an additional system call IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE. Optional.")
 #endif
-            ("limit,l", po::value<std::string>(), "The allowable limit for the size of the difference storage file. The suffixes M, K and G is allowed.");
+            ("limit,l", po::value<std::string>(), "The allowable limit for the size of the difference storage file. The suffixes M, K and G is allowed. Optional.");
     };
 
     void Execute(po::variables_map& vm) override
     {
         Uuid id;
+        CBlksnapFileWrap blksnapFd;
 
         std::string file;
 #ifdef BLKSNAP_MODIFICATION
         std::string diffStorage;
         if (vm.count("diff_storage"))
             diffStorage = vm["diff_storage"].as<std::string>();
-        else if (vm.count("file"))
-            file = vm["file"].as<std::string>();
-#else
-        if (!vm.count("file"))
-            throw std::invalid_argument("Argument 'file' is missed.");
-        file = vm["file"].as<std::string>();
+        else
 #endif
+        if (vm.count("file"))
+            file = vm["file"].as<std::string>();
 
         off_t limit = 0;
         if (vm.count("limit")) {
@@ -709,12 +752,13 @@ public:
                 default:
                     limit = std::stoll(limit_str.c_str()) * multiple;
             }
+            std::cerr << "Set limit " << limit << std::endl;
         }
+
 #ifdef BLKSNAP_MODIFICATION
         if (!diffStorage.empty())
         {
-            std::string bdevPath;
-            std::vector<struct blksnap_sectors> ranges;
+            std::cerr << "Selected difference storage " << diffStorage << std::endl;
 
             struct stat64 st;
             if (::stat64(diffStorage.c_str(), &st))
@@ -722,56 +766,127 @@ public:
 
             if (S_ISREG(st.st_mode))
             {// common snapshot mode
+                std::cerr << "Select common snapshot mode" << std::endl;
+
+                std::string bdevPath;
+                std::vector<struct blksnap_sectors> ranges;
+
                 if (limit == 0)
                     limit = st.st_size;
+
+                fiemapStorage(diffStorage, bdevPath, ranges);
+
+                struct blksnap_snapshot_create param = {0};
+                param.diff_storage_limit_sect = limit / 512;
+                param.diff_storage_filename = 0;
+                if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
+                    throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
+
+                id = Uuid(param.id.b);
+                std::cout << id.ToString() << std::endl;
+                std::cerr << id.ToString() << std::endl;
+
+                AppendStorage(blksnapFd.get(), id, bdevPath, ranges);
             }
             else if (S_ISDIR(st.st_mode))
-            {//stretch snapshot mode
-                off_t portionSize = 1024*1024*1024;
-                if (limit)
-                    portionSize = std::min(portionSize, limit);
+            {// stretch snapshot mode
+                std::cerr << "Select stretch snapshot mode" << std::endl;
 
-                diffStorage = diffStorage+"/diff_storage#0";
-                AllocateFile(diffStorage, portionSize);
+                if (limit == 0)
+                    throw std::invalid_argument("Argument 'limit' should be set for stretch snapshot.");
+
+                struct blksnap_snapshot_create param = {0};
+                param.diff_storage_limit_sect = limit / 512;
+                param.diff_storage_filename = 0;
+                if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
+                    throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object");
+
+                id = Uuid(param.id.b);
+                std::cout << id.ToString() << std::endl;
+                std::cerr << id.ToString() << std::endl;
+
+                //check events and try to create first portion
+                try
+                {
+                    struct blksnap_snapshot_event param;
+                    uuid_copy(param.id.b, id.Get());
+
+                    while (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT, &param))
+                    {
+                        int err = errno;
+
+                        if ((err == ENOENT) || (err == EINTR))
+                            continue;
+
+                        throw std::system_error(err, std::generic_category(), "Failed to get event from snapshot");
+                    }
+
+                    switch (param.code)
+                    {
+                    case blksnap_event_code_corrupted:
+                        {
+                            struct blksnap_event_corrupted* data = (struct blksnap_event_corrupted*)param.data;
+
+                            throw std::system_error(data->err_code, std::generic_category(),
+                                "The snapshot was corrupted for device [" +
+                                std::to_string(data->dev_id_mj) + ":" + std::to_string(data->dev_id_mn) + "]");
+                        }
+                    case blksnap_event_code_low_free_space:
+                        {
+                            struct blksnap_event_low_free_space* data = (struct blksnap_event_low_free_space*)param.data;
+
+                            std::string filepath = diffStorage+"/diff_storage#"+std::to_string(0);
+                            off_t filesize = data->requested_nr_sect * 512;
+                            AllocateFile(filepath, filesize);
+
+                            std::string bdevPath;
+                            std::vector<struct blksnap_sectors> ranges;
+                            fiemapStorage(filepath, bdevPath, ranges);
+
+                            AppendStorage(blksnapFd.get(), id, bdevPath, ranges);
+                        }
+                        break;
+                    default:
+                        std::cerr << param.time_label << " - unsupported event #" << param.code << "." << std::endl;
+                    }
+                }
+                catch (std::exception& ex)
+                {
+                    struct blksnap_uuid param;
+                    uuid_copy(param.b, id.Get());
+                    if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_DESTROY, &param))
+                        std::cerr << " Failed to destroy snapshot: " << std::strerror(errno) << std::endl;
+
+                    throw;
+                }
             }
-            fiemapStorage(diffStorage, bdevPath, ranges);
-
-            CBlksnapFileWrap blksnapFd;
-
-            struct blksnap_snapshot_create param = {0};
-            param.diff_storage_limit_sect = limit / 512;
-            param.diff_storage_filename = 0;
-            if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
-                throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
-
-            id = Uuid(param.id.b);
-            std::cout << id.ToString() << std::endl;
-
-            struct blksnap_snapshot_append_storage param2;
-            memcpy(param2.id.b, id.Get(), sizeof(struct blksnap_uuid));
-            param2.devpath = (__u64)bdevPath.c_str();
-            param2.count = static_cast<unsigned int>(ranges.size());
-            param2.ranges = (__u64)ranges.data();
-            if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param2))
-                throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
+            else
+                throw std::system_error(errno, std::generic_category(),
+                    "The 'diff_storage' parameter should be the directory or file");
         }
         else
 #endif
+        if (!file.empty())
         {
             if (limit == 0)
-                throw std::invalid_argument("Argument 'limit' is missed.");
+            {
+                struct stat64 st;
+                if (::stat64(file.c_str(), &st))
+                    throw std::system_error(errno, std::generic_category(), "Failed to get file size");
 
-            CBlksnapFileWrap blksnapFd;
+                limit = st.st_size;
+            }
 
             struct blksnap_snapshot_create param = {0};
             param.diff_storage_limit_sect = limit / 512;
             param.diff_storage_filename = (__u64)file.c_str();
             if (::ioctl(blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_CREATE, &param))
-                throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
+                throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object");
 
             id = Uuid(param.id.b);
             std::cout << id.ToString() << std::endl;
-        }
+        } else
+            throw std::invalid_argument("Argument 'file' is missed.");
 
         if (vm.count("device"))
         {
@@ -980,7 +1095,7 @@ private:
 #ifdef BLKSNAP_MODIFICATION
     void ProcessEventLowFreeSpace(unsigned int time_label, struct blksnap_event_low_free_space* data)
     {
-        std::cout << time_label << " - The snapshot requests additional ["<< data->requested_nr_sect << "] bytes for difference storage space." << std::endl;
+        std::cout << time_label << " - The snapshot requests additional ["<< data->requested_nr_sect << "] sectors for difference storage space." << std::endl;
 
         std::string filepath = m_diffStorage+"/diff_storage#"+std::to_string(++m_diffStorageCnt);
         off_t filesize = data->requested_nr_sect * 512;
@@ -990,13 +1105,7 @@ private:
         std::vector<struct blksnap_sectors> ranges;
         fiemapStorage(filepath, bdevPath, ranges);
 
-        struct blksnap_snapshot_append_storage param;
-        memcpy(param.id.b, m_id.Get(), sizeof(struct blksnap_uuid));
-        param.devpath = (__u64)bdevPath.c_str();
-        param.count = static_cast<unsigned int>(ranges.size());
-        param.ranges = (__u64)ranges.data();
-        if (::ioctl(m_blksnapFd.get(), IOCTL_BLKSNAP_SNAPSHOT_APPEND_STORAGE, &param))
-            throw std::system_error(errno, std::generic_category(), "Failed to create snapshot object.");
+        AppendStorage(m_blksnapFd.get(), m_id, bdevPath, ranges);
     };
 #endif
 
@@ -1023,12 +1132,13 @@ public:
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
 
+        std::cout << "Start snapshot watcher for snapshot '" << vm["id"].as<std::string>() << "'." << std::endl;
         m_id.FromString(vm["id"].as<std::string>());
 
-        std::cout << "Start snapshot watcher." << std::endl;
+        std::cout << "Start snapshot watcher for snapshot '" << m_id.ToString() << "'." << std::endl;
 #ifdef BLKSNAP_MODIFICATION
-        if (vm.count("diff_store")) {
-            m_diffStorage = vm["diff_store"].as<std::string>();
+        if (vm.count("diff_storage")) {
+            m_diffStorage = vm["diff_storage"].as<std::string>();
             std::cout << "Difference storage located in ["<< m_diffStorage << "]." << std::endl;
         }
 #endif
@@ -1067,19 +1177,10 @@ public:
                 }
             }
         }
-        catch (std::system_error& ex)
-        {
-            if (ex.code() == std::error_code(ESRCH, std::generic_category()))
-                std::cout << "The snapshot no longer exists." << std::endl;
-            else {
-                std::cerr << ex.what() << std::endl;
-                throw std::runtime_error("Snapshot watcher failed.");
-            }
-        }
         catch (std::exception& ex)
         {
             std::cerr << ex.what() << std::endl;
-            throw std::runtime_error("Snapshot watcher failed.");
+            throw std::runtime_error("Snapshot watcher failed: " + std::string(ex.what()));
         }
         std::cout << "Snapshot watcher finished." << std::endl;
     };
