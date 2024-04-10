@@ -342,7 +342,7 @@ static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
 		goto out;
 	}
 
-	pr_debug("Received event=%lld code=%d data_size=%d\n", ev->time,
+	pr_debug("Sent event: time=%lld code=%d data_size=%d\n", ev->time,
 		 ev->code, ev->data_size);
 	karg->code = ev->code;
 	karg->time_label = ev->time;
@@ -452,6 +452,8 @@ static int ioctl_snapshot_append_storage(
 	if (IS_ERR(devpath))
 		return PTR_ERR(devpath);
 
+	pr_debug("Append difference storage on device '%s' with %d ranges\n",
+		devpath, karg.count);
 	ret = snapshot_append_storage((uuid_t *)karg.id.b, devpath,
 	       (size_t)karg.count, (struct blksnap_sectors* __user)karg.ranges);
 

@@ -592,9 +592,13 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 	{
 		struct diff_storage *diff_storage = snapshot->diff_storage;
 
-		if (atomic_read(&diff_storage->low_space_flag) &&
-		    (diff_storage->capacity >= diff_storage->requested))
-			atomic_set(&diff_storage->low_space_flag, 0);
+		if (atomic_read(&diff_storage->low_space_flag)) {
+			if (diff_storage->capacity >= diff_storage->requested) {
+				atomic_set(&diff_storage->low_space_flag, 0);
+				pr_debug("Skip low_space_flag\n");
+			}
+		}
+
 	}
 
 out_snapshot_put:

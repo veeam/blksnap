@@ -43,10 +43,10 @@ struct diff_storage_range {
 	sector_t cnt;
 };
 
-static inline void diff_storage_event_low(struct diff_storage *diff_storage)
+static inline void diff_storage_event_low(struct diff_storage *diff_storage, sector_t req_sect)
 {
 	struct blksnap_event_low_free_space data = {
-		.requested_nr_sect = get_diff_storage_minimum(),
+		.requested_nr_sect = req_sect,
 	};
 
 	diff_storage->requested += data.requested_nr_sect;
@@ -83,8 +83,10 @@ static void diff_storage_reallocate_work(struct work_struct *work)
 		spin_lock(&diff_storage->lock);
 		diff_storage->capacity = req_sect;
 		complete = (diff_storage->capacity >= diff_storage->requested);
-		if (complete)
+		if (complete) {
 			atomic_set(&diff_storage->low_space_flag, 0);
+			pr_debug("Skip low_space_flag\n");
+		}
 		spin_unlock(&diff_storage->lock);
 
 		pr_debug("Diff storage reallocate. Capacity: %llu sectors\n",
@@ -92,15 +94,15 @@ static void diff_storage_reallocate_work(struct work_struct *work)
 	} while (!complete);
 }
 
-static bool diff_storage_calculate_requested(struct diff_storage *diff_storage)
+static sector_t diff_storage_calculate_requested(struct diff_storage *diff_storage)
 {
-	bool ret = false;
+	sector_t req_sect = 0;
 
 	spin_lock(&diff_storage->lock);
 	if (diff_storage->capacity < diff_storage->limit) {
-		diff_storage->requested += min(get_diff_storage_minimum(),
+		req_sect = min(get_diff_storage_minimum(),
 				diff_storage->limit - diff_storage->capacity);
-		ret = true;
+		diff_storage->requested += req_sect;
 	}
 	pr_debug("The size of the difference storage was %llu MiB\n",
 		 diff_storage->capacity >> (20 - SECTOR_SHIFT));
@@ -108,7 +110,7 @@ static bool diff_storage_calculate_requested(struct diff_storage *diff_storage)
 		 diff_storage->limit >> (20 - SECTOR_SHIFT));
 	spin_unlock(&diff_storage->lock);
 
-	return ret;
+	return req_sect;
 }
 
 static inline bool is_halffull(const sector_t sectors_left)
@@ -119,11 +121,19 @@ static inline bool is_halffull(const sector_t sectors_left)
 static inline void check_halffull(struct diff_storage *diff_storage,
 				  const sector_t sectors_left)
 {
+	sector_t req_sect;
+
 	if (is_halffull(sectors_left) &&
 	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
+	    	pr_debug("Set low_space_flag\n");
+
 #ifdef BLKSNAP_MODIFICATION
 		if (!diff_storage->bdev && !diff_storage->file) {
-			diff_storage_event_low(diff_storage);
+			req_sect = diff_storage_calculate_requested(diff_storage);
+			if (req_sect)
+				diff_storage_event_low(diff_storage, req_sect);
+			else
+				pr_info("The limit size of the difference storage has been reached\n");
 			return;
 		}
 #endif
@@ -342,11 +352,16 @@ int diff_storage_set(struct diff_storage *diff_storage, const char *filename,
 
 #if defined(BLKSNAP_MODIFICATION)
 	if (!filename) {
- 		diff_storage->dev_id = 0;
-		diff_storage->capacity = 0;
-		diff_storage->file = NULL;
-		diff_storage->requested = min(get_diff_storage_minimum(), limit);
 		diff_storage->limit = limit;
+
+	    	atomic_inc(&diff_storage->low_space_flag);
+	    	pr_debug("Set low_space_flag\n");
+
+	    	req_sect = diff_storage_calculate_requested(diff_storage);
+		if (req_sect)
+			diff_storage_event_low(diff_storage, req_sect);
+		else
+			pr_info("The limit size of the difference storage has been reached\n");
 		return 0;
 	}
 #endif
@@ -417,7 +432,8 @@ int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 			sector_t *psector)
 
 {
-	sector_t sectors_left;
+	int ret = 0;
+	sector_t sectors_left = 0;
 
 	if (atomic_read(&diff_storage->overflow_flag))
 		return -ENOSPC;
@@ -425,8 +441,8 @@ int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 	spin_lock(&diff_storage->lock);
 	if ((diff_storage->filled + count) > diff_storage->requested) {
 		atomic_inc(&diff_storage->overflow_flag);
-		spin_unlock(&diff_storage->lock);
-		return -ENOSPC;
+		ret = -ENOSPC;
+		goto out_spin_unlock;
 	}
 
 	*pbdev = diff_storage->bdev;
@@ -434,23 +450,19 @@ int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 	*psector = diff_storage->filled;
 #ifdef BLKSNAP_MODIFICATION
 	if (!*pbdev && ! *pfile) {
-		int ret = diff_storage_get_range(diff_storage, count,
-						 pbdev, psector);
-
-		if (ret) {
-			spin_unlock(&diff_storage->lock);
-			return ret;
-		}
+		ret = diff_storage_get_range(diff_storage, count, pbdev, psector);
+		if (ret)
+			goto out_spin_unlock;
 	}
 #endif
 
 	diff_storage->filled += count;
 	sectors_left = diff_storage->requested - diff_storage->filled;
-
+out_spin_unlock:
 	spin_unlock(&diff_storage->lock);
-
-	check_halffull(diff_storage, sectors_left);
-	return 0;
+	if (!ret)
+		check_halffull(diff_storage, sectors_left);
+	return ret;
 }
 
 #ifdef BLKSNAP_MODIFICATION
