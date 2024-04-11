@@ -752,22 +752,17 @@ public:
                 default:
                     limit = std::stoll(limit_str.c_str()) * multiple;
             }
-            std::cerr << "Set limit " << limit << std::endl;
         }
 
 #ifdef BLKSNAP_MODIFICATION
         if (!diffStorage.empty())
-        {
-            std::cerr << "Selected difference storage " << diffStorage << std::endl;
-
+        {// Selected difference storage
             struct stat64 st;
             if (::stat64(diffStorage.c_str(), &st))
                 throw std::system_error(errno, std::generic_category(), "Failed to get file size.");
 
             if (S_ISREG(st.st_mode))
             {// common snapshot mode
-                std::cerr << "Select common snapshot mode" << std::endl;
-
                 std::string bdevPath;
                 std::vector<struct blksnap_sectors> ranges;
 
@@ -784,14 +779,11 @@ public:
 
                 id = Uuid(param.id.b);
                 std::cout << id.ToString() << std::endl;
-                std::cerr << id.ToString() << std::endl;
 
                 AppendStorage(blksnapFd.get(), id, bdevPath, ranges);
             }
             else if (S_ISDIR(st.st_mode))
             {// stretch snapshot mode
-                std::cerr << "Select stretch snapshot mode" << std::endl;
-
                 if (limit == 0)
                     throw std::invalid_argument("Argument 'limit' should be set for stretch snapshot.");
 
@@ -803,7 +795,6 @@ public:
 
                 id = Uuid(param.id.b);
                 std::cout << id.ToString() << std::endl;
-                std::cerr << id.ToString() << std::endl;
 
                 //check events and try to create first portion
                 try
@@ -1131,11 +1122,8 @@ public:
 
         if (!vm.count("id"))
             throw std::invalid_argument("Argument 'id' is missed.");
-
-        std::cout << "Start snapshot watcher for snapshot '" << vm["id"].as<std::string>() << "'." << std::endl;
         m_id.FromString(vm["id"].as<std::string>());
 
-        std::cout << "Start snapshot watcher for snapshot '" << m_id.ToString() << "'." << std::endl;
 #ifdef BLKSNAP_MODIFICATION
         if (vm.count("diff_storage")) {
             m_diffStorage = vm["diff_storage"].as<std::string>();
