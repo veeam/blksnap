@@ -29,6 +29,8 @@ rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
+echo "remove files: "$(ls ${DIFF_STORAGE_DIR}/diff_storage*)
+rm -rf ${DIFF_STORAGE_DIR}/diff_storage*
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
