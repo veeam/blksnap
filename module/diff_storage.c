@@ -99,12 +99,14 @@ static sector_t diff_storage_calculate_requested(struct diff_storage *diff_stora
 	sector_t req_sect = 0;
 
 	spin_lock(&diff_storage->lock);
-	if (diff_storage->capacity < diff_storage->limit) {
+	if (diff_storage->requested < diff_storage->limit) {
 		req_sect = min(get_diff_storage_minimum(),
-				diff_storage->limit - diff_storage->capacity);
+				diff_storage->limit - diff_storage->requested);
 	}
 	pr_debug("The size of the difference storage was %llu MiB\n",
 		 diff_storage->capacity >> (20 - SECTOR_SHIFT));
+	pr_debug("The size already requested is %llu MiB\n",
+		 diff_storage->requested >> (20 - SECTOR_SHIFT));
 	pr_debug("The limit is %llu MiB\n",
 		 diff_storage->limit >> (20 - SECTOR_SHIFT));
 	spin_unlock(&diff_storage->lock);
