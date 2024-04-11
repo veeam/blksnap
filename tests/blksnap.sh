@@ -130,6 +130,7 @@ blksnap_snapshot_watcher()
 {
 	${BLKSNAP} snapshot_watcher --id=${ID} &
 	STRETCH_PROCESS_PID=$!
+	sleep 1s
 }
 blksnap_watcher_wait()
 {

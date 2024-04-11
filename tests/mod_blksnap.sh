@@ -139,8 +139,9 @@ blksnap_snapshot_watcher()
 	then
 		PARAM="${PARAM} --diff_storage ${STRETCH_DIFF_STORAGE} "
 	fi
-	${BLKSNAP} snapshot_watcher "${PARAM}" &
+	${BLKSNAP} snapshot_watcher ${PARAM} &
 	STRETCH_PROCESS_PID=$!
+	sleep 1s
 }
 blksnap_watcher_wait()
 {
