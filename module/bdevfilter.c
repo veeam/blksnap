@@ -513,10 +513,11 @@ static inline bool bdev_filters_apply(struct bio *bio)
 /**
  * submit_bio_noacct_notrace() - Execute submit_bio_noacct() without handling.
  */
+notrace __attribute__((optimize("no-optimize-sibling-calls")))
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-notrace blk_qc_t submit_bio_noacct_notrace(struct bio *bio)
+blk_qc_t submit_bio_noacct_notrace(struct bio *bio)
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-notrace void submit_bio_noacct_notrace(struct bio *bio)
+void submit_bio_noacct_notrace(struct bio *bio)
 #else
 #error "Your kernel is too old for this module."
 #endif
