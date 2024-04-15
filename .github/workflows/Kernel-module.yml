@@ -12,6 +12,9 @@ on:
       - "*"
     paths:
       - "module/**"
+  # Run every week
+  schedule:
+    - cron: '0 23 1 * *'
 
 jobs:
   build-on-image:
