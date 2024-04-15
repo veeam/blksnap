@@ -40,17 +40,27 @@ namespace blksnap
         int errorCode;
     };
 
+    struct SBlksnapEventLowFreeSpace
+    {
+        unsigned long long requestedSectors;
+    };
+
     struct SBlksnapEvent
     {
         unsigned int code;
         long long time;
-        SBlksnapEventCorrupted corrupted;
+        union
+        {
+            struct SBlksnapEventCorrupted corrupted;
+            struct SBlksnapEventLowFreeSpace lowFreeSpace;
+        };
     };
 
     class CSnapshot
     {
     public:
         static std::shared_ptr<CSnapshot> Create(const std::string& filePath, const unsigned long long limit);
+        static std::shared_ptr<CSnapshot> Create(const unsigned long long limit);
         static std::shared_ptr<CSnapshot> Open(const CSnapshotId& id);
 
     public:
@@ -59,9 +69,8 @@ namespace blksnap
         void Take();
         void Destroy();
         bool WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev);
-#ifdef BLKSNAP_MODIFICATION
         void AppendStorage(const std::string& devPath, struct blksnap_sectors* blockRanges, size_t blockCount);
-#endif
+
         const CSnapshotId& Id() const
         {
             return m_id;

@@ -52,9 +52,9 @@ void CService::Version(unsigned short& major, unsigned short& minor, unsigned sh
     build = version.build;
 }
 
-#ifdef BLKSNAP_MODIFICATION
 bool CService::GetModification(unsigned long long& flags, std::string& name)
 {
+#ifdef BLKSNAP_MODIFICATION
     struct blksnap_mod mod = { 0 };
 
     if (::ioctl(m_ctl.Get(), IOCTL_BLKSNAP_MOD, &mod))
@@ -63,10 +63,14 @@ bool CService::GetModification(unsigned long long& flags, std::string& name)
     flags = mod.compatibility_flags;
     name = std::string((char*)(mod.name));
     return true;
+#else
+    throw std::runtime_error("GetModification() is not available in current configuration");
+#endif
 }
 
 bool CService::SetLog(const int tz_minuteswest, const int level, const std::string& filepath)
 {
+#ifdef BLKSNAP_MODIFICATION
     struct blksnap_setlog param = { 0 };
 
     param.tz_minuteswest = tz_minuteswest;
@@ -85,8 +89,10 @@ bool CService::SetLog(const int tz_minuteswest, const int level, const std::stri
 
     throw std::system_error(errno, std::generic_category(),
         "Failed to set log");
-}
+#else
+    throw std::runtime_error("SetLog() is not available in current configuration");
 #endif
+}
 
 void CService::Collect(std::vector<CSnapshotId>& ids)
 {
