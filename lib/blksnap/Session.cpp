@@ -129,7 +129,7 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
 
     // Add devices to snapshot
     for (const auto& name : devices)
-        CTracker(name).SnapshotAdd(m_ptrSnapshot->Id());
+        CTracker(name).SnapshotAdd(m_ptrSnapshot->Id().Get());
 
     // Prepare state structure for thread
     m_ptrState = std::make_shared<SState>();

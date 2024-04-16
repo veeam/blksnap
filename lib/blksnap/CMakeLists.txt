@@ -31,6 +31,7 @@ if (NOT LIBUUID_LIBRARY)
 endif ()
 
 set(SOURCE_FILES
+    OpenFileHolder.cpp
     Snapshot.cpp
     Tracker.cpp
     Cbt.cpp

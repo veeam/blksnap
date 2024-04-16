@@ -25,12 +25,9 @@
 
 #include <memory>
 #include <string>
-#include <uuid/uuid.h>
-#include <cstring>
-#include <vector>
-
 #include "Sector.h"
-#include <linux/fs.h>
+#include "SnapshotId.h"
+#include "OpenFileHolder.h"
 #include <linux/blksnap.h>
 
 namespace blksnap
@@ -49,62 +46,9 @@ namespace blksnap
         SBlksnapEventCorrupted corrupted;
     };
 
-    class CSnapshotId
-    {
-    public:
-        CSnapshotId()
-        {
-            uuid_clear(m_id);
-        };
-        CSnapshotId(const uuid_t& id)
-        {
-            uuid_copy(m_id, id);
-        };
-        CSnapshotId(const __u8 buf[16])
-        {
-            memcpy(m_id, buf, sizeof(uuid_t));
-        };
-        CSnapshotId(const std::string& idStr)
-        {
-            uuid_parse(idStr.c_str(), m_id);
-        };
-
-        void FromString(const std::string& idStr)
-        {
-            uuid_parse(idStr.c_str(), m_id);
-        };
-        const uuid_t& Get() const
-        {
-            return m_id;
-        };
-        std::string ToString() const
-        {
-            char idStr[64];
-
-            uuid_unparse(m_id, idStr);
-
-            return std::string(idStr);
-        };
-    private:
-        uuid_t m_id;
-    };
-
-    class OpenFileHolder
-    {
-    public:
-        OpenFileHolder(const std::string& filename, int flags, int mode = 0);
-        ~OpenFileHolder();
-        int Get();
-
-    private:
-        int m_fd;
-    };
-
     class CSnapshot
     {
     public:
-        static void Collect(std::vector<CSnapshotId>& ids);
-        static void Version(struct blksnap_version& version);
         static std::shared_ptr<CSnapshot> Create(const std::string& filePath, const unsigned long long limit);
         static std::shared_ptr<CSnapshot> Open(const CSnapshotId& id);
 
@@ -115,15 +59,14 @@ namespace blksnap
         void Destroy();
         bool WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev);
 
-        const uuid_t& Id() const
+        const CSnapshotId& Id() const
         {
-            return m_id.Get();
+            return m_id;
         }
     private:
-        CSnapshot(const CSnapshotId& id, const std::shared_ptr<OpenFileHolder>& ctl);
+        CSnapshot(const CSnapshotId& id, const std::shared_ptr<COpenFileHolder>& ctl);
 
         CSnapshotId m_id;
-        std::shared_ptr<OpenFileHolder> m_ctl;
+        std::shared_ptr<COpenFileHolder> m_ctl;
     };
-
 }

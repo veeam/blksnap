@@ -220,6 +220,17 @@ void LogCurruptedSectors(const std::string& image, const std::vector<SRange>& ra
     }
 }
 
+static inline std::string GetBlksnapVersion()
+{
+    unsigned short major, minor, revision, build;
+
+    blksnap::CService().Version(major, minor, revision, build);
+    return std::to_string(major) + "." +
+           std::to_string(minor) + "." +
+           std::to_string(revision) + "." +
+           std::to_string(build);
+}
+
 void SimpleCorruption(const std::string& origDevName,
                       const std::string& diffStorage,
                       const unsigned long long diffStorageLimit,
@@ -229,7 +240,7 @@ void SimpleCorruption(const std::string& origDevName,
     std::vector<SCorruptInfo> corrupts;
 
     logger.Info("--- Test: check corruption ---");
-    logger.Info("version: " + blksnap::Version());
+    logger.Info("version: " + GetBlksnapVersion());
     logger.Info("device: " + origDevName);
     logger.Info("diffStorage: " + diffStorage);
     logger.Info("diffStorageLimit: " + std::to_string(diffStorageLimit) + " MiB");
@@ -348,7 +359,7 @@ void CheckCorruption(const std::string& origDevName,
     std::shared_ptr<blksnap::SCbtInfo> ptrCbtInfoPrevious;
 
     logger.Info("--- Test: check corruption ---");
-    logger.Info("version: " + blksnap::Version());
+    logger.Info("version: " + GetBlksnapVersion());
     logger.Info("device: " + origDevName);
     logger.Info("diffStorage: " + diffStorage);
     logger.Info("diffStorageLimit: " + std::to_string(diffStorageLimit) + " MiB");
@@ -593,7 +604,7 @@ void MultithreadCheckCorruption(const std::vector<std::string>& origDevNames, co
     std::map<std::string, std::shared_ptr<blksnap::SCbtInfo>> previousCbtInfoMap;
 
     logger.Info("--- Test: multithread check corruption ---");
-    logger.Info("version: " + blksnap::Version());
+    logger.Info("version: " + GetBlksnapVersion());
     {
         std::string mess("devices:");
         for (const std::string& origDevName : origDevNames)
