@@ -586,7 +586,7 @@ struct tracker *tracker_create_or_get(dev_t dev_id, const uuid_t* owner_id)
 	}
 put_bdev:
 #if defined(HAVE_BDEV_FILE_OPEN)
-	fput(bdev);
+	bdev_fput(bdev);
 #elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
@@ -690,7 +690,7 @@ put_tracker:
 	tracker_put(tracker);
 put_bdev:
 #if defined(HAVE_BDEV_FILE_OPEN)
-	fput(bdev);
+	bdev_fput(bdev);
 #elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
@@ -763,7 +763,7 @@ int tracker_read_cbt_bitmap(dev_t dev_id, unsigned int offset, size_t length,
 	tracker_put(tracker);
 put_bdev:
 #if defined(HAVE_BDEV_FILE_OPEN)
-	fput(bdev);
+	bdev_fput(bdev);
 #elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
@@ -823,7 +823,7 @@ put_tracker:
 	tracker_put(tracker);
 put_bdev:
 #if defined(HAVE_BDEV_FILE_OPEN)
-	fput(bdev);
+	bdev_fput(bdev);
 #elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
@@ -937,7 +937,7 @@ int tracker_mark_dirty_blocks(dev_t dev_id,
 	tracker_put(tracker);
 put_bdev:
 #if defined(HAVE_BDEV_FILE_OPEN)
-	fput(bdev);
+	bdev_fput(bdev);
 #elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)

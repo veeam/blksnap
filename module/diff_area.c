@@ -127,7 +127,7 @@ void diff_area_free(struct kref *kref)
 
 	if (diff_area->orig_bdev) {
 #if defined(HAVE_BDEV_FILE_OPEN)
-		fput(diff_area->orig_bdev_file);
+		bdev_fput(diff_area->orig_bdev_file);
 #elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(diff_area->orig_bdev_handler);
 		diff_area->orig_bdev_handler = NULL;
@@ -328,7 +328,7 @@ struct diff_area *diff_area_new(dev_t dev_id, struct diff_storage *diff_storage)
 	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
 	if (!diff_area) {
 #if defined(HAVE_BDEV_FILE_OPEN)
-		fput(bdev);
+		bdev_fput(bdev);
 #elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)

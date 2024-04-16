@@ -125,7 +125,7 @@ void diff_storage_free(struct kref *kref)
 
 	while ((storage_bdev = first_storage_bdev(diff_storage))) {
 #if defined(HAVE_BDEV_FILE_OPEN)
-		fput(storage_bdev->bdev_file);
+		bdev_fput(storage_bdev->bdev_file);
 #elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(storage_bdev->bdev_handler);
 #elif defined(HAVE_BLK_HOLDER_OPS)
@@ -191,7 +191,7 @@ diff_storage_add_storage_bdev(struct diff_storage *diff_storage, dev_t dev_id)
 	storage_bdev = kzalloc(sizeof(struct storage_bdev), GFP_KERNEL);
 	if (!storage_bdev) {
 #if defined(HAVE_BDEV_FILE_OPEN)
-		fput(bdev);
+		bdev_fput(bdev);
 #elif defined(HAVE_BDEV_HANDLE)
 		bdev_release(bdev);
 #elif defined(HAVE_BLK_HOLDER_OPS)
