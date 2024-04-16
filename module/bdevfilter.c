@@ -80,7 +80,9 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	struct bdevfilter_operations *fops;
 	struct bdev_extension *ext_tmp, *ext_new;
 	struct blkfilter *flt;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handle;
 #endif
 	struct block_device *bdev;
@@ -94,7 +96,17 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	if (IS_ERR(devpath))
 		return PTR_ERR(devpath);
 	pr_debug("Attach '%s' to device '%s'\n", karg.name, devpath);
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev_file = bdev_file_open_by_path(devpath,
+					BLK_OPEN_READ | BLK_OPEN_WRITE,
+					NULL, NULL);
+	if (IS_ERR(bdev_file)) {
+		pr_err("Failed to open a block device '%s'\n", devpath);
+		ret = PTR_ERR(bdev_file);
+		goto out_free_devpath;
+	}
+	bdev = file_bdev(bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_handle = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
@@ -191,7 +203,9 @@ out_mutex_unlock:
 #endif
 	kfree(ext_new);
 out_blkdev_put:
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev_fput(bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev_handle);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
@@ -235,7 +249,9 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 {
 	char *devpath;
 	struct bdevfilter_name karg;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handle;
 #endif
 	struct block_device *bdev;
@@ -249,7 +265,18 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	if (IS_ERR(devpath))
 		return PTR_ERR(devpath);
 	pr_debug("Detach '%s' from device '%s'\n", karg.name, devpath);
-#if defined(HAVE_BDEV_HANDLE)
+
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev_file = bdev_file_open_by_path(devpath,
+					BLK_OPEN_READ | BLK_OPEN_WRITE,
+					NULL, NULL);
+	if (IS_ERR(bdev_file)) {
+		pr_err("Failed to open a block device '%s'\n", devpath);
+		ret = PTR_ERR(bdev_file);
+		goto out_free_devpath;
+	}
+	bdev = file_bdev(bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_handle = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
@@ -293,7 +320,9 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	mutex_unlock(&bdev->bd_mutex);
 #endif
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev_fput(bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev_handle);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);
@@ -309,7 +338,9 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 {
 	char *devpath;
 	struct bdevfilter_ctl karg;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handle;
 #endif
 	struct block_device *bdev;
@@ -325,7 +356,17 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 	if (IS_ERR(devpath))
 		return PTR_ERR(devpath);
 	pr_debug("Control '%s' to device '%s'\n", karg.name, devpath);
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev_file = bdev_file_open_by_path(devpath,
+					BLK_OPEN_READ | BLK_OPEN_WRITE,
+					NULL, NULL);
+	if (IS_ERR(bdev_file)) {
+		pr_err("Failed to open a block device '%s'\n", devpath);
+		ret = PTR_ERR(bdev_file);
+		goto out_free_devpath;
+	}
+	bdev = file_bdev(bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_handle = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
@@ -389,7 +430,9 @@ out_mutex_unlock:
 #else
 	mutex_unlock(&bdev->bd_mutex);
 #endif
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev_fput(bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_release(bdev_handle);
 #elif defined(HAVE_BLK_HOLDER_OPS)
 	blkdev_put(bdev, NULL);

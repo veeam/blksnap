@@ -29,7 +29,9 @@
 #ifdef BLKSNAP_MODIFICATION
 
 struct diff_storage_bdev {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handle;
 #else
 	struct block_device *bdev;
@@ -186,7 +188,10 @@ void diff_storage_free(struct kref *kref)
 	diff_storage = container_of(kref, struct diff_storage, kref);
 	flush_work(&diff_storage->reallocate_work);
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	if (diff_storage->bdev_file)
+		bdev_fput(diff_storage->bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	if (diff_storage->bdev_handle)
 		bdev_release(diff_storage->bdev_handle);
 #elif defined(HAVE_BLK_HOLDER_OPS)
@@ -240,7 +245,25 @@ void diff_storage_free(struct kref *kref)
 static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,
 					const char *devpath)
 {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+	struct block_device *bdev;
+
+	bdev_file = bdev_file_open_by_path(devpath,
+				BLK_OPEN_EXCL | BLK_OPEN_READ | BLK_OPEN_WRITE,
+				diff_storage, NULL);
+	if (IS_ERR(bdev_file)) {
+		pr_err("Failed to open a block device '%s'\n", devpath);
+		return PTR_ERR(bdev_file);
+	}
+	bdev = file_bdev(bdev_file);
+
+	pr_debug("A block device is selected for difference storage\n");
+	diff_storage->bdev_file = bdev_file;
+	diff_storage->dev_id = bdev->bd_dev;
+	diff_storage->capacity = bdev_nr_sectors(bdev);
+	diff_storage->bdev = bdev;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handle;
 
 	bdev_handle = bdev_open_by_path(devpath,
@@ -468,7 +491,12 @@ out_spin_unlock:
 
 #ifdef BLKSNAP_MODIFICATION
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+int diff_storage_add_bdev(struct diff_storage *diff_storage,
+			   struct file *bdev_file)
+{
+	dev_t dev_id = file_bdev(bdev_file)->bd_dev;
+#elif defined(HAVE_BDEV_HANDLE)
 int diff_storage_add_bdev(struct diff_storage *diff_storage,
 			   struct bdev_handle *bdev_handle)
 {
@@ -495,7 +523,9 @@ int diff_storage_add_bdev(struct diff_storage *diff_storage,
 	if (!diff_storage_bdev)
 		return -ENOMEM;
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	diff_storage_bdev->bdev_file = bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	diff_storage_bdev->bdev_handle = bdev_handle;
 #else
 	diff_storage_bdev->bdev = bdev;
@@ -577,7 +607,9 @@ int diff_storage_get_range(struct diff_storage *diff_storage, sector_t count,
 		return -EFAULT;
 	}
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	*pbdev = file_bdev(diff_storage_bdev->bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	*pbdev = diff_storage_bdev->bdev_handle->bdev;
 #else
 	*pbdev = diff_storage_bdev->bdev;

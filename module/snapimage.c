@@ -138,7 +138,11 @@ int snapimage_create(struct tracker *tracker)
 		MAJOR(dev_id), MINOR(dev_id));
 
 #ifdef HAVE_BLK_ALLOC_DISK
+#if defined(HAVE_BDEV_QUEUE_LIMITS)
+	disk = blk_alloc_disk(NULL, NUMA_NO_NODE);
+#else
 	disk = blk_alloc_disk(NUMA_NO_NODE);
+#endif
 	if (!disk) {
 		pr_err("Failed to allocate disk\n");
 		return -ENOMEM;

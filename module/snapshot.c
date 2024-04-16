@@ -514,7 +514,9 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 {
 	int ret = 0;
 	struct snapshot *snapshot;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handle;
 #else
 	struct block_device *bdev;
@@ -523,7 +525,16 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 	struct blksnap_sectors range;
 	struct blksnap_sectors* __user src;
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	bdev_file = bdev_file_open_by_path(devpath,
+					BLK_OPEN_READ | BLK_OPEN_WRITE,
+					NULL, NULL);
+	if (IS_ERR(bdev_file)) {
+		pr_err("Failed to open a block device '%s'\n", devpath);
+		ret = PTR_ERR(bdev_file);
+	}else
+		dev_id = file_bdev(bdev_file)->bd_dev;
+#elif defined(HAVE_BDEV_HANDLE)
 	bdev_handle = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
@@ -554,12 +565,12 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 	}
 	down_write(&snapshot->rw_lock);
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev_handle);
-
 #else
 	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev);
-
 #endif
 	if (ret) {
 		if (ret == -EALREADY)
@@ -569,7 +580,9 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 			goto out_snapshot_put;
 		}
 	} else {
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+		bdev_file = NULL;
+#elif defined(HAVE_BDEV_HANDLE)
 		bdev_handle = NULL;
 #else
 		bdev = NULL;
@@ -605,7 +618,10 @@ out_snapshot_put:
 	up_write(&snapshot->rw_lock);
 	snapshot_put(snapshot);
 out_bdev_release:
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	if (bdev_file)
+		bdev_fput(bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 	if (bdev_handle)
 		bdev_release(bdev_handle);
 #elif defined(HAVE_BLK_HOLDER_OPS)

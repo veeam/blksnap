@@ -66,7 +66,9 @@ struct diff_storage {
 	spinlock_t lock;
 
 	dev_t dev_id;
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_file;
+#elif defined(HAVE_BDEV_HANDLE)
 	struct bdev_handle *bdev_handle;
 #endif
 	struct block_device *bdev;
@@ -110,7 +112,10 @@ int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
 
 #ifdef BLKSNAP_MODIFICATION
 
-#if defined(HAVE_BDEV_HANDLE)
+#if defined(HAVE_BDEV_FILE_OPEN)
+int diff_storage_add_bdev(struct diff_storage *diff_storage,
+			  struct file *bdev_file);
+#elif defined(HAVE_BDEV_HANDLE)
 int diff_storage_add_bdev(struct diff_storage *diff_storage,
 			  struct bdev_handle *bdev_handle);
 #else

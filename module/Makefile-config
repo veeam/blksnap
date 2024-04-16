@@ -59,6 +59,9 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "struct bdev_handle" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BDEV_HANDLE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "bdev_file_open_by_dev" $(srctree)/include/linux/blkdev.h &&	\
+		echo -D HAVE_BDEV_FILE_OPEN)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/bvec.h &&		\
 	grep -qw "inline void bvec_set_page" $(srctree)/include/linux/bvec.h &&	\
 		echo -D HAVE_BVEC_SET_PAGE)
@@ -98,3 +101,7 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/fs.h  &&		\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blk-crypto-profile.h  &&		\
 	grep -qw "struct blk_crypto_profile" $(srctree)/include/linux/blk-crypto-profile.h &&	\
 		echo -D HAVE_BLK_CRYPTO_PROFILE)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep "__blk_alloc_disk" $(srctree)/include/linux/blkdev.h |		\
+	grep -qw "struct queue_limits" &&					\
+		echo -D HAVE_BDEV_QUEUE_LIMITS)
