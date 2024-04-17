@@ -26,32 +26,20 @@ struct memstat_obj {
 static atomic64_t memstat_kcnt;
 static atomic_t memstat_state;
 static DEFINE_XARRAY(memstat_class_map);
-static DEFINE_XARRAY(memstat_obj_map);
 
 void memstat_done(void)
 {
 	s64 total_leak = 0;
 	unsigned long inx = 0;
 	struct memstat_class *class;
-	struct memstat_obj *obj;
 
 	if (atomic64_read(&memstat_kcnt))
 		pr_err("Critical error! Memory leak found. kcnt=%lld",
 			atomic64_read(&memstat_kcnt));
 
-	xa_for_each(&memstat_obj_map, inx, obj) {
-		if (obj) {
-			total_leak += obj->size;
-			kfree(obj);
-		}
-	}
-	xa_destroy(&memstat_obj_map);
-	if (total_leak)
-		pr_err("Critical error! The total memory leak was %lld bytes",
-			total_leak);
-
 	xa_for_each(&memstat_class_map, inx, class) {
 		if (likely(class) && atomic64_read(&class->count)) {
+			total_leak += atomic64_read(&class->total_size);
 			pr_err("%s:%d count: %lld total: %lld\n",
 				class->file, class->line,
 				atomic64_read(&class->count),
@@ -60,6 +48,10 @@ void memstat_done(void)
 		}
 	}
 	xa_destroy(&memstat_class_map);
+
+	if (total_leak)
+		pr_err("Critical error! The total memory leak was %lld bytes",
+			total_leak);
 }
 
 void memstat_print(void)
@@ -68,7 +60,7 @@ void memstat_print(void)
 	struct memstat_class *class;
 	s64 total_leak = 0;
 
-	pr_info("%lld objects has been allocated\n",
+	pr_info("Total objects in use: %lld\n",
 		atomic64_read(&memstat_kcnt));
 
 	if (!atomic_read(&memstat_state))
@@ -85,7 +77,7 @@ void memstat_print(void)
 	}
 
 	if (total_leak)
-		pr_info("%lld bytes has been allocated\n", total_leak);
+		pr_info("Total bytes in use: %lld\n", total_leak);
 }
 
 void memstat_enable(int state)
@@ -101,9 +93,12 @@ void *memstat_kmalloc(const char *file, const int line, size_t size, gfp_t flags
 	struct memstat_class *class;
 	struct memstat_obj *obj;
 
-	ptr = kmalloc(size, flags);
+	ptr = kmalloc(size + sizeof(struct memstat_obj), flags);
 	if (likely(ptr))
 		atomic64_inc(&memstat_kcnt);
+	obj = ptr;
+	ptr += sizeof(struct memstat_obj);
+
 	if (!atomic_read(&memstat_state))
 		goto out;
 
@@ -138,18 +133,10 @@ void *memstat_kmalloc(const char *file, const int line, size_t size, gfp_t flags
 		}
 	}
 
-	obj = kmalloc(sizeof(struct memstat_obj), GFP_KERNEL);
-	if (unlikely(!obj))
-		goto out;
-
 	obj->class = class;
 	obj->size = size;
 	atomic64_inc(&class->count);
 	atomic64_add(size, &class->total_size);
-
-	ret = xa_insert(&memstat_obj_map, (unsigned long)ptr, obj, GFP_KERNEL);
-	if (unlikely(ret))
-		kfree(obj);
 out:
 	return ptr;
 }
@@ -160,18 +147,14 @@ void memstat_kfree(void *ptr)
 
 	if (unlikely(!ptr))
 		return;
-	if (!atomic_read(&memstat_state))
-		goto out;
-	obj = xa_load(&memstat_obj_map, (unsigned long)ptr);
-	if (obj) {
-		xa_erase(&memstat_obj_map, (unsigned long)ptr);
 
+	ptr -= sizeof(struct memstat_obj);
+	obj = ptr;
+
+	if (atomic_read(&memstat_state)) {
 		atomic64_dec(&obj->class->count);
 		atomic64_sub(obj->size, &obj->class->total_size);
-
-		kfree(obj);
 	}
-out:
 	atomic64_dec(&memstat_kcnt);
 	return kfree(ptr);
 }
