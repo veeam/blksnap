@@ -4,6 +4,9 @@
 
 #include <linux/blkdev.h>
 #include <linux/slab.h>
+#if !defined(HAVE_IOCB_ITER)
+#include <linux/fsnotify.h>
+#endif
 #ifdef BLKSNAP_STANDALONE
 #include "compat.h"
 #include "bdevfilter-internal.h"
@@ -220,6 +223,63 @@ static inline void chunk_io_ctx_complete(struct chunk_io_ctx *io_ctx, long ret)
 	}
 	kref_put(&io_ctx->kref, io_ctx_free);
 }
+
+#if !defined(HAVE_IOCB_ITER)
+static ssize_t blksnap_vfs_iocb_iter_read(struct file *file,
+				struct kiocb *iocb, struct iov_iter *iter)
+{
+	size_t tot_len;
+	ssize_t ret = 0;
+
+	if (!file->f_op->read_iter)
+		return -EINVAL;
+	if (!(file->f_mode & FMODE_READ))
+		return -EBADF;
+	if (!(file->f_mode & FMODE_CAN_READ))
+		return -EINVAL;
+
+	tot_len = iov_iter_count(iter);
+	if (!tot_len)
+		goto out;
+	//ret = rw_verify_area(READ, file, &iocb->ki_pos, tot_len);
+	//if (ret < 0)
+	//	return ret;
+
+	ret = call_read_iter(file, iocb, iter);
+out:
+	if (ret >= 0)
+		fsnotify_access(file);
+	return ret;
+}
+
+static ssize_t blksnap_vfs_iocb_iter_write(struct file *file,
+				struct kiocb *iocb, struct iov_iter *iter)
+{
+	size_t tot_len;
+	ssize_t ret = 0;
+
+	if (!file->f_op->write_iter)
+		return -EINVAL;
+	if (!(file->f_mode & FMODE_WRITE))
+		return -EBADF;
+	if (!(file->f_mode & FMODE_CAN_WRITE))
+		return -EINVAL;
+
+	tot_len = iov_iter_count(iter);
+	if (!tot_len)
+		return 0;
+	//ret = rw_verify_area(WRITE, file, &iocb->ki_pos, tot_len);
+	//if (ret < 0)
+	//	return ret;
+
+	ret = call_write_iter(file, iocb, iter);
+	if (ret > 0)
+		fsnotify_modify(file);
+
+	return ret;
+}
+#endif
+
 #ifdef HAVE_KI_COMPLETE_RET2
 static void chunk_diff_bio_complete(struct kiocb *iocb, long ret, long ret2)
 #else
@@ -245,11 +305,19 @@ void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
 #else
 	if (io_ctx->iov_iter.data_source)
 #endif
+#ifdef HAVE_IOCB_ITER
 		ret = vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
 							&io_ctx->iov_iter);
 	else
 		ret = vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
 							&io_ctx->iov_iter);
+#else
+		ret = blksnap_vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
+							&io_ctx->iov_iter);
+	else
+		ret = blksnap_vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
+							&io_ctx->iov_iter);
+#endif
 	if (ret != -EIOCBQUEUED)
 		chunk_io_ctx_complete(io_ctx, ret);
 	kref_put(&io_ctx->kref, io_ctx_free);
