@@ -5,6 +5,11 @@
 
 struct tracker;
 
+#if !defined(HAVE_BLK_ALLOC_DISK)
+int snapimage_init(void);
+void snapimage_done(void);
+#endif
+
 void snapimage_free(struct tracker *tracker);
 int snapimage_create(struct tracker *tracker);
 #endif /* __BLKSNAP_SNAPIMAGE_H */

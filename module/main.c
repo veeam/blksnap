@@ -593,6 +593,11 @@ static int __init blksnap_init(void)
 	if (ret)
 		goto fail_tracker_init;
 
+#if !defined(HAVE_BLK_ALLOC_DISK)
+	ret = snapimage_init();
+	if (ret)
+		goto fail_snapimage_init;
+#endif
 	ret = misc_register(&blksnap_ctrl_misc);
 	if (ret)
 		goto fail_misc_register;
@@ -600,6 +605,10 @@ static int __init blksnap_init(void)
 	return 0;
 
 fail_misc_register:
+#if !defined(HAVE_BLK_ALLOC_DISK)
+	snapimage_done();
+fail_snapimage_init:
+#endif
 	tracker_done();
 fail_tracker_init:
 	destroy_workqueue(blksnap_wq);

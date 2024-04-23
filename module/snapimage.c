@@ -28,6 +28,33 @@
 #include "log_histogram.h"
 #endif
 
+#if !defined(HAVE_BLK_ALLOC_DISK)
+static unsigned int g_snapimage_major;
+
+int snapimage_init(void)
+{
+	int mj = 0;
+
+	mj = register_blkdev(mj, BLKSNAP_IMAGE_NAME);
+	if (mj < 0) {
+		pr_err("Failed to register snapshot image block device. errno=%d\n",
+		       abs(mj));
+		return mj;
+	}
+	g_snapimage_major = mj;
+	pr_debug("Snapshot image block device major %d was registered\n", mj);
+
+	return 0;
+}
+
+void snapimage_done(void)
+{
+	unregister_blkdev(g_snapimage_major, BLKSNAP_IMAGE_NAME);
+	pr_debug("Snapshot image block device [%d] was unregistered\n",
+		g_snapimage_major);
+}
+#endif
+
 /*
  * The snapshot supports write operations.  This allows for example to delete
  * some files from the file system before backing up the volume. The data can
@@ -161,6 +188,9 @@ int snapimage_create(struct tracker *tracker)
 		goto fail_cleanup_queue;
 	}
 	disk->queue = queue;
+
+	disk->major = g_snapimage_major;
+	disk->minors = 1;
 #endif
 
 #ifdef GENHD_FL_NO_PART_SCAN
