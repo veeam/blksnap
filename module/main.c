@@ -678,3 +678,8 @@ MODULE_DESCRIPTION("Block Device Snapshots Module");
 MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
 MODULE_LICENSE("GPL");
+
+#ifdef BLKSNAP_STANDALONE
+/* Allow to be loaded on OpenSUSE/SLES */
+MODULE_INFO(supported, "external");
+#endif
