@@ -38,12 +38,14 @@ void memstat_done(void)
 			atomic64_read(&memstat_kcnt));
 
 	xa_for_each(&memstat_class_map, inx, class) {
-		if (likely(class) && atomic64_read(&class->count)) {
-			total_leak += atomic64_read(&class->total_size);
-			pr_err("%s:%d count: %lld total: %lld\n",
-				class->file, class->line,
-				atomic64_read(&class->count),
-				atomic64_read(&class->total_size));
+		if (likely(class)) {
+			if (atomic64_read(&class->count)) {
+				total_leak += atomic64_read(&class->total_size);
+				pr_err("%s:%d count: %lld total: %lld\n",
+					class->file, class->line,
+					atomic64_read(&class->count),
+					atomic64_read(&class->total_size));
+			}
 			kfree(class);
 		}
 	}
