@@ -706,7 +706,7 @@ static void __exit bdevfilter_done(void)
 	struct bdev_extension *ext;
 
 	misc_deregister(&bdevfilter_misc);
-
+	ftrace_set_filter(&ops_submit_bio_noacct, NULL, 0, 1);
 	unregister_ftrace_function(&ops_submit_bio_noacct);
 
 	pr_debug("Ftrace filter for 'submit_bio_noacct' has been unregistered\n");
