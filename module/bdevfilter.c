@@ -73,6 +73,13 @@ static inline struct bdevfilter_operations *bdevfilter_operations_find(
 	return fops;
 }
 
+static void freeze_ref_release(struct percpu_ref *freeze_ref)
+{
+	struct blkfilter *flt = container_of(freeze_ref,
+					     struct blkfilter, freeze_ref);
+	wake_up_all(&flt->freeze_wq);
+}
+
 static int ioctl_attach(struct bdevfilter_name __user *argp)
 {
 	char *devpath;
@@ -173,6 +180,13 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	kref_init(&flt->kref);
 	flt->fops = fops;
 
+	flt->is_frozen = false;
+	init_waitqueue_head(&flt->freeze_wq);
+	ret = percpu_ref_init(&flt->freeze_ref, freeze_ref_release,
+				PERCPU_REF_INIT_ATOMIC, GFP_KERNEL);
+	if (ret)
+		goto out_bdevfilter_put;
+
 	spin_lock(&bdev_extension_list_lock);
 	ext_tmp = bdev_extension_find(bdev->bd_dev);
 	if (ext_tmp) {
@@ -191,6 +205,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	}
 	spin_unlock(&bdev_extension_list_lock);
 
+out_bdevfilter_put:
 	bdevfilter_put(flt);
 out_unfreeze:
 	memalloc_noio_restore(task_flags);
@@ -448,7 +463,11 @@ void bdevfilter_free(struct kref *kref)
 {
 	struct blkfilter *flt = container_of(kref, struct blkfilter, kref);
 
+	might_sleep();
+
 	pr_debug("Detach filter '%s' registered\n", flt->fops->name);
+	bdevfilter_freeze(flt);
+	percpu_ref_exit(&flt->freeze_ref);
 	flt->fops->detach(flt);
 }
 
@@ -545,7 +564,9 @@ static inline bool bdev_filters_apply(struct bio *bio)
 		flt = bdevfilter_get(ext->flt);
 	spin_unlock(&bdev_extension_list_lock);
 	if (flt) {
+		bdevfilter_enter(flt);
 		skip = flt->fops->submit_bio(bio, flt);
+		bdevfilter_exit(flt);
 		bdevfilter_put(flt);
 	}
 

@@ -326,10 +326,14 @@ int tracker_take_snapshot(struct tracker *tracker)
 	struct block_device *orig_bdev = tracker->orig_bdev;
 	sector_t capacity;
 
+#ifdef BLKSNAP_STANDALONE
+	bdevfilter_freeze(&tracker->filter);
+#else
 #if defined(HAVE_BD_QUEUE)
 	blk_mq_freeze_queue(orig_bdev->bd_queue);
 #else
 	blk_mq_freeze_queue(orig_bdev->bd_disk->queue);
+#endif
 #endif
 	if (tracker->cbt_map->is_corrupted) {
 		cbt_reset_needed = true;
@@ -347,17 +351,22 @@ int tracker_take_snapshot(struct tracker *tracker)
 		if (ret) {
 			pr_err("Failed to create tracker. errno=%d\n",
 			       abs(ret));
-			return ret;
+			goto out_unfreeze;
 		}
 	}
 
 	cbt_map_switch(tracker->cbt_map);
 	atomic_set(&tracker->snapshot_is_taken, true);
 
+out_unfreeze:
+#ifdef BLKSNAP_STANDALONE
+	bdevfilter_unfreeze(&tracker->filter);
+#else
 #if defined(HAVE_BD_QUEUE)
 	blk_mq_unfreeze_queue(orig_bdev->bd_queue);
 #else
 	blk_mq_unfreeze_queue(orig_bdev->bd_disk->queue);
+#endif
 #endif
 	return 0;
 }

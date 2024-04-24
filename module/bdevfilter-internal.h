@@ -22,6 +22,10 @@ struct bdevfilter_operations;
 struct blkfilter {
 	struct kref kref;
 	const struct bdevfilter_operations *fops;
+
+	struct percpu_ref freeze_ref;
+	struct wait_queue_head freeze_wq;
+	bool is_frozen;
 };
 
 /**
@@ -69,6 +73,43 @@ blk_qc_t submit_bio_noacct_notrace(struct bio *bio);
 void submit_bio_noacct_notrace(struct bio *bio);
 #endif
 
+static inline bool bdevfilter_try_enter(struct blkfilter *flt)
+{
+	bool ret = false;
 
+	rcu_read_lock();
+	if (percpu_ref_tryget_live_rcu(&flt->freeze_ref))
+		ret = !flt->is_frozen;
+	rcu_read_unlock();
+	return ret;
+};
+
+static inline void bdevfilter_enter(struct blkfilter *flt)
+{
+	while (!bdevfilter_try_enter(flt)) {
+		smp_rmb();
+		wait_event(flt->freeze_wq, !flt->is_frozen);
+	}
+};
+
+static inline void bdevfilter_exit(struct blkfilter *flt)
+{
+	percpu_ref_put(&flt->freeze_ref);
+};
+
+static inline void bdevfilter_freeze(struct blkfilter *flt)
+{
+	percpu_ref_kill(&flt->freeze_ref);
+	wait_event(flt->freeze_wq, percpu_ref_is_zero(&flt->freeze_ref));
+	flt->is_frozen = true;
+
+};
+
+static inline void bdevfilter_unfreeze(struct blkfilter *flt)
+{
+	flt->is_frozen = false;
+	percpu_ref_resurrect(&flt->freeze_ref);
+	wake_up_all(&flt->freeze_wq);
+};
 #endif /* __BDEVFILTER_INTERNAL_H */
 
