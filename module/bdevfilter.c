@@ -442,7 +442,7 @@ static int __init bdevfilter_init(void)
 	ret = register_ftrace_function(&ops_submit_bio_noacct);
 	if (ret) {
 		pr_err("Failed to register ftrace handler (%d)\n", ret);
-		ftrace_set_filter(&ops_submit_bio_noacct, NULL, 0, 1);
+		ftrace_free_filter(&ops_submit_bio_noacct);
 		return ret;
 	}
 
@@ -456,6 +456,7 @@ static void __exit bdevfilter_done(void)
 	struct bdev_extension *ext;
 
 	unregister_ftrace_function(&ops_submit_bio_noacct);
+	ftrace_free_filter(&ops_submit_bio_noacct);
 
 	pr_debug("Ftrace filter for 'submit_bio_noacct' has been unregistered\n");
 
