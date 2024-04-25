@@ -685,7 +685,7 @@ static int __init bdevfilter_init(void)
 	ret = register_ftrace_function(&ops_submit_bio_noacct);
 	if (ret) {
 		pr_err("Failed to register ftrace handler (%d)\n", ret);
-		ftrace_free_filter(&ops_submit_bio_noacct);
+		//ftrace_free_filter(&ops_submit_bio_noacct);
 		return ret;
 	}
 
@@ -693,7 +693,7 @@ static int __init bdevfilter_init(void)
 	if (ret) {
 		pr_err("Failed to register control device (%d)\n", ret);
 		unregister_ftrace_function(&ops_submit_bio_noacct);
-		ftrace_free_filter(&ops_submit_bio_noacct);
+		//ftrace_free_filter(&ops_submit_bio_noacct);
 		return ret;
 	}
 
@@ -707,7 +707,7 @@ static void __exit bdevfilter_done(void)
 
 	misc_deregister(&bdevfilter_misc);
 	unregister_ftrace_function(&ops_submit_bio_noacct);
-	ftrace_free_filter(&ops_submit_bio_noacct);
+	//ftrace_free_filter(&ops_submit_bio_noacct);
 
 	pr_debug("Ftrace filter for 'submit_bio_noacct' has been unregistered\n");
 
