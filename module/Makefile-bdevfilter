@@ -4,4 +4,8 @@
 
 EXTRA_CFLAGS += "-Wno-unused-function"
 
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "TSK_TRACE_FL_TRACE_BIT" $(srctree)/include/linux/ftrace.h &&	\
+		echo -D HAVE_NOT_FTRACE_FREE_FILTER)
+
 obj-m	 += bdevfilter.o
