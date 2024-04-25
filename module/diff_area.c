@@ -118,10 +118,10 @@ void diff_area_free(struct kref *kref)
 	pr_info("%llu MiB was read from image\n", atomic64_read(&diff_area->stat_image_read) >> (20 - SECTOR_SHIFT));
 	pr_info("%llu MiB was written to image\n", atomic64_read(&diff_area->stat_image_written) >> (20 - SECTOR_SHIFT));
 
-	pr_info("Reading IO units statistic:\n");
+	pr_debug("Reading IO units statistic:\n");
 	log_histogram_show(&diff_area->read_hg);
 
-	pr_info("Redirection IO units statistic:\n");
+	pr_debug("Redirection IO units statistic:\n");
 	log_histogram_show(&diff_area->redirect_hg);
 #endif
 
