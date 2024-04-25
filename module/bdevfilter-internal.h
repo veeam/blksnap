@@ -100,7 +100,6 @@ static inline void bdevfilter_freeze(struct blkfilter *flt)
 	percpu_ref_kill(&flt->freeze_ref);
 	wait_event(flt->freeze_wq, percpu_ref_is_zero(&flt->freeze_ref));
 	flt->is_frozen = true;
-
 };
 
 static inline void bdevfilter_unfreeze(struct blkfilter *flt)
