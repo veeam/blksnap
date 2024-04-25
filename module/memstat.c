@@ -62,7 +62,7 @@ void memstat_print(void)
 	struct memstat_class *class;
 	s64 total_leak = 0;
 
-	pr_info("Total objects in use: %lld\n",
+	pr_debug("Total objects in use: %lld\n",
 		atomic64_read(&memstat_kcnt));
 
 	if (!atomic_read(&memstat_state))
@@ -71,7 +71,7 @@ void memstat_print(void)
 	xa_for_each(&memstat_class_map, inx, class) {
 		if (likely(class) && atomic64_read(&class->count)) {
 			total_leak += atomic64_read(&class->total_size);
-			pr_info("%s:%d count: %lld total: %lld\n",
+			pr_debug("%s:%d count: %lld total: %lld\n",
 				class->file, class->line,
 				atomic64_read(&class->count),
 				atomic64_read(&class->total_size));
