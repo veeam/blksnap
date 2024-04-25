@@ -234,7 +234,7 @@ out_free_devpath:
 	return ret;
 }
 
-static inline int __blkfilter_detach(dev_t dev_id, struct bdevfilter_name* kargp)
+static inline int __blkfilter_detach(dev_t dev_id, char *name, size_t name_length)
 {
 	int ret = 0;
 	struct bdev_extension *ext;
@@ -246,7 +246,7 @@ static inline int __blkfilter_detach(dev_t dev_id, struct bdevfilter_name* kargp
 	if (!ext)
 		ret = -ENOENT;
 	else {
-		if (strncmp(ext->flt->fops->name, kargp->name, BDEVFILTER_NAME_LENGTH))
+		if (name && strncmp(ext->flt->fops->name, name, name_length))
 			ret = -EINVAL;
 		else {
 			flt = ext->flt;
@@ -329,7 +329,7 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 #endif
 		ret = -ENODEV;
 	else
-		ret = __blkfilter_detach(bdev->bd_dev, &karg);
+		ret = __blkfilter_detach(bdev->bd_dev, karg.name, BDEVFILTER_NAME_LENGTH);
 #ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_unlock(&bdev->bd_disk->open_mutex);
 #else
@@ -626,15 +626,16 @@ static notrace void ftrace_handler_submit_bio_noacct(
 #endif
 	)
 {
-	if (!current->bio_list && !within_module(parent_ip, THIS_MODULE)) {
+	if (current->bio_list || within_module(parent_ip, THIS_MODULE))
+		return;
+
 #if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
-		ftrace_regs_set_instruction_pointer(fregs, (unsigned long)submit_bio_noacct_handler);
+	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)submit_bio_noacct_handler);
 #elif defined(HAVE_FTRACE_REGS)
-		ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
+	ftrace_instruction_pointer_set(fregs, (unsigned long)submit_bio_noacct_handler);
 #else
-		instruction_pointer_set(regs, (unsigned long)submit_bio_noacct_handler);
+	instruction_pointer_set(regs, (unsigned long)submit_bio_noacct_handler);
 #endif
-	}
 }
 
 static struct ftrace_ops ops_submit_bio_noacct = {
@@ -645,6 +646,50 @@ static struct ftrace_ops ops_submit_bio_noacct = {
 		FTRACE_OPS_FL_PERMANENT,
 };
 
+#ifdef HAVE_BDEV_MARK_DEAD
+
+static notrace __attribute__((optimize("no-optimize-sibling-calls")))
+void bdev_mark_dead_handler(struct block_device *bdev, bool surprise)
+{
+	int ret;
+
+	ret = __blkfilter_detach(bdev->bd_dev, NULL, 0);
+	if (ret)
+		pr_err("Failed to detach bdevfilter for device [%d:%d]\n",
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+
+	bdev_mark_dead(bdev, surprise);
+}
+
+static notrace void ftrace_handler_bdev_mark_dead(
+	unsigned long ip, unsigned long parent_ip, struct ftrace_ops *fops,
+#ifdef HAVE_FTRACE_REGS
+	struct ftrace_regs *fregs
+#else
+	struct pt_regs *regs
+#endif
+	)
+{
+	if (within_module(parent_ip, THIS_MODULE))
+		return;
+
+#if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
+	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)bdev_mark_dead_handler);
+#elif defined(HAVE_FTRACE_REGS)
+	ftrace_instruction_pointer_set(fregs, (unsigned long)bdev_mark_dead_handler);
+#else
+	instruction_pointer_set(regs, (unsigned long)bdev_mark_dead_handler);
+#endif
+}
+
+static struct ftrace_ops ops_bdev_mark_dead = {
+	.func = ftrace_handler_bdev_mark_dead,
+	.flags = FTRACE_OPS_FL_DYNAMIC |
+		FTRACE_OPS_FL_SAVE_REGS |
+		FTRACE_OPS_FL_IPMODIFY |
+		FTRACE_OPS_FL_PERMANENT,
+};
+#endif
 
 static long unlocked_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg)
@@ -717,6 +762,41 @@ static int prepare_fn(void )
 	return 0;
 }
 
+static int bdevfilter_set(struct ftrace_ops *ops, unsigned char *name)
+{
+	int ret;
+
+	ret = ftrace_set_filter(ops, name, strlen(name), 0);
+	if (ret) {
+		pr_err("Failed to set ftrace handler for function '%s'\n", name);
+		return ret;
+	}
+
+	ret = register_ftrace_function(ops);
+	if (ret) {
+		pr_err("Failed to register ftrace handler (%d)\n", ret);
+#ifdef HAVE_NOT_FTRACE_FREE_FILTER
+		((void (*)(struct ftrace_ops *ops))addr_ftrace_free_filter)(ops);
+#else
+		ftrace_free_filter(ops);
+#endif
+		return ret;
+	}
+
+	pr_debug("Ftrace filter for '%s' has been registered\n", name);
+	return ret;
+}
+
+static void bdevfilter_unset(struct ftrace_ops *ops)
+{
+	unregister_ftrace_function(ops);
+#ifdef HAVE_NOT_FTRACE_FREE_FILTER
+	((void (*)(struct ftrace_ops *ops))addr_ftrace_free_filter)(ops);
+#else
+	ftrace_free_filter(ops);
+#endif
+}
+
 static int __init bdevfilter_init(void)
 {
 	int ret;
@@ -727,37 +807,32 @@ static int __init bdevfilter_init(void)
 		return ret;
 	}
 
-	ret = ftrace_set_filter(&ops_submit_bio_noacct, "submit_bio_noacct", strlen("submit_bio_noacct"), 0);
-	if (ret) {
-		pr_err("Failed to set ftrace handler for function 'submit_bio_noacct'\n");
+	ret = bdevfilter_set(&ops_submit_bio_noacct, "submit_bio_noacct");
+	if (ret)
 		return ret;
-	}
 
-	ret = register_ftrace_function(&ops_submit_bio_noacct);
-	if (ret) {
-		pr_err("Failed to register ftrace handler (%d)\n", ret);
-#ifdef HAVE_NOT_FTRACE_FREE_FILTER
-		((void (*)(struct ftrace_ops *ops))addr_ftrace_free_filter)(&ops_submit_bio_noacct);
-#else
-		ftrace_free_filter(&ops_submit_bio_noacct);
+#ifdef HAVE_BDEV_MARK_DEAD
+	ret = bdevfilter_set(&ops_bdev_mark_dead, "bdev_mark_dead");
+	if (ret)
+		goto out_unset_submit_bio_noacct;
 #endif
-		return ret;
-	}
 
 	ret = misc_register(&bdevfilter_misc);
 	if (ret) {
 		pr_err("Failed to register control device (%d)\n", ret);
-		unregister_ftrace_function(&ops_submit_bio_noacct);
-#ifdef HAVE_NOT_FTRACE_FREE_FILTER
-		((void (*)(struct ftrace_ops *ops))addr_ftrace_free_filter)(&ops_submit_bio_noacct);
-#else
-		ftrace_free_filter(&ops_submit_bio_noacct);
-#endif
-		return ret;
+		goto out_unset;
 	}
 
-	pr_debug("Ftrace filter for 'submit_bio_noacct' has been registered\n");
 	return 0;
+
+out_unset:
+#ifdef HAVE_BDEV_MARK_DEAD
+	bdevfilter_unset(&ops_bdev_mark_dead);
+out_unset_submit_bio_noacct:
+#endif
+	bdevfilter_unset(&ops_submit_bio_noacct);
+
+	return ret;
 }
 
 static void __exit bdevfilter_done(void)
@@ -765,14 +840,10 @@ static void __exit bdevfilter_done(void)
 	struct bdev_extension *ext;
 
 	misc_deregister(&bdevfilter_misc);
-	unregister_ftrace_function(&ops_submit_bio_noacct);
-#ifdef HAVE_NOT_FTRACE_FREE_FILTER
-	((void (*)(struct ftrace_ops *ops))addr_ftrace_free_filter)(&ops_submit_bio_noacct);
-#else
-	ftrace_free_filter(&ops_submit_bio_noacct);
+	bdevfilter_unset(&ops_submit_bio_noacct);
+#ifdef HAVE_BDEV_MARK_DEAD
+	bdevfilter_unset(&ops_bdev_mark_dead);
 #endif
-
-	pr_debug("Ftrace filter for 'submit_bio_noacct' has been unregistered\n");
 
 	spin_lock(&bdev_extension_list_lock);
 	while ((ext = list_first_entry_or_null(&bdev_extension_list,

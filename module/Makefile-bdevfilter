@@ -7,5 +7,8 @@ EXTRA_CFLAGS += "-Wno-unused-function"
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "TSK_TRACE_FL_TRACE_BIT" $(srctree)/include/linux/ftrace.h &&	\
 		echo -D HAVE_NOT_FTRACE_FREE_FILTER)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "void bdev_mark_dead" $(srctree)/include/linux/blkdev.h && \
+		echo -D HAVE_BDEV_MARK_DEAD)
 
 obj-m	 += bdevfilter.o
