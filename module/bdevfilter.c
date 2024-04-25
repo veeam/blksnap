@@ -2,6 +2,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
 #include <linux/ftrace.h>
+#include <linux/kprobes.h>
 #include <linux/sched/task.h>
 #include <linux/bio.h>
 #ifdef HAVE_GENHD_H
@@ -429,9 +430,58 @@ static struct ftrace_ops ops_submit_bio_noacct = {
 		FTRACE_OPS_FL_PERMANENT,
 };
 
+#ifdef HAVE_NOT_FTRACE_FREE_FILTER
+static unsigned long addr_ftrace_free_filter;
+#endif
+
+static int get_symbol(const char *name, void **paddr)
+{
+	int ret;
+	struct kprobe kp = {0};
+
+	kp.symbol_name = name;
+	ret = register_kprobe(&kp);
+	if (ret) {
+		pr_err("Failed to get address of the '%s'\n", name);
+		return ret;
+	}
+
+	*paddr = kp.addr;
+	unregister_kprobe(&kp);
+
+	return 0;
+}
+
+static int prepare_fn(void )
+{
+	int ret;
+
+	unsigned long kernel_base;
+	void *addr;
+
+	ret = get_symbol("get_option", &addr);
+	if (ret)
+		return ret;
+	kernel_base = (unsigned long)(get_option) - (unsigned long)addr;
+
+#ifdef HAVE_NOT_FTRACE_FREE_FILTER
+	ret = get_symbol("ftrace_free_filter", &addr);
+	if (ret)
+		return ret;
+	addr_ftrace_free_filter = kernel_base + (unsigned long)addr;
+#endif
+	return 0;
+}
+
 static int __init bdevfilter_init(void)
 {
 	int ret;
+
+	ret = prepare_fn();
+	if (ret) {
+		pr_err("Failed to prepare pointers to internal functions\n");
+		return ret;
+	}
 
 	ret = ftrace_set_filter(&ops_submit_bio_noacct, "submit_bio_noacct", strlen("submit_bio_noacct"), 0);
 	if (ret) {
@@ -442,7 +492,11 @@ static int __init bdevfilter_init(void)
 	ret = register_ftrace_function(&ops_submit_bio_noacct);
 	if (ret) {
 		pr_err("Failed to register ftrace handler (%d)\n", ret);
-		//ftrace_free_filter(&ops_submit_bio_noacct);
+#ifdef HAVE_NOT_FTRACE_FREE_FILTER
+		((void (*)(struct ftrace_ops *ops))addr_ftrace_free_filter)(&ops_submit_bio_noacct);
+#else
+		ftrace_free_filter(&ops_submit_bio_noacct);
+#endif
 		return ret;
 	}
 
@@ -456,7 +510,11 @@ static void __exit bdevfilter_done(void)
 	struct bdev_extension *ext;
 
 	unregister_ftrace_function(&ops_submit_bio_noacct);
-	//ftrace_free_filter(&ops_submit_bio_noacct);
+#ifdef HAVE_NOT_FTRACE_FREE_FILTER
+	((void (*)(struct ftrace_ops *ops))addr_ftrace_free_filter)(&ops_submit_bio_noacct);
+#else
+	ftrace_free_filter(&ops_submit_bio_noacct);
+#endif
 
 	pr_debug("Ftrace filter for 'submit_bio_noacct' has been unregistered\n");
 
