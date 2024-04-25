@@ -77,10 +77,8 @@ static inline bool bdevfilter_try_enter(struct blkfilter *flt)
 {
 	bool ret = false;
 
-	rcu_read_lock();
-	if (percpu_ref_tryget_live_rcu(&flt->freeze_ref))
+	if (percpu_ref_tryget_live(&flt->freeze_ref))
 		ret = !flt->is_frozen;
-	rcu_read_unlock();
 	return ret;
 };
 
