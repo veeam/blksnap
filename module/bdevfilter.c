@@ -611,9 +611,9 @@ void submit_bio_noacct_handler(struct bio *bio)
 	}
 
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
-	return submit_bio_noacct_notrace(bio);
+	return submit_bio_noacct(bio);
 #elif defined(HAVE_VOID_SUBMIT_BIO_NOACCT)
-	submit_bio_noacct_notrace(bio);
+	submit_bio_noacct(bio);
 #endif
 }
 
