@@ -466,7 +466,7 @@ void bdevfilter_free(struct kref *kref)
 
 	might_sleep();
 
-	pr_debug("Detach filter '%s' registered\n", flt->fops->name);
+	pr_debug("Detach filter '%s'\n", flt->fops->name);
 	bdevfilter_freeze(flt);
 	percpu_ref_exit(&flt->freeze_ref);
 	flt->fops->detach(flt);
