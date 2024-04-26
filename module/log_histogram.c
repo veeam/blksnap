@@ -51,7 +51,7 @@ void log_histogram_show(struct log_histogram *hg)
 		return;
 
 	while (inx <= last) {
-		pr_info("(%lu : %lu] KiB - %lld\n",
+		pr_debug("(%lu : %lu] KiB - %lld\n",
 			prev_test_value / 1024,
 			test_value / 1024,
 			atomic64_read(&hg->cnt[inx]));
