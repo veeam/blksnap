@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2023 Veeam Software Group GmbH
 
+#
+# Configuration relevant only for the bdevfilter
+#
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "struct ftrace_regs" $(srctree)/include/linux/ftrace.h	&&	\
 		echo -D HAVE_FTRACE_REGS)
@@ -8,11 +11,22 @@ EXTRA_CFLAGS += $(shell 							\
 	grep -qw "ftrace_regs_set_instruction_pointer" $(srctree)/include/linux/ftrace.h && \
 		echo -D HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
 EXTRA_CFLAGS += $(shell 							\
-	grep -qw "blk_qc_t submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&& \
-		echo -D HAVE_QC_SUBMIT_BIO_NOACCT)
-EXTRA_CFLAGS += $(shell 							\
 	grep -qw "void submit_bio_noacct" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_VOID_SUBMIT_BIO_NOACCT)
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "TSK_TRACE_FL_TRACE_BIT" $(srctree)/include/linux/ftrace.h &&	\
+		echo -D HAVE_NOT_FTRACE_FREE_FILTER)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "void bdev_mark_dead" $(srctree)/include/linux/blkdev.h && \
+		echo -D HAVE_BDEV_MARK_DEAD)
+
+#
+# Configuration relevant for the blksnap and bdevfilter
+#
+EXTRA_CFLAGS += $(shell 							\
+	grep -qw "blk_qc_t submit_bio_noacct" $(srctree)/include/linux/blkdev.h	&& \
+		echo -D HAVE_QC_SUBMIT_BIO_NOACCT)
+
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "struct super_block \*freeze_bdev"				\
 		$(srctree)/include/linux/blkdev.h &&				\
