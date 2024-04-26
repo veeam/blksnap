@@ -109,13 +109,13 @@ void diff_area_free(struct kref *kref)
 	xa_destroy(&diff_area->chunk_map);
 
 #ifdef STANDALONE_BDEVFILTER
-	pr_info("Difference area statistic for device [%d:%d]\n",
+	pr_debug("Difference area statistic for device [%d:%d]\n",
 		MAJOR(diff_area->orig_bdev->bd_dev),
 		MINOR(diff_area->orig_bdev->bd_dev));
-	pr_info("%llu MiB was processed\n", atomic64_read(&diff_area->stat_processed) >> (20 - SECTOR_SHIFT));
-	pr_info("%llu MiB was copied\n", atomic64_read(&diff_area->stat_copied) >> (20 - SECTOR_SHIFT));
-	pr_info("%llu MiB was read from image\n", atomic64_read(&diff_area->stat_image_read) >> (20 - SECTOR_SHIFT));
-	pr_info("%llu MiB was written to image\n", atomic64_read(&diff_area->stat_image_written) >> (20 - SECTOR_SHIFT));
+	pr_debug("%llu MiB was processed\n", atomic64_read(&diff_area->stat_processed) >> (20 - SECTOR_SHIFT));
+	pr_debug("%llu MiB was copied\n", atomic64_read(&diff_area->stat_copied) >> (20 - SECTOR_SHIFT));
+	pr_debug("%llu MiB was read from image\n", atomic64_read(&diff_area->stat_image_read) >> (20 - SECTOR_SHIFT));
+	pr_debug("%llu MiB was written to image\n", atomic64_read(&diff_area->stat_image_written) >> (20 - SECTOR_SHIFT));
 #endif
 
 	if (diff_area->orig_bdev) {
