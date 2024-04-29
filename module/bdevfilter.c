@@ -595,6 +595,9 @@ void submit_bio_noacct_notrace(struct bio *bio)
 }
 EXPORT_SYMBOL_GPL(submit_bio_noacct_notrace);
 
+/*
+ * ftrace for submit_bio_noacct()
+ */
 static notrace __attribute__((optimize("no-optimize-sibling-calls")))
 #if defined(HAVE_QC_SUBMIT_BIO_NOACCT)
 blk_qc_t submit_bio_noacct_handler(struct bio *bio)
@@ -648,6 +651,9 @@ static struct ftrace_ops ops_submit_bio_noacct = {
 
 #ifdef HAVE_BDEV_MARK_DEAD
 
+/*
+ * ftrace for bdev_mark_dead()
+ */
 static notrace __attribute__((optimize("no-optimize-sibling-calls")))
 void bdev_mark_dead_handler(struct block_device *bdev, bool surprise)
 {
@@ -690,32 +696,50 @@ static struct ftrace_ops ops_bdev_mark_dead = {
 		FTRACE_OPS_FL_PERMANENT,
 };
 
-#elif defined(HAVE_BLK_MARK_DISK_DEAD)
+#else
 
-static notrace __attribute__((optimize("no-optimize-sibling-calls")))
-void blk_mark_disk_dead_handler(struct gendisk *disk)
+static inline void __blkfilter_detach_disk(struct gendisk *disk)
 {
+#ifdef HAVE_DISK_PART_ITER
+	struct disk_part_iter piter;
+	struct hd_struct *part;
 	struct block_device *bdev;
+
+	disk_part_iter_init(&piter, disk, DISK_PITER_INCL_EMPTY);
+	while ((part = disk_part_iter_next(&piter))) {
+		bdev = bdget_disk(disk, part->partno);
+		if (!bdev)
+			continue;
+		__blkfilter_detach(bdev->bd_dev, NULL, 0);
+		bdput(bdev);
+	}
+	disk_part_iter_exit(&piter);
+	bdev = bdget_disk(disk, part->partno);
+	if (!bdev)
+		return;
+	__blkfilter_detach(bdev->bd_dev, NULL, 0);
+	bdput(bdev);
+#else
+	struct block_device *part;
 	unsigned long idx;
 
-	rcu_read_lock();
-	xa_for_each(&disk->part_tbl, idx, bdev) {
-		int ret;
-		dev_t dev_id = bdev->dev_id;
-
-		rcu_read_unlock();
-		ret = __blkfilter_detach(dev_id, NULL, 0);
-		if (ret)
-			pr_err("Failed to detach bdevfilter for device [%d:%d]\n",
-				MAJOR(dev_id), MINOR(dev_id));
-		rcu_read_lock();
-	}
-	rcu_read_unlock();
-
-	blk_mark_disk_dead(disk);
+	xa_for_each_start(&disk->part_tbl, idx, part, 1)
+		__blkfilter_detach(part->bd_dev, NULL, 0);
+	__blkfilter_detach(disk->part0->bd_dev, NULL, 0);
+#endif
 }
 
-static notrace void ftrace_handler_blk_mark_disk_dead(
+/*
+ * ftrace for the del_gendisk()
+ */
+static notrace __attribute__((optimize("no-optimize-sibling-calls")))
+void del_gendisk_handler(struct gendisk *disk)
+{
+	__blkfilter_detach_disk(disk);
+	del_gendisk(disk);
+}
+
+static notrace void ftrace_handler_del_gendisk(
 	unsigned long ip, unsigned long parent_ip, struct ftrace_ops *fops,
 #ifdef HAVE_FTRACE_REGS
 	struct ftrace_regs *fregs
@@ -728,16 +752,65 @@ static notrace void ftrace_handler_blk_mark_disk_dead(
 		return;
 
 #if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
-	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)blk_mark_disk_dead_handler);
+	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)del_gendisk_handler);
 #elif defined(HAVE_FTRACE_REGS)
-	ftrace_instruction_pointer_set(fregs, (unsigned long)blk_mark_disk_dead_handler);
+	ftrace_instruction_pointer_set(fregs, (unsigned long)del_gendisk_handler);
 #else
-	instruction_pointer_set(regs, (unsigned long)blk_mark_disk_dead_handler);
+	instruction_pointer_set(regs, (unsigned long)del_gendisk_handler);
 #endif
 }
 
-static struct ftrace_ops ops_bdev_mark_dead = {
-	.func = ftrace_handler_blk_mark_disk_dead,
+static struct ftrace_ops ops_del_gendisk = {
+	.func = ftrace_handler_del_gendisk,
+	.flags = FTRACE_OPS_FL_DYNAMIC |
+		FTRACE_OPS_FL_SAVE_REGS |
+		FTRACE_OPS_FL_IPMODIFY |
+		FTRACE_OPS_FL_PERMANENT,
+};
+
+/*
+ * ftrace for the bdev_disk_changed())
+ */
+
+#if defined(HAVE_BDEV_DISK_CHANGED_DISK)
+static notrace __attribute__((optimize("no-optimize-sibling-calls")))
+int bdev_disk_changed_handler(struct gendisk *disk, bool invalidate)
+{
+	__blkfilter_detach_disk(disk);
+	return bdev_disk_changed(disk, invalidate);
+}
+#elif defined(HAVE_BDEV_DISK_CHANGED_BDEV)
+static notrace __attribute__((optimize("no-optimize-sibling-calls")))
+int bdev_disk_changed_handler(struct block_device *bdev, bool invalidate)
+{
+	__blkfilter_detach_disk(bdev->bd_disk);
+	return bdev_disk_changed(bdev, invalidate);
+}
+#endif
+
+static notrace void ftrace_handler_bdev_disk_changed(
+	unsigned long ip, unsigned long parent_ip, struct ftrace_ops *fops,
+#ifdef HAVE_FTRACE_REGS
+	struct ftrace_regs *fregs
+#else
+	struct pt_regs *regs
+#endif
+	)
+{
+	if (within_module(parent_ip, THIS_MODULE))
+		return;
+
+#if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
+	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)bdev_disk_changed_handler);
+#elif defined(HAVE_FTRACE_REGS)
+	ftrace_instruction_pointer_set(fregs, (unsigned long)bdev_disk_changed_handler);
+#else
+	instruction_pointer_set(regs, (unsigned long)bdev_disk_changed_handler);
+#endif
+}
+
+static struct ftrace_ops ops_bdev_disk_changed = {
+	.func = ftrace_handler_bdev_disk_changed,
 	.flags = FTRACE_OPS_FL_DYNAMIC |
 		FTRACE_OPS_FL_SAVE_REGS |
 		FTRACE_OPS_FL_IPMODIFY |
@@ -870,28 +943,34 @@ static int __init bdevfilter_init(void)
 	ret = bdevfilter_set(&ops_bdev_mark_dead, "bdev_mark_dead");
 	if (ret)
 		goto out_unset_submit_bio_noacct;
-#elif defined(HAVE_BLK_MARK_DISK_DEAD)
-	ret = bdevfilter_set(&ops_blk_mark_disk_dead, "blk_mark_disk_dead");
+#else
+	ret = bdevfilter_set(&ops_del_gendisk, "del_gendisk");
 	if (ret)
 		goto out_unset_submit_bio_noacct;
+
+	ret = bdevfilter_set(&ops_bdev_disk_changed, "bdev_disk_changed");
+	if (ret) {
+		goto out_unset_del_gendisk;
+	}
 #endif
 
 	ret = misc_register(&bdevfilter_misc);
 	if (ret) {
 		pr_err("Failed to register control device (%d)\n", ret);
-		goto out_unset;
+		goto out_unset_all;
 	}
 
 	return 0;
 
-out_unset:
+out_unset_all:
 #ifdef HAVE_BDEV_MARK_DEAD
 	bdevfilter_unset(&ops_bdev_mark_dead);
-out_unset_submit_bio_noacct:
-#elif defined(HAVE_BLK_MARK_DISK_DEAD)
-	bdevfilter_unset(&ops_blk_mark_disk_dead);
-out_unset_submit_bio_noacct:
+#else
+	bdevfilter_unset(&ops_bdev_disk_changed);
+out_unset_del_gendisk:
+	bdevfilter_unset(&ops_del_gendisk);
 #endif
+out_unset_submit_bio_noacct:
 	bdevfilter_unset(&ops_submit_bio_noacct);
 
 	return ret;
@@ -902,12 +981,13 @@ static void __exit bdevfilter_done(void)
 	struct bdev_extension *ext;
 
 	misc_deregister(&bdevfilter_misc);
-	bdevfilter_unset(&ops_submit_bio_noacct);
 #ifdef HAVE_BDEV_MARK_DEAD
 	bdevfilter_unset(&ops_bdev_mark_dead);
-#elif defined(HAVE_BLK_MARK_DISK_DEAD)
-	bdevfilter_unset(&ops_blk_mark_disk_dead);
+#else
+	bdevfilter_unset(&ops_bdev_disk_changed);
+	bdevfilter_unset(&ops_del_gendisk);
 #endif
+	bdevfilter_unset(&ops_submit_bio_noacct);
 
 	spin_lock(&bdev_extension_list_lock);
 	while ((ext = list_first_entry_or_null(&bdev_extension_list,

@@ -16,12 +16,49 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell 							\
 	grep -qw "TSK_TRACE_FL_TRACE_BIT" $(srctree)/include/linux/ftrace.h &&	\
 		echo -D HAVE_NOT_FTRACE_FREE_FILTER)
+#
+# [6.6 : latest]
+# include/linux/blkdev.h
+# void bdev_mark_dead(struct block_device *bdev, bool surprise);
+#
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
-	grep -qw "void bdev_mark_dead" $(srctree)/include/linux/blkdev.h && \
+	grep -qw "void bdev_mark_dead" $(srctree)/include/linux/blkdev.h &&	\
 		echo -D HAVE_BDEV_MARK_DEAD)
+#
+# [5.18 : 6.5]
+# include/linux/blkdev.h
+# void del_gendisk(struct gendisk *gp);
+# int bdev_disk_changed(struct gendisk *disk, bool invalidate)
+#
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
-	grep -qw "void blk_mark_disk_dead" $(srctree)/include/linux/blkdev.h && \
-		echo -D HAVE_BLK_MARK_DISK_DEAD)
+	grep -w "int bdev_disk_changed" $(srctree)/include/linux/blkdev.h | grep -qw "struct gendisk" && \
+		echo -D HAVE_BDEV_DISK_CHANGED_DISK)
+#
+# [5.14 : 5.17]
+# include/linux/genhd.h
+# void del_gendisk(struct gendisk *gp);
+# int bdev_disk_changed(struct gendisk *disk, bool invalidate)
+#
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+	grep -w "int bdev_disk_changed" $(srctree)/include/linux/genhd.h | grep -qw "struct gendisk" && \
+		echo -D HAVE_BDEV_DISK_CHANGED_DISK)
+#
+# [5.10 : 5.13]
+# include/linux/genhd.h
+# void del_gendisk(struct gendisk *gp);
+# int bdev_disk_changed(struct block_device *bdev, bool invalidate)
+#
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+	grep -w "int bdev_disk_changed" $(srctree)/include/linux/genhd.h | grep -qw "struct block_device" && \
+		echo -D HAVE_BDEV_DISK_CHANGED_BDEV)
+#
+# [5.10 : 5.12]
+# include/linux/genhd.h
+# struct block_device *disk_part_iter_next(struct disk_part_iter *piter);
+#
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
+	grep -qw "struct disk_part_iter" $(srctree)/include/linux/genhd.h &&	\
+		echo -D HAVE_DISK_PART_ITER)
 
 #
 # Configuration relevant for the blksnap and bdevfilter
