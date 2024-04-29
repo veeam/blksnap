@@ -689,6 +689,61 @@ static struct ftrace_ops ops_bdev_mark_dead = {
 		FTRACE_OPS_FL_IPMODIFY |
 		FTRACE_OPS_FL_PERMANENT,
 };
+
+#elif defined(HAVE_BLK_MARK_DISK_DEAD)
+
+static notrace __attribute__((optimize("no-optimize-sibling-calls")))
+void blk_mark_disk_dead_handler(struct gendisk *disk)
+{
+	struct block_device *bdev;
+	unsigned long idx;
+
+	rcu_read_lock();
+	xa_for_each(&disk->part_tbl, idx, bdev) {
+		int ret;
+		dev_t dev_id = bdev->dev_id;
+
+		rcu_read_unlock();
+		ret = __blkfilter_detach(dev_id, NULL, 0);
+		if (ret)
+			pr_err("Failed to detach bdevfilter for device [%d:%d]\n",
+				MAJOR(dev_id), MINOR(dev_id));
+		rcu_read_lock();
+	}
+	rcu_read_unlock();
+
+	blk_mark_disk_dead(disk);
+}
+
+static notrace void ftrace_handler_blk_mark_disk_dead(
+	unsigned long ip, unsigned long parent_ip, struct ftrace_ops *fops,
+#ifdef HAVE_FTRACE_REGS
+	struct ftrace_regs *fregs
+#else
+	struct pt_regs *regs
+#endif
+	)
+{
+	if (within_module(parent_ip, THIS_MODULE))
+		return;
+
+#if defined(HAVE_FTRACE_REGS_SET_INSTRUCTION_POINTER)
+	ftrace_regs_set_instruction_pointer(fregs, (unsigned long)blk_mark_disk_dead_handler);
+#elif defined(HAVE_FTRACE_REGS)
+	ftrace_instruction_pointer_set(fregs, (unsigned long)blk_mark_disk_dead_handler);
+#else
+	instruction_pointer_set(regs, (unsigned long)blk_mark_disk_dead_handler);
+#endif
+}
+
+static struct ftrace_ops ops_bdev_mark_dead = {
+	.func = ftrace_handler_blk_mark_disk_dead,
+	.flags = FTRACE_OPS_FL_DYNAMIC |
+		FTRACE_OPS_FL_SAVE_REGS |
+		FTRACE_OPS_FL_IPMODIFY |
+		FTRACE_OPS_FL_PERMANENT,
+};
+
 #endif
 
 static long unlocked_ioctl(struct file *filp, unsigned int cmd,
@@ -815,6 +870,10 @@ static int __init bdevfilter_init(void)
 	ret = bdevfilter_set(&ops_bdev_mark_dead, "bdev_mark_dead");
 	if (ret)
 		goto out_unset_submit_bio_noacct;
+#elif defined(HAVE_BLK_MARK_DISK_DEAD)
+	ret = bdevfilter_set(&ops_blk_mark_disk_dead, "blk_mark_disk_dead");
+	if (ret)
+		goto out_unset_submit_bio_noacct;
 #endif
 
 	ret = misc_register(&bdevfilter_misc);
@@ -828,6 +887,9 @@ static int __init bdevfilter_init(void)
 out_unset:
 #ifdef HAVE_BDEV_MARK_DEAD
 	bdevfilter_unset(&ops_bdev_mark_dead);
+out_unset_submit_bio_noacct:
+#elif defined(HAVE_BLK_MARK_DISK_DEAD)
+	bdevfilter_unset(&ops_blk_mark_disk_dead);
 out_unset_submit_bio_noacct:
 #endif
 	bdevfilter_unset(&ops_submit_bio_noacct);
@@ -843,6 +905,8 @@ static void __exit bdevfilter_done(void)
 	bdevfilter_unset(&ops_submit_bio_noacct);
 #ifdef HAVE_BDEV_MARK_DEAD
 	bdevfilter_unset(&ops_bdev_mark_dead);
+#elif defined(HAVE_BLK_MARK_DISK_DEAD)
+	bdevfilter_unset(&ops_blk_mark_disk_dead);
 #endif
 
 	spin_lock(&bdev_extension_list_lock);

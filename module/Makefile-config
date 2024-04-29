@@ -19,6 +19,9 @@ EXTRA_CFLAGS += $(shell 							\
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "void bdev_mark_dead" $(srctree)/include/linux/blkdev.h && \
 		echo -D HAVE_BDEV_MARK_DEAD)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
+	grep -qw "void blk_mark_disk_dead" $(srctree)/include/linux/blkdev.h && \
+		echo -D HAVE_BLK_MARK_DISK_DEAD)
 
 #
 # Configuration relevant for the blksnap and bdevfilter
