@@ -29,7 +29,35 @@
 #endif
 
 #if !defined(HAVE_BLK_ALLOC_DISK)
-static unsigned int g_snapimage_major;
+static unsigned int snapimage_major;
+static DEFINE_IDR(snapimage_minor_idr);
+static DEFINE_SPINLOCK(snapimage_minor_lock);
+
+static void free_minor(int minor)
+{
+	spin_lock(&snapimage_minor_lock);
+	idr_remove(&snapimage_minor_idr, minor);
+	spin_unlock(&snapimage_minor_lock);
+}
+
+static int new_minor(int *minor, void *ptr)
+{
+	int ret;
+
+	idr_preload(GFP_KERNEL);
+	spin_lock(&snapimage_minor_lock);
+
+	ret = idr_alloc(&snapimage_minor_idr, ptr, 0, 1 << MINORBITS, GFP_NOWAIT);
+
+	spin_unlock(&snapimage_minor_lock);
+	idr_preload_end();
+
+	if (ret < 0)
+		return ret;
+
+	*minor = ret;
+	return 0;
+}
 
 int snapimage_init(void)
 {
@@ -41,7 +69,7 @@ int snapimage_init(void)
 		       abs(mj));
 		return mj;
 	}
-	g_snapimage_major = mj;
+	snapimage_major = mj;
 	pr_debug("Snapshot image block device major %d was registered\n", mj);
 
 	return 0;
@@ -49,9 +77,9 @@ int snapimage_init(void)
 
 void snapimage_done(void)
 {
-	unregister_blkdev(g_snapimage_major, BLKSNAP_IMAGE_NAME);
+	unregister_blkdev(snapimage_major, BLKSNAP_IMAGE_NAME);
 	pr_debug("Snapshot image block device [%d] was unregistered\n",
-		g_snapimage_major);
+		snapimage_major);
 }
 #endif
 
@@ -141,13 +169,31 @@ static const struct block_device_operations bd_ops = {
 void snapimage_free(struct tracker *tracker)
 {
 	struct gendisk *disk = tracker->snap_disk;
+#if !defined(HAVE_BLK_ALLOC_DISK)
+	struct request_queue *queue;
+	int minor;
+#endif
 
 	if (!disk)
 		return;
-
 	pr_debug("Snapshot image disk %s delete\n", disk->disk_name);
+
+#if !defined(HAVE_BLK_ALLOC_DISK)
+	queue = disk->queue;
+	minor = disk->first_minor;
+#endif
 	del_gendisk(disk);
+#ifdef HAVE_BLK_ALLOC_DISK
+#ifdef HAVE_BLK_CLEANUP_DISK
+	blk_cleanup_disk(disk);
+#else
 	put_disk(disk);
+#endif
+#else
+	blk_cleanup_queue(queue);
+	put_disk(disk);
+	free_minor(minor);
+#endif
 
 	tracker->snap_disk = NULL;
 }
@@ -159,6 +205,7 @@ int snapimage_create(struct tracker *tracker)
 	struct gendisk *disk;
 #ifndef HAVE_BLK_ALLOC_DISK
 	struct request_queue *queue;
+	int minor = 0;
 #endif
 
 	pr_info("Create snapshot image device for original device [%u:%u]\n",
@@ -175,10 +222,16 @@ int snapimage_create(struct tracker *tracker)
 		return -ENOMEM;
 	}
 #else
+	ret = new_minor(&minor, tracker);
+	if (ret) {
+		pr_err("Failed to allocate minor for snapshot image device. errno=%d\n",
+		       abs(ret));
+		return ret;
+	}
 	queue = blk_alloc_queue(NUMA_NO_NODE);
 	if (!queue) {
 		pr_err("Failed to allocate disk queue\n");
-		return -ENOMEM;
+		goto fail_cleanup_minor;
 	}
 
 	disk = alloc_disk(1);
@@ -189,7 +242,8 @@ int snapimage_create(struct tracker *tracker)
 	}
 	disk->queue = queue;
 
-	disk->major = g_snapimage_major;
+	disk->major = snapimage_major;
+	disk->first_minor = minor;
 	disk->minors = 1;
 #endif
 
@@ -243,6 +297,8 @@ fail_cleanup_disk:
 	del_gendisk(disk);
 fail_cleanup_queue:
 	blk_cleanup_queue(queue);
+fail_cleanup_minor:
+	free_minor(minor);
 #endif
 	return ret;
 }
