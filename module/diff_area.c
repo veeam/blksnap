@@ -364,7 +364,6 @@ static void diff_area_image_io_work(struct work_struct *work)
 struct diff_area *diff_area_new(struct tracker *tracker,
 				struct diff_storage *diff_storage)
 {
-	int ret = 0;
 	struct diff_area *diff_area = NULL;
 	struct block_device *bdev = tracker->orig_bdev;
 
@@ -383,6 +382,11 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 	diff_area_calculate_chunk_size(diff_area);
 	if (diff_area->chunk_shift > get_chunk_maximum_shift()) {
 		pr_info("The maximum allowable chunk size has been reached.\n");
+#ifdef BLKSNAP_MEMSTAT
+		__kfree(diff_area);
+#else
+		kfree(diff_area);
+#endif
 		return ERR_PTR(-EFAULT);
 	}
 	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
@@ -426,11 +430,6 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 	log_histogram_init(&diff_area->image_hg, 4096);
 	log_histogram_init(&diff_area->cow_hg, 4096);
 #endif
-
-	if (ret) {
-		diff_area_put(diff_area);
-		return ERR_PTR(ret);
-	}
 
 	return diff_area;
 }
