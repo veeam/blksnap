@@ -89,11 +89,13 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 	struct bdev_extension *ext_tmp, *ext_new;
 	struct blkfilter *flt;
 #if defined(HAVE_BDEV_FILE_OPEN)
-	struct file *bdev_file;
+	struct file *bdev_holder;
 #elif defined(HAVE_BDEV_HANDLE)
-	struct bdev_handle *bdev_handle;
+	struct bdev_handle *bdev_holder;
+#else
+	struct block_device *bdev_holder;
 #endif
-	struct block_device *bdev;
+	struct block_device *bdev = NULL;
 	unsigned int task_flags;
 	int ret = 0;
 
@@ -105,38 +107,39 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 		return PTR_ERR(devpath);
 	pr_debug("Attach '%s' to device '%s'\n", karg.name, devpath);
 #if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_file = bdev_file_open_by_path(devpath,
+	bdev_holder = bdev_file_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_file)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev_file);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
-	bdev = file_bdev(bdev_file);
+	bdev = file_bdev(bdev_holder);
 #elif defined(HAVE_BDEV_HANDLE)
-	bdev_handle = bdev_open_by_path(devpath,
+	bdev_holder = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_handle)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
 		ret = PTR_ERR(bdev_handle);
 		goto out_free_devpath;
 	}
-	bdev = bdev_handle->bdev;
+	bdev = bdev_holder->bdev;
 #else
-	bdev = blkdev_get_by_path(devpath,
+	bdev_holder = blkdev_get_by_path(devpath,
 #if defined(HAVE_BLK_HOLDER_OPS)
 				BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL
 #else
 				FMODE_READ | FMODE_WRITE, NULL
 #endif
 				);
-	if (IS_ERR(bdev)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
+	bdev = bdev_holder;
 #endif
 
 	fops = bdevfilter_operations_find(karg.name);
@@ -199,6 +202,9 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 			pr_debug("Device is busy\n");
 		}
 	} else {
+		flt->bdev_holder = bdev_holder;
+		bdev_holder = NULL;
+
 		ext_new->flt = flt;
 		list_add_tail(&ext_new->link, &bdev_extension_list);
 		flt = NULL;
@@ -219,16 +225,17 @@ out_mutex_unlock:
 #endif
 	kfree(ext_new);
 out_blkdev_put:
+	if (bdev_holder) {
 #if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_fput(bdev_file);
+		bdev_fput(bdev_holder);
 #elif defined(HAVE_BDEV_HANDLE)
-	bdev_release(bdev_handle);
+		bdev_release(bdev_holder);
 #elif defined(HAVE_BLK_HOLDER_OPS)
-	blkdev_put(bdev, NULL);
+		blkdev_put(bdev_holder, NULL);
 #else
-	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+		blkdev_put(bdev_holder, FMODE_READ | FMODE_WRITE);
 #endif
-
+	}
 out_free_devpath:
 	kfree(devpath);
 	return ret;
@@ -237,7 +244,7 @@ out_free_devpath:
 static inline int __blkfilter_detach(dev_t dev_id, char *name, size_t name_length)
 {
 	int ret = 0;
-	struct bdev_extension *ext;
+	struct bdev_extension *ext = NULL;
 	struct blkfilter *flt = NULL;
 	const struct bdevfilter_operations *fops = NULL;
 
@@ -266,9 +273,11 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	char *devpath;
 	struct bdevfilter_name karg;
 #if defined(HAVE_BDEV_FILE_OPEN)
-	struct file *bdev_file;
+	struct file *bdev_holder;
 #elif defined(HAVE_BDEV_HANDLE)
-	struct bdev_handle *bdev_handle;
+	struct bdev_handle *bdev_holder;
+#else
+	struct block_device *bdev_holder;
 #endif
 	struct block_device *bdev;
 	int ret = 0;
@@ -283,38 +292,39 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	pr_debug("Detach '%s' from device '%s'\n", karg.name, devpath);
 
 #if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_file = bdev_file_open_by_path(devpath,
+	bdev_holder = bdev_file_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_file)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev_file);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
-	bdev = file_bdev(bdev_file);
+	bdev = file_bdev(bdev_holder);
 #elif defined(HAVE_BDEV_HANDLE)
-	bdev_handle = bdev_open_by_path(devpath,
+	bdev_holder = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_handle)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev_handle);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
-	bdev = bdev_handle->bdev;
+	bdev = bdev_holder->bdev;
 #else
-	bdev = blkdev_get_by_path(devpath,
+	bdev_holder = blkdev_get_by_path(devpath,
 #if defined(HAVE_BLK_HOLDER_OPS)
 				BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL
 #else
 				FMODE_READ | FMODE_WRITE, NULL
 #endif
 				);
-	if (IS_ERR(bdev)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
+	bdev = bdev_holder;
 #endif
 
 #ifdef HAVE_GENDISK_OPEN_MUTEX
@@ -337,13 +347,13 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 #endif
 
 #if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_fput(bdev_file);
+	bdev_fput(bdev_holder);
 #elif defined(HAVE_BDEV_HANDLE)
-	bdev_release(bdev_handle);
+	bdev_release(bdev_holder);
 #elif defined(HAVE_BLK_HOLDER_OPS)
-	blkdev_put(bdev, NULL);
+	blkdev_put(bdev_holder, NULL);
 #else
-	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+	blkdev_put(bdev_holder, FMODE_READ | FMODE_WRITE);
 #endif
 out_free_devpath:
 	kfree(devpath);
@@ -355,9 +365,11 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 	char *devpath;
 	struct bdevfilter_ctl karg;
 #if defined(HAVE_BDEV_FILE_OPEN)
-	struct file *bdev_file;
+	struct file *bdev_holder;
 #elif defined(HAVE_BDEV_HANDLE)
-	struct bdev_handle *bdev_handle;
+	struct bdev_handle *bdev_holder;
+#else
+	struct block_device *bdev_holder;
 #endif
 	struct block_device *bdev;
 	struct bdev_extension *ext;
@@ -373,38 +385,39 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 		return PTR_ERR(devpath);
 	pr_debug("Control '%s' to device '%s'\n", karg.name, devpath);
 #if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_file = bdev_file_open_by_path(devpath,
+	bdev_holder = bdev_file_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_file)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev_file);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
-	bdev = file_bdev(bdev_file);
+	bdev = file_bdev(bdev_holder);
 #elif defined(HAVE_BDEV_HANDLE)
-	bdev_handle = bdev_open_by_path(devpath,
+	bdev_holder = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_handle)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev_handle);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
-	bdev = bdev_handle->bdev;
+	bdev = bdev_holder->bdev;
 #else
-	bdev = blkdev_get_by_path(devpath,
+	bdev_holder = blkdev_get_by_path(devpath,
 #if defined(HAVE_BLK_HOLDER_OPS)
 				BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL
 #else
 				FMODE_READ | FMODE_WRITE, NULL
 #endif
 				);
-	if (IS_ERR(bdev)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev);
+		ret = PTR_ERR(bdev_holder);
 		goto out_free_devpath;
 	}
+	bdev = bdev_holder;
 #endif
 
 #ifdef HAVE_GENDISK_OPEN_MUTEX
@@ -447,13 +460,13 @@ out_mutex_unlock:
 	mutex_unlock(&bdev->bd_mutex);
 #endif
 #if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_fput(bdev_file);
+	bdev_fput(bdev_holder);
 #elif defined(HAVE_BDEV_HANDLE)
-	bdev_release(bdev_handle);
+	bdev_release(bdev_holder);
 #elif defined(HAVE_BLK_HOLDER_OPS)
-	blkdev_put(bdev, NULL);
+	blkdev_put(bdev_holder, NULL);
 #else
-	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+	blkdev_put(bdev_holder, FMODE_READ | FMODE_WRITE);
 #endif
 out_free_devpath:
 	kfree(devpath);
@@ -470,6 +483,18 @@ void bdevfilter_free(struct kref *kref)
 	bdevfilter_freeze(flt);
 	percpu_ref_exit(&flt->freeze_ref);
 	flt->fops->detach(flt);
+
+	if (flt->bdev_holder) {
+#if defined(HAVE_BDEV_FILE_OPEN)
+		bdev_fput(flt->bdev_holder);
+#elif defined(HAVE_BDEV_HANDLE)
+		bdev_release(flt->bdev_holder);
+#elif defined(HAVE_BLK_HOLDER_OPS)
+		blkdev_put(flt->bdev_holder, NULL);
+#else
+		blkdev_put(flt->bdev_holder, FMODE_READ | FMODE_WRITE);
+#endif
+	}
 }
 
 void bdevfilter_detach_all(struct bdevfilter_operations *fops)

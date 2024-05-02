@@ -26,6 +26,14 @@ struct blkfilter {
 	struct percpu_ref freeze_ref;
 	struct wait_queue_head freeze_wq;
 	bool is_frozen;
+
+#if defined(HAVE_BDEV_FILE_OPEN)
+	struct file *bdev_holder;
+#elif defined(HAVE_BDEV_HANDLE)
+	struct bdev_handle *bdev_holder;
+#else
+	struct block_device *bdev_holder;
+#endif
 };
 
 /**
