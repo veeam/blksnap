@@ -515,43 +515,43 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 	int ret = 0;
 	struct snapshot *snapshot;
 #if defined(HAVE_BDEV_FILE_OPEN)
-	struct file *bdev_file;
+	struct file *bdev_holder;
 #elif defined(HAVE_BDEV_HANDLE)
-	struct bdev_handle *bdev_handle;
+	struct bdev_handle *bdev_holder;
 #else
-	struct block_device *bdev;
+	struct block_device *bdev_holder;
 #endif
 	dev_t dev_id;
 	struct blksnap_sectors range;
 	struct blksnap_sectors* __user src;
 
 #if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_file = bdev_file_open_by_path(devpath,
+	bdev_holder = bdev_file_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_file)) {
+	if (IS_ERR(bdev_holder)) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev_file);
+		ret = PTR_ERR(bdev_holder);
 	}else
-		dev_id = file_bdev(bdev_file)->bd_dev;
+		dev_id = file_bdev(bdev_holder)->bd_dev;
 #elif defined(HAVE_BDEV_HANDLE)
-	bdev_handle = bdev_open_by_path(devpath,
+	bdev_holder = bdev_open_by_path(devpath,
 					BLK_OPEN_READ | BLK_OPEN_WRITE,
 					NULL, NULL);
-	if (IS_ERR(bdev_handle))
-		ret = PTR_ERR(bdev_handle);
+	if (IS_ERR(bdev_holder))
+		ret = PTR_ERR(bdev_holder);
 	else
-		dev_id = bdev_handle->bdev->bd_dev;
+		dev_id = bdev_holder->bdev->bd_dev;
 #else
 #if defined(HAVE_BLK_HOLDER_OPS)
-	bdev = blkdev_get_by_path(devpath, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
+	bdev_holder = blkdev_get_by_path(devpath, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
 #else
-	bdev = blkdev_get_by_path(devpath, FMODE_READ | FMODE_WRITE, NULL);
+	bdev_holder = blkdev_get_by_path(devpath, FMODE_READ | FMODE_WRITE, NULL);
 #endif
-	if (IS_ERR(bdev))
-		ret = PTR_ERR(bdev);
+	if (IS_ERR(bdev_holder))
+		ret = PTR_ERR(bdev_holder);
 	else
-		dev_id = bdev->bd_dev;
+		dev_id = bdev_holder->bd_dev;
 #endif
 	if (ret) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
@@ -565,13 +565,7 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 	}
 	down_write(&snapshot->rw_lock);
 
-#if defined(HAVE_BDEV_FILE_OPEN)
-	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev_file);
-#elif defined(HAVE_BDEV_HANDLE)
-	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev_handle);
-#else
-	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev);
-#endif
+	ret = diff_storage_add_bdev(snapshot->diff_storage, bdev_holder);
 	if (ret) {
 		if (ret == -EALREADY)
 			ret = 0;
@@ -579,15 +573,8 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 			pr_err("Failed to add a block device\n");
 			goto out_snapshot_put;
 		}
-	} else {
-#if defined(HAVE_BDEV_FILE_OPEN)
-		bdev_file = NULL;
-#elif defined(HAVE_BDEV_HANDLE)
-		bdev_handle = NULL;
-#else
-		bdev = NULL;
-#endif
-	}
+	} else
+		bdev_holder = NULL;
 
 	for (src = ranges; src < (ranges + count); src++) {
 		if (copy_from_user(&range, src, sizeof(range))) {
@@ -618,19 +605,17 @@ out_snapshot_put:
 	up_write(&snapshot->rw_lock);
 	snapshot_put(snapshot);
 out_bdev_release:
+	if (bdev_holder) {
 #if defined(HAVE_BDEV_FILE_OPEN)
-	if (bdev_file)
-		bdev_fput(bdev_file);
+		bdev_fput(bdev_holder);
 #elif defined(HAVE_BDEV_HANDLE)
-	if (bdev_handle)
-		bdev_release(bdev_handle);
+		bdev_release(bdev_holder);
 #elif defined(HAVE_BLK_HOLDER_OPS)
-	if (bdev)
-		blkdev_put(bdev, NULL);
+		blkdev_put(bdev_holder, NULL);
 #else
-	if (bdev)
-		blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+		blkdev_put(bdev_holder, FMODE_READ | FMODE_WRITE);
 #endif
+	}
 out:
 	return ret;
 }
