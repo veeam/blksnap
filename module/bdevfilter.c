@@ -739,7 +739,7 @@ static inline void __blkfilter_detach_disk(struct gendisk *disk)
 		bdput(bdev);
 	}
 	disk_part_iter_exit(&piter);
-	bdev = bdget_disk(disk, part->partno);
+	bdev = bdget_disk(disk, 0);
 	if (!bdev)
 		return;
 	__blkfilter_detach(bdev->bd_dev, NULL, 0);
