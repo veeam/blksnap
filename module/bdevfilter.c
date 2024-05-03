@@ -682,13 +682,7 @@ static struct ftrace_ops ops_submit_bio_noacct = {
 static notrace __attribute__((optimize("no-optimize-sibling-calls")))
 void bdev_mark_dead_handler(struct block_device *bdev, bool surprise)
 {
-	int ret;
-
-	ret = __blkfilter_detach(bdev->bd_dev, NULL, 0);
-	if (ret)
-		pr_err("Failed to detach bdevfilter for device [%d:%d]\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-
+	__blkfilter_detach(bdev->bd_dev, NULL, 0);
 	bdev_mark_dead(bdev, surprise);
 }
 
