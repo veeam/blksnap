@@ -303,14 +303,15 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 #else
 	if (inode_unhashed(bdev->bd_inode))
 #endif
-	{
 		ret = -ENODEV;
-		goto out_mutex_unlock;
-	}
 
-	//ret = blk_queue_enter(bdev_get_queue(bdev), 0);
-	//if (ret)
-	//	goto out_mutex_unlock;
+#ifdef HAVE_GENDISK_OPEN_MUTEX
+	mutex_unlock(&bdev->bd_disk->open_mutex);
+#else
+	mutex_unlock(&bdev->bd_mutex);
+#endif
+	if (ret)
+		goto out_bdev_close;
 
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(bdev->bd_dev);
@@ -318,20 +319,15 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 		flt = bdevfilter_get(ext->flt);
 	spin_unlock(&bdev_extension_list_lock);
 
-	if (flt) {
-		ret = flt->fops->ctl(flt, karg.cmd, u64_to_user_ptr(karg.opt),
-			    &karg.optlen);
-		bdevfilter_put(flt);
-	} else
+	if (!flt) {
 		ret = -ENOENT;
+		goto out_bdev_close;
+	}
 
-	//blk_queue_exit(bdev_get_queue(bdev));
-out_mutex_unlock:
-#ifdef HAVE_GENDISK_OPEN_MUTEX
-	mutex_unlock(&bdev->bd_disk->open_mutex);
-#else
-	mutex_unlock(&bdev->bd_mutex);
-#endif
+	ret = flt->fops->ctl(flt, karg.cmd, u64_to_user_ptr(karg.opt), &karg.optlen);
+	bdevfilter_put(flt);
+
+out_bdev_close:
 	bdev_close(bdev_holder);
 out_free_devpath:
 	kfree(devpath);
