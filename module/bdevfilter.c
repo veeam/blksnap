@@ -293,26 +293,6 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 		goto out_free_devpath;
 	}
 
-#ifdef HAVE_GENDISK_OPEN_MUTEX
-	mutex_lock(&bdev->bd_disk->open_mutex);
-#else
-	mutex_lock(&bdev->bd_mutex);
-#endif
-#ifdef HAVE_DISK_LIVE
-	if (!disk_live(bdev->bd_disk))
-#else
-	if (inode_unhashed(bdev->bd_inode))
-#endif
-		ret = -ENODEV;
-
-#ifdef HAVE_GENDISK_OPEN_MUTEX
-	mutex_unlock(&bdev->bd_disk->open_mutex);
-#else
-	mutex_unlock(&bdev->bd_mutex);
-#endif
-	if (ret)
-		goto out_bdev_close;
-
 	spin_lock(&bdev_extension_list_lock);
 	ext = bdev_extension_find(bdev->bd_dev);
 	if (ext && (strncmp(ext->flt->fops->name, karg.name, BDEVFILTER_NAME_LENGTH) == 0))
