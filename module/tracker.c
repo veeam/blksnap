@@ -355,18 +355,18 @@ int tracker_take_snapshot(struct tracker *tracker)
 		if (ret) {
 			pr_err("Failed to create tracker. errno=%d\n",
 			       abs(ret));
-			goto out_unfreeze;
+			goto out;
 		}
 	}
 
 	cbt_map_switch(tracker->cbt_map);
 	atomic_set(&tracker->snapshot_is_taken, true);
 
-out_unfreeze:
+out:
 #ifdef BLKSNAP_STANDALONE
 	bdevfilter_unfreeze(&tracker->filter);
 #endif
-	return 0;
+	return ret;
 }
 
 void tracker_release_snapshot(struct tracker *tracker)
