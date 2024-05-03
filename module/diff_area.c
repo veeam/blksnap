@@ -173,6 +173,7 @@ void diff_area_free(struct kref *kref)
 
 	diff_buffer_cleanup(diff_area);
 	tracker_put(diff_area->tracker);
+	bdev_close(diff_area->orig_bdev_holder);
 #ifdef BLKSNAP_MEMSTAT
 	__kfree(diff_area);
 #else
@@ -364,8 +365,8 @@ static void diff_area_image_io_work(struct work_struct *work)
 struct diff_area *diff_area_new(struct tracker *tracker,
 				struct diff_storage *diff_storage)
 {
+	int ret;
 	struct diff_area *diff_area = NULL;
-	struct block_device *bdev = tracker->orig_bdev;
 
 #ifdef BLKSNAP_MEMSTAT
 	diff_area = __kzalloc(sizeof(struct diff_area), GFP_KERNEL);
@@ -376,22 +377,27 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 		return ERR_PTR(-ENOMEM);
 
 	kref_init(&diff_area->kref);
-	diff_area->orig_bdev = bdev;
+#ifdef BLKSNAP_STANDALONE
+	ret = bdev_open(tracker->orig_bdevpath,
+			&diff_area->orig_bdev_holder,
+			&diff_area->orig_bdev);
+	if (ret)
+		goto out_kfree;
+#else
+	diff_area->orig_bdev = tracker->orig_bdev;
+#endif
 	diff_area->diff_storage = diff_storage;
 
 	diff_area_calculate_chunk_size(diff_area);
 	if (diff_area->chunk_shift > get_chunk_maximum_shift()) {
 		pr_info("The maximum allowable chunk size has been reached.\n");
-#ifdef BLKSNAP_MEMSTAT
-		__kfree(diff_area);
-#else
-		kfree(diff_area);
-#endif
-		return ERR_PTR(-EFAULT);
+		ret = -EFAULT;
+		goto out_bdev_close;
 	}
 	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
 		 (1ull << diff_area->chunk_shift),
-		 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+		 MAJOR(diff_area->orig_bdev->bd_dev),
+		 MINOR(diff_area->orig_bdev->bd_dev));
 
 	xa_init(&diff_area->chunk_map);
 
@@ -415,8 +421,8 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 	INIT_LIST_HEAD(&diff_area->image_io_queue);
 	INIT_WORK(&diff_area->image_io_work, diff_area_image_io_work);
 
-	diff_area->physical_blksz = bdev_physical_block_size(bdev);
-	diff_area->logical_blksz = bdev_logical_block_size(bdev);
+	diff_area->physical_blksz = bdev_physical_block_size(diff_area->orig_bdev);
+	diff_area->logical_blksz = bdev_logical_block_size(diff_area->orig_bdev);
 	diff_area->corrupt_flag = 0;
 	diff_area->store_queue_processing = false;
 
@@ -432,6 +438,19 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 #endif
 
 	return diff_area;
+
+#ifdef BLKSNAP_STANDALONE
+out_bdev_close:
+	bdev_close(diff_area->orig_bdev_holder);
+#endif
+
+out_kfree:
+#ifdef BLKSNAP_MEMSTAT
+	__kfree(diff_area);
+#else
+	kfree(diff_area);
+#endif
+	return ERR_PTR(ret);
 }
 
 static inline unsigned int chunk_limit(struct chunk *chunk,

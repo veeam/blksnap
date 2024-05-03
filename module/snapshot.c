@@ -173,6 +173,7 @@ int snapshot_add_device(const uuid_t *id, struct tracker *tracker)
 	int ret = 0;
 	struct snapshot *snapshot = NULL;
 
+#if !defined(BLKSNAP_STANDALONE)
 #ifdef CONFIG_BLK_DEV_INTEGRITY
 	if (tracker->orig_bdev->bd_disk->queue->integrity.profile) {
 		pr_err("Blksnap is not compatible with data integrity\n");
@@ -183,16 +184,6 @@ int snapshot_add_device(const uuid_t *id, struct tracker *tracker)
 #endif
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
-#if defined(BLKSNAP_STANDALONE)
-#if defined(HAVE_BLK_CRYPTO_PROFILE)
-	if (tracker->orig_bdev->bd_disk->queue->crypto_profile) {
-		pr_err("Blksnap is not compatible with hardware inline encryption\n");
-		ret = -EPERM;
-		goto out_up;
-	} else
-		pr_debug("Inline encryption not found\n");
-#endif
-#else
 	if (tracker->orig_bdev->bd_disk->queue->crypto_profile) {
 		pr_err("Blksnap is not compatible with hardware inline encryption\n");
 		ret = -EPERM;
@@ -514,48 +505,16 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 {
 	int ret = 0;
 	struct snapshot *snapshot;
-#if defined(HAVE_BDEV_FILE_OPEN)
-	struct file *bdev_holder;
-#elif defined(HAVE_BDEV_HANDLE)
-	struct bdev_handle *bdev_holder;
-#else
-	struct block_device *bdev_holder;
-#endif
-	dev_t dev_id;
+	bdev_holder_t *bdev_holder;
+
+	struct block_device *bdev;
 	struct blksnap_sectors range;
 	struct blksnap_sectors* __user src;
 
-#if defined(HAVE_BDEV_FILE_OPEN)
-	bdev_holder = bdev_file_open_by_path(devpath,
-					BLK_OPEN_READ | BLK_OPEN_WRITE,
-					NULL, NULL);
-	if (IS_ERR(bdev_holder)) {
-		pr_err("Failed to open a block device '%s'\n", devpath);
-		ret = PTR_ERR(bdev_holder);
-	}else
-		dev_id = file_bdev(bdev_holder)->bd_dev;
-#elif defined(HAVE_BDEV_HANDLE)
-	bdev_holder = bdev_open_by_path(devpath,
-					BLK_OPEN_READ | BLK_OPEN_WRITE,
-					NULL, NULL);
-	if (IS_ERR(bdev_holder))
-		ret = PTR_ERR(bdev_holder);
-	else
-		dev_id = bdev_holder->bdev->bd_dev;
-#else
-#if defined(HAVE_BLK_HOLDER_OPS)
-	bdev_holder = blkdev_get_by_path(devpath, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
-#else
-	bdev_holder = blkdev_get_by_path(devpath, FMODE_READ | FMODE_WRITE, NULL);
-#endif
-	if (IS_ERR(bdev_holder))
-		ret = PTR_ERR(bdev_holder);
-	else
-		dev_id = bdev_holder->bd_dev;
-#endif
+	ret = bdev_open(devpath, &bdev_holder, &bdev);
 	if (ret) {
 		pr_err("Failed to open a block device '%s'\n", devpath);
-		goto out;;
+		return ret;
 	}
 
 	snapshot = snapshot_get_by_id(id);
@@ -583,7 +542,7 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 			break;
 		}
 
-		ret = diff_storage_add_range(snapshot->diff_storage, dev_id, range);
+		ret = diff_storage_add_range(snapshot->diff_storage, bdev->bd_dev, range);
 		if (ret) {
 			pr_err("Failed to add a range\n");
 			break;
@@ -605,18 +564,8 @@ out_snapshot_put:
 	up_write(&snapshot->rw_lock);
 	snapshot_put(snapshot);
 out_bdev_release:
-	if (bdev_holder) {
-#if defined(HAVE_BDEV_FILE_OPEN)
-		bdev_fput(bdev_holder);
-#elif defined(HAVE_BDEV_HANDLE)
-		bdev_release(bdev_holder);
-#elif defined(HAVE_BLK_HOLDER_OPS)
-		blkdev_put(bdev_holder, NULL);
-#else
-		blkdev_put(bdev_holder, FMODE_READ | FMODE_WRITE);
-#endif
-	}
-out:
+	if (bdev_holder)
+		bdev_close(bdev_holder);
 	return ret;
 }
 #endif

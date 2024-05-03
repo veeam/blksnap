@@ -39,7 +39,9 @@ void tracker_free(struct kref *kref)
 		diff_area_put(tracker->diff_area);
 	if (tracker->cbt_map)
 		cbt_map_destroy(tracker->cbt_map);
-
+#ifdef BLKSNAP_STANDALONE
+	kfree(tracker->orig_bdevpath);
+#endif
 #ifdef BLKSNAP_MEMSTAT
 	__kfree(tracker);
 #else
@@ -98,7 +100,11 @@ static bool tracker_submit_bio(struct bio *bio)
 	return diff_area_cow(tracker->diff_area, bio);
 }
 
+#ifdef BLKSNAP_STANDALONE
+static struct blkfilter *tracker_attach(struct block_device *bdev, char *bdevpath)
+#else
 static struct blkfilter *tracker_attach(struct block_device *bdev)
+#endif
 {
 	struct tracker *tracker = NULL;
 	struct cbt_map *cbt_map;
@@ -106,7 +112,7 @@ static struct blkfilter *tracker_attach(struct block_device *bdev)
 	pr_debug("Creating tracker for device [%u:%u]\n",
 		 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
 
-	cbt_map = cbt_map_create(bdev);
+	cbt_map = cbt_map_create(bdev_nr_sectors(bdev));
 	if (!cbt_map) {
 		pr_err("Failed to create CBT map for device [%u:%u]\n",
 		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
@@ -123,7 +129,11 @@ static struct blkfilter *tracker_attach(struct block_device *bdev)
 		return ERR_PTR(-ENOMEM);
 	}
 
+#ifdef BLKSNAP_STANDALONE
+	tracker->orig_bdevpath = bdevpath;
+#else
 	tracker->orig_bdev = bdev;
+#endif
 	mutex_init(&tracker->ctl_lock);
 	INIT_LIST_HEAD(&tracker->link);
 	kref_init(&tracker->kref);
@@ -323,7 +333,7 @@ int tracker_take_snapshot(struct tracker *tracker)
 {
 	int ret = 0;
 	bool cbt_reset_needed = false;
-	struct block_device *orig_bdev = tracker->orig_bdev;
+	struct block_device *orig_bdev = tracker->diff_area->orig_bdev;
 	sector_t capacity;
 
 #ifdef BLKSNAP_STANDALONE
@@ -367,20 +377,20 @@ void tracker_release_snapshot(struct tracker *tracker)
 		return;
 
 	snapimage_free(tracker);
-#if defined(HAVE_BD_QUEUE)
-	blk_mq_freeze_queue(tracker->orig_bdev->bd_queue);
+#ifdef BLKSNAP_STANDALONE
+	bdevfilter_freeze(&tracker->filter);
 #else
-	blk_mq_freeze_queue(tracker->orig_bdev->bd_disk->queue);
+	blk_mq_freeze_queue(tracker->orig_bdev->bd_queue);
 #endif
 	pr_debug("Tracker for device [%u:%u] release snapshot\n",
 		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->diff_area = NULL;
-#if defined(HAVE_BD_QUEUE)
-	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_queue);
+#ifdef BLKSNAP_STANDALONE
+	bdevfilter_unfreeze(&tracker->filter);
 #else
-	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_disk->queue);
+	blk_mq_unfreeze_queue(tracker->orig_bdev->bd_queue);
 #endif
 #ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 	flush_work(&diff_area->cow_queue_work);

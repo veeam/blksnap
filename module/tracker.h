@@ -49,7 +49,11 @@ struct diff_area;
  */
 struct tracker {
 	struct blkfilter filter;
+#ifdef BLKSNAP_STANDALONE
+	char *orig_bdevpath;
+#else
 	struct block_device *orig_bdev;
+#endif
 	struct mutex ctl_lock;
 	struct list_head link;
 	struct kref kref;

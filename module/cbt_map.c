@@ -121,7 +121,7 @@ void cbt_map_destroy(struct cbt_map *cbt_map)
 #endif
 }
 
-struct cbt_map *cbt_map_create(struct block_device *bdev)
+struct cbt_map *cbt_map_create(sector_t device_capacity)
 {
 	struct cbt_map *cbt_map = NULL;
 	int ret;
@@ -135,7 +135,7 @@ struct cbt_map *cbt_map_create(struct block_device *bdev)
 	if (cbt_map == NULL)
 		return NULL;
 
-	cbt_map->device_capacity = bdev_nr_sectors(bdev);
+	cbt_map->device_capacity = device_capacity;
 	cbt_map_calculate_block_size(cbt_map);
 
 	ret = cbt_map_allocate(cbt_map);

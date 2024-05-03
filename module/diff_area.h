@@ -11,7 +11,9 @@
 #include <linux/blkdev.h>
 #include <linux/xarray.h>
 #include "event_queue.h"
-
+#ifdef BLKSNAP_STANDALONE
+#include "compat.h"
+#endif
 #ifdef BLKSNAP_HISTOGRAM
 #include "log_histogram.h"
 #endif
@@ -119,6 +121,9 @@ struct tracker;
  */
 struct diff_area {
 	struct kref kref;
+#ifdef BLKSNAP_STANDALONE
+	bdev_holder_t *orig_bdev_holder;
+#endif
 	struct block_device *orig_bdev;
 	struct diff_storage *diff_storage;
 	struct tracker *tracker;
