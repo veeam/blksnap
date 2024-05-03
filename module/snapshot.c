@@ -406,10 +406,10 @@ static int snapshot_release_trackers(struct snapshot *snapshot)
 	struct tracker *tracker;
 
 	down_write(&snapshot->rw_lock);
-
-	list_for_each_entry(tracker, &snapshot->trackers, link)
+	while ((tracker = list_first_entry_or_null(&snapshot->trackers, struct tracker, link))) {
+		list_del_init(&tracker->link);
 		tracker_release_snapshot(tracker);
-
+	}
 	up_write(&snapshot->rw_lock);
 	return ret;
 }
