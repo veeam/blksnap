@@ -254,13 +254,13 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 	if (inode_unhashed(bdev->bd_inode))
 #endif
 		ret = -ENODEV;
-	else
-		ret = __blkfilter_detach(bdev->bd_dev, karg.name, BDEVFILTER_NAME_LENGTH);
 #ifdef HAVE_GENDISK_OPEN_MUTEX
 	mutex_unlock(&bdev->bd_disk->open_mutex);
 #else
 	mutex_unlock(&bdev->bd_mutex);
 #endif
+	if (!ret)
+		ret = __blkfilter_detach(bdev->bd_dev, karg.name, BDEVFILTER_NAME_LENGTH);
 
 	bdev_close(bdev_holder);
 out_free_devpath:
