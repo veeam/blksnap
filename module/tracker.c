@@ -26,9 +26,8 @@
 #include "memstat.h"
 #endif
 
-void tracker_free(struct kref *kref)
+void tracker_free(struct tracker *tracker)
 {
-	struct tracker *tracker = container_of(kref, struct tracker, kref);
 
 	might_sleep();
 
@@ -136,7 +135,6 @@ static struct blkfilter *tracker_attach(struct block_device *bdev)
 #endif
 	mutex_init(&tracker->ctl_lock);
 	INIT_LIST_HEAD(&tracker->link);
-	kref_init(&tracker->kref);
 	tracker->dev_id = bdev->bd_dev;
 	atomic_set(&tracker->snapshot_is_taken, false);
 	tracker->cbt_map = cbt_map;
@@ -155,7 +153,7 @@ static void tracker_detach(struct blkfilter *flt)
 	pr_debug("Detach tracker from device [%u:%u]\n",
 		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 
-	tracker_put(tracker);
+	tracker_free(tracker);
 }
 
 static int ctl_cbtinfo(struct tracker *tracker, __u8 __user *buf, __u32 *plen)

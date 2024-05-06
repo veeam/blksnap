@@ -325,6 +325,7 @@ void bdevfilter_free(struct kref *kref)
 	percpu_ref_exit(&flt->freeze_ref);
 	flt->fops->detach(flt);
 }
+EXPORT_SYMBOL_GPL(bdevfilter_free);
 
 void bdevfilter_detach_all(struct bdevfilter_operations *fops)
 {
@@ -334,6 +335,8 @@ void bdevfilter_detach_all(struct bdevfilter_operations *fops)
 	while ((ext = list_first_entry_or_null(&bdev_extension_list,
 					       struct bdev_extension, link))) {
 		list_del(&ext->link);
+		if (fops && (ext->flt->fops != fops))
+			continue;
 		spin_unlock(&bdev_extension_list_lock);
 
 		bdevfilter_put(ext->flt);
@@ -826,8 +829,6 @@ out_unset_submit_bio_noacct:
 
 static void __exit bdevfilter_done(void)
 {
-	struct bdev_extension *ext;
-
 	misc_deregister(&bdevfilter_misc);
 #ifdef HAVE_BDEV_MARK_DEAD
 	bdevfilter_unset(&ops_bdev_mark_dead);
@@ -837,13 +838,7 @@ static void __exit bdevfilter_done(void)
 #endif
 	bdevfilter_unset(&ops_submit_bio_noacct);
 
-	spin_lock(&bdev_extension_list_lock);
-	while ((ext = list_first_entry_or_null(&bdev_extension_list,
-					       struct bdev_extension, link))) {
-		list_del(&ext->link);
-		kfree(ext);
-	}
-	spin_unlock(&bdev_extension_list_lock);
+	bdevfilter_detach_all(NULL);
 }
 
 module_init(bdevfilter_init);

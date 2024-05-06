@@ -56,7 +56,6 @@ struct tracker {
 #endif
 	struct mutex ctl_lock;
 	struct list_head link;
-	struct kref kref;
 	dev_t dev_id;
 
 	atomic_t snapshot_is_taken;
@@ -69,15 +68,14 @@ struct tracker {
 int __init tracker_init(void);
 void tracker_done(void);
 
-void tracker_free(struct kref *kref);
 static inline void tracker_put(struct tracker *tracker)
 {
 	if (likely(tracker))
-		kref_put(&tracker->kref, tracker_free);
+		bdevfilter_put(&tracker->filter);
 };
 static inline void tracker_get(struct tracker *tracker)
 {
-	kref_get(&tracker->kref);
+	bdevfilter_get(&tracker->filter);
 };
 int tracker_take_snapshot(struct tracker *tracker);
 void tracker_release_snapshot(struct tracker *tracker);
