@@ -627,14 +627,32 @@ static struct ftrace_ops ops_del_gendisk = {
 static notrace __attribute__((optimize("no-optimize-sibling-calls")))
 int bdev_disk_changed_handler(struct gendisk *disk, bool invalidate)
 {
+#ifdef GENHD_FL_UP
+	if (!(disk->flags & GENHD_FL_UP))
+		goto out;
+#else
+	if (!disk_live(disk))
+		goto out;
+#endif
+	if (disk->open_partitions)
+		goto out;
 	__blkfilter_detach_disk(disk);
+out:
 	return bdev_disk_changed(disk, invalidate);
 }
 #elif defined(HAVE_BDEV_DISK_CHANGED_BDEV)
 static notrace __attribute__((optimize("no-optimize-sibling-calls")))
 int bdev_disk_changed_handler(struct block_device *bdev, bool invalidate)
 {
-	__blkfilter_detach_disk(bdev->bd_disk);
+	struct gendisk *disk = bdev->bd_disk;
+
+	if (!(disk->flags & GENHD_FL_UP))
+		goto out;
+	if (bdev->bd_part_count)
+		goto out;
+
+	__blkfilter_detach_disk(disk);
+out:
 	return bdev_disk_changed(bdev, invalidate);
 }
 #endif
