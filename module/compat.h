@@ -203,13 +203,13 @@ static inline int bdev_open_excl(const char *bdevpath, void *owner,
 static inline void bdev_close_excl(bdev_holder_t *bdev_holder, void *owner)
 {
 	(void)owner;
-	bdev_release(bdev_holder)
+	bdev_release(bdev_holder);
 }
 static inline dev_t bdev_id_by_holder(bdev_holder_t *bdev_holder)
 {
 	return bdev_holder->bdev->bd_dev;
 }
-static inline dev_t bdev_by_holder(bdev_holder_t *bdev_holder)
+static inline struct block_device *bdev_by_holder(bdev_holder_t *bdev_holder)
 {
 	return bdev_holder->bdev;
 }

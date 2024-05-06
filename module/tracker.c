@@ -26,7 +26,7 @@
 #include "memstat.h"
 #endif
 
-void tracker_free(struct tracker *tracker)
+static void tracker_free(struct tracker *tracker)
 {
 
 	might_sleep();
