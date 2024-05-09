@@ -2,7 +2,7 @@ Source: blksnap-dkms
 Section: kernel
 Priority: optional
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
-Build-Depends: debhelper (>= 9.0.0), dh-dkms | dkms
+Build-Depends: debhelper (>= 10.0.0), dh-dkms | dkms
 Homepage: https://github.org/veeam/blksnap
 Testsuite: autopkgtest-pkg-dkms
 

@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Veeam Software Group GmbH <veeam_team@veeam.com>
 Build-Depends:
  bash,
- debhelper (>= 9.0.0),
+ debhelper (>= 10.0.0),
 Homepage: https://github.org/veeam/blksnap
 
 Package: blksnap-dev
