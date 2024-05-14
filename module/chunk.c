@@ -288,6 +288,11 @@ static void chunk_diff_bio_complete(struct kiocb *iocb, long ret)
 {
 	struct chunk_io_ctx *io_ctx;
 
+#ifdef HAVE_IOCB_ITER
+	if (iocb->ki_flags & IOCB_WRITE)
+		kiocb_end_write(iocb);
+#endif
+
 	if (unlikely(ret < 0))
 		pr_err("Failed to write data to difference storage\n");
 
@@ -300,18 +305,15 @@ void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
 	struct file *diff_file = io_ctx->chunk->diff_file;
 	ssize_t ret;
 
-#ifdef BLKSNAP_STANDALONE
-	if (bio_data_dir(io_ctx->bio))
-#else
-	if (io_ctx->iov_iter.data_source)
-#endif
 #ifdef HAVE_IOCB_ITER
+	if (io_ctx->iocb.ki_flags & IOCB_WRITE)
 		ret = vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
 							&io_ctx->iov_iter);
 	else
 		ret = vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
 							&io_ctx->iov_iter);
 #else
+	if (bio_data_dir(io_ctx->bio))
 		ret = blksnap_vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
 							&io_ctx->iov_iter);
 	else
