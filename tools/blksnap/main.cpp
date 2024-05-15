@@ -808,6 +808,8 @@ public:
 
                         if ((err == ENOENT) || (err == EINTR))
                             continue;
+                        if (err == ESRCH)
+                            throw std::system_error(err, std::generic_category(), "Snapshot not found");
 
                         throw std::system_error(err, std::generic_category(), "Failed to get event from snapshot");
                     }
@@ -1144,6 +1146,12 @@ public:
                     if ((err == ENOENT) || (err == EINTR))
                         continue;
 
+                    if (err == ESRCH)
+                    {
+                        std::cout << "Snapshot not found" << std::endl;
+                        break;
+                    }
+
                     throw std::system_error(err, std::generic_category(), "Failed to get event from snapshot");
                 }
 
@@ -1170,7 +1178,7 @@ public:
             std::cerr << ex.what() << std::endl;
             throw std::runtime_error("Snapshot watcher failed: " + std::string(ex.what()));
         }
-        std::cout << "Snapshot watcher finished." << std::endl;
+        std::cout << "Snapshot watcher finished" << std::endl;
     };
 };
 
