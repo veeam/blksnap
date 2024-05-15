@@ -75,14 +75,8 @@ echo "Destroy snapshot"
 #read -n 1
 
 blksnap_snapshot_destroy
-
-#echo "Check generated data"
-#check_files ${TESTDIR}
-
 blksnap_watcher_wait
-
 blksnap_detach ${DEVICE}
-
 blksnap_unload
 
 echo "Cleanup test directory" ${TESTDIR}

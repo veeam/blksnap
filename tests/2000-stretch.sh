@@ -83,18 +83,17 @@ umount ${IMAGE_1}
 echo "Destroy snapshot"
 #echo "press..."
 blksnap_snapshot_destroy
+blksnap_watcher_wait
 
 #echo "Check generated data"
 #check_files ${MOUNTPOINT_1}
 
-echo "Destroy first device"
+echo "Destroy device"
 #echo "press..."
 blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
 loop_device_detach ${DEVICE_1}
 imagefile_cleanup ${IMAGEFILE_1}
-
-blksnap_watcher_wait
 
 blksnap_unload
 

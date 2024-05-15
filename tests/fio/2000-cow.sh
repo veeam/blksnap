@@ -34,8 +34,8 @@ fio --filename "${DEVICE}" --section sequental_read ./blksnap.fio
 
 echo "Destroy snapshot"
 blksnap_snapshot_destroy
-blksnap_detach "${DEVICE}"
 blksnap_watcher_wait
+blksnap_detach "${DEVICE}"
 
 blksnap_unload
 
