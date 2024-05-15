@@ -94,6 +94,7 @@ static sector_t diff_storage_calculate_requested(struct diff_storage *diff_stora
 	if (diff_storage->requested < diff_storage->limit) {
 		req_sect = min(get_diff_storage_minimum(),
 				diff_storage->limit - diff_storage->requested);
+		diff_storage->requested += req_sect;
 	}
 	pr_debug("The size of the difference storage was %llu MiB\n",
 		 diff_storage->capacity >> (20 - SECTOR_SHIFT));
