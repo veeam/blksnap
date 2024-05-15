@@ -92,6 +92,8 @@ bool CSnapshot::WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev)
     {
         if ((errno == ENOENT) || (errno == EINTR))
             return false;
+        if (errno == ESRCH)
+            throw std::system_error(errno, std::generic_category(), "Snapshot not found");
 
         throw std::system_error(errno, std::generic_category(), "Failed to get event from snapshot.");
     }
