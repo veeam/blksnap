@@ -555,11 +555,9 @@ static int __init parameters_init(void)
 			 diff_storage_minimum);
 	}
 #ifdef CONFIG_64BIT
-	chunk_maximum_count_shift = min((unsigned int)40,
-					chunk_maximum_count_shift);
+	chunk_maximum_count_shift = min(40U, chunk_maximum_count_shift);
 #else
-	chunk_maximum_count_shift = min((unsigned int)32,
-					chunk_maximum_count_shift);
+	chunk_maximum_count_shift = min(32U, chunk_maximum_count_shift);
 #endif
 	return 0;
 }
