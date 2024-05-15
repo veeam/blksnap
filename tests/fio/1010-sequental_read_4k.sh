@@ -2,16 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
-. ./functions.sh
-. ./blksnap.sh
+. ../functions.sh
+. ../blksnap.sh
 
 echo "---"
-echo "Diff storage test"
+echo "FIO sequental read test"
 
-# diff_storage_minimum=262144 - set 256 K sectors, it's 128MiB diff_storage portion size
-blksnap_load "diff_storage_minimum=262144"
-
-# check module is ready
+fio --version
+blksnap_load
 blksnap_version
 
 if [ -z $1 ]
@@ -27,24 +25,16 @@ MP_TEST_DIR=$(stat -c %m ${TEST_DIR})
 DEVICE="/dev/block/"$(mountpoint -d ${MP_TEST_DIR})
 echo "Test directory [${TEST_DIR}] on device [${DEVICE}] selected"
 
-RELATIVE_TEST_DIR=${TEST_DIR#${MP_TEST_DIR}}
-
 MP_DIR=/mnt/blksnap-test
-
 rm -rf ${MP_DIR}
 mkdir -p ${MP_DIR}
 
-generate_block_MB ${TEST_DIR} "before" 10
-check_files ${TEST_DIR}
+fio --directory "${MP_TEST_DIR}" --section sequental_read_4k ./blksnap.fio
 
-DIFF_STORAGE=/dev/shm
-
-blksnap_snapshot_create "${DEVICE}" "${DIFF_STORAGE}" "1G"
+blksnap_snapshot_create "${DEVICE}" "/dev/shm" "1G"
 blksnap_snapshot_watcher
 blksnap_snapshot_take
 
-generate_block_MB ${TEST_DIR} "after" 100
-check_files ${TEST_DIR}
 
 IMAGE=${MP_DIR}/image0
 mkdir -p ${IMAGE}
@@ -52,10 +42,8 @@ mkdir -p ${IMAGE}
 echo "Mount image"
 DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
 mount ${DEVICE_IMAGE} ${IMAGE}
-# for XFS filesystem nouuid option needed
-#mount -o nouuid /dev/blksnap-image0 ${IMAGE}
 
-check_files ${IMAGE}/${RELATIVE_TEST_DIR}
+fio --directory "${IMAGE}/${MP_TEST_DIR}" --section sequental_read_4k ./blksnap.fio
 
 echo "Umount image"
 umount ${IMAGE}
@@ -64,7 +52,8 @@ echo "Destroy snapshot"
 blksnap_snapshot_destroy
 blksnap_watcher_wait
 blksnap_detach ${DEVICE}
+
 blksnap_unload
 
-echo "Diff storage test finish"
+echo "FIO sequental read test finish"
 echo "---"

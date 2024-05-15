@@ -10,7 +10,7 @@ else
 fi
 
 . ./functions.sh
-. ./blksnap.sh
+. ./mod_blksnap.sh
 BLOCK_SIZE=$(block_size_mnt ${DIFF_STORAGE_DIR})
 
 echo "---"
@@ -24,12 +24,13 @@ blksnap_version
 
 TESTDIR=${HOME}/blksnap-test
 MPDIR=/mnt/blksnap-test
-DIFF_STORAGE="${DIFF_STORAGE_DIR}/diff_storage"
 
 rm -rf ${TESTDIR}
 rm -rf ${MPDIR}
 mkdir -p ${TESTDIR}
 mkdir -p ${MPDIR}
+echo "remove files: "$(ls ${DIFF_STORAGE_DIR}/diff_storage*)
+rm -rf ${DIFF_STORAGE_DIR}/diff_storage*
 
 # create first device
 IMAGEFILE_1=${TESTDIR}/simple_1.img
@@ -46,9 +47,7 @@ mount ${DEVICE_1} ${MOUNTPOINT_1}
 generate_files_direct ${MOUNTPOINT_1} "before" 5
 drop_cache
 
-rm -f ${DIFF_STORAGE}
-fallocate --length 128MiB ${DIFF_STORAGE}
-blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE}" "512M"
+blksnap_snapshot_create "${DEVICE_1}" "${DIFF_STORAGE_DIR}" "512M"
 
 generate_files_direct ${MOUNTPOINT_1} "tracked" 5
 drop_cache
@@ -84,11 +83,10 @@ echo "Destroy snapshot"
 #echo "press..."
 blksnap_snapshot_destroy
 blksnap_watcher_wait
-
 #echo "Check generated data"
 #check_files ${MOUNTPOINT_1}
 
-echo "Destroy device"
+echo "Destroy first device"
 #echo "press..."
 blksnap_detach ${DEVICE_1}
 umount ${MOUNTPOINT_1}
