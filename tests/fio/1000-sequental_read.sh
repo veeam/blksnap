@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-2.0+
 
-. ./functions.sh
-. ./blksnap.sh
+. ../functions.sh
+. ../blksnap.sh
 
 echo "---"
 echo "FIO sequental read test"
@@ -29,7 +29,7 @@ MP_DIR=/mnt/blksnap-test
 rm -rf ${MP_DIR}
 mkdir -p ${MP_DIR}
 
-DIR=${MP_TEST_DIR} fio --section sequental_read ./blksnap.fio
+fio --directory "${MP_TEST_DIR}" --section sequental_read ./blksnap.fio
 
 blksnap_snapshot_create "${DEVICE}" "/dev/shm" "1G"
 blksnap_snapshot_watcher
@@ -43,7 +43,7 @@ echo "Mount image"
 DEVICE_IMAGE=$(blksnap_get_image ${DEVICE})
 mount ${DEVICE_IMAGE} ${IMAGE}
 
-DIR="${IMAGE}/${MP_TEST_DIR}" fio --section sequental_read ./blksnap.fio
+fio --directory "${IMAGE}/${MP_TEST_DIR}" --section sequental_read ./blksnap.fio
 
 echo "Umount image"
 umount ${IMAGE}
