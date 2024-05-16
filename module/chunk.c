@@ -224,7 +224,7 @@ static inline void chunk_io_ctx_complete(struct chunk_io_ctx *io_ctx, long ret)
 	kref_put(&io_ctx->kref, io_ctx_free);
 }
 
-#if !defined(HAVE_IOCB_ITER)
+#ifdef BLKSNAP_STANDALONE
 static ssize_t blksnap_vfs_iocb_iter_read(struct file *file,
 				struct kiocb *iocb, struct iov_iter *iter)
 {
@@ -247,9 +247,33 @@ static ssize_t blksnap_vfs_iocb_iter_read(struct file *file,
 
 	ret = call_read_iter(file, iocb, iter);
 out:
-	if (ret >= 0)
-		fsnotify_access(file);
+	//if (ret >= 0)
+	//	fsnotify_access(file);
 	return ret;
+}
+
+static inline void blksnap_kiocb_start_write(struct kiocb *iocb)
+{
+#ifdef HAVE_KIOCB_START_WRITE
+	kiocb_start_write(iocb);
+#else
+	struct inode *inode = file_inode(iocb->ki_filp);
+
+	sb_start_write(inode->i_sb);
+	__sb_writers_release(inode->i_sb, SB_FREEZE_WRITE);
+#endif
+}
+
+static inline void blksnap_kiocb_end_write(struct kiocb *iocb)
+{
+#ifdef HAVE_KIOCB_START_WRITE
+	kiocb_end_write(iocb);
+#else
+	struct inode *inode = file_inode(iocb->ki_filp);
+
+	__sb_writers_acquired(inode->i_sb, SB_FREEZE_WRITE);
+	sb_end_write(inode->i_sb);
+#endif
 }
 
 static ssize_t blksnap_vfs_iocb_iter_write(struct file *file,
@@ -272,9 +296,12 @@ static ssize_t blksnap_vfs_iocb_iter_write(struct file *file,
 	//if (ret < 0)
 	//	return ret;
 
+	blksnap_kiocb_start_write(iocb);
 	ret = call_write_iter(file, iocb, iter);
-	if (ret > 0)
-		fsnotify_modify(file);
+	if (ret != -EIOCBQUEUED)
+		blksnap_kiocb_end_write(iocb);
+	//if (ret > 0)
+	//	fsnotify_modify(file);
 
 	return ret;
 }
@@ -288,8 +315,10 @@ static void chunk_diff_bio_complete(struct kiocb *iocb, long ret)
 {
 	struct chunk_io_ctx *io_ctx;
 
-#ifdef HAVE_IOCB_ITER
 	if (iocb->ki_flags & IOCB_WRITE)
+#ifdef BLKSNAP_STANDALONE
+		blksnap_kiocb_end_write(iocb);
+#else
 		kiocb_end_write(iocb);
 #endif
 
@@ -305,19 +334,19 @@ void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
 	struct file *diff_file = io_ctx->chunk->diff_file;
 	ssize_t ret;
 
-#ifdef HAVE_IOCB_ITER
+#ifdef BLKSNAP_STANDALONE
+	if (io_ctx->iocb.ki_flags & IOCB_WRITE)
+		ret = blksnap_vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
+							&io_ctx->iov_iter);
+	else
+		ret = blksnap_vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
+							&io_ctx->iov_iter);
+#else
 	if (io_ctx->iocb.ki_flags & IOCB_WRITE)
 		ret = vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
 							&io_ctx->iov_iter);
 	else
 		ret = vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
-							&io_ctx->iov_iter);
-#else
-	if (bio_data_dir(io_ctx->bio))
-		ret = blksnap_vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
-							&io_ctx->iov_iter);
-	else
-		ret = blksnap_vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
 							&io_ctx->iov_iter);
 #endif
 	if (ret != -EIOCBQUEUED)

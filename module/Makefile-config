@@ -160,5 +160,8 @@ EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blkdev.h &&		\
 	grep -qw "struct queue_limits" &&					\
 		echo -D HAVE_BDEV_QUEUE_LIMITS)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/fs.h  &&		\
-	grep -qw "vfs_iocb_iter_read" $(srctree)/include/linux/fs.h && \
+	grep -qw "vfs_iocb_iter_read" $(srctree)/include/linux/fs.h &&		\
 		echo -D HAVE_IOCB_ITER)
+EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/fs.h  &&		\
+	grep -qw "kiocb_start_write" $(srctree)/include/linux/fs.h &&		\
+		echo -D HAVE_KIOCB_START_WRITE)
