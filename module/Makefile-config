@@ -76,10 +76,10 @@ EXTRA_CFLAGS += $(shell 							\
 		$(srctree)/include/linux/blkdev.h &&				\
 		echo -D HAVE_BDEV_FREEZE)
 EXTRA_CFLAGS += $(shell 							\
-	grep -qw "*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
+	grep -qw "\*bi_disk;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -D HAVE_BI_BDISK)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/blk_types.h &&		\
-	grep -qw "*bd_queue;" $(srctree)/include/linux/blk_types.h &&		\
+	grep -qw "\*bd_queue;" $(srctree)/include/linux/blk_types.h &&		\
 		echo -D HAVE_BD_QUEUE)
 EXTRA_CFLAGS += $(shell test -f $(srctree)/include/linux/genhd.h &&		\
 	grep -qw "sector_t bdev_nr_sectors" $(srctree)/include/linux/genhd.h &&	\
