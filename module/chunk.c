@@ -4,9 +4,6 @@
 
 #include <linux/blkdev.h>
 #include <linux/slab.h>
-#if !defined(HAVE_IOCB_ITER)
-#include <linux/fsnotify.h>
-#endif
 #ifdef BLKSNAP_STANDALONE
 #include "compat.h"
 #include "bdevfilter-internal.h"
