@@ -61,10 +61,6 @@ struct event *event_wait(struct event_queue *event_queue,
 			 unsigned long timeout_ms);
 static inline void event_free(struct event *event)
 {
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(event);
-#else
-	kfree(event);
-#endif
+	ms_kfree(event);
 };
 #endif /* __BLKSNAP_EVENT_QUEUE_H */

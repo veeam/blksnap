@@ -72,11 +72,7 @@ static inline struct chunk *chunk_alloc(struct diff_area *diff_area,
 {
 	struct chunk *chunk;
 
-#ifdef BLKSNAP_MEMSTAT
-	chunk = __kzalloc(sizeof(struct chunk), GFP_KERNEL);
-#else
-	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
-#endif
+	chunk = ms_kzalloc(sizeof(struct chunk), GFP_KERNEL);
 	if (!chunk)
 		return NULL;
 
@@ -106,11 +102,7 @@ static inline void chunk_free(struct diff_area *diff_area, struct chunk *chunk)
 	if (chunk->diff_buffer)
 		diff_buffer_release(diff_area, chunk->diff_buffer);
 	up(&chunk->lock);
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(chunk);
-#else
-	kfree(chunk);
-#endif
+	ms_kfree(chunk);
 }
 
 static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
@@ -174,11 +166,7 @@ void diff_area_free(struct kref *kref)
 	diff_buffer_cleanup(diff_area);
 	tracker_put(diff_area->tracker);
 	bdev_close(diff_area->orig_bdev_holder);
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(diff_area);
-#else
-	kfree(diff_area);
-#endif
+	ms_kfree(diff_area);
 }
 
 static inline bool diff_area_store_one(struct diff_area *diff_area)
@@ -247,11 +235,7 @@ static int diff_area_cow_schedule(struct diff_area *diff_area, struct bio *bio)
 {
 	struct cow_task *task;
 
-#ifdef BLKSNAP_MEMSTAT
-	task = __kzalloc(sizeof(struct cow_task), GFP_KERNEL);
-#else
-	task = kzalloc(sizeof(struct cow_task), GFP_KERNEL);
-#endif
+	task = ms_kzalloc(sizeof(struct cow_task), GFP_KERNEL);
 	if (!task)
 		return -ENOMEM;
 
@@ -281,11 +265,7 @@ static inline struct bio *diff_area_cow_get_bio(struct diff_area *diff_area)
 
 	if (task) {
 		bio = task->bio;
-#ifdef BLKSNAP_MEMSTAT
-		__kfree(task);
-#else
-		kfree(task);
-#endif
+		ms_kfree(task);
 	}
 	return bio;
 }
@@ -368,11 +348,7 @@ struct diff_area *diff_area_new(struct tracker *tracker,
 	int ret;
 	struct diff_area *diff_area = NULL;
 
-#ifdef BLKSNAP_MEMSTAT
-	diff_area = __kzalloc(sizeof(struct diff_area), GFP_KERNEL);
-#else
-	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
-#endif
+	diff_area = ms_kzalloc(sizeof(struct diff_area), GFP_KERNEL);
 	if (!diff_area)
 		return ERR_PTR(-ENOMEM);
 
@@ -445,11 +421,7 @@ out_bdev_close:
 #endif
 
 out_kfree:
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(diff_area);
-#else
-	kfree(diff_area);
-#endif
+	ms_kfree(diff_area);
 	return ERR_PTR(ret);
 }
 

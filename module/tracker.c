@@ -41,11 +41,7 @@ static void tracker_free(struct tracker *tracker)
 #ifdef BLKSNAP_STANDALONE
 	kfree(tracker->orig_bdevpath);
 #endif
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(tracker);
-#else
-	kfree(tracker);
-#endif
+	ms_kfree(tracker);
 }
 #ifdef BLKSNAP_STANDALONE
 static bool tracker_submit_bio(struct bio *bio, struct blkfilter *flt)
@@ -118,11 +114,7 @@ static struct blkfilter *tracker_attach(struct block_device *bdev)
 		return ERR_PTR(-ENOMEM);
 	}
 
-#ifdef BLKSNAP_MEMSTAT
-	tracker = __kzalloc(sizeof(struct tracker), GFP_KERNEL);
-#else
-	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
-#endif
+	tracker = ms_kzalloc(sizeof(struct tracker), GFP_KERNEL);
 	if (!tracker) {
 		cbt_map_destroy(cbt_map);
 		return ERR_PTR(-ENOMEM);

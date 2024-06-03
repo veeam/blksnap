@@ -38,11 +38,7 @@ int event_gen(struct event_queue *event_queue, int code,
 {
 	struct event *event;
 
-#ifdef BLKSNAP_MEMSTAT
-	event = __kzalloc(sizeof(struct event) + data_size + 1, GFP_KERNEL);
-#else
-	event = kzalloc(sizeof(struct event) + data_size + 1, GFP_KERNEL);
-#endif
+	event = ms_kzalloc(sizeof(struct event) + data_size + 1, GFP_KERNEL);
 	if (!event)
 		return -ENOMEM;
 

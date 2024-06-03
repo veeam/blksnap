@@ -252,10 +252,7 @@ static int ioctl_snapshot_create(struct blksnap_snapshot_create __user *uarg)
 #endif
 	}
 	ret = snapshot_create(fname, karg.diff_storage_limit_sect, &karg.id);
-	kfree(fname);
-#ifdef BLKSNAP_MEMSTAT
-	// fname has been created by strndup_user()
-#endif
+	kfree(fname); // fname has been created by strndup_user()
 	if (ret)
 		return ret;
 
@@ -321,11 +318,7 @@ static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
 	struct blksnap_snapshot_event *karg;
 	struct event *ev;
 
-#ifdef BLKSNAP_MEMSTAT
-	karg = __kzalloc(sizeof(struct blksnap_snapshot_event), GFP_KERNEL);
-#else
-	karg = kzalloc(sizeof(struct blksnap_snapshot_event), GFP_KERNEL);
-#endif
+	karg = ms_kzalloc(sizeof(struct blksnap_snapshot_event), GFP_KERNEL);
 	if (!karg)
 		return -ENOMEM;
 
@@ -360,11 +353,7 @@ static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
 		ret = -ENODATA;
 	}
 out:
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(karg);
-#else
-	kfree(karg);
-#endif
+	ms_kfree(karg);
 	return ret;
 }
 

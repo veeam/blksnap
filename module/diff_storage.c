@@ -149,11 +149,7 @@ struct diff_storage *diff_storage_new(void)
 {
 	struct diff_storage *diff_storage;
 
-#ifdef BLKSNAP_MEMSTAT
-	diff_storage = __kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
-#else
-	diff_storage = kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
-#endif
+	diff_storage = ms_kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
 	if (!diff_storage)
 		return NULL;
 
@@ -193,11 +189,7 @@ void diff_storage_free(struct kref *kref)
 		rg = list_first_entry(&diff_storage->free_ranges_list,
 				      struct diff_storage_range, link);
 		list_del(&rg->link);
-#ifdef BLKSNAP_MEMSTAT
-		__kfree(rg);
-#else
-		kfree(rg);
-#endif
+		ms_kfree(rg);
 	}
 	{
 		unsigned long dev_id;
@@ -211,11 +203,7 @@ void diff_storage_free(struct kref *kref)
 	xa_destroy(&diff_storage->diff_storage_bdev_map);
 #endif /* BLKSNAP_MODIFICATION */
 
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(diff_storage);
-#else
-	kfree(diff_storage);
-#endif
+	ms_kfree(diff_storage);
 }
 
 static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,
@@ -452,11 +440,7 @@ int diff_storage_add_range(struct diff_storage *diff_storage,
 {
 	struct diff_storage_range *rg;
 
-#ifdef BLKSNAP_MEMSTAT
-	rg = __kzalloc(sizeof(struct diff_storage_range), GFP_KERNEL);
-#else
-	rg = kzalloc(sizeof(struct diff_storage_range), GFP_KERNEL);
-#endif
+	rg = ms_kzalloc(sizeof(struct diff_storage_range), GFP_KERNEL);
 	if (!rg)
 		return -ENOMEM;
 
@@ -493,11 +477,7 @@ int diff_storage_get_range(struct diff_storage *diff_storage, sector_t count,
 		}
 
 		list_del(&rg->link);
-#ifdef BLKSNAP_MEMSTAT
-		__kfree(rg);
-#else
-		kfree(rg);
-#endif
+		ms_kfree(rg);
 	}
 	spin_unlock(&diff_storage->ranges_lock);
 

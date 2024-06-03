@@ -114,11 +114,7 @@ void cbt_map_destroy(struct cbt_map *cbt_map)
 
 	vfree(cbt_map->read_map);
 	vfree(cbt_map->write_map);
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(cbt_map);
-#else
-	kfree(cbt_map);
-#endif
+	ms_kfree(cbt_map);
 }
 
 struct cbt_map *cbt_map_create(sector_t device_capacity)
@@ -127,11 +123,7 @@ struct cbt_map *cbt_map_create(sector_t device_capacity)
 	int ret;
 
 	pr_debug("CBT map create\n");
-#ifdef BLKSNAP_MEMSTAT
-	cbt_map = __kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
-#else
-	cbt_map = kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
-#endif
+	cbt_map = ms_kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
 	if (cbt_map == NULL)
 		return NULL;
 

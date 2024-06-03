@@ -205,11 +205,7 @@ void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
 
 static void io_ctx_free(struct kref *kref)
 {
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(container_of(kref, struct chunk_io_ctx, kref));
-#else
-	kfree(container_of(kref, struct chunk_io_ctx, kref));
-#endif
+	ms_kfree(container_of(kref, struct chunk_io_ctx, kref));
 }
 
 static inline void chunk_io_ctx_complete(struct chunk_io_ctx *io_ctx, long ret)
@@ -377,11 +373,7 @@ int chunk_diff_bio(struct chunk *chunk, struct bio *bio)
 	size_t nbytes = 0;
 	struct chunk_io_ctx *io_ctx;
 
-#ifdef BLKSNAP_MEMSTAT
-	io_ctx = __kzalloc(sizeof(struct chunk_io_ctx), GFP_KERNEL);
-#else
-	io_ctx = kzalloc(sizeof(struct chunk_io_ctx), GFP_KERNEL);
-#endif
+	io_ctx = ms_kzalloc(sizeof(struct chunk_io_ctx), GFP_KERNEL);
 	if (!io_ctx)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&io_ctx->link);

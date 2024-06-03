@@ -44,11 +44,7 @@ static void snapshot_free(struct kref *kref)
 
 	diff_storage_put(snapshot->diff_storage);
 	snapshot->diff_storage = NULL;
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(snapshot);
-#else
-	kfree(snapshot);
-#endif
+	ms_kfree(snapshot);
 #ifdef BLKSNAP_MEMSTAT
 	memstat_print();
 #endif
@@ -69,11 +65,7 @@ static struct snapshot *snapshot_new(void)
 	int ret;
 	struct snapshot *snapshot = NULL;
 
-#ifdef BLKSNAP_MEMSTAT
-	snapshot = __kzalloc(sizeof(struct snapshot), GFP_KERNEL);
-#else
-	snapshot = kzalloc(sizeof(struct snapshot), GFP_KERNEL);
-#endif
+	snapshot = ms_kzalloc(sizeof(struct snapshot), GFP_KERNEL);
 	if (!snapshot)
 		return ERR_PTR(-ENOMEM);
 
@@ -93,11 +85,7 @@ static struct snapshot *snapshot_new(void)
 	return snapshot;
 
 fail_free_snapshot:
-#ifdef BLKSNAP_MEMSTAT
-	__kfree(snapshot);
-#else
-	kfree(snapshot);
-#endif
+	ms_kfree(snapshot);
 	return ERR_PTR(ret);
 }
 
