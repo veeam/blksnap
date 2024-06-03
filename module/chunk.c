@@ -241,7 +241,7 @@ static ssize_t blksnap_vfs_iocb_iter_read(struct file *file,
 	//if (ret < 0)
 	//	return ret;
 
-	ret = call_read_iter(file, iocb, iter);
+	ret = file->f_op->read_iter(iocb, iter);
 out:
 	//if (ret >= 0)
 	//	fsnotify_access(file);
@@ -293,7 +293,7 @@ static ssize_t blksnap_vfs_iocb_iter_write(struct file *file,
 	//	return ret;
 
 	blksnap_kiocb_start_write(iocb);
-	ret = call_write_iter(file, iocb, iter);
+	ret = file->f_op->write_iter(iocb, iter);
 	if (ret != -EIOCBQUEUED)
 		blksnap_kiocb_end_write(iocb);
 	//if (ret > 0)
