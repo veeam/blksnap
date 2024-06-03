@@ -296,10 +296,13 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 
 	blk_queue_bounce_limit(snapimage->queue, BLK_BOUNCE_HIGH);
 #endif
+
+#ifdef HAVE_BLK_QUEUE_MAX_HW_SECTORS
 #ifdef BLK_DEF_MAX_SECTORS_CAP
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS_CAP);
 #else
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
+#endif
 #endif
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
 
