@@ -97,10 +97,22 @@ static inline unsigned int bio_max_segs(unsigned int nr_segs)
 }
 #endif
 
+#if !defined(HAVE_DISK_LIVE)
+struct bdev_inode {
+	struct block_device bdev;
+	struct inode vfs_inode;
+};
+
+static inline struct inode *BD_INODE(struct block_device *bdev)
+{
+	return &container_of(bdev, struct bdev_inode, bdev)->vfs_inode;
+}
+#endif
+
 #ifndef HAVE_BDEV_NR_SECTORS
 static inline sector_t bdev_nr_sectors(struct block_device *bdev)
 {
-	return i_size_read(bdev->bd_inode) >> 9;
+	return i_size_read(BD_INODE(bdev)) >> 9;
 };
 #endif
 

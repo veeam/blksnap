@@ -129,7 +129,7 @@ static int ioctl_attach(struct bdevfilter_name __user *argp)
 #ifdef HAVE_DISK_LIVE
 	if (!disk_live(bdev->bd_disk))
 #else
-	if (inode_unhashed(bdev->bd_inode))
+	if (inode_unhashed(BD_INODE(bdev)))
 #endif
 	{
 		pr_debug("Device is not alive\n");
@@ -251,7 +251,7 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 #ifdef HAVE_DISK_LIVE
 	if (!disk_live(bdev->bd_disk))
 #else
-	if (inode_unhashed(bdev->bd_inode))
+	if (inode_unhashed(BD_INODE(bdev)))
 #endif
 		ret = -ENODEV;
 #ifdef HAVE_GENDISK_OPEN_MUTEX
