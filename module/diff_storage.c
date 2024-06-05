@@ -312,7 +312,7 @@ int diff_storage_set(struct diff_storage *diff_storage, const char *filename,
 	}
 #endif
 
-	file = filp_open(filename, O_RDONLY, 0);
+	file = filp_open(filename, O_RDONLY | O_LARGEFILE | O_NOATIME, 0);
 	if (IS_ERR(file)) {
 		pr_err("Failed to open '%s'\n", filename);
 		return PTR_ERR(file);
