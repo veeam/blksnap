@@ -132,7 +132,7 @@ static inline void check_halffull(struct diff_storage *diff_storage,
 		}
 #endif
 		if (diff_storage->bdev_holder) {
-			pr_warn("Reallocating is allowed only for a regular file\n");
+			pr_info("The free space in the difference storage on the block device is running out\n");
 			return;
 		}
 		if (!diff_storage_calculate_requested(diff_storage)) {
