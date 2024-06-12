@@ -221,6 +221,7 @@ static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,
 	pr_debug("A block device is selected for difference storage\n");
 	diff_storage->bdev_holder = bdev_holder;
 	diff_storage->dev_id = bdev->bd_dev;
+	diff_storage->filled = 4096;
 	diff_storage->capacity = bdev_nr_sectors(bdev);
 
 	return 0;
@@ -236,6 +237,7 @@ static inline void ___set_file(struct diff_storage *diff_storage,
 	 * device under the snapshot.
 	 */
 	diff_storage->dev_id = inode->i_sb->s_dev;
+	diff_storage->filled = 4096;
 	diff_storage->capacity = i_size_read(inode) >> SECTOR_SHIFT;
 	diff_storage->file = file;
 }
