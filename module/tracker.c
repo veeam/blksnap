@@ -207,6 +207,7 @@ static int ctl_cbtdirty(struct tracker *tracker, __u8 __user *buf, __u32 *plen)
 {
 	struct cbt_map *cbt_map = tracker->cbt_map;
 	struct blksnap_cbtdirty arg;
+	struct blksnap_sectors __user *ranges;
 	unsigned int inx;
 
 	if (!cbt_map)
@@ -218,11 +219,12 @@ static int ctl_cbtdirty(struct tracker *tracker, __u8 __user *buf, __u32 *plen)
 	if (copy_from_user(&arg, buf, sizeof(arg)))
 		return -ENODATA;
 
+	ranges = u64_to_user_ptr(arg.dirty_sectors);
 	for (inx = 0; inx < arg.count; inx++) {
 		struct blksnap_sectors range;
 		int ret;
 
-		if (copy_from_user(&range, u64_to_user_ptr(arg.dirty_sectors),
+		if (copy_from_user(&range, ranges + inx,
 				   sizeof(range)))
 			return -ENODATA;
 
