@@ -450,7 +450,7 @@ static struct chunk *diff_area_chunk_take(struct diff_area *diff_area,
 	}
 
 	spin_lock(&diff_area->chunk_map_lock);
-	ret = xa_insert(&diff_area->chunk_map, nr, new_chunk, GFP_NOIO);
+	ret = xa_insert(&diff_area->chunk_map, nr, new_chunk, GFP_ATOMIC);
 	if (likely(!ret)) {
 		chunk = new_chunk;
 		new_chunk = NULL;
