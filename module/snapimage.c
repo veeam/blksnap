@@ -145,7 +145,7 @@ static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 
 	blk_mq_start_request(rq);
 
-	if (unlikely(!snapimage->is_ready || diff_area_is_corrupted(snapimage->diff_area))) {
+	if (unlikely(diff_area_is_corrupted(snapimage->diff_area))) {
 		blk_mq_end_request(rq, BLK_STS_NOSPC);
 		return BLK_STS_NOSPC;
 	}
@@ -194,9 +194,8 @@ void snapimage_free(struct snapimage *snapimage)
 	pr_info("Snapshot image disk [%u:%u] delete\n",
 		MAJOR(snapimage->image_dev_id), MINOR(snapimage->image_dev_id));
 
-	blk_mq_freeze_queue(snapimage->disk->queue);
-	snapimage->is_ready = false;
-	blk_mq_unfreeze_queue(snapimage->disk->queue);
+	blk_mq_stop_hw_queues(snapimage->disk->queue);
+	blk_mq_quiesce_queue(snapimage->disk->queue);
 
 	snapimage_unprepare_worker(snapimage);
 
@@ -244,7 +243,6 @@ struct snapimage *snapimage_create(struct diff_area *diff_area,
 		goto fail_free_image;
 	}
 
-	snapimage->is_ready = true;
 	snapimage->capacity = cbt_map->device_capacity;
 	snapimage->image_dev_id = MKDEV(_major, minor);
 	pr_info("Create snapshot image device [%u:%u] for original device [%u:%u]\n",

@@ -21,9 +21,6 @@ struct cbt_map;
  * @capacity:
  *	The size of the snapshot image in sectors must be equal to the size
  *	of the original device at the time of taking the snapshot.
- * @is_ready:
- *	The flag means that the snapshot image is ready for processing
- *	I/O requests.
  * @worker:
  *	The worker thread for processing I/O requests.
  * @worker_task:
@@ -49,7 +46,6 @@ struct cbt_map;
 struct snapimage {
 	dev_t image_dev_id;
 	sector_t capacity;
-	bool is_ready;
 
 	struct kthread_worker worker;
 	struct task_struct *worker_task;
