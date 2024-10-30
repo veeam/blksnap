@@ -143,22 +143,17 @@ static blk_status_t snapimage_queue_rq(struct blk_mq_hw_ctx *hctx,
 	struct snapimage *snapimage = rq->q->queuedata;
 	struct snapimage_cmd *cmd = blk_mq_rq_to_pdu(rq);
 
-	blk_mq_start_request(rq);
-
-	if (unlikely(diff_area_is_corrupted(snapimage->diff_area))) {
-		blk_mq_end_request(rq, BLK_STS_NOSPC);
+	if (unlikely(diff_area_is_corrupted(snapimage->diff_area)))
 		return BLK_STS_NOSPC;
-	}
 
 	if (op_is_write(req_op(rq))) {
 		ret = cbt_map_set_both(snapimage->cbt_map, blk_rq_pos(rq),
 				       blk_rq_sectors(rq));
-		if (unlikely(ret)) {
-			blk_mq_end_request(rq, BLK_STS_IOERR);
+		if (unlikely(ret))
 			return BLK_STS_IOERR;
-		}
 	}
 
+	blk_mq_start_request(rq);
 	kthread_queue_work(&snapimage->worker, &cmd->work);
 	return BLK_STS_OK;
 }
