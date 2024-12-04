@@ -50,7 +50,7 @@ else
   exit 1
 fi
 
-%postunmodinfo
+%postun
 exit 0
 
 %preun
