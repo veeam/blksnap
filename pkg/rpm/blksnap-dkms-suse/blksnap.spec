@@ -24,23 +24,33 @@ designed to ensure the Availability of your Linux server instances, whether
 they reside in the public cloud or on premises.
 
 %post
-for POSTINST in /usr/lib/dkms/common.postinst; do
-  if [ -f $POSTINST ]; then
-    $POSTINST %{name} %{version}
-    RETVAL=$?
-    if [ -z "$(dkms status -m %{name} -v %{version} -k $(uname -r) | grep 'installed')" ] ; then
-        echo "WARNING: Package not configured! See output!"
-        exit 1
-    fi
-    exit $RETVAL
+POSTINST="/usr/lib/dkms/common.postinst"
+if [ -f $POSTINST ]
+then
+  $POSTINST %{name} %{version}
+  RETVAL=$?
+  if [ -z "$(dkms status -m %{name} -v %{version} -k $(uname -r) | grep 'installed')" ] ; then
+      echo "WARNING: Package not configured! See output!"
+      exit 1
   fi
-  echo "WARNING: $POSTINST does not exist."
-done
-echo -e "ERROR: DKMS version is too old and %{name} was not"
-echo -e "built with legacy DKMS support."
-echo -e "You must either rebuild %{name} with legacy postinst"
-echo -e "support or upgrade DKMS to a more current version."
-exit 1
+  exit $RETVAL
+else
+  echo "$POSTINST does not exist"
+  if dkms build -m %{name} -v %{version}
+  then
+    echo %{name}"-"%{version}" build"
+    if dkms autoinstall -m %{name} -v %{version}
+    then
+      echo %{name}"-"%{version}" installed"
+      exit 0
+    else
+      echo "ERROR: failed to install "%{name}"-"%{version}
+    fi
+  else
+    echo "ERROR: failed to build "%{name}"-"%{version}
+  fi
+  exit 1
+fi
 
 %postun
 exit 0
