@@ -106,6 +106,14 @@ static void BlksnapThread(std::shared_ptr<CSnapshot> ptrCtl, std::shared_ptr<SSt
             case blksnap_event_code_corrupted:
                 throw std::system_error(ev.corrupted.errorCode, std::generic_category(),
                     std::string("Snapshot corrupted for device " + std::to_string(ev.corrupted.origDevIdMj) + ":" + std::to_string(ev.corrupted.origDevIdMn)));
+            case blksnap_event_code_no_space:
+                {
+                    const std::string noSpaceMsg = "The limit size of the difference storage has been reached";
+
+                    std::cerr << noSpaceMsg << std::endl;
+                    std::lock_guard<std::mutex> guard(ptrState->lock);
+                    ptrState->errorMessage.push_back(std::string(noSpaceMsg));
+                }
             default:
                 throw std::runtime_error("Invalid blksnap event code received.");
             }
@@ -146,7 +154,14 @@ CSession::CSession(const std::vector<std::string>& devices, const std::string& d
                                     std::string("Failed to create snapshot for device "
                                                 + std::to_string(ev.corrupted.origDevIdMj) + ":"
                                                 + std::to_string(ev.corrupted.origDevIdMn)));
-            break;
+        case blksnap_event_code_no_space:
+            {
+                const std::string noSpaceMsg = "The limit size of the difference storage has been reached";
+
+                std::cerr << noSpaceMsg << std::endl;
+                std::lock_guard<std::mutex> guard(m_ptrState->lock);
+                m_ptrState->errorMessage.push_back(std::string(noSpaceMsg));
+            }
         default:
             throw std::runtime_error("Invalid blksnap event code received.");
         }

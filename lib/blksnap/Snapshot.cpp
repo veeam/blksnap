@@ -111,6 +111,13 @@ bool CSnapshot::WaitEvent(unsigned int timeoutMs, SBlksnapEvent& ev)
         ev.corrupted.errorCode = corrupted->err_code;
         break;
     }
+    case blksnap_event_code_no_space:
+    {
+        struct blksnap_event_no_space* data = (struct blksnap_event_no_space*)(param.data);
+
+        ev.noSpace.requestedSectors = data->requested_nr_sect;
+        break;
+    }
     default:
         throw std::runtime_error("An unsupported event ["+std::to_string(param.code)+"] was received.");
     }

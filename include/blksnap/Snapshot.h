@@ -39,11 +39,20 @@ namespace blksnap
         int errorCode;
     };
 
+    struct SBlksnapEventNoSpace
+    {
+        unsigned long long requestedSectors;
+    };
+
     struct SBlksnapEvent
     {
         unsigned int code;
         long long time;
-        SBlksnapEventCorrupted corrupted;
+        union
+        {
+            struct SBlksnapEventCorrupted corrupted;
+            struct SBlksnapEventNoSpace noSpace;
+        };
     };
 
     class CSnapshot

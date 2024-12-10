@@ -340,9 +340,14 @@ struct blksnap_snapshot_collect {
  *	that the backup process was interrupted with an error. If the snapshot
  *	image has been read to the end by this time, the backup process is
  *	considered successful.
+ * @blksnap_event_code_no_space:
+ *	No more space left in the difference storage.
+ *	This event is generated at the moment when the difference storage resize
+ *	request cannot be satisfied.
  */
 enum blksnap_event_codes {
 	blksnap_event_code_corrupted,
+	blksnap_event_code_no_space,
 };
 
 /**
@@ -398,6 +403,16 @@ struct blksnap_event_corrupted {
 	__u32 dev_id_mj;
 	__u32 dev_id_mn;
 	__s32 err_code;
+};
+
+/**
+ * struct blksnap_event_no_space - Data for the
+ *	&blksnap_event_code_no_space event.
+ * @requested_nr_sect:
+ *	The required number of sectors.
+ */
+struct blksnap_event_no_space {
+	__u64 requested_nr_sect;
 };
 
 #endif /* _UAPI_LINUX_BLKSNAP_H */

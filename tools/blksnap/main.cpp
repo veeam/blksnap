@@ -835,6 +835,9 @@ public:
             case blksnap_event_code_corrupted:
                 std::cout << "event=corrupted" << std::endl;
                 break;
+            case blksnap_event_code_no_space:
+                std::cout << "event=no_space" << std::endl;
+                break;
             default:
                 std::cout << "event=" << param.code << std::endl;
             }
@@ -902,6 +905,12 @@ private:
         std::cout << time_label << " - The snapshot was corrupted for device [" << data->dev_id_mj << ":"
                   << data->dev_id_mn << "] with error \"" << std::strerror(data->err_code) << "\"." << std::endl;
     };
+    void ProcessEventNoSpace(unsigned int time_label, struct blksnap_event_no_space* data)
+    {
+        std::cout << time_label << " - The the difference storage already grow up to "
+                  << (data->requested_nr_sect / 2048) << " MiB. Limit has been reached." << std::endl;
+    }
+
 public:
     SnapshotWatcherArgsProc()
         : IArgsProc()
@@ -952,6 +961,10 @@ public:
                     ProcessEventCorrupted(param.time_label,
                             (struct blksnap_event_corrupted*)param.data);
                     terminate = true;
+                    break;
+                case blksnap_event_code_no_space:
+                    ProcessEventNoSpace(param.time_label,
+                            (struct blksnap_event_no_space*)param.data);
                     break;
                 default:
                     std::cout << param.time_label << " - unsupported event #" << param.code << "." << std::endl;
