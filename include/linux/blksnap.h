@@ -25,7 +25,7 @@
 #include <linux/types.h>
 
 #define BLKSNAP_CTL "blksnap-control"
-#define BLKSNAP_IMAGE_NAME "blksnap-image"
+#define BLKSNAP_IMAGE_NAME "blksnap"
 #define BLKSNAP 'V'
 
 /**
