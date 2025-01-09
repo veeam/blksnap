@@ -56,6 +56,9 @@ class CKernelVersion:
 			if self._flavour[inx][0:3] in ["el6", "el7", "el8", "el9"]:
 				if self._flavour[inx][0:3] != other._flavour[inx][0:3]:
 					return False;
+			elif self._flavour[inx][0:4] in ["el10"]:
+				if self._flavour[inx][0:4] != other._flavour[inx][0:4]:
+					return False;
 			else:
 				if self._flavour[inx] != other._flavour[inx]:
 					return False;
@@ -83,7 +86,7 @@ class CKernelVersion:
 
 		result = self._revisionString+"-"+str(self._patchNumbers[0])
 		for flavour in self._flavour:
-			if flavour in ["el6uek", "el7uek", "el8uek"]:
+			if flavour in ["el6uek", "el7uek", "el8uek", "el9uek", "el10uek"]:
 				return True
 		return False
 
