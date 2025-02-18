@@ -176,7 +176,11 @@ static inline int snapimage_alloc_tag_set(struct snapimage *snapimage)
 	set->nr_maps = 1;
 	set->queue_depth = 128;
 	set->numa_node = NUMA_NO_NODE;
+#ifdef HAVE_BLK_MQ_F_SHOULD_MERGE
 	set->flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;
+#else
+	set->flags = BLK_MQ_F_STACKING;
+#endif
 
 	set->cmd_size = sizeof(struct snapimage_cmd);
 	set->driver_data = snapimage;
