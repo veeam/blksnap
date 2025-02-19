@@ -396,10 +396,6 @@ def main(params):
 		if not distName in ["oracle", "ol", "redhat", "rhel", "centos", "rocky", "almalinux"]:
 			raise RuntimeError("Found unsupported distribution [{0}]".format(distName) )
 
-		distVersionWords = distVersion.split(".")
-		if distVersionWords[0] < "6":
-			raise RuntimeError("Found unsupported platform version [{0}]".format(distVersion) )
-
 		kver = CKernelVersion(unameKernelVersion)
 
 		#try find direct module
