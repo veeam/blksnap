@@ -413,7 +413,7 @@ int snapshot_create(struct blk_snap_dev_t *dev_id_array, unsigned int count,
 	}
 
 	down_write(&snapshots_lock);
-	list_add_tail(&snapshots, &snapshot->link);
+	list_add_tail(&snapshot->link, &snapshots);
 	up_write(&snapshots_lock);
 
 	uuid_copy(id, &snapshot->id);
