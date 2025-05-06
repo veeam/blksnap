@@ -48,11 +48,13 @@ CTracker::~CTracker()
 
 bool CTracker::Attach()
 {
-    struct blkfilter_name name = {
+    struct blkfilter_attach arg = {
         .name = BLKSNAP_FILTER_NAME,
+        .opt = 0ull,
+        .optlen = 0u,
     };
 
-    if (::ioctl(m_fd, BLKFILTER_ATTACH, &name) < 0) {
+    if (::ioctl(m_fd, BLKFILTER_ATTACH, &arg) < 0) {
         if (errno == EALREADY)
             return false;
         else
@@ -63,11 +65,11 @@ bool CTracker::Attach()
 }
 void CTracker::Detach()
 {
-    struct blkfilter_name name = {
+    struct blkfilter_detach arg = {
         .name = BLKSNAP_FILTER_NAME,
     };
 
-    if (::ioctl(m_fd, BLKFILTER_DETACH, &name) < 0)
+    if (::ioctl(m_fd, BLKFILTER_DETACH, &arg) < 0)
         throw std::system_error(errno, std::generic_category(),
             "Failed to detach 'blksnap' filter.");
 

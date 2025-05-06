@@ -137,13 +137,15 @@ namespace
 
         bool Attach()
         {
-            struct blkfilter_name name = {
+            struct blkfilter_attach arg = {
                 .name = {'b','l','k','s','n','a','p', '\0'},
+                .opt = 0ull,
+                .optlen = 0u,
             };
 
             try
             {
-                deviceCtl.Ioctl(BLKFILTER_ATTACH, &name);
+                deviceCtl.Ioctl(BLKFILTER_ATTACH, &arg);
             }
             catch (std::system_error &ex)
             {
@@ -158,13 +160,13 @@ namespace
 
         void Detach()
         {
-            struct blkfilter_ctl name = {
+            struct blkfilter_detach arg = {
                 .name = {'b','l','k','s','n','a','p', '\0'},
             };
 
             try
             {
-                deviceCtl.Ioctl(BLKFILTER_DETACH, &name);
+                deviceCtl.Ioctl(BLKFILTER_DETACH, &arg);
             }
             catch (std::exception &ex)
             {
