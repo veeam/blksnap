@@ -1,0 +1,5164 @@
+From affc22b7e5e3bb084564ca7d8de814cbaf085e09 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@linux.dev>
+Date: Tue, 6 May 2025 12:41:53 +0200
+Subject: [PATCH 2/2] the block devices snapshots module (blksnap)
+
+Signed-off-by: Sergei Shtepa <sergei.shtepa@linux.dev>
+---
+ Documentation/block/blksnap.rst               | 351 ++++++++++
+ Documentation/block/index.rst                 |   1 +
+ .../userspace-api/ioctl/ioctl-number.rst      |   1 +
+ MAINTAINERS                                   |   8 +
+ drivers/block/Kconfig                         |   2 +
+ drivers/block/Makefile                        |   2 +
+ drivers/block/blksnap/Kconfig                 |  13 +
+ drivers/block/blksnap/Makefile                |  18 +
+ drivers/block/blksnap/cbt_map.c               | 211 ++++++
+ drivers/block/blksnap/cbt_map.h               |  89 +++
+ drivers/block/blksnap/chunk.c                 | 600 ++++++++++++++++++
+ drivers/block/blksnap/chunk.h                 | 135 ++++
+ drivers/block/blksnap/diff_area.c             | 567 +++++++++++++++++
+ drivers/block/blksnap/diff_area.h             | 153 +++++
+ drivers/block/blksnap/diff_buffer.c           | 105 +++
+ drivers/block/blksnap/diff_buffer.h           |  37 ++
+ drivers/block/blksnap/diff_storage.c          | 310 +++++++++
+ drivers/block/blksnap/diff_storage.h          | 104 +++
+ drivers/block/blksnap/event_queue.c           |  81 +++
+ drivers/block/blksnap/event_queue.h           |  64 ++
+ drivers/block/blksnap/main.c                  | 481 ++++++++++++++
+ drivers/block/blksnap/params.h                |  17 +
+ drivers/block/blksnap/snapimage.c             | 136 ++++
+ drivers/block/blksnap/snapimage.h             |  10 +
+ drivers/block/blksnap/snapshot.c              | 467 ++++++++++++++
+ drivers/block/blksnap/snapshot.h              |  65 ++
+ drivers/block/blksnap/tracker.c               | 388 +++++++++++
+ drivers/block/blksnap/tracker.h               |  90 +++
+ include/uapi/linux/blksnap.h                  | 399 ++++++++++++
+ 29 files changed, 4905 insertions(+)
+ create mode 100644 Documentation/block/blksnap.rst
+ create mode 100644 drivers/block/blksnap/Kconfig
+ create mode 100644 drivers/block/blksnap/Makefile
+ create mode 100644 drivers/block/blksnap/cbt_map.c
+ create mode 100644 drivers/block/blksnap/cbt_map.h
+ create mode 100644 drivers/block/blksnap/chunk.c
+ create mode 100644 drivers/block/blksnap/chunk.h
+ create mode 100644 drivers/block/blksnap/diff_area.c
+ create mode 100644 drivers/block/blksnap/diff_area.h
+ create mode 100644 drivers/block/blksnap/diff_buffer.c
+ create mode 100644 drivers/block/blksnap/diff_buffer.h
+ create mode 100644 drivers/block/blksnap/diff_storage.c
+ create mode 100644 drivers/block/blksnap/diff_storage.h
+ create mode 100644 drivers/block/blksnap/event_queue.c
+ create mode 100644 drivers/block/blksnap/event_queue.h
+ create mode 100644 drivers/block/blksnap/main.c
+ create mode 100644 drivers/block/blksnap/params.h
+ create mode 100644 drivers/block/blksnap/snapimage.c
+ create mode 100644 drivers/block/blksnap/snapimage.h
+ create mode 100644 drivers/block/blksnap/snapshot.c
+ create mode 100644 drivers/block/blksnap/snapshot.h
+ create mode 100644 drivers/block/blksnap/tracker.c
+ create mode 100644 drivers/block/blksnap/tracker.h
+ create mode 100644 include/uapi/linux/blksnap.h
+
+diff --git a/Documentation/block/blksnap.rst b/Documentation/block/blksnap.rst
+new file mode 100644
+index 000000000000..6e85682833b1
+--- /dev/null
++++ b/Documentation/block/blksnap.rst
+@@ -0,0 +1,351 @@
++.. SPDX-License-Identifier: GPL-2.0
++
++========================================
++Block Devices Snapshots Module (blksnap)
++========================================
++
++Introduction
++============
++
++At first glance, there is no novelty in the idea of creating snapshots for
++block devices. The Linux kernel already has mechanisms for creating snapshots.
++Device Mapper includes dm-snap, which allows to create snapshots of block
++devices. BTRFS supports snapshots at the filesystem level. However, both of
++these options have specificities that do not allow to use them as a universal
++tool for creating backups.
++
++The main properties that a backup tool should have are:
++
++- Simplicity and universality of use
++- Reliability
++- Minimal consumption of system resources during backup
++- Minimal time required for recovery or replication of the entire system
++
++Taking above properties into account, blksnap module features:
++
++- Change tracker
++- Snapshots at the block device level
++- Dynamic allocation of space for storing differences
++- Snapshot overflow resistance
++- Coherent snapshot of multiple block devices
++
++Features
++========
++
++Change tracker
++--------------
++
++The change tracker allows to determine which blocks were changed during the
++time between the last snapshot created and any of the previous snapshots.
++With a map of changes, it is enough to copy only the changed blocks, and no
++need to reread the entire block device completely. The change tracker allows
++to implement the logic of both incremental and differential backups.
++Incremental backup is critical for large file repositories whose size can be
++hundreds of terabytes and whose full backup time can take more than a day.
++On such servers, the use of backup tools without a change tracker becomes
++practically impossible.
++
++Snapshot at the block device level
++----------------------------------
++
++A snapshot at the block device level allows to simplify the backup algorithm
++and reduce consumption of system resources. It also allows to perform linear
++reading of disk space directly, which allows to achieve maximum reading speed
++with minimal use of processor time. At the same time, the universality of
++creating snapshots for any block device is achieved, regardless of the file
++system located on it. The exceptions are BTRFS, ZFS and cluster file systems.
++
++Dynamic allocation of storage space for differences
++---------------------------------------------------
++
++To store differences, the module does not require a pre-reserved space on
++filesystem. The space for storing differences can be allocated in file in any
++filesystem. In addition, the size of the difference storage can be increased
++after the snapshot is created, but only for a filesystem that supports
++fallocate. A shared difference storage for all images of snapshot block devices
++allows to optimize the use of storage space. However, there is one limitation.
++A snapshot cannot be taken from a block device on which the difference storage
++is located.
++
++Snapshot overflow resistance
++----------------------------
++
++To create images of snapshots of block devices, the module stores blocks
++of the original block device that have been changed since the snapshot
++was taken. To do this, the module handles write requests and reads blocks
++that need to be overwritten. This algorithm guarantees safety of the data
++of the original block device in the event of an overflow of the snapshot,
++and even in the case of unpredictable critical errors. If a problem occurs
++during backup, the difference storage is released, the snapshot is closed,
++no backup is created, but the server continues to work.
++
++Coherent snapshot of multiple block devices
++-------------------------------------------
++
++A snapshot is created simultaneously for all block devices for which a backup
++is being created, ensuring their coherent state.
++
++
++Algorithms
++==========
++
++Overview
++--------
++
++The blksnap module is a block-level filter. It handles all write I/O units.
++The filter is attached to the block device when the snapshot is created
++for the first time. The change tracker marks all overwritten blocks.
++Information about the history of changes on the block device is available
++while holding the snapshot. The module reads the blocks that need to be
++overwritten and stores them in the difference storage. When reading from
++a snapshot image, reading is performed either from the original device or
++from the difference storage.
++
++Change tracking
++---------------
++
++A change tracker map is created for each block device. One byte of this map
++corresponds to one block. The block size is set by the
++``tracking_block_minimum_shift`` and ``tracking_block_maximum_count``
++module parameters. The ``tracking_block_minimum_shift`` parameter limits
++the minimum block size for tracking, while ``tracking_block_maximum_count``
++defines the maximum allowed number of blocks. The size of the change tracker
++block is determined depending on the size of the block device when adding
++a tracking device, that is, when the snapshot is taken for the first time.
++The block size must be a power of two. The ``tracking_block_maximum_shift``
++module parameter allows to limit the maximum block size for tracking. If the
++block size reaches the allowable limit, the number of blocks will exceed the
++``tracking_block_maximum_count`` parameter.
++
++The byte of the change map stores a number from 0 to 255. This is the
++snapshot number, since the creation of which there have been changes in
++the block. Each time a snapshot is created, the number of the current
++snapshot is increased by one. This number is written to the cell of the
++change map when writing to the block. Thus, knowing the number of one of
++the previous snapshots and the number of the last snapshot, one can determine
++from the change map which blocks have been changed. When the number of the
++current change reaches the maximum allowed value for the map of 255, at the
++time when the next snapshot is created, the map of changes is reset to zero,
++and the number of the current snapshot is assigned the value 1. The change
++tracker is reset, and a new UUID is generated - a unique identifier of the
++snapshot generation. The snapshot generation identifier allows to identify
++that a change tracking reset has been performed.
++
++The change map has two copies. One copy is active, it tracks the current
++changes on the block device. The second copy is available for reading
++while the snapshot is being held, and contains the history up to the moment
++the snapshot is taken. Copies are synchronized at the moment of snapshot
++creation. After the snapshot is released, a second copy of the map is not
++needed, but it is not released, so as not to allocate memory for it again
++the next time the snapshot is created.
++
++Copy on write
++-------------
++
++Data is copied in blocks, or rather in chunks. The term "chunk" is used to
++avoid confusion with change tracker blocks and I/O blocks. In addition,
++the "chunk" in the blksnap module means about the same as the "chunk" in
++the dm-snap module.
++
++The size of the chunk is determined by the ``chunk_minimum_shift`` and
++``chunk_maximum_count`` module parameters. The ``chunk_minimum_shift``
++parameter limits the minimum size of the chunk, while ``chunk_maximum_count``
++defines the maximum allowed number of chunks. The size of the chunk is
++determined depending on the size of the block device at the time of taking the
++snapshot. The size of the chunk must be a power of two. The module parameter
++``chunk_maximum_shift`` allows to limit the maximum chunk size. If the chunk
++size reaches the allowable limit, the number of chunks will exceed the
++``chunk_maximum_count`` parameter.
++
++One chunk is described by the ``struct chunk`` structure. A map of structures
++is created for each block device. The structure contains all the necessary
++information to copy the chunks data from the original block device to the
++difference storage. This information allows to describe the snapshot image.
++A semaphore is located in the structure, which allows synchronization of threads
++accessing the chunk.
++
++The block level in Linux has a feature. If a read I/O unit was sent, and a
++write I/O unit was sent after it, then a write can be performed first, and only
++then a read. Therefore, the copy-on-write algorithm is executed synchronously.
++If the write request is handled, the execution of this I/O unit will be delayed
++until the overwritten chunks are read from the original device for later
++storing to the difference store. But if, when handling a write I/O unit, it
++turns out that the written range of sectors has already been prepared for
++storing to the difference storage, then the I/O unit is simply passed.
++
++This algorithm makes it possible to efficiently perform backup even systems
++with a Round-Robin databases. Such databases can be overwritten several times
++during the system backup. Of course, the value of a backup of the RRD monitoring
++system data can be questioned. However, it is often a task to make a backup
++of the entire enterprise infrastructure in order to restore or replicate it
++entirely in case of problems.
++
++There is also a flaw in the algorithm. When overwriting at least one sector,
++an entire chunk is copied. Thus, a situation of rapid filling of the difference
++storage when writing data to a block device in small portions in random order
++is possible. This situation is possible in case of strong fragmentation of
++data on the filesystem. But it must be borne in mind that with such data
++fragmentation, performance of systems usually degrades greatly. So, this
++problem does not occur on real servers, although it can easily be created
++by artificial tests.
++
++Difference storage
++------------------
++
++The difference storage can be a block device or it can be a file on a
++filesystem. Using a block device allows to achieve slightly higher performance,
++but in this case, the block device is used by the kernel module exclusively.
++Usually the disk space is marked up so that there is no available free space
++for backup purposes. Using a file allows to place the difference storage on a
++filesystem.
++
++The difference storage can be expanded already while the snapshot is being held,
++but only if the filesystem supports fallocate(). If the free space in the
++difference storage remains less than half of the value of the module parameter
++``diff_storage_minimum``, then the kernel module can expand the difference
++storage  file within the specified limits. This limit is set when creating a
++snapshot.
++
++If free space in the difference storage runs out, an event to user land is
++generated about the overflow of the snapshot. Such a snapshot is considered
++corrupted, and read I/O units to snapshot images will be terminated with an
++error code. The difference storage stores outdated data required for snapshot
++images, so when the snapshot is overflowed, the backup process is interrupted,
++but the system maintains its operability without data loss.
++
++The difference storage has a limitation. The device cannot be added to the
++snapshot where the difference storage is located. In this case, the difference
++storage can be located in virtual memory, which consists of RAM and a swap
++partition (or file). To do this, it is enough to use a file in /dev/shm, or a
++new tmpfs filesystem can be created for this purpose. Obviously, this variant
++can be useful if the system has a lot of RAM or a large swap. The good news is
++that the modern Linux kernel allows to increase the size of the swap file "on
++the fly" without changing the system configuration.
++
++A regular file or a block device file for the difference storage must be opened
++with the O_EXCL flag. If an unnamed file with the O_TMPFILE flag is created,
++then such a file will be automatically released when the snapshot is destroyed.
++In addition, the use of an unnamed temporary file ensures that no one can open
++this file and read its contents.
++
++Performing I/O for a snapshot image
++-----------------------------------
++
++To read snapshot data, when taking a snapshot, block devices of snapshot images
++are created. The snapshot image block devices support the write operation.
++This allows to perform additional data preparation on the filesystem before
++creating a backup.
++
++To process the I/O unit, clones of the I/O unit are created, which redirect
++the I/O unit either to the original block device or to the difference storage.
++When processing of cloned I/O units is completed, the original I/O unit is
++marked as completed too.
++
++An I/O unit can be partially processed without accessing to block devices if
++the I/O unit refers to a chunk that is in the queue for storing to the
++difference storage. In this case, the data is read or written in a buffer in
++memory.
++
++If, when processing the write I/O unit, it turns out that the data of the
++referred chunk has not yet been stored to the difference storage or has not
++even been read from the original device, then an I/O unit to read data from the
++original device is initiated beforehand. After the reading from original device
++is performed, their data from the I/O unit is partially overwritten directly in
++the buffer of the chunk in memory, and the chunk is scheduled to be saved to the
++difference storage.
++
++How to use
++==========
++
++Depending on the needs and the selected license, you can choose different
++options for managing the module:
++
++- Using ioctl directly
++- Using a static C++ library
++- Using the blksnap console tool
++
++Using a BLKFILTER_CTL for block device
++--------------------------------------
++
++BLKFILTER_CTL allows to send a filter-specific command to the filter on block
++device and get the result of its execution. The module provides the
++``include/uapi/blksnap.h`` header file with a description of the commands and
++their data structures.
++
++1. ``BLKFILTER_CTL_BLKSNAP_CBTINFO`` allows to get information from the
++   change tracker.
++2. ``BLKFILTER_CTL_BLKSNAP_CBTMAP`` reads the change tracker table. If a write
++   operation was performed for the snapshot, then the change tracker takes this
++   into account. Therefore, it is necessary to receive tracker data after write
++   operations have been completed.
++3. ``BLKFILTER_CTL_BLKSNAP_CBTDIRTY`` mark blocks as changed in the change
++   tracker table. This is necessary if post-processing is performed after the
++   backup is created, which changes the backup blocks.
++4. ``BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD`` adds a block device to the snapshot.
++5. ``BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO`` allows to get the name of the snapshot
++   image block device and the presence of an error.
++
++Using ioctl
++-----------
++
++Using a BLKFILTER_CTL ioctl does not allow to fully implement the management of
++the blksnap module. A control file ``blksnap-control`` is created to manage
++snapshots. The control commands are also described in the file
++``include/uapi/blksnap.h``.
++
++1. ``BLKSNAP_IOCTL_VERSION`` get the version number.
++2. ``BLKSNAP_IOCTL_SNAPSHOT_CREATE`` initiates a snapshot and prepares a
++   difference storage.
++3. ``BLKSNAP_IOCTL_SNAPSHOT_TAKE`` creates block devices of block device
++   snapshot images.
++4. ``BLKSNAP_IOCTL_SNAPSHOT_COLLECT`` collect all created snapshots.
++5. ``BLKSNAP_IOCTL_SNAPSHOT_WAIT_EVENT`` allows to track the status of
++   snapshots and receive events about the requirement to expand the difference
++   storage or about snapshot overflow.
++6. ``BLKSNAP_IOCTL_SNAPSHOT_DESTROY`` releases the snapshot.
++
++Static C++ library
++------------------
++
++The [#userspace_libs]_ library was created primarily to simplify creation of
++tests in C++, and it is also a good example of using the module interface.
++When creating applications, direct use of control calls is preferable.
++However, the library can be used in an application with a GPL-2+ license,
++or a library with an LGPL-2+ license can be created, with which even a
++proprietary application can be dynamically linked.
++
++blksnap console tool
++--------------------
++
++The blksnap [#userspace_tools]_ console tool allows to control the module from
++the command line. The tool contains detailed built-in help. To get list of
++commands with usage description, see ``blksnap --help`` command. The ``blksnap
++<command name> --help`` command allows to get detailed information about the
++parameters of each command call. This option may be convenient when creating
++proprietary software, as it allows not to compile with the open source code.
++At the same time, the blksnap tool can be used for creating backup scripts.
++For example, rsync can be called to synchronize files on the filesystem of
++the mounted snapshot image and files in the archive on a filesystem that
++supports compression.
++
++Tests
++-----
++
++A set of tests was created for regression testing [#userspace_tests]_.
++Tests with simple algorithms that use the ``blksnap`` console tool to
++control the module are written in Bash. More complex testing algorithms
++are implemented in C++.
++
++References
++==========
++
++.. [#userspace_libs] https://github.com/veeam/blksnap/tree/master/lib
++
++.. [#userspace_tools] https://github.com/veeam/blksnap/tree/master/tools
++
++.. [#userspace_tests] https://github.com/veeam/blksnap/tree/master/tests
++
++Module interface description
++============================
++
++.. kernel-doc:: include/uapi/linux/blksnap.h
+diff --git a/Documentation/block/index.rst b/Documentation/block/index.rst
+index e9712f72cd6d..696ff150c6b7 100644
+--- a/Documentation/block/index.rst
++++ b/Documentation/block/index.rst
+@@ -11,6 +11,7 @@ Block
+    biovecs
+    blk-mq
+    blkfilter
++   blksnap
+    cmdline-partition
+    data-integrity
+    deadline-iosched
+diff --git a/Documentation/userspace-api/ioctl/ioctl-number.rst b/Documentation/userspace-api/ioctl/ioctl-number.rst
+index 7a1409ecc238..935bc57d6824 100644
+--- a/Documentation/userspace-api/ioctl/ioctl-number.rst
++++ b/Documentation/userspace-api/ioctl/ioctl-number.rst
+@@ -211,6 +211,7 @@ Code  Seq#    Include File                                           Comments
+ 'V'   C0     linux/ivtvfb.h                                          conflict!
+ 'V'   C0     linux/ivtv.h                                            conflict!
+ 'V'   C0     media/si4713.h                                          conflict!
++'V'   00-1F  uapi/linux/blksnap.h                                    conflict!
+ 'W'   00-1F  linux/watchdog.h                                        conflict!
+ 'W'   00-1F  linux/wanrouter.h                                       conflict! (pre 3.9)
+ 'W'   00-3F  sound/asound.h                                          conflict!
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 971c9c74ef5c..cc0d336d4a8e 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -4153,6 +4153,14 @@ F:	block/blk-filter.c
+ F:	include/linux/blk-filter.h
+ F:	include/uapi/linux/blk-filter.h
+ 
++BLOCK DEVICE SNAPSHOTS MODULE
++M:	Sergei Shtepa <sergei.shtepa@linux.dev>
++L:	linux-block@vger.kernel.org
++S:	Supported
++F:	Documentation/block/blksnap.rst
++F:	drivers/block/blksnap/*
++F:	include/uapi/linux/blksnap.h
++
+ BLOCK LAYER
+ M:	Jens Axboe <axboe@kernel.dk>
+ L:	linux-block@vger.kernel.org
+diff --git a/drivers/block/Kconfig b/drivers/block/Kconfig
+index e48b24be45ee..36b2c27ca577 100644
+--- a/drivers/block/Kconfig
++++ b/drivers/block/Kconfig
+@@ -407,4 +407,6 @@ config BLKDEV_UBLK_LEGACY_OPCODES
+ 
+ source "drivers/block/rnbd/Kconfig"
+ 
++source "drivers/block/blksnap/Kconfig"
++
+ endif # BLK_DEV
+diff --git a/drivers/block/Makefile b/drivers/block/Makefile
+index 1105a2d4fdcb..3ef15d8fb196 100644
+--- a/drivers/block/Makefile
++++ b/drivers/block/Makefile
+@@ -43,3 +43,5 @@ obj-$(CONFIG_BLK_DEV_NULL_BLK)	+= null_blk/
+ obj-$(CONFIG_BLK_DEV_UBLK)			+= ublk_drv.o
+ 
+ swim_mod-y	:= swim.o swim_asm.o
++
++obj-$(CONFIG_BLKSNAP) += blksnap/
+diff --git a/drivers/block/blksnap/Kconfig b/drivers/block/blksnap/Kconfig
+new file mode 100644
+index 000000000000..8827a7e4574e
+--- /dev/null
++++ b/drivers/block/blksnap/Kconfig
+@@ -0,0 +1,13 @@
++# SPDX-License-Identifier: GPL-2.0
++# Copyright (C) 2023 Veeam Software Group GmbH
++#
++# Snapshots of block devices configuration
++#
++
++config BLKSNAP
++	tristate "Snapshots of block devices (Experimental)"
++	help
++	  Allow to create snapshots and track block changes for block devices.
++	  It can be used to create backups of block devices. Snapshots are
++	  temporary and are released when backup is completed. Change block
++	  tracking allows to create incremental or differential backups.
+diff --git a/drivers/block/blksnap/Makefile b/drivers/block/blksnap/Makefile
+new file mode 100644
+index 000000000000..ca83411fa2bd
+--- /dev/null
++++ b/drivers/block/blksnap/Makefile
+@@ -0,0 +1,18 @@
++# SPDX-License-Identifier: GPL-2.0
++# Copyright (C) 2023 Veeam Software Group GmbH
++
++# EXTRA_CFLAGS += "-D DEBUG"
++
++blksnap-y := 		\
++	cbt_map.o	\
++	chunk.o		\
++	diff_area.o	\
++	diff_buffer.o	\
++	diff_storage.o	\
++	event_queue.o	\
++	main.o		\
++	snapimage.o	\
++	snapshot.o	\
++	tracker.o
++
++obj-$(CONFIG_BLKSNAP)	 += blksnap.o
+diff --git a/drivers/block/blksnap/cbt_map.c b/drivers/block/blksnap/cbt_map.c
+new file mode 100644
+index 000000000000..5f273cf97b5a
+--- /dev/null
++++ b/drivers/block/blksnap/cbt_map.c
+@@ -0,0 +1,211 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-cbt_map: " fmt
++
++#include <linux/slab.h>
++#include <linux/vmalloc.h>
++#include <uapi/linux/blksnap.h>
++#include "cbt_map.h"
++#include "params.h"
++
++static inline unsigned long long count_by_shift(sector_t capacity,
++						unsigned long long shift)
++{
++	sector_t blk_size = 1ull << (shift - SECTOR_SHIFT);
++
++	return round_up(capacity, blk_size) / blk_size;
++}
++
++static void cbt_map_calculate_block_size(struct cbt_map *cbt_map)
++{
++	unsigned long long count;
++	unsigned long long shift = get_tracking_block_minimum_shift();
++
++	pr_debug("Device capacity %llu sectors\n", cbt_map->bdev_capacity);
++	/*
++	 * The size of the tracking block is calculated based on the size of
++	 * the disk so that the CBT table does not exceed a reasonable size.
++	 */
++	count = count_by_shift(cbt_map->bdev_capacity, shift);
++	pr_debug("Blocks count %llu\n", count);
++	while (count > get_tracking_block_maximum_count()) {
++		if (shift >= get_tracking_block_maximum_shift()) {
++			pr_info("The maximum allowable CBT block size has been reached.\n");
++			break;
++		}
++		shift = shift + 1ull;
++		count = count_by_shift(cbt_map->bdev_capacity, shift);
++		pr_debug("Blocks count %llu\n", count);
++	}
++
++	cbt_map->blk_size_shift = shift;
++	cbt_map->blk_count = count;
++	pr_debug("The optimal CBT block size was calculated as %llu bytes\n",
++		 (1ull << cbt_map->blk_size_shift));
++}
++
++static int cbt_map_allocate(struct cbt_map *cbt_map)
++{
++	int ret = 0;
++	unsigned int flags;
++	unsigned char *read_map = NULL;
++	unsigned char *write_map = NULL;
++	size_t size = cbt_map->blk_count;
++
++	if (cbt_map->read_map || cbt_map->write_map)
++		return -EINVAL;
++
++	pr_debug("Allocate CBT map of %zu blocks\n", size);
++	flags = memalloc_noio_save();
++
++	read_map = vzalloc(size);
++	if (!read_map) {
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	write_map = vzalloc(size);
++	if (!write_map) {
++		vfree(read_map);
++		ret = -ENOMEM;
++		goto out;
++	}
++
++	cbt_map->read_map = read_map;
++	cbt_map->write_map = write_map;
++
++	cbt_map->snap_number_previous = 0;
++	cbt_map->snap_number_active = 1;
++	generate_random_uuid(cbt_map->generation_id.b);
++	cbt_map->is_corrupted = false;
++out:
++	memalloc_noio_restore(flags);
++	return ret;
++}
++
++void cbt_map_destroy(struct cbt_map *cbt_map)
++{
++	pr_debug("CBT map destroy\n");
++
++	vfree(cbt_map->read_map);
++	vfree(cbt_map->write_map);
++	kfree(cbt_map);
++}
++
++struct cbt_map *cbt_map_create(struct block_device *bdev)
++{
++	struct cbt_map *cbt_map = NULL;
++	int ret;
++
++	pr_debug("CBT map create\n");
++
++	cbt_map = kzalloc(sizeof(struct cbt_map), GFP_KERNEL);
++	if (cbt_map == NULL)
++		return NULL;
++
++	cbt_map->bdev_capacity = bdev_nr_sectors(bdev);
++	cbt_map_calculate_block_size(cbt_map);
++
++	ret = cbt_map_allocate(cbt_map);
++	if (ret) {
++		pr_err("Failed to create tracker. errno=%d\n", abs(ret));
++		cbt_map_destroy(cbt_map);
++		return NULL;
++	}
++
++	spin_lock_init(&cbt_map->locker);
++	cbt_map->is_corrupted = false;
++
++	return cbt_map;
++}
++
++void cbt_map_switch(struct cbt_map *cbt_map)
++{
++	pr_debug("CBT map switch\n");
++	spin_lock(&cbt_map->locker);
++
++	cbt_map->snap_number_previous = cbt_map->snap_number_active;
++	++cbt_map->snap_number_active;
++	if (cbt_map->snap_number_active == 256) {
++		cbt_map->snap_number_active = 1;
++
++		memset(cbt_map->write_map, 0, cbt_map->blk_count);
++
++		generate_random_uuid(cbt_map->generation_id.b);
++
++		pr_debug("CBT reset\n");
++	} else
++		memcpy(cbt_map->read_map, cbt_map->write_map,
++		       cbt_map->blk_count);
++	spin_unlock(&cbt_map->locker);
++}
++
++static inline int _cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
++			       sector_t sector_cnt, u8 snap_number,
++			       unsigned char *map)
++{
++	int res = 0;
++	u8 num;
++	size_t inx;
++	size_t cbt_block_first = (size_t)(
++		sector_start >> (cbt_map->blk_size_shift - SECTOR_SHIFT));
++	size_t cbt_block_last = (size_t)(
++		(sector_start + sector_cnt - 1) >>
++		(cbt_map->blk_size_shift - SECTOR_SHIFT));
++
++	for (inx = cbt_block_first; inx <= cbt_block_last; ++inx) {
++		if (unlikely(inx >= cbt_map->blk_count)) {
++			pr_err("Block index is too large\n");
++			pr_err("Block #%zu was demanded, map size %zu blocks\n",
++			       inx, cbt_map->blk_count);
++			res = -EINVAL;
++			break;
++		}
++
++		num = map[inx];
++		if (num < snap_number)
++			map[inx] = snap_number;
++	}
++	return res;
++}
++
++int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
++		sector_t sector_cnt)
++{
++	int res;
++
++	spin_lock(&cbt_map->locker);
++	if (unlikely(cbt_map->is_corrupted)) {
++		spin_unlock(&cbt_map->locker);
++		return -EINVAL;
++	}
++	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
++			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
++	if (unlikely(res))
++		cbt_map->is_corrupted = true;
++
++	spin_unlock(&cbt_map->locker);
++
++	return res;
++}
++
++int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start,
++		     sector_t sector_cnt)
++{
++	int res;
++
++	spin_lock(&cbt_map->locker);
++	if (unlikely(cbt_map->is_corrupted)) {
++		spin_unlock(&cbt_map->locker);
++		return -EINVAL;
++	}
++	res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
++			   (u8)cbt_map->snap_number_active, cbt_map->write_map);
++	if (!res)
++		res = _cbt_map_set(cbt_map, sector_start, sector_cnt,
++				   (u8)cbt_map->snap_number_previous,
++				   cbt_map->read_map);
++	spin_unlock(&cbt_map->locker);
++
++	return res;
++}
+diff --git a/drivers/block/blksnap/cbt_map.h b/drivers/block/blksnap/cbt_map.h
+new file mode 100644
+index 000000000000..9ef7819e41a5
+--- /dev/null
++++ b/drivers/block/blksnap/cbt_map.h
+@@ -0,0 +1,89 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_CBT_MAP_H
++#define __BLKSNAP_CBT_MAP_H
++
++#include <linux/kernel.h>
++#include <linux/kref.h>
++#include <linux/uuid.h>
++#include <linux/spinlock.h>
++#include <linux/blkdev.h>
++
++struct blksnap_sectors;
++
++/**
++ * struct cbt_map - The table of changes for a block device.
++ *
++ * @locker:
++ *	Locking for atomic modification of structure members.
++ * @blk_size_shift:
++ *	The power of 2 used to specify the change tracking block size.
++ * @blk_count:
++ *	The number of change tracking blocks.
++ * @device_capacity:
++ *	The actual capacity of the device.
++ * @read_map:
++ *	A table of changes available for reading. This is the table that can
++ *	be read after taking a snapshot.
++ * @write_map:
++ *	The current table for tracking changes.
++ * @snap_number_active:
++ *	The current sequential number of changes. This is the number that is
++ *	written to the current table when the block data changes.
++ * @snap_number_previous:
++ *	The previous sequential number of changes. This number is used to
++ *	identify the blocks that were changed between the penultimate snapshot
++ *	and the last snapshot.
++ * @generation_id:
++ *	UUID of the generation of changes.
++ * @is_corrupted:
++ *	A flag that the change tracking data is no longer reliable.
++ *
++ * The change block tracking map is a byte table. Each byte stores the
++ * sequential number of changes for one block. To determine which blocks have
++ * changed since the previous snapshot with the change number 4, it is enough
++ * to find all bytes with the number more than 4.
++ *
++ * Since one byte is allocated to track changes in one block, the change table
++ * is created again at the 255th snapshot. At the same time, a new unique
++ * generation identifier is generated. Tracking changes is possible only for
++ * tables of the same generation.
++ *
++ * There are two tables on the change block tracking map. One is available for
++ * reading, and the other is available for writing. At the moment of taking
++ * a snapshot, the tables are synchronized. The user's process, when calling
++ * the corresponding ioctl, can read the readable table. At the same time, the
++ * change tracking mechanism continues to work with the writable table.
++ *
++ * To provide the ability to mount a snapshot image as writeable, it is
++ * possible to make changes to both of these tables simultaneously.
++ *
++ */
++struct cbt_map {
++	spinlock_t locker;
++
++	size_t blk_size_shift;
++	size_t blk_count;
++	sector_t bdev_capacity;
++
++	unsigned char *read_map;
++	unsigned char *write_map;
++
++	unsigned long snap_number_active;
++	unsigned long snap_number_previous;
++	uuid_t generation_id;
++
++	bool is_corrupted;
++};
++
++struct cbt_map *cbt_map_create(struct block_device *bdev);
++
++void cbt_map_destroy(struct cbt_map *cbt_map);
++
++void cbt_map_switch(struct cbt_map *cbt_map);
++int cbt_map_set(struct cbt_map *cbt_map, sector_t sector_start,
++		sector_t sector_cnt);
++int cbt_map_set_both(struct cbt_map *cbt_map, sector_t sector_start,
++		     sector_t sector_cnt);
++
++#endif /* __BLKSNAP_CBT_MAP_H */
+diff --git a/drivers/block/blksnap/chunk.c b/drivers/block/blksnap/chunk.c
+new file mode 100644
+index 000000000000..72c0e1353d85
+--- /dev/null
++++ b/drivers/block/blksnap/chunk.c
+@@ -0,0 +1,600 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-chunk: " fmt
++
++#include <linux/blkdev.h>
++#include <linux/slab.h>
++#include <linux/blk-filter.h>
++#include "chunk.h"
++#include "diff_buffer.h"
++#include "diff_storage.h"
++#include "tracker.h"
++#include "params.h"
++
++struct chunk_bio {
++	struct work_struct work;
++	struct list_head chunks;
++	struct bio *orig_bio;
++	struct bvec_iter orig_iter;
++	struct bio bio;
++};
++
++static struct bio_set chunk_io_bioset;
++static struct bio_set chunk_clone_bioset;
++
++static inline sector_t chunk_sector(struct chunk *chunk)
++{
++	return (sector_t)(chunk->number) <<
++		(chunk->diff_area->chunk_shift - SECTOR_SHIFT);
++}
++
++static inline sector_t chunk_sector_end(struct chunk *chunk)
++{
++	return chunk_sector(chunk) + chunk->sector_count;
++}
++
++void chunk_store_failed(struct chunk *chunk, int error)
++{
++	struct diff_area *diff_area = diff_area_get(chunk->diff_area);
++
++	WARN_ON_ONCE(chunk->state != CHUNK_ST_NEW &&
++		     chunk->state != CHUNK_ST_IN_MEMORY);
++	chunk->state = CHUNK_ST_FAILED;
++
++	if (likely(chunk->diff_buffer)) {
++		diff_buffer_release(diff_area, chunk->diff_buffer);
++		chunk->diff_buffer = NULL;
++	}
++
++	chunk_up(chunk);
++	if (error)
++		diff_area_set_corrupted(diff_area, error);
++	diff_area_put(diff_area);
++};
++
++static inline void chunk_io_failed(struct chunk *chunk)
++{
++	if (likely(chunk->diff_buffer)) {
++		diff_buffer_release(chunk->diff_area, chunk->diff_buffer);
++		chunk->diff_buffer = NULL;
++	}
++
++	chunk_up(chunk);
++}
++
++static void chunk_store(struct chunk *chunk)
++{
++	struct diff_area *diff_area = diff_area_get(chunk->diff_area);
++	unsigned int old_nofs;
++	struct blkfilter *prev_filter;
++
++	WARN_ON_ONCE(chunk->state != CHUNK_ST_NEW &&
++		     chunk->state != CHUNK_ST_STORED);
++	chunk->state = CHUNK_ST_IN_MEMORY;
++
++	prev_filter = tracker_current_filter_set(diff_area->tracker);
++	old_nofs = memalloc_nofs_save();
++	diff_area_store_chunk(diff_area, chunk);
++	memalloc_nofs_restore(old_nofs);
++	tracker_current_filter_restore(prev_filter);
++
++	diff_area_put(diff_area);
++}
++
++void chunk_copy_bio(struct chunk *chunk, struct bio *bio,
++		    struct bvec_iter *iter)
++{
++	unsigned int chunk_ofs, chunk_left;
++
++	chunk_ofs = (iter->bi_sector - chunk_sector(chunk)) << SECTOR_SHIFT;
++	chunk_left = chunk->diff_buffer->size - chunk_ofs;
++	while (chunk_left && iter->bi_size) {
++		struct bio_vec bvec = bio_iter_iovec(bio, *iter);
++		unsigned int page_ofs = offset_in_page(chunk_ofs);
++		unsigned int inx = chunk_ofs >> PAGE_SHIFT;
++		struct page *page = chunk->diff_buffer->bvec[inx].bv_page;
++		unsigned int len;
++
++		len = min3(bvec.bv_len,
++			   chunk_left,
++			   (unsigned int)PAGE_SIZE - page_ofs);
++
++		if (op_is_write(bio_op(bio))) {
++			/* from bio to buffer */
++			memcpy_page(page, page_ofs,
++				    bvec.bv_page, bvec.bv_offset, len);
++		} else {
++			/* from buffer to bio */
++			memcpy_page(bvec.bv_page, bvec.bv_offset,
++				    page, page_ofs, len);
++		}
++
++		chunk_ofs += len;
++		chunk_left -= len;
++		bio_advance_iter_single(bio, iter, len);
++	}
++}
++
++static inline sector_t chunk_offset(struct chunk *chunk, struct bio *bio)
++{
++	return bio->bi_iter.bi_sector - chunk_sector(chunk);
++}
++
++static inline void chunk_limit_iter(struct chunk *chunk, struct bio *bio,
++				    sector_t sector, struct bvec_iter *iter)
++{
++	sector_t chunk_ofs = chunk_offset(chunk, bio);
++
++	iter->bi_sector = sector + chunk_ofs;
++	iter->bi_size = min_t(unsigned int,
++			bio->bi_iter.bi_size,
++			(chunk->sector_count - chunk_ofs) << SECTOR_SHIFT);
++}
++
++static inline unsigned int chunk_limit(struct chunk *chunk, struct bio *bio)
++{
++	unsigned int chunk_ofs, chunk_left;
++
++	chunk_ofs = (unsigned int)chunk_offset(chunk, bio) << SECTOR_SHIFT;
++	chunk_left = chunk->diff_buffer->size - chunk_ofs;
++
++	return min(bio->bi_iter.bi_size, chunk_left);
++}
++
++struct bio *chunk_alloc_clone(struct block_device *bdev, struct bio *bio)
++{
++	return bio_alloc_clone(bdev, bio, GFP_KERNEL, &chunk_clone_bioset);
++}
++
++void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio)
++{
++	struct bio *new_bio;
++
++	new_bio = chunk_alloc_clone(chunk->diff_bdev, bio);
++	chunk_limit_iter(chunk, bio, chunk->diff_ofs_sect, &new_bio->bi_iter);
++
++	bio_advance(bio, new_bio->bi_iter.bi_size);
++	bio_chain(new_bio, bio);
++
++	submit_bio_noacct(new_bio);
++}
++
++static void io_ctx_free(struct kref *kref)
++{
++	kfree(container_of(kref, struct chunk_io_ctx, kref));
++}
++
++static inline void chunk_io_ctx_complete(struct chunk_io_ctx *io_ctx, long ret)
++{
++	if (ret < 0) {
++		bio_io_error(io_ctx->bio);
++		chunk_io_failed(io_ctx->chunk);
++	} else {
++		bio_endio(io_ctx->bio);
++		chunk_up(io_ctx->chunk);
++	}
++	kref_put(&io_ctx->kref, io_ctx_free);
++}
++
++static void chunk_diff_bio_complete(struct kiocb *iocb, long ret)
++{
++	struct chunk_io_ctx *io_ctx;
++
++	if (iocb->ki_flags & IOCB_WRITE)
++		kiocb_end_write(iocb);
++
++	if (unlikely(ret < 0))
++		pr_err("Failed to write data to difference storage\n");
++
++	io_ctx = container_of(iocb, struct chunk_io_ctx, iocb);
++	chunk_io_ctx_complete(io_ctx, ret);
++}
++
++void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx)
++{
++	struct file *diff_file = io_ctx->chunk->diff_file;
++	ssize_t ret;
++
++	if (io_ctx->iocb.ki_flags & IOCB_WRITE)
++		ret = vfs_iocb_iter_write(diff_file, &io_ctx->iocb,
++							&io_ctx->iov_iter);
++	else
++		ret = vfs_iocb_iter_read(diff_file, &io_ctx->iocb,
++							&io_ctx->iov_iter);
++	if (ret != -EIOCBQUEUED)
++		chunk_io_ctx_complete(io_ctx, ret);
++	kref_put(&io_ctx->kref, io_ctx_free);
++}
++
++static inline void chunk_diff_bio_schedule(struct diff_area *diff_area,
++					   struct chunk_io_ctx *io_ctx)
++{
++	kref_get(&io_ctx->kref);
++	spin_lock(&diff_area->image_io_queue_lock);
++	list_add_tail(&io_ctx->link, &diff_area->image_io_queue);
++	atomic_inc(&diff_area->image_io_queue_count);
++	spin_unlock(&diff_area->image_io_queue_lock);
++	blksnap_queue_work(&diff_area->image_io_work);
++
++	while (atomic_read(&diff_area->image_io_queue_count) >=
++						get_chunk_maximum_in_queue()) {
++		io_schedule();
++	}
++}
++
++/*
++ * The data from bio is write to the diff file or read from it.
++ */
++int chunk_diff_bio(struct chunk *chunk, struct bio *bio)
++{
++	bool is_write = op_is_write(bio_op(bio));
++	loff_t chunk_ofs, chunk_left;
++	struct bio_vec iter_bvec, *bio_bvec;
++	struct bvec_iter iter;
++	unsigned long nr_segs = 0;
++	size_t nbytes = 0;
++	struct chunk_io_ctx *io_ctx;
++
++	io_ctx = kzalloc(sizeof(struct chunk_io_ctx), GFP_KERNEL);
++	if (!io_ctx)
++		return -ENOMEM;
++	INIT_LIST_HEAD(&io_ctx->link);
++	kref_init(&io_ctx->kref);
++	chunk_ofs = (bio->bi_iter.bi_sector - chunk_sector(chunk))
++			<< SECTOR_SHIFT;
++	chunk_left = (chunk->sector_count << SECTOR_SHIFT) - chunk_ofs;
++	bio_for_each_segment(iter_bvec, bio, iter) {
++		if (chunk_left == 0)
++			break;
++
++		if (chunk_left > iter_bvec.bv_len) {
++			chunk_left -= iter_bvec.bv_len;
++			nbytes += iter_bvec.bv_len;
++		} else {
++			nbytes += chunk_left;
++			chunk_left = 0;
++		}
++		nr_segs++;
++	}
++	bio_bvec = __bvec_iter_bvec(bio->bi_io_vec, bio->bi_iter);
++	iov_iter_bvec(&io_ctx->iov_iter, is_write ? WRITE : READ,
++		      bio_bvec, nr_segs, nbytes);
++	io_ctx->iov_iter.iov_offset = bio->bi_iter.bi_bvec_done;
++
++	init_sync_kiocb(&io_ctx->iocb, chunk->diff_file);
++	io_ctx->iocb.ki_filp = chunk->diff_file;
++	io_ctx->iocb.ki_pos = (chunk->diff_ofs_sect << SECTOR_SHIFT) +
++								chunk_ofs;
++	if (is_write)
++		io_ctx->iocb.ki_flags |= IOCB_WRITE;
++	io_ctx->iocb.ki_complete = chunk_diff_bio_complete;
++	io_ctx->chunk = chunk;
++	io_ctx->bio = bio;
++	bio_inc_remaining(bio);
++	bio_advance(bio, nbytes);
++
++	chunk_diff_bio_schedule(chunk->diff_area, io_ctx);
++
++	return 0;
++}
++
++static inline struct chunk *get_chunk_from_cbio(struct chunk_bio *cbio)
++{
++	struct chunk *chunk = list_first_entry_or_null(&cbio->chunks,
++						       struct chunk, link);
++
++	if (chunk)
++		list_del_init(&chunk->link);
++	return chunk;
++}
++
++static void notify_load_and_schedule_io(struct work_struct *work)
++{
++	struct chunk_bio *cbio = container_of(work, struct chunk_bio, work);
++	struct chunk *chunk;
++
++	while ((chunk = get_chunk_from_cbio(cbio))) {
++		if (unlikely(cbio->bio.bi_status != BLK_STS_OK)) {
++			chunk_store_failed(chunk, -EIO);
++			bio_io_error(cbio->orig_bio);
++			continue;
++		}
++		if (chunk->state == CHUNK_ST_FAILED) {
++			chunk_up(chunk);
++			bio_io_error(cbio->orig_bio);
++			continue;
++		}
++
++		chunk_copy_bio(chunk, cbio->orig_bio, &cbio->orig_iter);
++		chunk_store(chunk);
++		bio_endio(cbio->orig_bio);
++	}
++
++	bio_put(&cbio->bio);
++}
++
++static void notify_load_and_postpone_io(struct work_struct *work)
++{
++	struct chunk_bio *cbio = container_of(work, struct chunk_bio, work);
++	struct chunk *chunk;
++
++	while ((chunk = get_chunk_from_cbio(cbio))) {
++		if (unlikely(cbio->bio.bi_status != BLK_STS_OK)) {
++			chunk_store_failed(chunk, -EIO);
++			continue;
++		}
++		if (chunk->state == CHUNK_ST_FAILED) {
++			chunk_up(chunk);
++			continue;
++		}
++
++		chunk_store(chunk);
++	}
++
++	/* re submit filtered original bio */
++	resubmit_filtered_bio(cbio->orig_bio);
++	bio_put(&cbio->bio);
++}
++
++static void chunk_notify_store(struct chunk *chunk, int err)
++{
++	if (err) {
++		chunk_store_failed(chunk, err);
++		return;
++	}
++
++	WARN_ON_ONCE(chunk->state != CHUNK_ST_IN_MEMORY);
++	chunk->state = CHUNK_ST_STORED;
++
++	if (chunk->diff_buffer) {
++		diff_buffer_release(chunk->diff_area,
++				    chunk->diff_buffer);
++		chunk->diff_buffer = NULL;
++	}
++	chunk_up(chunk);
++}
++
++static void chunk_notify_store_tobdev(struct work_struct *work)
++{
++	struct chunk_bio *cbio = container_of(work, struct chunk_bio, work);
++	struct chunk *chunk;
++
++	while ((chunk = get_chunk_from_cbio(cbio))) {
++		if (unlikely(cbio->bio.bi_status != BLK_STS_OK)) {
++			chunk_store_failed(chunk, -EIO);
++			continue;
++		}
++
++		WARN_ON_ONCE(chunk->state != CHUNK_ST_IN_MEMORY);
++		chunk->state = CHUNK_ST_STORED;
++
++		if (chunk->diff_buffer) {
++			diff_buffer_release(chunk->diff_area,
++					    chunk->diff_buffer);
++			chunk->diff_buffer = NULL;
++		}
++		chunk_up(chunk);
++	}
++
++	bio_put(&cbio->bio);
++}
++
++static void chunk_io_endio(struct bio *bio)
++{
++	struct chunk_bio *cbio = container_of(bio, struct chunk_bio, bio);
++
++	blksnap_queue_work(&cbio->work);
++}
++
++static inline void chunk_submit_bio(struct bio *bio)
++{
++	bio->bi_end_io = chunk_io_endio;
++	submit_bio_noacct(bio);
++}
++
++static inline unsigned short calc_max_vecs(sector_t left)
++{
++	return bio_max_segs(round_up(left, PAGE_SECTORS) / PAGE_SECTORS);
++}
++
++void chunk_store_tobdev(struct chunk *chunk)
++{
++	struct block_device *bdev = chunk->diff_bdev;
++	sector_t sector = chunk->diff_ofs_sect;
++	sector_t count = chunk->sector_count;
++	unsigned int inx = 0;
++	struct bio *bio;
++	struct chunk_bio *cbio;
++
++	bio = bio_alloc_bioset(bdev, calc_max_vecs(count),
++			       REQ_OP_WRITE | REQ_SYNC | REQ_FUA,
++			       GFP_KERNEL, &chunk_io_bioset);
++	bio->bi_iter.bi_sector = sector;
++
++	while (count) {
++		struct bio *next;
++		sector_t portion = min_t(sector_t, count, PAGE_SECTORS);
++		unsigned int bytes = portion << SECTOR_SHIFT;
++
++		if (bio_add_page(bio, chunk->diff_buffer->bvec[inx].bv_page,
++				 bytes, 0) == bytes) {
++			inx++;
++			count -= portion;
++			continue;
++		}
++
++		/* Create next bio */
++		next = bio_alloc_bioset(bdev, calc_max_vecs(count),
++					REQ_OP_WRITE | REQ_SYNC | REQ_FUA,
++					GFP_KERNEL, &chunk_io_bioset);
++		next->bi_iter.bi_sector = bio_end_sector(bio);
++		bio_chain(bio, next);
++		submit_bio_noacct(bio);
++		bio = next;
++	}
++
++	cbio = container_of(bio, struct chunk_bio, bio);
++	INIT_WORK(&cbio->work, chunk_notify_store_tobdev);
++	INIT_LIST_HEAD(&cbio->chunks);
++	list_add_tail(&chunk->link, &cbio->chunks);
++	cbio->orig_bio = NULL;
++	chunk_submit_bio(bio);
++}
++
++/*
++ * Synchronously store chunk to diff file.
++ */
++void chunk_diff_write(struct chunk *chunk)
++{
++	loff_t pos = chunk->diff_ofs_sect << SECTOR_SHIFT;
++	size_t length = chunk->sector_count << SECTOR_SHIFT;
++	struct iov_iter iov_iter;
++	ssize_t len;
++	int err = 0;
++
++	iov_iter_bvec(&iov_iter, ITER_SOURCE, chunk->diff_buffer->bvec,
++		      chunk->diff_buffer->nr_pages, length);
++	while (length) {
++		len = vfs_iter_write(chunk->diff_file, &iov_iter, &pos, 0);
++		if (len < 0) {
++			err = (int)len;
++			pr_debug("vfs_iter_write complete with error code %zd\n",
++				 len);
++			break;
++		}
++		length -= len;
++	}
++	chunk_notify_store(chunk, err);
++}
++
++static struct bio *chunk_origin_load_async(struct chunk *chunk)
++{
++	struct block_device *bdev;
++	struct bio *bio = NULL;
++	struct diff_buffer *diff_buffer;
++	unsigned int inx = 0;
++	sector_t sector, count = chunk->sector_count;
++
++	diff_buffer = diff_buffer_take(chunk->diff_area);
++	if (IS_ERR(diff_buffer))
++		return ERR_CAST(diff_buffer);
++	chunk->diff_buffer = diff_buffer;
++
++	bdev = chunk->diff_area->orig_bdev;
++	sector = chunk_sector(chunk);
++
++	bio = bio_alloc_bioset(bdev, calc_max_vecs(count), REQ_OP_READ,
++			       GFP_KERNEL, &chunk_io_bioset);
++	bio->bi_iter.bi_sector = sector;
++
++	while (count) {
++		struct bio *next;
++		sector_t portion = min_t(sector_t, count, PAGE_SECTORS);
++		unsigned int bytes = portion << SECTOR_SHIFT;
++		struct page *pg = chunk->diff_buffer->bvec[inx].bv_page;
++
++		if (bio_add_page(bio, pg, bytes, 0) == bytes) {
++			inx++;
++			count -= portion;
++			continue;
++		}
++
++		/* Create next bio */
++		next = bio_alloc_bioset(bdev, calc_max_vecs(count), REQ_OP_READ,
++					GFP_KERNEL, &chunk_io_bioset);
++		next->bi_iter.bi_sector = bio_end_sector(bio);
++		bio_chain(bio, next);
++		submit_bio_noacct(bio);
++		bio = next;
++	}
++
++	return bio;
++}
++
++/*
++ * Load the chunk asynchronously.
++ */
++int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
++{
++	struct bio *prev = *chunk_bio, *bio;
++
++	bio = chunk_origin_load_async(chunk);
++	if (IS_ERR(bio))
++		return PTR_ERR(bio);
++
++	if (prev) {
++		bio_chain(prev, bio);
++		submit_bio_noacct(prev);
++	}
++
++	*chunk_bio = bio;
++	return 0;
++}
++
++void chunk_load_and_postpone_io_finish(struct list_head *chunks,
++				struct bio *chunk_bio, struct bio *orig_bio)
++{
++	struct chunk_bio *cbio;
++
++	cbio = container_of(chunk_bio, struct chunk_bio, bio);
++	INIT_LIST_HEAD(&cbio->chunks);
++	while (!list_empty(chunks)) {
++		struct chunk *it;
++
++		it = list_first_entry(chunks, struct chunk, link);
++		list_del_init(&it->link);
++
++		list_add_tail(&it->link, &cbio->chunks);
++	}
++	INIT_WORK(&cbio->work, notify_load_and_postpone_io);
++	cbio->orig_bio = orig_bio;
++	chunk_submit_bio(chunk_bio);
++}
++
++bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
++{
++	struct chunk_bio *cbio;
++	struct bio *bio;
++
++	bio = chunk_origin_load_async(chunk);
++	if (IS_ERR(bio)) {
++		chunk_up(chunk);
++		return false;
++	}
++
++	cbio = container_of(bio, struct chunk_bio, bio);
++	INIT_LIST_HEAD(&cbio->chunks);
++	list_add_tail(&chunk->link, &cbio->chunks);
++	INIT_WORK(&cbio->work, notify_load_and_schedule_io);
++	cbio->orig_bio = orig_bio;
++	cbio->orig_iter = orig_bio->bi_iter;
++	bio_advance_iter_single(orig_bio, &orig_bio->bi_iter,
++				chunk_limit(chunk, orig_bio));
++	bio_inc_remaining(orig_bio);
++
++	chunk_submit_bio(bio);
++	return true;
++}
++
++int __init chunk_init(void)
++{
++	int ret;
++
++	ret = bioset_init(&chunk_io_bioset, 64,
++			  offsetof(struct chunk_bio, bio),
++			  BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
++	if (ret)
++		return ret;
++
++	ret = bioset_init(&chunk_clone_bioset, 64, 0,
++			  BIOSET_NEED_BVECS | BIOSET_NEED_RESCUER);
++	if (ret)
++		bioset_exit(&chunk_io_bioset);
++	return ret;
++}
++
++void chunk_done(void)
++{
++	bioset_exit(&chunk_io_bioset);
++	bioset_exit(&chunk_clone_bioset);
++}
+diff --git a/drivers/block/blksnap/chunk.h b/drivers/block/blksnap/chunk.h
+new file mode 100644
+index 000000000000..338d85d4a35d
+--- /dev/null
++++ b/drivers/block/blksnap/chunk.h
+@@ -0,0 +1,135 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_CHUNK_H
++#define __BLKSNAP_CHUNK_H
++
++#include <linux/blk_types.h>
++#include <linux/blkdev.h>
++#include <linux/rwsem.h>
++#include <linux/atomic.h>
++#include "diff_area.h"
++
++struct blkfilter;
++
++/**
++ * enum chunk_st - Possible states for a chunk.
++ *
++ * @CHUNK_ST_NEW:
++ *	No data is associated with the chunk.
++ * @CHUNK_ST_IN_MEMORY:
++ *	The data of the chunk is ready to be read from the RAM buffer.
++ *	The flag is removed when a chunk is removed from the store queue
++ *	and its buffer is released.
++ * @CHUNK_ST_STORED:
++ *	The data of the chunk has been written to the difference storage.
++ * @CHUNK_ST_FAILED:
++ *	An error occurred while processing the chunk data.
++ *
++ * Chunks life circle:
++ *	CHUNK_ST_NEW -> CHUNK_ST_IN_MEMORY <-> CHUNK_ST_STORED
++ */
++
++enum chunk_st {
++	CHUNK_ST_NEW,
++	CHUNK_ST_IN_MEMORY,
++	CHUNK_ST_STORED,
++	CHUNK_ST_FAILED,
++};
++
++/**
++ * struct chunk - Minimum data storage unit.
++ *
++ * @link:
++ *	The list header allows to create queue of chunks.
++ * @number:
++ *	Sequential number of the chunk.
++ * @sector_count:
++ *	Number of sectors in the current chunk. This is especially true
++ *	for the	last chunk.
++ * @lock:
++ *	Binary semaphore. Syncs access to the chunks fields: state,
++ *	diff_buffer, diff_file and diff_ofs_sect.
++ * @diff_area:
++ *	Pointer to the difference area - the difference storage area for a
++ *	specific device. This field is only available when the chunk is locked.
++ *	Allows to protect the difference area from early release.
++ * @state:
++ *	Defines the state of a chunk.
++ * @diff_bdev:
++ *      The difference storage block device.
++ * @diff_file:
++ *	The difference storage file.
++ * @diff_ofs_sect:
++ *	The sector offset of the region's first sector.
++ * @diff_buffer:
++ *	Pointer to &struct diff_buffer. Describes a buffer in the memory
++ *	for storing the chunk data.
++ *	on the difference storage.
++ *
++ * This structure describes the block of data that the module operates
++ * with when executing the copy-on-write algorithm and when performing I/O
++ * to snapshot images.
++ *
++ * If the data of the chunk has been changed, then the chunk gets into store
++ * queue. The queue provides caching of chunks. Saving chunks to the storage is
++ * performed in a separate working thread. This ensures the best system
++ * performance.
++ *
++ * The semaphore is blocked for writing if there is no actual data in the
++ * buffer, since a block of data is being read from the original device or
++ * from a difference storage. If data is being read from or written to the
++ * diff_buffer, the semaphore must be locked.
++ */
++struct chunk {
++	struct list_head link;
++	unsigned long number;
++	sector_t sector_count;
++
++	struct semaphore lock;
++	struct diff_area *diff_area;
++
++	enum chunk_st state;
++
++	struct block_device *diff_bdev;
++	struct file *diff_file;
++	sector_t diff_ofs_sect;
++
++	struct diff_buffer *diff_buffer;
++};
++
++static inline void chunk_up(struct chunk *chunk)
++{
++	struct diff_area *diff_area = chunk->diff_area;
++
++	chunk->diff_area = NULL;
++	up(&chunk->lock);
++	diff_area_put(diff_area);
++};
++
++struct chunk_io_ctx {
++	struct kref kref;
++	struct list_head link;
++	struct kiocb iocb;
++	struct iov_iter iov_iter;
++	struct chunk *chunk;
++	struct bio *bio;
++};
++void chunk_diff_bio_execute(struct chunk_io_ctx *io_ctx);
++
++void chunk_store_failed(struct chunk *chunk, int error);
++struct bio *chunk_alloc_clone(struct block_device *bdev, struct bio *bio);
++
++void chunk_copy_bio(struct chunk *chunk, struct bio *bio,
++		    struct bvec_iter *iter);
++void chunk_diff_bio_tobdev(struct chunk *chunk, struct bio *bio);
++void chunk_store_tobdev(struct chunk *chunk);
++int chunk_diff_bio(struct chunk *chunk, struct bio *bio);
++void chunk_diff_write(struct chunk *chunk);
++bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio);
++int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio);
++void chunk_load_and_postpone_io_finish(struct list_head *chunks,
++				struct bio *chunk_bio, struct bio *orig_bio);
++
++int __init chunk_init(void);
++void chunk_done(void);
++#endif /* __BLKSNAP_CHUNK_H */
+diff --git a/drivers/block/blksnap/diff_area.c b/drivers/block/blksnap/diff_area.c
+new file mode 100644
+index 000000000000..33c6cb3f73c3
+--- /dev/null
++++ b/drivers/block/blksnap/diff_area.c
+@@ -0,0 +1,567 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-diff-area: " fmt
++
++#include <linux/blkdev.h>
++#include <linux/slab.h>
++#include <linux/build_bug.h>
++#include <uapi/linux/blksnap.h>
++#include "chunk.h"
++#include "diff_buffer.h"
++#include "diff_storage.h"
++#include "params.h"
++#include "tracker.h"
++
++struct cow_task {
++	struct list_head link;
++	struct bio *bio;
++};
++
++static inline sector_t diff_area_chunk_offset(struct diff_area *diff_area,
++					      sector_t sector)
++{
++	return sector & ((1ull << (diff_area->chunk_shift - SECTOR_SHIFT)) - 1);
++}
++
++static inline unsigned long diff_area_chunk_number(struct diff_area *diff_area,
++						   sector_t sector)
++{
++	return (unsigned long)(sector >>
++			       (diff_area->chunk_shift - SECTOR_SHIFT));
++}
++
++static inline sector_t chunk_sector(struct chunk *chunk)
++{
++	return (sector_t)(chunk->number)
++	       << (chunk->diff_area->chunk_shift - SECTOR_SHIFT);
++}
++
++static inline sector_t last_chunk_size(sector_t sector_count, sector_t capacity)
++{
++	sector_t capacity_rounded = round_down(capacity, sector_count);
++
++	if (capacity > capacity_rounded)
++		sector_count = capacity - capacity_rounded;
++
++	return sector_count;
++}
++
++static inline unsigned long long count_by_shift(sector_t capacity,
++						unsigned long long shift)
++{
++	unsigned long long shift_sector = (shift - SECTOR_SHIFT);
++
++	return round_up(capacity, (1ull << shift_sector)) >> shift_sector;
++}
++
++static inline struct chunk *chunk_alloc(struct diff_area *diff_area,
++					unsigned long number)
++{
++	struct chunk *chunk;
++
++	chunk = kzalloc(sizeof(struct chunk), GFP_KERNEL);
++	if (!chunk)
++		return NULL;
++
++	INIT_LIST_HEAD(&chunk->link);
++	sema_init(&chunk->lock, 1);
++	chunk->diff_area = NULL;
++	chunk->number = number;
++	chunk->state = CHUNK_ST_NEW;
++
++	chunk->sector_count = diff_area_chunk_sectors(diff_area);
++	/*
++	 * The last chunk has a special size.
++	 */
++	if (unlikely((number + 1) == diff_area->chunk_count))
++		chunk->sector_count = bdev_nr_sectors(diff_area->orig_bdev) -
++						(chunk->sector_count * number);
++	return chunk;
++}
++
++static inline void chunk_free(struct diff_area *diff_area, struct chunk *chunk)
++{
++	down(&chunk->lock);
++	if (chunk->diff_buffer)
++		diff_buffer_release(diff_area, chunk->diff_buffer);
++	up(&chunk->lock);
++	kfree(chunk);
++}
++
++static void diff_area_calculate_chunk_size(struct diff_area *diff_area)
++{
++	unsigned long shift = PAGE_SHIFT;
++	sector_t capacity;
++	sector_t min_io_sect;
++
++	min_io_sect = (sector_t)(bdev_io_min(diff_area->orig_bdev) >>
++								SECTOR_SHIFT);
++	capacity = bdev_nr_sectors(diff_area->orig_bdev);
++	pr_debug("Minimal IO block %llu sectors\n", min_io_sect);
++	pr_debug("Device capacity %llu sectors\n", capacity);
++
++	while ((1ul << (shift - SECTOR_SHIFT)) < min_io_sect)
++		shift++;
++
++	if (shift >= get_chunk_maximum_shift()) {
++		pr_info("The maximum allowable chunk size [%lu] has been reached.\n",
++			1ul << shift);
++		goto out;
++	}
++
++	if (shift < get_chunk_minimum_shift())
++		shift = get_chunk_minimum_shift();
++
++	while (count_by_shift(capacity, shift) > get_chunk_maximum_count()) {
++		if (shift >= get_chunk_maximum_shift()) {
++			shift = get_chunk_maximum_shift();
++			pr_info("The maximum allowable chunk size [%lu] has been reached.\n",
++				1ul << shift);
++			goto out;
++		}
++		shift++;
++	}
++out:
++	diff_area->chunk_shift = shift;
++	diff_area->chunk_count = (unsigned long)DIV_ROUND_UP_ULL(capacity,
++					(1ul << (shift - SECTOR_SHIFT)));
++
++	pr_debug("The optimal chunk size was calculated as %llu bytes for device [%d:%d]\n",
++		 (1ull << diff_area->chunk_shift),
++		 MAJOR(diff_area->orig_bdev->bd_dev),
++		 MINOR(diff_area->orig_bdev->bd_dev));
++
++}
++
++void diff_area_free(struct kref *kref)
++{
++	unsigned long inx = 0;
++	struct chunk *chunk;
++	struct diff_area *diff_area;
++
++	might_sleep();
++	diff_area = container_of(kref, struct diff_area, kref);
++
++	xa_for_each(&diff_area->chunk_map, inx, chunk) {
++		if (chunk)
++			chunk_free(diff_area, chunk);
++	}
++	xa_destroy(&diff_area->chunk_map);
++
++	diff_buffer_cleanup(diff_area);
++	tracker_put(diff_area->tracker);
++	diff_storage_put(diff_area->diff_storage);
++	kfree(diff_area);
++}
++
++void diff_area_store_chunk(struct diff_area *diff_area, struct chunk *chunk)
++{
++	if (chunk->state != CHUNK_ST_IN_MEMORY) {
++		/*
++		 * There cannot be a chunk in the store queue whose buffer has
++		 * not been read into memory.
++		 */
++		chunk_up(chunk);
++		pr_warn("Cannot release empty buffer for chunk #%ld",
++			chunk->number);
++		return;
++	}
++
++	if (diff_area_is_corrupted(diff_area)) {
++		chunk_store_failed(chunk, 0);
++		return;
++	}
++
++	if (!chunk->diff_file && !chunk->diff_bdev) {
++		int ret;
++
++		ret = diff_storage_alloc(diff_area->diff_storage,
++					 diff_area_chunk_sectors(diff_area),
++					 &chunk->diff_bdev,
++					 &chunk->diff_file,
++					 &chunk->diff_ofs_sect);
++		if (ret) {
++			pr_debug("Cannot get store for chunk #%ld\n",
++				 chunk->number);
++			chunk_store_failed(chunk, ret);
++			return;
++		}
++	}
++	if (chunk->diff_bdev)
++		chunk_store_tobdev(chunk);
++	else
++		chunk_diff_write(chunk);
++}
++
++static inline struct chunk_io_ctx *chunk_io_ctx_take(
++						struct diff_area *diff_area)
++{
++	struct chunk_io_ctx *io_ctx;
++
++	spin_lock(&diff_area->image_io_queue_lock);
++	io_ctx = list_first_entry_or_null(&diff_area->image_io_queue,
++						  struct chunk_io_ctx, link);
++	if (io_ctx) {
++		list_del(&io_ctx->link);
++		atomic_dec(&diff_area->image_io_queue_count);
++	}
++	spin_unlock(&diff_area->image_io_queue_lock);
++
++	return io_ctx;
++}
++
++static void diff_area_image_io_work(struct work_struct *work)
++{
++	struct diff_area *diff_area = container_of(
++		work, struct diff_area, image_io_work);
++	struct chunk_io_ctx *io_ctx;
++	unsigned int old_nofs;
++	struct blkfilter *prev_filter = current->blk_filter;
++
++	current->blk_filter = &diff_area->tracker->filter;
++	old_nofs = memalloc_nofs_save();
++	while ((io_ctx = chunk_io_ctx_take(diff_area)))
++		chunk_diff_bio_execute(io_ctx);
++	memalloc_nofs_restore(old_nofs);
++	current->blk_filter = prev_filter;
++}
++
++struct diff_area *diff_area_new(struct tracker *tracker,
++				struct diff_storage *diff_storage)
++{
++	struct diff_area *diff_area = NULL;
++	struct block_device *bdev = tracker->orig_bdev;
++
++	diff_area = kzalloc(sizeof(struct diff_area), GFP_KERNEL);
++	if (!diff_area)
++		return ERR_PTR(-ENOMEM);
++
++	kref_init(&diff_area->kref);
++	diff_area->orig_bdev = bdev;
++	diff_area->diff_storage = diff_storage_get(diff_storage);
++
++	diff_area_calculate_chunk_size(diff_area);
++
++	xa_init(&diff_area->chunk_map);
++
++	tracker_get(tracker);
++	diff_area->tracker = tracker;
++
++	spin_lock_init(&diff_area->free_diff_buffers_lock);
++	INIT_LIST_HEAD(&diff_area->free_diff_buffers);
++
++	spin_lock_init(&diff_area->image_io_queue_lock);
++	INIT_LIST_HEAD(&diff_area->image_io_queue);
++	atomic_set(&diff_area->image_io_queue_count, 0);
++	INIT_WORK(&diff_area->image_io_work, diff_area_image_io_work);
++
++	diff_area->physical_blksz = bdev_physical_block_size(bdev);
++	diff_area->logical_blksz = bdev_logical_block_size(bdev);
++	diff_area->corrupt_flag = 0;
++
++	return diff_area;
++}
++
++static inline unsigned int chunk_limit(struct chunk *chunk,
++				       struct bvec_iter *iter)
++{
++	sector_t chunk_ofs = iter->bi_sector - chunk_sector(chunk);
++	sector_t chunk_left = chunk->sector_count - chunk_ofs;
++
++	return min(iter->bi_size, (unsigned int)(chunk_left << SECTOR_SHIFT));
++}
++
++/*
++ * Implements the copy-on-write mechanism.
++ */
++bool diff_area_cow_process_bio(struct diff_area *diff_area, struct bio *bio)
++{
++	bool skip_bio = false;
++	bool nowait = bio->bi_opf & REQ_NOWAIT;
++	struct bvec_iter iter = bio->bi_iter;
++	struct bio *chunk_bio = NULL;
++	LIST_HEAD(chunks);
++	int ret = 0;
++	unsigned int flags;
++
++	if (bio_flagged(bio, BIO_REMAPPED))
++		iter.bi_sector -= bio->bi_bdev->bd_start_sect;
++
++	flags = memalloc_noio_save();
++	while (iter.bi_size) {
++		unsigned long nr = diff_area_chunk_number(diff_area,
++								iter.bi_sector);
++		struct chunk *chunk = xa_load(&diff_area->chunk_map, nr);
++		unsigned int len;
++
++		if (!chunk) {
++			chunk = chunk_alloc(diff_area, nr);
++			if (!chunk) {
++				diff_area_set_corrupted(diff_area, -EINVAL);
++				ret = -ENOMEM;
++				goto fail;
++			}
++
++			ret = xa_insert(&diff_area->chunk_map, nr, chunk,
++					GFP_KERNEL);
++			if (likely(!ret)) {
++				/* new chunk has been added */
++			} else if (ret == -EBUSY) {
++				/* another chunk has just been created */
++				chunk_free(diff_area, chunk);
++				chunk = xa_load(&diff_area->chunk_map, nr);
++				WARN_ON_ONCE(!chunk);
++				if (unlikely(!chunk)) {
++					ret = -EINVAL;
++					diff_area_set_corrupted(diff_area, ret);
++					goto fail;
++				}
++			} else if (ret) {
++				pr_err("Failed insert chunk to chunk map\n");
++				chunk_free(diff_area, chunk);
++				diff_area_set_corrupted(diff_area, ret);
++				goto fail;
++			}
++		}
++
++		if (nowait) {
++			if (down_trylock(&chunk->lock)) {
++				ret = -EAGAIN;
++				goto fail;
++			}
++		} else {
++			ret = down_killable(&chunk->lock);
++			if (unlikely(ret))
++				goto fail;
++		}
++		chunk->diff_area = diff_area_get(diff_area);
++
++		len = chunk_limit(chunk, &iter);
++		bio_advance_iter_single(bio, &iter, len);
++
++		if (chunk->state == CHUNK_ST_NEW) {
++			if (nowait) {
++				/*
++				 * If the data of this chunk has not yet been
++				 * copied to the difference storage, then it is
++				 * impossible to process the I/O write unit with
++				 * the NOWAIT flag.
++				 */
++				chunk_up(chunk);
++				ret = -EAGAIN;
++				goto fail;
++			}
++
++			/*
++			 * Load the chunk asynchronously.
++			 */
++			ret = chunk_load_and_postpone_io(chunk, &chunk_bio);
++			if (ret) {
++				chunk_up(chunk);
++				goto fail;
++			}
++			list_add_tail(&chunk->link, &chunks);
++		} else {
++			/*
++			 * The chunk has already been:
++			 *   - failed, when the snapshot is corrupted
++			 *   - read into the buffer
++			 *   - stored into the diff storage
++			 * In this case, we do not change the chunk.
++			 */
++			chunk_up(chunk);
++		}
++	}
++
++	if (chunk_bio) {
++		/* Postpone bio processing in a callback. */
++		chunk_load_and_postpone_io_finish(&chunks, chunk_bio, bio);
++		skip_bio = true;
++
++	}
++	/* Pass bio to the low level */
++	goto out;
++
++fail:
++	if (chunk_bio) {
++		chunk_bio->bi_status = errno_to_blk_status(ret);
++		bio_endio(chunk_bio);
++	}
++
++	if (ret == -EAGAIN) {
++		/*
++		 * The -EAGAIN error code means that it is not possible to
++		 * process a I/O unit with a flag REQ_NOWAIT.
++		 * I/O unit processing is being completed with such error.
++		 */
++		bio->bi_status = BLK_STS_AGAIN;
++		bio_endio(bio);
++		skip_bio = true;
++	} else
++		diff_area_set_corrupted(diff_area, ret);
++out:
++	memalloc_noio_restore(flags);
++	return skip_bio;
++}
++
++bool diff_area_cow(struct diff_area *diff_area, struct bio *bio)
++{
++	bool skip_bio = true;
++	unsigned int flags;
++
++	if (bio->bi_opf & REQ_NOWAIT) {
++		bio->bi_status = BLK_STS_AGAIN;
++		bio_endio(bio);
++		return skip_bio;
++	}
++
++	flags = memalloc_noio_save();
++	skip_bio = diff_area_cow_process_bio(diff_area, bio);
++	memalloc_noio_restore(flags);
++
++	return skip_bio;
++}
++
++static void orig_clone_bio(struct diff_area *diff_area, struct bio *bio)
++{
++	struct bio *new_bio;
++	struct block_device *bdev = diff_area->orig_bdev;
++	sector_t chunk_limit;
++
++	new_bio = chunk_alloc_clone(bdev, bio);
++	WARN_ON(!new_bio);
++
++	chunk_limit = diff_area_chunk_sectors(diff_area) -
++		      diff_area_chunk_offset(diff_area, bio->bi_iter.bi_sector);
++
++	new_bio->bi_iter.bi_sector = bio->bi_iter.bi_sector;
++	new_bio->bi_iter.bi_size = min_t(unsigned int,
++			bio->bi_iter.bi_size, chunk_limit << SECTOR_SHIFT);
++
++	bio_advance(bio, new_bio->bi_iter.bi_size);
++	bio_chain(new_bio, bio);
++
++	submit_bio_noacct(new_bio);
++}
++
++bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio)
++{
++	int ret;
++	unsigned long nr;
++	struct chunk *chunk;
++
++	nr = diff_area_chunk_number(diff_area, bio->bi_iter.bi_sector);
++	chunk = xa_load(&diff_area->chunk_map, nr);
++	/*
++	 * If this chunk is not in the chunk map, then the COW algorithm did
++	 * not access this part of the disk space, and writing to the snapshot
++	 * in this part was also not performed.
++	 */
++	if (!chunk) {
++		if (!op_is_write(bio_op(bio))) {
++			/*
++			 * To read, we simply redirect the bio to the original
++			 * block device.
++			 */
++			orig_clone_bio(diff_area, bio);
++			return true;
++		}
++
++		/*
++		 * To process a write bio, we need to allocate a new chunk.
++		 */
++		chunk = chunk_alloc(diff_area, nr);
++		WARN_ON_ONCE(!chunk);
++		if (unlikely(!chunk))
++			return false;
++
++		ret = xa_insert(&diff_area->chunk_map, nr, chunk, GFP_KERNEL);
++		if (likely(!ret)) {
++			/* new chunk has been added */
++		} else if (ret == -EBUSY) {
++			/* another chunk has just been created */
++			chunk_free(diff_area, chunk);
++			chunk = xa_load(&diff_area->chunk_map, nr);
++			WARN_ON_ONCE(!chunk);
++			if (unlikely(!chunk))
++				return false;
++		} else if (ret) {
++			pr_err("Failed insert chunk to chunk map\n");
++			chunk_free(diff_area, chunk);
++			return false;
++		}
++	}
++	if (down_killable(&chunk->lock))
++		return false;
++
++	chunk->diff_area = diff_area_get(diff_area);
++
++	switch (chunk->state) {
++	case CHUNK_ST_IN_MEMORY:
++		/*
++		 * Directly copy data from the in-memory chunk or
++		 * copy to the in-memory chunk for write operation.
++		 */
++		chunk_copy_bio(chunk, bio, &bio->bi_iter);
++		chunk_up(chunk);
++		return true;
++	case CHUNK_ST_STORED:
++		/*
++		 * Data is read from the difference storage or written to it.
++		 */
++		if (chunk->diff_bdev) {
++			chunk_diff_bio_tobdev(chunk, bio);
++			chunk_up(chunk);
++			return true;
++		}
++		ret = chunk_diff_bio(chunk, bio);
++		return (ret == 0);
++	case CHUNK_ST_NEW:
++		if (!op_is_write(bio_op(bio))) {
++			/*
++			 * Read from original block device
++			 */
++			orig_clone_bio(diff_area, bio);
++			chunk_up(chunk);
++			return true;
++		}
++
++		/*
++		 * Starts asynchronous loading of a chunk from the original
++		 * block device and schedule copying data to (or from) the
++		 * in-memory chunk.
++		 */
++		return chunk_load_and_schedule_io(chunk, bio);
++	default: /* CHUNK_ST_FAILED */
++		pr_err("Chunk #%ld corrupted\n", chunk->number);
++		chunk_up(chunk);
++		return false;
++	}
++}
++
++static inline void diff_area_event_corrupted(struct diff_area *diff_area)
++{
++	struct blksnap_event_corrupted data = {
++		.dev_id_mj = MAJOR(diff_area->orig_bdev->bd_dev),
++		.dev_id_mn = MINOR(diff_area->orig_bdev->bd_dev),
++		.err_code = abs(diff_area->error_code),
++	};
++
++	event_gen(&diff_area->diff_storage->event_queue,
++		  blksnap_event_code_corrupted,
++		  &data,
++		  sizeof(struct blksnap_event_corrupted));
++}
++
++void diff_area_set_corrupted(struct diff_area *diff_area, int err_code)
++{
++	if (test_and_set_bit(0, &diff_area->corrupt_flag))
++		return;
++
++	diff_area->error_code = err_code;
++	diff_area_event_corrupted(diff_area);
++
++	pr_err("Set snapshot device is corrupted for [%u:%u] with error code %d\n",
++	       MAJOR(diff_area->orig_bdev->bd_dev),
++	       MINOR(diff_area->orig_bdev->bd_dev), abs(err_code));
++}
+diff --git a/drivers/block/blksnap/diff_area.h b/drivers/block/blksnap/diff_area.h
+new file mode 100644
+index 000000000000..9456abc27daf
+--- /dev/null
++++ b/drivers/block/blksnap/diff_area.h
+@@ -0,0 +1,153 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_DIFF_AREA_H
++#define __BLKSNAP_DIFF_AREA_H
++
++#include <linux/slab.h>
++#include <linux/uio.h>
++#include <linux/kref.h>
++#include <linux/list.h>
++#include <linux/spinlock.h>
++#include <linux/blkdev.h>
++#include <linux/xarray.h>
++#include "event_queue.h"
++
++struct diff_storage;
++struct chunk;
++struct tracker;
++
++/**
++ * struct diff_area - Describes the difference area for one original device.
++ *
++ * @kref:
++ *	The reference counter allows to manage the lifetime of an object.
++ * @orig_bdev:
++ *	A pointer to the structure of an opened block device.
++ * @diff_storage:
++ *	Pointer to difference storage for storing difference data.
++ * @tracker:
++ *	Back pointer to the tracker for this &struct diff_area
++ * @chunk_shift:
++ *	Power of 2 used to specify the chunk size. This allows to set different
++ *	chunk sizes for huge and small block devices.
++ * @chunk_count:
++ *	Count of chunks. The number of chunks into which the block device
++ *	is divided.
++ * @chunk_map:
++ *	A map of chunks. The map stores only chunks of differences. Chunks are
++ *	added to the map if this data block was overwritten on the original
++ *	device, or was overwritten on the snapshot. If there is no chunk in the
++ *	map, then when accessing the snapshot, I/O units are redirected to the
++ *	original device.
++ * @free_diff_buffers_lock:
++ *	The spinlock guarantees consistency of the linked lists of free
++ *	difference buffers.
++ * @free_diff_buffers:
++ *	Linked list of free difference buffers allows to reduce the number
++ *	of buffer allocation and release operations.
++ * @image_io_queue_lock:
++ *	The spinlock guarantees consistency of the linked lists of I/O
++ *	requests to image.
++ * @image_io_queue:
++ *	A linked list of I/O units for the snapshot image that need to be read
++ *	from the difference storage to process.
++ * @image_io_work:
++ *	A worker who maintains the I/O units for reading or writing data to the
++ *	difference storage file. If the difference storage is a block device,
++ *	then this worker is not	used to process the I/O units of the snapshot
++ *	image.
++ * @physical_blksz:
++ *	The physical block size for the snapshot image is equal to the
++ *	physical block size of the original device.
++ * @logical_blksz:
++ *	The logical block size for the snapshot image is equal to the
++ *	logical block size of the original device.
++ * @corrupt_flag:
++ *	The flag is set if an error occurred in the operation of the data
++ *	saving mechanism in the diff area. In this case, an error will be
++ *	generated when reading from the snapshot image.
++ * @error_code:
++ *	The error code that caused the snapshot to be corrupted.
++ *
++ * The &struct diff_area is created for each block device in the snapshot. It
++ * is used to store the differences between the original block device and the
++ * snapshot image. That is, when writing data to the original device, the
++ * differences are copied as chunks to the difference storage. Reading and
++ * writing from the snapshot image is also performed using &struct diff_area.
++ *
++ * The map of chunks is a xarray. It has a capacity limit. This can be
++ * especially noticeable on 32-bit systems. The maximum number of chunks for
++ * 32-bit systems cannot be equal or more than 2^32.
++ *
++ * For example, for a 256 TiB disk and a chunk size of 65536 bytes, the number
++ * of chunks in the chunk map will be equal to 2^32. This number already goes
++ * beyond the 32-bit number. Therefore, for large disks, it is required to
++ * increase the size of the chunk.
++ *
++ * The store queue allows to postpone the operation of storing a chunks data
++ * to the difference storage and perform it later in the worker thread.
++ *
++ * The linked list of difference buffers allows to have a certain number of
++ * "hot" buffers. This allows to reduce the number of allocations and releases
++ * of memory.
++ *
++ * If it is required to read or write to the difference storage file to process
++ * I/O unit from snapshot image, then this operation is performed in a separate
++ * thread. To do this, a worker &diff_area.image_io_work and a queue
++ * &diff_area.image_io_queue are used. An attempt to read a file from the same
++ * thread that initiated the block I/O can lead to a deadlock state.
++ */
++struct diff_area {
++	struct kref kref;
++	struct block_device *orig_bdev;
++	struct diff_storage *diff_storage;
++	struct tracker *tracker;
++
++	unsigned long chunk_shift;
++	unsigned long chunk_count;
++	struct xarray chunk_map;
++
++	spinlock_t free_diff_buffers_lock;
++	struct list_head free_diff_buffers;
++
++	spinlock_t image_io_queue_lock;
++	struct list_head image_io_queue;
++	atomic_t image_io_queue_count;
++	struct work_struct image_io_work;
++
++	unsigned int physical_blksz;
++	unsigned int logical_blksz;
++
++	unsigned long corrupt_flag;
++	int error_code;
++};
++
++struct diff_area *diff_area_new(struct tracker *tracker,
++				struct diff_storage *diff_storage);
++void diff_area_free(struct kref *kref);
++static inline struct diff_area *diff_area_get(struct diff_area *diff_area)
++{
++	kref_get(&diff_area->kref);
++	return diff_area;
++};
++static inline void diff_area_put(struct diff_area *diff_area)
++{
++	kref_put(&diff_area->kref, diff_area_free);
++};
++
++void diff_area_set_corrupted(struct diff_area *diff_area, int err_code);
++static inline bool diff_area_is_corrupted(struct diff_area *diff_area)
++{
++	return !!diff_area->corrupt_flag;
++};
++static inline sector_t diff_area_chunk_sectors(struct diff_area *diff_area)
++{
++	return (sector_t)(1ull << (diff_area->chunk_shift - SECTOR_SHIFT));
++};
++bool diff_area_cow(struct diff_area *diff_area, struct bio *bio);
++void diff_area_store_chunk(struct diff_area *diff_area, struct chunk *chunk);
++bool diff_area_submit_chunk(struct diff_area *diff_area, struct bio *bio);
++void diff_area_rw_chunk(struct kref *kref);
++bool diff_area_cow_process_bio(struct diff_area *diff_area, struct bio *bio);
++
++#endif /* __BLKSNAP_DIFF_AREA_H */
+diff --git a/drivers/block/blksnap/diff_buffer.c b/drivers/block/blksnap/diff_buffer.c
+new file mode 100644
+index 000000000000..8960f50ffd4e
+--- /dev/null
++++ b/drivers/block/blksnap/diff_buffer.c
+@@ -0,0 +1,105 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-diff-buffer: " fmt
++
++#include "diff_buffer.h"
++#include "diff_area.h"
++#include "params.h"
++
++static void diff_buffer_free(struct diff_buffer *diff_buffer)
++{
++	size_t inx = 0;
++
++	if (unlikely(!diff_buffer))
++		return;
++
++	for (inx = 0; inx < diff_buffer->nr_pages; inx++)
++		__free_page(diff_buffer->bvec[inx].bv_page);
++
++	kfree(diff_buffer);
++}
++
++static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
++{
++	struct diff_buffer *diff_buffer;
++	size_t inx = 0;
++
++	if (unlikely(nr_pages <= 0))
++		return NULL;
++
++	diff_buffer = kzalloc(sizeof(struct diff_buffer) +
++			      nr_pages * sizeof(struct bio_vec),
++			      GFP_KERNEL);
++	if (!diff_buffer)
++		return NULL;
++
++	INIT_LIST_HEAD(&diff_buffer->link);
++	diff_buffer->size = size;
++	diff_buffer->nr_pages = 0;
++
++	for (inx = 0; inx < nr_pages; inx++) {
++		struct page *page = alloc_page(GFP_KERNEL);
++
++		if (!page)
++			goto fail;
++		bvec_set_page(&diff_buffer->bvec[inx], page, PAGE_SIZE, 0);
++		diff_buffer->nr_pages++;
++	}
++	return diff_buffer;
++fail:
++	diff_buffer_free(diff_buffer);
++	return NULL;
++}
++
++struct diff_buffer *diff_buffer_take(struct diff_area *diff_area)
++{
++	struct diff_buffer *diff_buffer = NULL;
++	sector_t chunk_sectors;
++	size_t page_count;
++
++	spin_lock(&diff_area->free_diff_buffers_lock);
++	diff_buffer = list_first_entry_or_null(&diff_area->free_diff_buffers,
++					       struct diff_buffer, link);
++	if (diff_buffer)
++		list_del(&diff_buffer->link);
++	spin_unlock(&diff_area->free_diff_buffers_lock);
++
++	/* Return free buffer if it was found in a pool */
++	if (diff_buffer)
++		return diff_buffer;
++
++	/* Allocate new buffer */
++	chunk_sectors = diff_area_chunk_sectors(diff_area);
++	page_count = round_up(chunk_sectors, PAGE_SECTORS) / PAGE_SECTORS;
++	diff_buffer = diff_buffer_new(page_count,
++				      chunk_sectors << SECTOR_SHIFT);
++	if (unlikely(!diff_buffer))
++		return ERR_PTR(-ENOMEM);
++	return diff_buffer;
++}
++
++void diff_buffer_release(struct diff_area *diff_area,
++			 struct diff_buffer *diff_buffer)
++{
++	spin_lock(&diff_area->free_diff_buffers_lock);
++	list_add_tail(&diff_buffer->link, &diff_area->free_diff_buffers);
++	spin_unlock(&diff_area->free_diff_buffers_lock);
++}
++
++void diff_buffer_cleanup(struct diff_area *diff_area)
++{
++	struct diff_buffer *diff_buffer = NULL;
++
++	do {
++		spin_lock(&diff_area->free_diff_buffers_lock);
++		diff_buffer =
++			list_first_entry_or_null(&diff_area->free_diff_buffers,
++						 struct diff_buffer, link);
++		if (diff_buffer)
++			list_del(&diff_buffer->link);
++		spin_unlock(&diff_area->free_diff_buffers_lock);
++
++		if (diff_buffer)
++			diff_buffer_free(diff_buffer);
++	} while (diff_buffer);
++}
+diff --git a/drivers/block/blksnap/diff_buffer.h b/drivers/block/blksnap/diff_buffer.h
+new file mode 100644
+index 000000000000..02f2da6c4620
+--- /dev/null
++++ b/drivers/block/blksnap/diff_buffer.h
+@@ -0,0 +1,37 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_DIFF_BUFFER_H
++#define __BLKSNAP_DIFF_BUFFER_H
++
++#include <linux/types.h>
++#include <linux/slab.h>
++#include <linux/list.h>
++#include <linux/blkdev.h>
++
++struct diff_area;
++
++/**
++ * struct diff_buffer - Difference buffer.
++ * @link:
++ *	The list header allows to create a pool of the diff_buffer structures.
++ * @size:
++ *	Count of bytes in the buffer.
++ * @nr_pages:
++ *	The number of pages reserved for the buffer.
++ * @bvec:
++ *	An array of pages in bio_vec form.
++ *
++ * Describes the buffer in memory for a chunk.
++ */
++struct diff_buffer {
++	struct list_head link;
++	size_t size;
++	unsigned long nr_pages;
++	struct bio_vec bvec[];
++};
++
++struct diff_buffer *diff_buffer_take(struct diff_area *diff_area);
++void diff_buffer_release(struct diff_area *diff_area,
++			 struct diff_buffer *diff_buffer);
++void diff_buffer_cleanup(struct diff_area *diff_area);
++#endif /* __BLKSNAP_DIFF_BUFFER_H */
+diff --git a/drivers/block/blksnap/diff_storage.c b/drivers/block/blksnap/diff_storage.c
+new file mode 100644
+index 000000000000..a3b1cb9942e8
+--- /dev/null
++++ b/drivers/block/blksnap/diff_storage.c
+@@ -0,0 +1,310 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-diff-storage: " fmt
++
++#include <linux/slab.h>
++#include <linux/sched/mm.h>
++#include <linux/list.h>
++#include <linux/spinlock.h>
++#include <linux/file.h>
++#include <linux/blkdev.h>
++#include <linux/build_bug.h>
++#include <uapi/linux/blksnap.h>
++#include "chunk.h"
++#include "diff_buffer.h"
++#include "diff_storage.h"
++#include "params.h"
++
++static inline void diff_storage_event_nospace(struct diff_storage *diff_storage)
++{
++	struct blksnap_event_no_space data = {
++		.requested_nr_sect = diff_storage->requested,
++	};
++
++	pr_info("The limit size of the difference storage has been reached\n");
++	event_gen(&diff_storage->event_queue,
++		  blksnap_event_code_no_space,
++		  &data, sizeof(data));
++}
++
++static void diff_storage_reallocate_work(struct work_struct *work)
++{
++	int ret;
++	sector_t req_sect;
++	struct diff_storage *diff_storage = container_of(
++		work, struct diff_storage, reallocate_work);
++	bool complete = false;
++
++	do {
++		spin_lock(&diff_storage->lock);
++		req_sect = diff_storage->requested;
++		spin_unlock(&diff_storage->lock);
++
++		ret = vfs_fallocate(diff_storage->file, 0, 0,
++				    (loff_t)(req_sect << SECTOR_SHIFT));
++		if (ret) {
++			pr_err("Failed to fallocate difference storage file\n");
++			break;
++		}
++
++		spin_lock(&diff_storage->lock);
++		diff_storage->capacity = req_sect;
++		complete = (diff_storage->capacity >= diff_storage->requested);
++		if (complete)
++			atomic_set(&diff_storage->low_space_flag, 0);
++		spin_unlock(&diff_storage->lock);
++
++		pr_debug("Diff storage reallocate. Capacity: %llu sectors\n",
++			 req_sect);
++	} while (!complete);
++}
++
++static bool diff_storage_calculate_requested(struct diff_storage *diff_storage)
++{
++	bool ret = false;
++
++	spin_lock(&diff_storage->lock);
++	if (diff_storage->capacity < diff_storage->limit) {
++		diff_storage->requested += min(get_diff_storage_minimum(),
++				diff_storage->limit - diff_storage->capacity);
++		ret = true;
++	}
++	pr_debug("The size of the difference storage was %llu MiB\n",
++		 diff_storage->capacity >> (20 - SECTOR_SHIFT));
++	pr_debug("The limit is %llu MiB\n",
++		 diff_storage->limit >> (20 - SECTOR_SHIFT));
++	spin_unlock(&diff_storage->lock);
++
++	return ret;
++}
++
++static inline bool is_halffull(const sector_t sectors_left)
++{
++	return sectors_left <= (get_diff_storage_minimum() / 2);
++}
++
++static inline void check_halffull(struct diff_storage *diff_storage,
++				  const sector_t sectors_left)
++{
++	if (is_halffull(sectors_left) &&
++	    (atomic_inc_return(&diff_storage->low_space_flag) == 1)) {
++		if (diff_storage->bdev) {
++			pr_info("The free space in the difference storage on the block device is running out\n");
++			return;
++		}
++		if (!diff_storage_calculate_requested(diff_storage)) {
++			diff_storage_event_nospace(diff_storage);
++			return;
++		}
++
++		pr_debug("Diff storage low free space.\n");
++		blksnap_queue_work(&diff_storage->reallocate_work);
++	}
++}
++
++struct diff_storage *diff_storage_new(void)
++{
++	struct diff_storage *diff_storage;
++
++	diff_storage = kzalloc(sizeof(struct diff_storage), GFP_KERNEL);
++	if (!diff_storage)
++		return NULL;
++
++	kref_init(&diff_storage->kref);
++	spin_lock_init(&diff_storage->lock);
++	diff_storage->limit = 0;
++
++	INIT_WORK(&diff_storage->reallocate_work, diff_storage_reallocate_work);
++	event_queue_init(&diff_storage->event_queue);
++
++	return diff_storage;
++}
++
++void diff_storage_free(struct kref *kref)
++{
++	struct diff_storage *diff_storage =
++				container_of(kref, struct diff_storage, kref);
++
++	pr_debug("Release difference storage %p\n", diff_storage);
++	diff_storage = container_of(kref, struct diff_storage, kref);
++	flush_work(&diff_storage->reallocate_work);
++
++	if (diff_storage->bdev_file)
++		bdev_fput(diff_storage->bdev_file);
++	if (diff_storage->file)
++		filp_close(diff_storage->file, NULL);
++	event_queue_done(&diff_storage->event_queue);
++
++	pr_debug("Difference storage %p has been released\n", diff_storage);
++	kfree(diff_storage);
++}
++
++static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,
++					const char *devpath)
++{
++	struct file *bdev_file;
++	struct block_device *bdev;
++
++	bdev_file = bdev_file_open_by_path(devpath,
++				BLK_OPEN_EXCL | BLK_OPEN_READ | BLK_OPEN_WRITE,
++				diff_storage, NULL);
++	if (IS_ERR(bdev_file)) {
++		pr_err("Failed to open a block device '%s'\n", devpath);
++		return PTR_ERR(bdev_file);
++	}
++	bdev = file_bdev(bdev_file);
++
++	pr_debug("A block device is selected for difference storage\n");
++	diff_storage->bdev_file = bdev_file;
++	diff_storage->dev_id = bdev->bd_dev;
++	diff_storage->filled = 4096;
++	diff_storage->capacity = bdev_nr_sectors(bdev);
++	diff_storage->bdev = bdev;
++	return 0;
++}
++
++static inline void ___set_file(struct diff_storage *diff_storage,
++			       struct file *file)
++{
++	struct inode *inode = file_inode(file);
++
++	diff_storage->dev_id = inode->i_sb->s_dev;
++	diff_storage->filled = 4096;
++	diff_storage->capacity = i_size_read(inode) >> SECTOR_SHIFT;
++	diff_storage->file = file;
++}
++
++static inline int diff_storage_set_tmpfile(struct diff_storage *diff_storage,
++					   const char *dirname)
++{
++	struct file *file;
++	int flags = O_EXCL | O_RDWR | O_LARGEFILE | O_NOATIME | O_DIRECT |
++		    O_TMPFILE;
++
++	file = filp_open(dirname, flags, 00600);
++	if (IS_ERR(file)) {
++		pr_err("Failed to create a temp file in directory '%s'\n",
++			dirname);
++		return PTR_ERR(file);
++	}
++
++	pr_debug("A temp file is selected for difference storage\n");
++	___set_file(diff_storage, file);
++	return 0;
++}
++
++static inline int diff_storage_set_regfile(struct diff_storage *diff_storage,
++					   const char *filename)
++{
++	struct file *file;
++	int flags = O_EXCL | O_RDWR | O_LARGEFILE | O_NOATIME | O_DIRECT;
++
++	file = filp_open(filename, flags, 00600);
++	if (IS_ERR(file)) {
++		pr_err("Failed to open a regular file '%s'\n", filename);
++		return PTR_ERR(file);
++	}
++
++	pr_debug("A regular file is selected for difference storage\n");
++	___set_file(diff_storage, file);
++	return 0;
++}
++
++int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
++				  const char *filename, sector_t limit)
++{
++	int ret = 0;
++	struct file *file;
++	umode_t mode;
++	sector_t req_sect;
++
++	file = filp_open(filename, O_RDONLY | O_LARGEFILE | O_NOATIME, 00400);
++	if (IS_ERR(file)) {
++		pr_err("Failed to open '%s'\n", filename);
++		return PTR_ERR(file);
++	}
++	mode = file_inode(file)->i_mode;
++	filp_close(file, NULL);
++
++	if (S_ISBLK(mode))
++		ret = diff_storage_set_bdev(diff_storage, filename);
++	else if (S_ISDIR(mode))
++		ret = diff_storage_set_tmpfile(diff_storage, filename);
++	else if (S_ISREG(mode))
++		ret = diff_storage_set_regfile(diff_storage, filename);
++	else {
++		pr_err("The difference storage should be a block device, directory or regular file\n");
++		ret = -EINVAL;
++	}
++	if (ret)
++		return ret;
++
++	diff_storage->requested = diff_storage->capacity;
++	diff_storage->limit = limit;
++
++	if (!is_halffull(diff_storage->requested))
++		return 0;
++
++	if (diff_storage->capacity == diff_storage->limit) {
++		pr_info("The limit size of the difference storage has been reached\n");
++		return 0;
++	}
++	if (diff_storage->capacity > diff_storage->limit) {
++		pr_err("The limit size of the difference storage has been exceeded\n");
++		return -ENOSPC;
++	}
++
++	diff_storage->requested +=
++		min(get_diff_storage_minimum(),
++		    diff_storage->limit - diff_storage->capacity);
++	req_sect = diff_storage->requested;
++
++	if (diff_storage->bdev) {
++		pr_warn("Difference storage on block device is not large enough\n");
++		pr_warn("Requested: %llu sectors\n", req_sect);
++		return 0;
++	}
++
++	pr_debug("Difference storage is not large enough\n");
++	pr_debug("Requested: %llu sectors\n", req_sect);
++
++	ret = vfs_fallocate(diff_storage->file, 0, 0,
++			    (loff_t)(req_sect << SECTOR_SHIFT));
++	if (ret) {
++		pr_err("Failed to fallocate difference storage file\n");
++		pr_warn("The difference storage is not large enough\n");
++		return ret;
++	}
++	diff_storage->capacity = req_sect;
++	return 0;
++}
++
++int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
++			struct block_device **bdev, struct file **file,
++			sector_t *sector)
++
++{
++	sector_t sectors_left;
++
++	if (atomic_read(&diff_storage->overflow_flag))
++		return -ENOSPC;
++
++	spin_lock(&diff_storage->lock);
++	if ((diff_storage->filled + count) > diff_storage->requested) {
++		atomic_inc(&diff_storage->overflow_flag);
++		spin_unlock(&diff_storage->lock);
++		return -ENOSPC;
++	}
++
++	*bdev = diff_storage->bdev;
++	*file = diff_storage->file;
++	*sector = diff_storage->filled;
++
++	diff_storage->filled += count;
++	sectors_left = diff_storage->requested - diff_storage->filled;
++
++	spin_unlock(&diff_storage->lock);
++
++	check_halffull(diff_storage, sectors_left);
++	return 0;
++}
+diff --git a/drivers/block/blksnap/diff_storage.h b/drivers/block/blksnap/diff_storage.h
+new file mode 100644
+index 000000000000..118377cb668f
+--- /dev/null
++++ b/drivers/block/blksnap/diff_storage.h
+@@ -0,0 +1,104 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_DIFF_STORAGE_H
++#define __BLKSNAP_DIFF_STORAGE_H
++
++#include "event_queue.h"
++
++struct blksnap_sectors;
++
++/**
++ * struct diff_storage - Difference storage.
++ *
++ * @kref:
++ *	The reference counter.
++ * @lock:
++ *	Spinlock allows to safely change structure fields in a multithreaded
++ *	environment.
++ * @dev_id:
++ *	ID of the block device on which the difference storage file is located.
++ * @bdev_file:
++ *	A pointer to the block device file. This file allows to keep the
++ *	block device open.
++ * @bdev:
++ *	A pointer to the block device that has been selected for the
++ *	difference storage.
++ * @file:
++ *	A pointer to the file that was selected for the difference storage.
++ * @capacity:
++ *	Total amount of available difference storage space.
++ * @limit:
++ *	The limit to which the difference storage can be allowed to grow.
++ * @filled:
++ *	The number of sectors already filled in.
++ * @requested:
++ *	The number of sectors already requested from user space.
++ * @low_space_flag:
++ *	The flag is set if the number of free regions available in the
++ *	difference storage is less than the allowed minimum.
++ * @overflow_flag:
++ *	The request for a free region failed due to the absence of free
++ *	regions in the difference storage.
++ * @reallocate_work:
++ *	The working thread in which the difference storage file is growing.
++ * @event_queue:
++ *	A queue of events to pass events to user space.
++ *
++ * The difference storage manages the block device or file that are used
++ * to store the data of the original block devices in the snapshot.
++ * The difference storage is created one per snapshot and is used to store
++ * data from all block devices.
++ *
++ * The difference storage file has the ability to increase while holding the
++ * snapshot as needed within the specified limits. This is done using the
++ * function vfs_fallocate().
++ *
++ * Changing the file size leads to a change in the file metadata in the file
++ * system, which leads to the generation of I/O units for the block device.
++ * Using a separate working thread ensures that metadata changes will be
++ * handled and correctly processed by the block-level filters.
++ *
++ * The event queue allows to inform the user land about changes in the state
++ * of the difference storage.
++ */
++struct diff_storage {
++	struct kref kref;
++	spinlock_t lock;
++
++	dev_t dev_id;
++	struct file *bdev_file;
++	struct block_device *bdev;
++	struct file *file;
++	sector_t capacity;
++	sector_t limit;
++	sector_t filled;
++	sector_t requested;
++
++	atomic_t low_space_flag;
++	atomic_t overflow_flag;
++
++	struct work_struct reallocate_work;
++	struct event_queue event_queue;
++};
++
++struct diff_storage *diff_storage_new(void);
++void diff_storage_free(struct kref *kref);
++
++static inline struct diff_storage *diff_storage_get(struct diff_storage *diff_storage)
++{
++	kref_get(&diff_storage->kref);
++	return diff_storage;
++};
++static inline void diff_storage_put(struct diff_storage *diff_storage)
++{
++	if (likely(diff_storage))
++		kref_put(&diff_storage->kref, diff_storage_free);
++};
++
++int diff_storage_set_diff_storage(struct diff_storage *diff_storage,
++				  const char *filename, sector_t limit);
++
++int diff_storage_alloc(struct diff_storage *diff_storage, sector_t count,
++		       struct block_device **bdev, struct file **file,
++		       sector_t *sector);
++#endif /* __BLKSNAP_DIFF_STORAGE_H */
+diff --git a/drivers/block/blksnap/event_queue.c b/drivers/block/blksnap/event_queue.c
+new file mode 100644
+index 000000000000..afa4e8511eeb
+--- /dev/null
++++ b/drivers/block/blksnap/event_queue.c
+@@ -0,0 +1,81 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-event_queue: " fmt
++
++#include <linux/slab.h>
++#include <linux/sched.h>
++#include "event_queue.h"
++
++void event_queue_init(struct event_queue *event_queue)
++{
++	INIT_LIST_HEAD(&event_queue->list);
++	spin_lock_init(&event_queue->lock);
++	init_waitqueue_head(&event_queue->wq_head);
++}
++
++void event_queue_done(struct event_queue *event_queue)
++{
++	struct event *event;
++
++	spin_lock(&event_queue->lock);
++	while (!list_empty(&event_queue->list)) {
++		event = list_first_entry(&event_queue->list, struct event,
++					 link);
++		list_del(&event->link);
++		event_free(event);
++	}
++	spin_unlock(&event_queue->lock);
++}
++
++int event_gen(struct event_queue *event_queue, int code,
++	      const void *data, int data_size)
++{
++	struct event *event;
++
++	event = kzalloc(sizeof(struct event) + data_size + 1, GFP_KERNEL);
++	if (!event)
++		return -ENOMEM;
++
++	event->time = ktime_get();
++	event->code = code;
++	event->data_size = data_size;
++	memcpy(event->data, data, data_size);
++
++	pr_debug("Generate event: time=%lld code=%d data_size=%d\n",
++		 event->time, event->code, event->data_size);
++
++	spin_lock(&event_queue->lock);
++	list_add_tail(&event->link, &event_queue->list);
++	spin_unlock(&event_queue->lock);
++
++	wake_up(&event_queue->wq_head);
++	return 0;
++}
++
++struct event *event_wait(struct event_queue *event_queue,
++			 unsigned long timeout_ms)
++{
++	int ret;
++
++	ret = wait_event_interruptible_timeout(event_queue->wq_head,
++				!list_empty(&event_queue->list), timeout_ms);
++	if (ret >= 0) {
++		struct event *event = ERR_PTR(-ENOENT);
++
++		spin_lock(&event_queue->lock);
++		if (!list_empty(&event_queue->list)) {
++			event = list_first_entry(&event_queue->list,
++						 struct event, link);
++			list_del(&event->link);
++		}
++		spin_unlock(&event_queue->lock);
++		return event;
++	}
++	if (ret == -ERESTARTSYS) {
++		pr_debug("event waiting interrupted\n");
++		return ERR_PTR(-EINTR);
++	}
++
++	pr_err("Failed to wait event. errno=%d\n", abs(ret));
++	return ERR_PTR(ret);
++}
+diff --git a/drivers/block/blksnap/event_queue.h b/drivers/block/blksnap/event_queue.h
+new file mode 100644
+index 000000000000..4980789ee83a
+--- /dev/null
++++ b/drivers/block/blksnap/event_queue.h
+@@ -0,0 +1,64 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_EVENT_QUEUE_H
++#define __BLKSNAP_EVENT_QUEUE_H
++
++#include <linux/types.h>
++#include <linux/ktime.h>
++#include <linux/list.h>
++#include <linux/spinlock.h>
++#include <linux/wait.h>
++
++/**
++ * struct event - An event to be passed to the user space.
++ * @link:
++ *	The list header allows to combine events from the queue.
++ * @time:
++ *	A timestamp indicates when an event occurred.
++ * @code:
++ *	Event code.
++ * @data_size:
++ *	The number of bytes in the event data array.
++ * @data:
++ *	An array of event data.
++ *
++ * Events can be different, so they contain different data. The size of the
++ * data array is not defined exactly, but it has limitations. The size of
++ * the event structure is limited by the PAGE_SIZE (4096 bytes).
++ */
++struct event {
++	struct list_head link;
++	ktime_t time;
++	int code;
++	int data_size;
++	char data[];
++};
++
++/**
++ * struct event_queue - A queue of &struct event.
++ * @list:
++ *	Linked list for storing events.
++ * @lock:
++ *	Spinlock allows to guarantee safety of the linked list.
++ * @wq_head:
++ *	A wait queue allows to put a user thread in a waiting state until
++ *	an event appears in the linked list.
++ */
++struct event_queue {
++	struct list_head list;
++	spinlock_t lock;
++	struct wait_queue_head wq_head;
++};
++
++void event_queue_init(struct event_queue *event_queue);
++void event_queue_done(struct event_queue *event_queue);
++
++int event_gen(struct event_queue *event_queue, int code,
++	      const void *data, int data_size);
++struct event *event_wait(struct event_queue *event_queue,
++			 unsigned long timeout_ms);
++static inline void event_free(struct event *event)
++{
++	kfree(event);
++};
++#endif /* __BLKSNAP_EVENT_QUEUE_H */
+diff --git a/drivers/block/blksnap/main.c b/drivers/block/blksnap/main.c
+new file mode 100644
+index 000000000000..4e034d412c42
+--- /dev/null
++++ b/drivers/block/blksnap/main.c
+@@ -0,0 +1,481 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++
++#include <linux/module.h>
++#include <linux/miscdevice.h>
++#include <linux/build_bug.h>
++#include <uapi/linux/blksnap.h>
++#include "snapimage.h"
++#include "snapshot.h"
++#include "tracker.h"
++#include "chunk.h"
++#include "params.h"
++
++/*
++ * The power of 2 for minimum tracking block size.
++ *
++ * If we make the tracking block size small, we will get detailed information
++ * about the changes, but the size of the change tracker table will be too
++ * large, which will lead to inefficient memory usage.
++ */
++static unsigned int tracking_block_minimum_shift = 16;
++
++/*
++ * The maximum number of tracking blocks.
++ *
++ * A table is created in RAM to store information about the status of all
++ * tracking blocks. So, if the size of the tracking block is small, then the
++ * size of the table turns out to be large and memory is consumed inefficiently.
++ * As the size of the block device grows, the size of the tracking block size
++ * should also grow. For this purpose, the limit of the maximum number of block
++ * size is set.
++ */
++static unsigned int tracking_block_maximum_count = 2097152;
++
++/*
++ * The power of 2 for maximum tracking block size.
++ *
++ * On very large capacity disks, the block size may be too large. To prevent
++ * this, the maximum block size is limited. If the limit on the maximum block
++ * size has been reached, then the number of blocks may exceed the
++ * &tracking_block_maximum_count.
++ */
++static unsigned int tracking_block_maximum_shift = 26;
++
++/*
++ * The power of 2 for minimum chunk size.
++ *
++ * The size of the chunk depends on how much data will be copied to the
++ * difference storage when at least one sector of the block device is changed.
++ * If the size is small, then small I/O units will be generated, which will
++ * reduce performance. Too large a chunk size will lead to inefficient use of
++ * the difference storage.
++ */
++static unsigned int chunk_minimum_shift = 18;
++
++/*
++ * The power of 2 for maximum number of chunks.
++ *
++ * A table is created in RAM to store information about the state of the chunks.
++ * So, if the size of the chunk is small, then the size of the table turns out
++ * to be large and memory is consumed inefficiently. As the size of the block
++ * device grows, the size of the chunk should also grow. For this purpose, the
++ * maximum number of chunks is set.
++ *
++ * The table expands dynamically when new chunks are allocated. Therefore,
++ * memory consumption also depends on the intensity of writing to the block
++ * device under the snapshot.
++ */
++static unsigned int chunk_maximum_count_shift = 40;
++
++/*
++ * The power of 2 for maximum chunk size.
++ *
++ * On very large capacity disks, the chunk size may be too large. To prevent
++ * this, the maximum block size is limited. If the limit on the maximum chunk
++ * size has been reached, then the number of chunks may exceed the
++ * &chunk_maximum_count.
++ */
++static unsigned int chunk_maximum_shift = 26;
++
++/*
++ * The maximum number of chunks in queue.
++ *
++ * The chunk is not immediately stored to the difference storage. The chunks
++ * are put in a store queue. The store queue allows to postpone the operation
++ * of storing a chunks data to the difference storage and perform it later in
++ * the worker thread.
++ */
++static unsigned int chunk_maximum_in_queue = 256;
++
++/*
++ * The minimum allowable size of the difference storage in sectors.
++ *
++ * The difference storage is a part of the disk space allocated for storing
++ * snapshot data. If the free space in difference storage is less than half of
++ * this value, then the process of increasing the size of the difference storage
++ * file will begin. The size of the difference storage file is increased in
++ * portions, the size of which is determined by this value.
++ */
++static unsigned int diff_storage_minimum = 2097152;
++
++#define VERSION_STR "2.0.0.0"
++static const struct blksnap_version version = {
++	.major = 2,
++	.minor = 0,
++	.revision = 0,
++	.build = 0,
++};
++
++static struct workqueue_struct *blksnap_wq;
++
++unsigned int get_tracking_block_minimum_shift(void)
++{
++	return tracking_block_minimum_shift;
++}
++
++unsigned int get_tracking_block_maximum_shift(void)
++{
++	return tracking_block_maximum_shift;
++}
++
++unsigned int get_tracking_block_maximum_count(void)
++{
++	return tracking_block_maximum_count;
++}
++
++unsigned int get_chunk_minimum_shift(void)
++{
++	return chunk_minimum_shift;
++}
++
++unsigned int get_chunk_maximum_shift(void)
++{
++	return chunk_maximum_shift;
++}
++
++unsigned long get_chunk_maximum_count(void)
++{
++	/*
++	 * The XArray is used to store chunks. And 'unsigned long' is used as
++	 * chunk number parameter. So, The number of chunks cannot exceed the
++	 * limits of ULONG_MAX.
++	 */
++	if ((chunk_maximum_count_shift >> 3) < sizeof(unsigned long))
++		return (1ul << chunk_maximum_count_shift);
++	return ULONG_MAX;
++}
++
++unsigned int get_chunk_maximum_in_queue(void)
++{
++	return chunk_maximum_in_queue;
++}
++
++sector_t get_diff_storage_minimum(void)
++{
++	return (sector_t)diff_storage_minimum;
++}
++
++bool blksnap_queue_work(struct work_struct *work)
++{
++	return queue_work(blksnap_wq, work);
++}
++
++static int ioctl_version(struct blksnap_version __user *user_version)
++{
++	if (copy_to_user(user_version, &version, sizeof(version))) {
++		pr_err("Unable to get version: invalid user buffer\n");
++		return -ENODATA;
++	}
++
++	return 0;
++}
++
++static_assert(sizeof(uuid_t) == sizeof(struct blksnap_uuid),
++	"Invalid size of struct blksnap_uuid.");
++
++static int ioctl_snapshot_create(struct blksnap_snapshot_create __user *uarg)
++{
++	struct blksnap_snapshot_create karg;
++	char *fname;
++	int ret;
++
++	if (copy_from_user(&karg, uarg, sizeof(karg))) {
++		pr_err("Unable to create snapshot: invalid user buffer\n");
++		return -ENODATA;
++	}
++	fname = strndup_user((const char __user *)karg.diff_storage_filename,
++			     PATH_MAX);
++	if (IS_ERR(fname))
++		return PTR_ERR(fname);
++
++	ret = snapshot_create(fname, karg.diff_storage_limit_sect, &karg.id);
++	kfree(fname);
++	if (ret)
++		return ret;
++
++	if (copy_to_user(uarg, &karg, sizeof(karg))) {
++		pr_err("Unable to create snapshot: invalid user buffer\n");
++		return -ENODATA;
++	}
++
++	return 0;
++}
++
++static int ioctl_snapshot_destroy(struct blksnap_uuid __user *user_id)
++{
++	uuid_t kernel_id;
++
++	if (copy_from_user(kernel_id.b, user_id->b, sizeof(uuid_t))) {
++		pr_err("Unable to destroy snapshot: invalid user buffer\n");
++		return -ENODATA;
++	}
++
++	return snapshot_destroy(&kernel_id);
++}
++
++static int ioctl_snapshot_take(struct blksnap_uuid __user *user_id)
++{
++	uuid_t kernel_id;
++
++	if (copy_from_user(kernel_id.b, user_id->b, sizeof(uuid_t))) {
++		pr_err("Unable to take snapshot: invalid user buffer\n");
++		return -ENODATA;
++	}
++
++	return snapshot_take(&kernel_id);
++}
++
++static int ioctl_snapshot_collect(struct blksnap_snapshot_collect __user *uarg)
++{
++	int ret;
++	struct blksnap_snapshot_collect karg;
++
++	if (copy_from_user(&karg, uarg, sizeof(karg))) {
++		pr_err("Unable to collect available snapshots: invalid user buffer\n");
++		return -ENODATA;
++	}
++
++	ret = snapshot_collect(&karg.count, u64_to_user_ptr(karg.ids));
++
++	if (copy_to_user(uarg, &karg, sizeof(karg))) {
++		pr_err("Unable to collect available snapshots: invalid user buffer\n");
++		return -ENODATA;
++	}
++
++	return ret;
++}
++
++static_assert(sizeof(struct blksnap_snapshot_event) == 4096,
++	"The size struct blksnap_snapshot_event should be equal to the size of the page.");
++
++static int ioctl_snapshot_wait_event(struct blksnap_snapshot_event __user *uarg)
++{
++	int ret = 0;
++	struct blksnap_snapshot_event *karg;
++	struct event *ev;
++
++	karg = kzalloc(sizeof(struct blksnap_snapshot_event), GFP_KERNEL);
++	if (!karg)
++		return -ENOMEM;
++
++	/* Copy only snapshot ID and timeout*/
++	if (copy_from_user(karg, uarg, sizeof(uuid_t) + sizeof(__u32))) {
++		pr_err("Unable to get snapshot event. Invalid user buffer\n");
++		ret = -EINVAL;
++		goto out;
++	}
++
++	ev = snapshot_wait_event((uuid_t *)karg->id.b, karg->timeout_ms);
++	if (IS_ERR(ev)) {
++		ret = PTR_ERR(ev);
++		goto out;
++	}
++
++	pr_debug("Received event=%lld code=%d data_size=%d\n", ev->time,
++		 ev->code, ev->data_size);
++	karg->code = ev->code;
++	karg->time_label = ev->time;
++
++	if (ev->data_size > sizeof(karg->data)) {
++		pr_err("Event size %d is too big\n", ev->data_size);
++		ret = -ENOSPC;
++		/* If we can't copy all the data, we copy only part of it. */
++	}
++	memcpy(karg->data, ev->data, ev->data_size);
++	event_free(ev);
++
++	if (copy_to_user(uarg, karg, sizeof(struct blksnap_snapshot_event))) {
++		pr_err("Unable to get snapshot event. Invalid user buffer\n");
++		ret = -EINVAL;
++	}
++out:
++	kfree(karg);
++
++	return ret;
++}
++
++static long blksnap_ctrl_unlocked_ioctl(struct file *filp, unsigned int cmd,
++				unsigned long arg)
++{
++	void *argp = (void __user *)arg;
++
++	switch (cmd) {
++	case IOCTL_BLKSNAP_VERSION:
++		return ioctl_version(argp);
++	case IOCTL_BLKSNAP_SNAPSHOT_CREATE:
++		return ioctl_snapshot_create(argp);
++	case IOCTL_BLKSNAP_SNAPSHOT_DESTROY:
++		return ioctl_snapshot_destroy(argp);
++	case IOCTL_BLKSNAP_SNAPSHOT_TAKE:
++		return ioctl_snapshot_take(argp);
++	case IOCTL_BLKSNAP_SNAPSHOT_COLLECT:
++		return ioctl_snapshot_collect(argp);
++	case IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT:
++		return ioctl_snapshot_wait_event(argp);
++	default:
++		return -ENOTTY;
++	}
++
++}
++
++static const struct file_operations blksnap_ctrl_fops = {
++	.owner		= THIS_MODULE,
++	.unlocked_ioctl	= blksnap_ctrl_unlocked_ioctl,
++};
++
++static struct miscdevice blksnap_ctrl_misc = {
++	.minor		= MISC_DYNAMIC_MINOR,
++	.name		= BLKSNAP_CTL,
++	.fops		= &blksnap_ctrl_fops,
++};
++
++static inline sector_t chunk_minimum_sectors(void)
++{
++	return (1ull << (chunk_minimum_shift - SECTOR_SHIFT));
++}
++
++static int __init parameters_init(void)
++{
++	pr_debug("tracking_block_minimum_shift: %d\n",
++		 tracking_block_minimum_shift);
++	pr_debug("tracking_block_maximum_shift: %d\n",
++		 tracking_block_maximum_shift);
++	pr_debug("tracking_block_maximum_count: %d\n",
++		 tracking_block_maximum_count);
++
++	pr_debug("chunk_minimum_shift: %d\n", chunk_minimum_shift);
++	pr_debug("chunk_maximum_shift: %d\n", chunk_maximum_shift);
++	pr_debug("chunk_maximum_count_shift: %u\n", chunk_maximum_count_shift);
++
++	pr_debug("chunk_maximum_in_queue: %d\n", chunk_maximum_in_queue);
++	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
++
++	if (tracking_block_maximum_shift < tracking_block_minimum_shift) {
++		tracking_block_maximum_shift = tracking_block_minimum_shift;
++		pr_warn("fixed tracking_block_maximum_shift: %d\n",
++			 tracking_block_maximum_shift);
++	}
++
++	if (chunk_minimum_shift > chunk_maximum_shift) {
++		chunk_minimum_shift = chunk_maximum_shift;
++		pr_warn("fixed chunk_minimum_shift: %d\n",
++			 chunk_minimum_shift);
++	}
++	if (chunk_minimum_shift < PAGE_SHIFT) {
++		chunk_minimum_shift = PAGE_SHIFT;
++		pr_warn("fixed chunk_minimum_shift: %d\n",
++			 chunk_minimum_shift);
++	}
++	if (diff_storage_minimum < (chunk_minimum_sectors() * 2)) {
++		diff_storage_minimum = chunk_minimum_sectors() * 2;
++		pr_warn("fixed diff_storage_minimum: %d\n",
++			 diff_storage_minimum);
++	}
++	if (diff_storage_minimum & (chunk_minimum_sectors() - 1)) {
++		diff_storage_minimum &= ~(chunk_minimum_sectors() - 1);
++		pr_warn("fixed diff_storage_minimum: %d\n",
++			 diff_storage_minimum);
++	}
++#ifdef CONFIG_64BIT
++	chunk_maximum_count_shift = min(40U, chunk_maximum_count_shift);
++#else
++	chunk_maximum_count_shift = min(32U, chunk_maximum_count_shift);
++#endif
++	return 0;
++}
++
++static int __init blksnap_init(void)
++{
++	int ret;
++
++	pr_debug("Loading\n");
++	pr_debug("Version: %s\n", VERSION_STR);
++
++	ret = parameters_init();
++	if (ret)
++		return ret;
++
++	ret = chunk_init();
++	if (ret)
++		goto fail_chunk_init;
++
++	blksnap_wq = alloc_workqueue("blksnap", WQ_MEM_RECLAIM |
++				      WQ_UNBOUND | WQ_HIGHPRI | WQ_SYSFS, 0);
++	if (!blksnap_wq) {
++		ret = -ENOMEM;
++		goto fail_wq_init;
++	}
++
++	ret = tracker_init();
++	if (ret)
++		goto fail_tracker_init;
++
++	ret = misc_register(&blksnap_ctrl_misc);
++	if (ret)
++		goto fail_misc_register;
++
++	return 0;
++
++fail_misc_register:
++	tracker_done();
++fail_tracker_init:
++	destroy_workqueue(blksnap_wq);
++fail_wq_init:
++	chunk_done();
++fail_chunk_init:
++
++	return ret;
++}
++
++static void __exit blksnap_exit(void)
++{
++	pr_debug("Unloading module\n");
++
++	misc_deregister(&blksnap_ctrl_misc);
++
++	snapshot_done();
++	tracker_done();
++	destroy_workqueue(blksnap_wq);
++	chunk_done();
++
++	pr_debug("Module was unloaded\n");
++}
++
++module_init(blksnap_init);
++module_exit(blksnap_exit);
++
++module_param_named(tracking_block_minimum_shift, tracking_block_minimum_shift,
++		   uint, 0644);
++MODULE_PARM_DESC(tracking_block_minimum_shift,
++		 "The power of 2 for minimum tracking block size");
++module_param_named(tracking_block_maximum_count, tracking_block_maximum_count,
++		   uint, 0644);
++MODULE_PARM_DESC(tracking_block_maximum_count,
++		 "The maximum number of tracking blocks");
++module_param_named(tracking_block_maximum_shift, tracking_block_maximum_shift,
++		   uint, 0644);
++MODULE_PARM_DESC(tracking_block_maximum_shift,
++		 "The power of 2 for maximum trackings block size");
++module_param_named(chunk_minimum_shift, chunk_minimum_shift, uint, 0644);
++MODULE_PARM_DESC(chunk_minimum_shift,
++		 "The power of 2 for minimum chunk size");
++module_param_named(chunk_maximum_count_shift, chunk_maximum_count_shift,
++		   uint, 0644);
++MODULE_PARM_DESC(chunk_maximum_count_shift,
++		 "The power of 2 for maximum number of chunks");
++module_param_named(chunk_maximum_shift, chunk_maximum_shift, uint, 0644);
++MODULE_PARM_DESC(chunk_maximum_shift,
++		 "The power of 2 for maximum snapshots chunk size");
++module_param_named(chunk_maximum_in_queue, chunk_maximum_in_queue, uint, 0644);
++MODULE_PARM_DESC(chunk_maximum_in_queue,
++		 "The maximum number of chunks in store queue");
++module_param_named(diff_storage_minimum, diff_storage_minimum, uint, 0644);
++MODULE_PARM_DESC(diff_storage_minimum,
++	"The minimum allowable size of the difference storage in sectors");
++
++MODULE_DESCRIPTION("Block Device Snapshots Module");
++MODULE_VERSION(VERSION_STR);
++MODULE_AUTHOR("Veeam Software Group GmbH");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/block/blksnap/params.h b/drivers/block/blksnap/params.h
+new file mode 100644
+index 000000000000..064aa2f7757e
+--- /dev/null
++++ b/drivers/block/blksnap/params.h
+@@ -0,0 +1,17 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_PARAMS_H
++#define __BLKSNAP_PARAMS_H
++
++unsigned int get_tracking_block_minimum_shift(void);
++unsigned int get_tracking_block_maximum_shift(void);
++unsigned int get_tracking_block_maximum_count(void);
++unsigned int get_chunk_minimum_shift(void);
++unsigned int get_chunk_maximum_shift(void);
++unsigned long get_chunk_maximum_count(void);
++unsigned int get_chunk_maximum_in_queue(void);
++sector_t get_diff_storage_minimum(void);
++
++bool blksnap_queue_work(struct work_struct *work);
++
++#endif /* __BLKSNAP_PARAMS_H */
+diff --git a/drivers/block/blksnap/snapimage.c b/drivers/block/blksnap/snapimage.c
+new file mode 100644
+index 000000000000..e6c99897a972
+--- /dev/null
++++ b/drivers/block/blksnap/snapimage.c
+@@ -0,0 +1,136 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++/*
++ * Present the snapshot image as a block device.
++ */
++#define pr_fmt(fmt) KBUILD_MODNAME "-image: " fmt
++#include <linux/slab.h>
++#include <linux/cdrom.h>
++#include <linux/blk-mq.h>
++#include <linux/build_bug.h>
++#include <uapi/linux/blksnap.h>
++#include "snapimage.h"
++#include "tracker.h"
++#include "chunk.h"
++#include "cbt_map.h"
++
++/*
++ * The snapshot supports write operations.  This allows for example to delete
++ * some files from the file system before backing up the volume. The data can
++ * be stored only in the difference storage. Therefore, before partially
++ * overwriting this data, it should be read from the original block device.
++ */
++static void snapimage_submit_bio(struct bio *bio)
++{
++	struct tracker *tracker = bio->bi_bdev->bd_disk->private_data;
++	struct diff_area *diff_area = tracker->diff_area;
++	unsigned int flags;
++	struct blkfilter *prev_filter;
++	bool is_success = true;
++
++	/*
++	 * We can use the diff_area here without fear that it will be released.
++	 * The diff_area is not blocked from releasing now, because
++	 * snapimage_free() is calling before diff_area_put() in
++	 * tracker_release_snapshot().
++	 */
++	if (diff_area_is_corrupted(diff_area)) {
++		bio_io_error(bio);
++		return;
++	}
++
++	flags = memalloc_noio_save();
++	/*
++	 * The change tracking table should indicate that the image block device
++	 * is different from the original device. At the next snapshot, such
++	 * blocks must be inevitably reread.
++	 */
++	if (op_is_write(bio_op(bio)))
++		cbt_map_set_both(tracker->cbt_map, bio->bi_iter.bi_sector,
++				 bio_sectors(bio));
++
++	prev_filter = current->blk_filter;
++	current->blk_filter = &tracker->filter;
++	while (bio->bi_iter.bi_size && is_success)
++		is_success = diff_area_submit_chunk(diff_area, bio);
++	current->blk_filter = prev_filter;
++
++	memalloc_noio_restore(flags);
++
++	if (is_success)
++		bio_endio(bio);
++	else
++		bio_io_error(bio);
++}
++
++static const struct block_device_operations bd_ops = {
++	.owner = THIS_MODULE,
++	.submit_bio = snapimage_submit_bio,
++};
++
++void snapimage_free(struct tracker *tracker)
++{
++	struct gendisk *disk = tracker->snap_disk;
++
++	if (!disk)
++		return;
++
++	pr_debug("Snapshot image disk %s delete\n", disk->disk_name);
++	del_gendisk(disk);
++	put_disk(disk);
++
++	tracker->snap_disk = NULL;
++}
++
++int snapimage_create(struct tracker *tracker)
++{
++	int ret = 0;
++	dev_t dev_id = tracker->dev_id;
++	struct gendisk *disk;
++	struct queue_limits lim = {
++		.physical_block_size = tracker->diff_area->physical_blksz,
++		.logical_block_size = tracker->diff_area->logical_blksz,
++	};
++
++
++	pr_info("Create snapshot image device for original device [%u:%u]\n",
++		MAJOR(dev_id), MINOR(dev_id));
++
++	disk = blk_alloc_disk(&lim, NUMA_NO_NODE);
++	if (!disk) {
++		pr_err("Failed to allocate disk\n");
++		return -ENOMEM;
++	}
++
++	disk->flags = GENHD_FL_NO_PART;
++	disk->fops = &bd_ops;
++	disk->private_data = tracker;
++	set_capacity(disk, tracker->cbt_map->bdev_capacity);
++	ret = snprintf(disk->disk_name, DISK_NAME_LEN, "%s-%d-%d",
++		       BLKSNAP_IMAGE_NAME, MAJOR(dev_id), MINOR(dev_id));
++	if (ret < 0) {
++		pr_err("Unable to set disk name for snapshot image device: invalid device id [%d:%d]\n",
++		       MAJOR(dev_id), MINOR(dev_id));
++		ret = -EINVAL;
++		goto fail_cleanup_disk;
++	}
++	pr_debug("Snapshot image disk name [%s]\n", disk->disk_name);
++
++	blk_set_queue_depth(disk->queue, 64);
++	ret = add_disk(disk);
++	if (ret) {
++		pr_err("Failed to add disk [%s] for snapshot image device\n",
++		       disk->disk_name);
++		goto fail_cleanup_disk;
++	}
++	tracker->snap_disk = disk;
++
++	pr_debug("Image block device [%d:%d] has been created\n",
++		disk->major, disk->first_minor);
++
++	return 0;
++
++fail_cleanup_disk:
++	put_disk(disk);
++	return ret;
++}
+diff --git a/drivers/block/blksnap/snapimage.h b/drivers/block/blksnap/snapimage.h
+new file mode 100644
+index 000000000000..cb2df7019eb8
+--- /dev/null
++++ b/drivers/block/blksnap/snapimage.h
+@@ -0,0 +1,10 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_SNAPIMAGE_H
++#define __BLKSNAP_SNAPIMAGE_H
++
++struct tracker;
++
++void snapimage_free(struct tracker *tracker);
++int snapimage_create(struct tracker *tracker);
++#endif /* __BLKSNAP_SNAPIMAGE_H */
+diff --git a/drivers/block/blksnap/snapshot.c b/drivers/block/blksnap/snapshot.c
+new file mode 100644
+index 000000000000..e0e67c149441
+--- /dev/null
++++ b/drivers/block/blksnap/snapshot.c
+@@ -0,0 +1,467 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-snapshot: " fmt
++
++#include <linux/slab.h>
++#include <linux/sched/mm.h>
++#include <linux/build_bug.h>
++#include <uapi/linux/blksnap.h>
++#include "snapshot.h"
++#include "tracker.h"
++#include "diff_storage.h"
++#include "diff_area.h"
++#include "snapimage.h"
++#include "cbt_map.h"
++
++static LIST_HEAD(snapshots);
++static DECLARE_RWSEM(snapshots_lock);
++
++static void snapshot_free(struct kref *kref)
++{
++	struct snapshot *snapshot = container_of(kref, struct snapshot, kref);
++
++	pr_info("Release snapshot %pUb\n", &snapshot->id);
++	while (!list_empty(&snapshot->trackers)) {
++		struct tracker *tracker;
++
++		tracker = list_first_entry(&snapshot->trackers, struct tracker,
++					   link);
++		list_del_init(&tracker->link);
++		tracker_release_snapshot(tracker);
++		tracker_put(tracker);
++	}
++
++	diff_storage_put(snapshot->diff_storage);
++	snapshot->diff_storage = NULL;
++	kfree(snapshot);
++}
++
++static inline void snapshot_get(struct snapshot *snapshot)
++{
++	kref_get(&snapshot->kref);
++};
++static inline void snapshot_put(struct snapshot *snapshot)
++{
++	if (likely(snapshot))
++		kref_put(&snapshot->kref, snapshot_free);
++};
++
++static struct snapshot *snapshot_new(void)
++{
++	int ret;
++	struct snapshot *snapshot = NULL;
++
++	snapshot = kzalloc(sizeof(struct snapshot), GFP_KERNEL);
++	if (!snapshot)
++		return ERR_PTR(-ENOMEM);
++
++	snapshot->diff_storage = diff_storage_new();
++	if (!snapshot->diff_storage) {
++		ret = -ENOMEM;
++		goto fail_free_snapshot;
++	}
++
++	INIT_LIST_HEAD(&snapshot->link);
++	kref_init(&snapshot->kref);
++	uuid_gen(&snapshot->id);
++	init_rwsem(&snapshot->rw_lock);
++	snapshot->is_taken = false;
++	INIT_LIST_HEAD(&snapshot->trackers);
++
++	return snapshot;
++
++fail_free_snapshot:
++	kfree(snapshot);
++
++	return ERR_PTR(ret);
++}
++
++void __exit snapshot_done(void)
++{
++	struct snapshot *snapshot;
++
++	pr_debug("Cleanup snapshots\n");
++	do {
++		down_write(&snapshots_lock);
++		snapshot = list_first_entry_or_null(&snapshots, struct snapshot,
++						    link);
++		if (snapshot)
++			list_del(&snapshot->link);
++		up_write(&snapshots_lock);
++
++		snapshot_put(snapshot);
++	} while (snapshot);
++}
++
++int snapshot_create(const char *filename, sector_t limit_sect,
++		    struct blksnap_uuid *id)
++{
++	int ret;
++	struct snapshot *snapshot = NULL;
++
++	snapshot = snapshot_new();
++	if (IS_ERR(snapshot)) {
++		pr_err("Unable to create snapshot: failed to allocate snapshot structure\n");
++		return PTR_ERR(snapshot);
++	}
++
++	if (!filename) {
++		pr_err("Unable to create snapshot: difference storage file is not set\n");
++		snapshot_put(snapshot);
++		return ret;
++	}
++	ret = diff_storage_set_diff_storage(snapshot->diff_storage,
++					    filename, limit_sect);
++	if (ret) {
++		pr_err("Unable to create snapshot: invalid difference storage file\n");
++		snapshot_put(snapshot);
++		return ret;
++	}
++
++	export_uuid(id->b, &snapshot->id);
++
++	down_write(&snapshots_lock);
++	list_add_tail(&snapshot->link, &snapshots);
++	up_write(&snapshots_lock);
++
++	pr_info("Snapshot %pUb was created\n", id->b);
++	return 0;
++}
++
++static struct snapshot *snapshot_get_by_id(const uuid_t *id)
++{
++	struct snapshot *snapshot = NULL;
++	struct snapshot *s;
++
++	down_read(&snapshots_lock);
++	if (list_empty(&snapshots))
++		goto out;
++
++	list_for_each_entry(s, &snapshots, link) {
++		if (uuid_equal(&s->id, id)) {
++			snapshot = s;
++			snapshot_get(snapshot);
++			break;
++		}
++	}
++out:
++	up_read(&snapshots_lock);
++	return snapshot;
++}
++
++int snapshot_add_device(const uuid_t *id, struct tracker *tracker)
++{
++	int ret = 0;
++	struct snapshot *snapshot = NULL;
++
++	if (IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)) {
++		struct blk_integrity *bi =
++			&tracker->orig_bdev->bd_disk->queue->limits.integrity;
++
++		if (bi->csum_type != BLK_INTEGRITY_CSUM_NONE) {
++			pr_err("Blksnap is not compatible with data integrity\n");
++			ret = -EPERM;
++			goto out_up;
++		} else
++			pr_debug("Data integrity not found\n");
++	}
++#ifdef CONFIG_BLK_INLINE_ENCRYPTION
++	if (tracker->orig_bdev->bd_disk->queue->crypto_profile) {
++		pr_err("Blksnap is not compatible with hardware inline encryption\n");
++		ret = -EPERM;
++		goto out_up;
++	} else
++		pr_debug("Inline encryption not found\n");
++#endif
++	snapshot = snapshot_get_by_id(id);
++	if (!snapshot)
++		return -ESRCH;
++
++	down_write(&snapshot->rw_lock);
++	if (tracker->dev_id == snapshot->diff_storage->dev_id) {
++		pr_err("The block device %d:%d is already being used as difference storage\n",
++			MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++		goto out_up;
++	}
++	if (!list_empty(&snapshot->trackers)) {
++		struct tracker *tr;
++
++		list_for_each_entry(tr, &snapshot->trackers, link) {
++			if ((tr == tracker) ||
++			    (tr->dev_id == tracker->dev_id)) {
++				ret = -EALREADY;
++				goto out_up;
++			}
++		}
++	}
++	if (list_empty(&tracker->link)) {
++		tracker_get(tracker);
++		list_add_tail(&tracker->link, &snapshot->trackers);
++	} else
++		ret = -EBUSY;
++out_up:
++	up_write(&snapshot->rw_lock);
++
++	snapshot_put(snapshot);
++
++	return ret;
++}
++
++int snapshot_destroy(const uuid_t *id)
++{
++	struct snapshot *snapshot = NULL;
++
++	pr_info("Destroy snapshot %pUb\n", id);
++	down_write(&snapshots_lock);
++	if (!list_empty(&snapshots)) {
++		struct snapshot *s = NULL;
++
++		list_for_each_entry(s, &snapshots, link) {
++			if (uuid_equal(&s->id, id)) {
++				snapshot = s;
++				list_del(&snapshot->link);
++				break;
++			}
++		}
++	}
++	up_write(&snapshots_lock);
++
++	if (!snapshot) {
++		pr_err("Unable to destroy snapshot: cannot find snapshot by id %pUb\n",
++		       id);
++		return -ENODEV;
++	}
++	snapshot_put(snapshot);
++
++	return 0;
++}
++
++static int snapshot_take_trackers(struct snapshot *snapshot)
++{
++	int ret = 0;
++	struct tracker *tracker;
++	unsigned int current_flag;
++
++	down_write(&snapshot->rw_lock);
++
++	if (list_empty(&snapshot->trackers)) {
++		ret = -ENODEV;
++		goto fail;
++	}
++
++	list_for_each_entry(tracker, &snapshot->trackers, link) {
++		struct diff_area *diff_area =
++			diff_area_new(tracker, snapshot->diff_storage);
++
++		if (IS_ERR(diff_area)) {
++			ret = PTR_ERR(diff_area);
++			break;
++		}
++		tracker->diff_area = diff_area;
++	}
++	if (ret)
++		goto fail;
++
++	/*
++	 * Try to flush and freeze file system on each original block device.
++	 */
++	pr_debug("Freezing block devices to create a snapshot\n");
++	list_for_each_entry(tracker, &snapshot->trackers, link) {
++		if (bdev_freeze(tracker->diff_area->orig_bdev))
++			pr_warn("Failed to freeze device [%u:%u]\n",
++			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++		else
++			pr_debug("Device [%u:%u] was frozen\n",
++				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++	}
++
++	current_flag = memalloc_noio_save();
++	/*
++	 * Take snapshot - switch CBT tables and enable COW logic for each
++	 * tracker.
++	 */
++	list_for_each_entry(tracker, &snapshot->trackers, link) {
++		ret = tracker_take_snapshot(tracker);
++		if (ret) {
++			pr_err("Unable to take snapshot: failed to capture snapshot %pUb\n",
++			       &snapshot->id);
++			break;
++		}
++	}
++
++	if (!ret)
++		snapshot->is_taken = true;
++	memalloc_noio_restore(current_flag);
++
++	/*
++	 * Thaw file systems on original block devices.
++	 */
++	list_for_each_entry(tracker, &snapshot->trackers, link) {
++		if (bdev_thaw(tracker->diff_area->orig_bdev))
++			pr_warn("Failed to thaw device [%u:%u]\n",
++			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++		else
++			pr_debug("Device [%u:%u] was unfrozen\n",
++				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++	}
++	if (ret) {
++fail:
++		list_for_each_entry(tracker, &snapshot->trackers, link) {
++			if (tracker->diff_area) {
++				diff_area_put(tracker->diff_area);
++				tracker->diff_area = NULL;
++			}
++		}
++	}
++	up_write(&snapshot->rw_lock);
++	return ret;
++}
++
++/*
++ * Sometimes a snapshot is in the state of corrupt immediately after it is
++ * taken.
++ */
++static int snapshot_check_trackers(struct snapshot *snapshot)
++{
++	int ret = 0;
++	struct tracker *tracker;
++
++	down_read(&snapshot->rw_lock);
++
++	list_for_each_entry(tracker, &snapshot->trackers, link) {
++		if (unlikely(diff_area_is_corrupted(tracker->diff_area))) {
++			pr_err("Unable to create snapshot for device [%u:%u]: diff area is corrupted\n",
++			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++			ret = -EFAULT;
++			break;
++		}
++	}
++
++	up_read(&snapshot->rw_lock);
++
++	return ret;
++}
++
++/*
++ * Create all image block devices.
++ */
++static int snapshot_take_images(struct snapshot *snapshot)
++{
++	int ret = 0;
++	struct tracker *tracker;
++
++	down_write(&snapshot->rw_lock);
++
++	list_for_each_entry(tracker, &snapshot->trackers, link) {
++		ret = snapimage_create(tracker);
++
++		if (ret) {
++			pr_err("Failed to create snapshot image for device [%u:%u] with error=%d\n",
++			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id),
++			       ret);
++			break;
++		}
++	}
++
++	up_write(&snapshot->rw_lock);
++	return ret;
++}
++
++static int snapshot_release_trackers(struct snapshot *snapshot)
++{
++	int ret = 0;
++	struct tracker *tracker;
++
++	down_write(&snapshot->rw_lock);
++
++	list_for_each_entry(tracker, &snapshot->trackers, link)
++		tracker_release_snapshot(tracker);
++
++	up_write(&snapshot->rw_lock);
++	return ret;
++}
++
++int snapshot_take(const uuid_t *id)
++{
++	int ret = 0;
++	struct snapshot *snapshot;
++
++	snapshot = snapshot_get_by_id(id);
++	if (!snapshot)
++		return -ESRCH;
++
++	if (!snapshot->is_taken) {
++		ret = snapshot_take_trackers(snapshot);
++		if (!ret) {
++			ret = snapshot_check_trackers(snapshot);
++			if (!ret)
++				ret = snapshot_take_images(snapshot);
++		}
++
++		if (ret)
++			snapshot_release_trackers(snapshot);
++	} else
++		ret = -EALREADY;
++
++	snapshot_put(snapshot);
++
++	if (ret)
++		pr_err("Unable to take snapshot %pUb\n", &snapshot->id);
++	else
++		pr_info("Snapshot %pUb was taken successfully\n",
++			&snapshot->id);
++	return ret;
++}
++
++int snapshot_collect(unsigned int *pcount,
++		     struct blksnap_uuid __user *id_array)
++{
++	int ret = 0;
++	int inx = 0;
++	struct snapshot *s;
++
++	pr_debug("Collect snapshots\n");
++
++	down_read(&snapshots_lock);
++	if (list_empty(&snapshots))
++		goto out;
++
++	if (!id_array) {
++		list_for_each_entry(s, &snapshots, link)
++			inx++;
++		goto out;
++	}
++
++	list_for_each_entry(s, &snapshots, link) {
++		if (inx >= *pcount) {
++			ret = -ENODATA;
++			goto out;
++		}
++
++		if (copy_to_user(id_array[inx].b, &s->id.b, sizeof(uuid_t))) {
++			pr_err("Unable to collect snapshots: failed to copy data to user buffer\n");
++			goto out;
++		}
++
++		inx++;
++	}
++out:
++	up_read(&snapshots_lock);
++	*pcount = inx;
++	return ret;
++}
++
++struct event *snapshot_wait_event(const uuid_t *id, unsigned long timeout_ms)
++{
++	struct snapshot *snapshot;
++	struct event *event;
++
++	snapshot = snapshot_get_by_id(id);
++	if (!snapshot)
++		return ERR_PTR(-ESRCH);
++
++	event = event_wait(&snapshot->diff_storage->event_queue, timeout_ms);
++
++	snapshot_put(snapshot);
++	return event;
++}
+diff --git a/drivers/block/blksnap/snapshot.h b/drivers/block/blksnap/snapshot.h
+new file mode 100644
+index 000000000000..2cacdd4a080a
+--- /dev/null
++++ b/drivers/block/blksnap/snapshot.h
+@@ -0,0 +1,65 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_SNAPSHOT_H
++#define __BLKSNAP_SNAPSHOT_H
++
++#include <linux/types.h>
++#include <linux/list.h>
++#include <linux/mm.h>
++#include <linux/kref.h>
++#include <linux/uuid.h>
++#include <linux/spinlock.h>
++#include <linux/rwsem.h>
++#include <linux/fs.h>
++#include "event_queue.h"
++
++struct tracker;
++struct diff_storage;
++/**
++ * struct snapshot - Snapshot structure.
++ * @link:
++ *	The list header allows to store snapshots in a linked list.
++ * @kref:
++ *	Protects the structure from being released during the processing of
++ *	an ioctl.
++ * @id:
++ *	UUID of snapshot.
++ * @rw_lock:
++ *	Protects the structure from being modified by different threads.
++ * @is_taken:
++ *	Flag that the snapshot was taken.
++ * @diff_storage:
++ *	A pointer to the difference storage of this snapshot.
++ * @trackers:
++ *	List of block device trackers.
++ *
++ * A snapshot corresponds to a single backup session and provides snapshot
++ * images for multiple block devices. Several backup sessions can be performed
++ * at the same time, which means that several snapshots can exist at the same
++ * time. However, the original block device can only belong to one snapshot.
++ * Creating multiple snapshots from the same block device is not allowed.
++ */
++struct snapshot {
++	struct list_head link;
++	struct kref kref;
++	uuid_t id;
++
++	struct rw_semaphore rw_lock;
++
++	bool is_taken;
++	struct diff_storage *diff_storage;
++	struct list_head trackers;
++};
++
++void __exit snapshot_done(void);
++
++int snapshot_create(const char *filename, sector_t limit_sect,
++		    struct blksnap_uuid *id);
++int snapshot_destroy(const uuid_t *id);
++int snapshot_add_device(const uuid_t *id, struct tracker *tracker);
++int snapshot_take(const uuid_t *id);
++int snapshot_collect(unsigned int *pcount,
++		     struct blksnap_uuid __user *id_array);
++struct event *snapshot_wait_event(const uuid_t *id, unsigned long timeout_ms);
++
++#endif /* __BLKSNAP_SNAPSHOT_H */
+diff --git a/drivers/block/blksnap/tracker.c b/drivers/block/blksnap/tracker.c
+new file mode 100644
+index 000000000000..da7270e56f1a
+--- /dev/null
++++ b/drivers/block/blksnap/tracker.c
+@@ -0,0 +1,388 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#define pr_fmt(fmt) KBUILD_MODNAME "-tracker: " fmt
++
++#include <linux/slab.h>
++#include <linux/blk-mq.h>
++#include <linux/sched/mm.h>
++#include <linux/build_bug.h>
++#include <linux/blk-crypto.h>
++#include <uapi/linux/blksnap.h>
++#include "tracker.h"
++#include "cbt_map.h"
++#include "diff_area.h"
++#include "snapimage.h"
++#include "snapshot.h"
++
++void tracker_free(struct kref *kref)
++{
++	struct tracker *tracker = container_of(kref, struct tracker, kref);
++
++	might_sleep();
++
++	pr_debug("Free tracker for device [%u:%u]\n", MAJOR(tracker->dev_id),
++		 MINOR(tracker->dev_id));
++
++	if (tracker->diff_area)
++		diff_area_put(tracker->diff_area);
++	if (tracker->cbt_map)
++		cbt_map_destroy(tracker->cbt_map);
++	blkfilter_put(&tracker->filter);
++}
++
++static bool tracker_submit_bio(struct bio *bio)
++{
++	struct blkfilter *flt = bio->bi_bdev->bd_filter;
++	struct tracker *tracker = container_of(flt, struct tracker, filter);
++	sector_t count = bio_sectors(bio);
++	sector_t sector = bio->bi_iter.bi_sector;
++
++	if (WARN_ON_ONCE(current->blk_filter != flt))
++		return false;
++
++	if (!op_is_write(bio_op(bio)) || !count)
++		return false;
++
++	if (bio_flagged(bio, BIO_REMAPPED))
++		sector -= bio->bi_bdev->bd_start_sect;
++
++	if (cbt_map_set(tracker->cbt_map, sector, count))
++		return false;
++
++	if (!atomic_read(&tracker->snapshot_is_taken))
++		return false;
++	/*
++	 * The diff_area is not blocked from releasing now, because
++	 * changing the value of the snapshot_is_taken is performed when
++	 * the block device queue is frozen in tracker_release_snapshot().
++	 */
++	if (diff_area_is_corrupted(tracker->diff_area))
++		return false;
++
++#ifdef CONFIG_BLK_INLINE_ENCRYPTION
++	if (bio_has_crypt_ctx(bio)) {
++		pr_err("Inline encryption is not supported\n");
++		diff_area_set_corrupted(tracker->diff_area, -EPERM);
++		return false;
++	}
++#endif
++#ifdef CONFIG_BLK_DEV_INTEGRITY
++	if (bio->bi_integrity) {
++		pr_err("Data integrity is not supported\n");
++		diff_area_set_corrupted(tracker->diff_area, -EPERM);
++		return false;
++	}
++#endif
++	return diff_area_cow(tracker->diff_area, bio);
++}
++
++static struct blkfilter *tracker_attach(struct block_device *bdev,
++					__u8 __user *opt, __u32 optlen)
++{
++	struct tracker *tracker = NULL;
++	struct cbt_map *cbt_map;
++
++	/*
++	 * Options for tracker is not implemented yet.
++	 * Reserved for specifying the change tracking block size.
++	 */
++	(void)opt;
++	(void)optlen;
++
++	pr_debug("Creating tracker for device [%u:%u]\n",
++		 MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
++
++	cbt_map = cbt_map_create(bdev);
++	if (!cbt_map) {
++		pr_err("Failed to create CBT map for device [%u:%u]\n",
++		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
++		return ERR_PTR(-ENOMEM);
++	}
++
++	tracker = kzalloc(sizeof(struct tracker), GFP_KERNEL);
++	if (tracker == NULL) {
++		cbt_map_destroy(cbt_map);
++		return ERR_PTR(-ENOMEM);
++	}
++
++	tracker->orig_bdev = bdev;
++	INIT_LIST_HEAD(&tracker->link);
++	kref_init(&tracker->kref);
++	tracker->dev_id = bdev->bd_dev;
++	atomic_set(&tracker->snapshot_is_taken, false);
++	tracker->cbt_map = cbt_map;
++	tracker->diff_area = NULL;
++
++	pr_debug("New tracker for device [%u:%u] was created\n",
++		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++
++	return &tracker->filter;
++}
++
++static void tracker_detach(struct blkfilter *flt)
++{
++	struct tracker *tracker = container_of(flt, struct tracker, filter);
++
++	/*
++	 * The queue already frozen by blk_mq_freeze_queue().
++	 */
++	pr_debug("Detach tracker from device [%u:%u]\n",
++		 MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
++
++	tracker_put(tracker);
++}
++
++static int ctl_cbtinfo(struct tracker *tracker, __u8 __user *buf, __u32 *plen)
++{
++	struct cbt_map *cbt_map = tracker->cbt_map;
++	struct blksnap_cbtinfo arg;
++
++	if (!cbt_map)
++		return -ESRCH;
++
++	if (*plen < sizeof(arg))
++		return -EINVAL;
++
++	spin_lock(&cbt_map->locker);
++	arg.device_capacity = (__u64)(cbt_map->bdev_capacity << SECTOR_SHIFT);
++	arg.block_size = (__u32)(1 << cbt_map->blk_size_shift);
++	arg.block_count = (__u32)cbt_map->blk_count;
++	export_uuid(arg.generation_id.b, &cbt_map->generation_id);
++	arg.changes_number = (__u8)cbt_map->snap_number_previous;
++	spin_unlock(&cbt_map->locker);
++
++	if (copy_to_user(buf, &arg, sizeof(arg)))
++		return -ENODATA;
++
++	*plen = sizeof(arg);
++	return 0;
++}
++
++static int ctl_cbtmap(struct tracker *tracker, __u8 __user *buf, __u32 *plen)
++{
++	struct cbt_map *cbt_map = tracker->cbt_map;
++	struct blksnap_cbtmap arg;
++
++	if (!cbt_map)
++		return -ESRCH;
++
++	if (unlikely(cbt_map->is_corrupted)) {
++		pr_err("CBT table was corrupted\n");
++		return -EFAULT;
++	}
++
++	if (*plen < sizeof(arg))
++		return -EINVAL;
++
++	if (copy_from_user(&arg, buf, sizeof(arg)))
++		return -ENODATA;
++
++	if (arg.length > (cbt_map->blk_count - arg.offset))
++		return -ENODATA;
++
++	if (copy_to_user(u64_to_user_ptr(arg.buffer),
++			 cbt_map->read_map + arg.offset, arg.length))
++
++		return -EINVAL;
++
++	*plen = 0;
++	return 0;
++}
++
++static int ctl_cbtdirty(struct tracker *tracker, __u8 __user *buf, __u32 *plen)
++{
++	struct cbt_map *cbt_map = tracker->cbt_map;
++	struct blksnap_cbtdirty arg;
++	struct blksnap_sectors __user *ranges;
++	unsigned int inx;
++
++	if (!cbt_map)
++		return -ESRCH;
++
++	if (*plen < sizeof(arg))
++		return -EINVAL;
++
++	if (copy_from_user(&arg, buf, sizeof(arg)))
++		return -ENODATA;
++
++	ranges = u64_to_user_ptr(arg.dirty_sectors);
++	for (inx = 0; inx < arg.count; inx++) {
++		struct blksnap_sectors range;
++		int ret;
++
++		if (copy_from_user(&range, ranges + inx,
++				   sizeof(range)))
++			return -ENODATA;
++
++		ret = cbt_map_set_both(cbt_map, range.offset, range.count);
++		if (ret)
++			return ret;
++	}
++	*plen = 0;
++	return 0;
++}
++
++static int ctl_snapshotadd(struct tracker *tracker,
++			   __u8 __user *buf, __u32 *plen)
++{
++	struct blksnap_snapshotadd arg;
++
++	if (*plen < sizeof(arg))
++		return -EINVAL;
++
++	if (copy_from_user(&arg, buf, sizeof(arg)))
++		return -ENODATA;
++
++	*plen = 0;
++	return  snapshot_add_device((uuid_t *)&arg.id, tracker);
++}
++static int ctl_snapshotinfo(struct tracker *tracker,
++			    __u8 __user *buf, __u32 *plen)
++{
++	struct blksnap_snapshotinfo arg = {0};
++
++	if (*plen < sizeof(arg))
++		return -EINVAL;
++
++	if (copy_from_user(&arg, buf, sizeof(arg)))
++		return -ENODATA;
++
++	if (tracker->diff_area && diff_area_is_corrupted(tracker->diff_area))
++		arg.error_code = tracker->diff_area->error_code;
++	else
++		arg.error_code = 0;
++
++	if (tracker->snap_disk)
++		strscpy(arg.image, tracker->snap_disk->disk_name,
++			IMAGE_DISK_NAME_LEN);
++
++	if (copy_to_user(buf, &arg, sizeof(arg)))
++		return -ENODATA;
++
++	*plen = sizeof(arg);
++	return 0;
++}
++
++static int tracker_ctl(struct blkfilter *flt, const unsigned int cmd,
++		       __u8 __user *buf, __u32 *plen)
++{
++	int ret = 0;
++	struct tracker *tracker = container_of(flt, struct tracker, filter);
++
++	switch (cmd) {
++	case BLKFILTER_CTL_BLKSNAP_CBTINFO:
++		ret = ctl_cbtinfo(tracker, buf, plen);
++		break;
++	case BLKFILTER_CTL_BLKSNAP_CBTMAP:
++		ret = ctl_cbtmap(tracker, buf, plen);
++		break;
++	case BLKFILTER_CTL_BLKSNAP_CBTDIRTY:
++		ret = ctl_cbtdirty(tracker, buf, plen);
++		break;
++	case BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD:
++		ret = ctl_snapshotadd(tracker, buf, plen);
++		break;
++	case BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO:
++		ret = ctl_snapshotinfo(tracker, buf, plen);
++		break;
++	default:
++		ret = -ENOTTY;
++	};
++
++	return ret;
++}
++
++static struct blkfilter_operations tracker_ops = {
++	.owner		= THIS_MODULE,
++	.name		= "blksnap",
++	.attach		= tracker_attach,
++	.detach		= tracker_detach,
++	.ctl		= tracker_ctl,
++	.submit_bio	= tracker_submit_bio,
++};
++
++int tracker_take_snapshot(struct tracker *tracker)
++{
++	bool cbt_reset_needed = false;
++	struct block_device *orig_bdev = tracker->orig_bdev;
++	struct cbt_map *new_cbt_map = NULL;
++	struct cbt_map *old_cbt_map = NULL;
++	unsigned int memflags;
++
++	pr_debug("Freezing the [%d:%d] to take snapshot\n",
++		MAJOR(orig_bdev->bd_dev), MINOR(orig_bdev->bd_dev));
++
++	memflags = blk_mq_freeze_queue(bdev_get_queue(orig_bdev));
++
++	spin_lock(&tracker->cbt_map->locker);
++	cbt_reset_needed = tracker->cbt_map->is_corrupted ||
++		(tracker->cbt_map->bdev_capacity != bdev_nr_sectors(orig_bdev));
++	spin_unlock(&tracker->cbt_map->locker);
++
++	if (cbt_reset_needed) {
++		blk_mq_unfreeze_queue(bdev_get_queue(orig_bdev), memflags);
++
++		new_cbt_map = cbt_map_create(orig_bdev);
++		if (!new_cbt_map) {
++			pr_err("Failed to recreate CBT\n");
++			return -ENOMEM;
++		}
++
++		memflags = blk_mq_freeze_queue(bdev_get_queue(orig_bdev));
++		old_cbt_map = tracker->cbt_map;
++		tracker->cbt_map = new_cbt_map;
++	}
++
++	cbt_map_switch(tracker->cbt_map);
++	atomic_set(&tracker->snapshot_is_taken, true);
++
++	blk_mq_unfreeze_queue(bdev_get_queue(orig_bdev), memflags);
++
++	pr_debug("[%d:%d] have thawed out\n",
++		MAJOR(orig_bdev->bd_dev), MINOR(orig_bdev->bd_dev));
++
++	if (old_cbt_map)
++		cbt_map_destroy(old_cbt_map);
++	return 0;
++}
++
++void tracker_release_snapshot(struct tracker *tracker)
++{
++	struct diff_area *diff_area = tracker->diff_area;
++	struct block_device *orig_bdev = tracker->orig_bdev;
++	unsigned int memflags;
++
++	if (unlikely(!diff_area))
++		return;
++
++	snapimage_free(tracker);
++
++	pr_debug("Freezing the device [%d:%d] to release snapshot\n",
++		MAJOR(orig_bdev->bd_dev), MINOR(orig_bdev->bd_dev));
++
++	memflags = blk_mq_freeze_queue(bdev_get_queue(orig_bdev));
++	atomic_set(&tracker->snapshot_is_taken, false);
++	tracker->diff_area = NULL;
++	blk_mq_unfreeze_queue(bdev_get_queue(orig_bdev), memflags);
++
++	pr_debug("Device [%d:%d] have thawed out\n",
++		MAJOR(orig_bdev->bd_dev), MINOR(orig_bdev->bd_dev));
++
++	flush_work(&diff_area->image_io_work);
++
++	diff_area_put(diff_area);
++}
++
++int __init tracker_init(void)
++{
++	pr_debug("Register filter '%s'", tracker_ops.name);
++
++	return blkfilter_register(&tracker_ops);
++}
++
++void tracker_done(void)
++{
++	pr_debug("Unregister filter '%s'", tracker_ops.name);
++
++	blkfilter_unregister(&tracker_ops);
++}
+diff --git a/drivers/block/blksnap/tracker.h b/drivers/block/blksnap/tracker.h
+new file mode 100644
+index 000000000000..d2fb380313bd
+--- /dev/null
++++ b/drivers/block/blksnap/tracker.h
+@@ -0,0 +1,90 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef __BLKSNAP_TRACKER_H
++#define __BLKSNAP_TRACKER_H
++
++#include <linux/blk-filter.h>
++#include <linux/kref.h>
++#include <linux/spinlock.h>
++#include <linux/list.h>
++#include <linux/rwsem.h>
++#include <linux/blkdev.h>
++#include <linux/fs.h>
++
++struct cbt_map;
++struct diff_area;
++
++/**
++ * struct tracker - Tracker for a block device.
++ *
++ * @filter:
++ *	The block device filter structure.
++ * @orig_bdev:
++ *	The original block device this trackker is attached to.
++ * @link:
++ *	List header. Allows to combine trackers into a list in a snapshot.
++ * @kref:
++ *	The reference counter allows to control the lifetime of the tracker.
++ * @dev_id:
++ *	Original block device ID.
++ * @snapshot_is_taken:
++ *	Indicates that a snapshot was taken for the device whose I/O unit are
++ *	handled by this tracker.
++ * @cbt_map:
++ *	Pointer to a change block tracker map.
++ * @diff_area:
++ *	Pointer to a difference area.
++ * @snap_disk:
++ *	Snapshot image disk.
++ *
++ * The goal of the tracker is to handle I/O unit. The tracker detectes the range
++ * of sectors that will change and transmits them to the CBT map and to the
++ * difference area.
++ */
++struct tracker {
++	struct blkfilter filter;
++	struct block_device *orig_bdev;
++	struct list_head link;
++	struct kref kref;
++	dev_t dev_id;
++
++	atomic_t snapshot_is_taken;
++
++	struct cbt_map *cbt_map;
++	struct diff_area *diff_area;
++	struct gendisk *snap_disk;
++};
++
++int __init tracker_init(void);
++void tracker_done(void);
++
++void tracker_free(struct kref *kref);
++static inline void tracker_put(struct tracker *tracker)
++{
++	if (likely(tracker))
++		kref_put(&tracker->kref, tracker_free);
++};
++static inline void tracker_get(struct tracker *tracker)
++{
++	kref_get(&tracker->kref);
++};
++int tracker_take_snapshot(struct tracker *tracker);
++void tracker_release_snapshot(struct tracker *tracker);
++
++static inline struct blkfilter *tracker_current_filter_set(
++						struct tracker *tracker)
++{
++	struct blkfilter *flt;
++
++	flt = current->blk_filter;
++	current->blk_filter = &tracker->filter;
++
++	return flt;
++};
++
++static inline void tracker_current_filter_restore(struct blkfilter *flt)
++{
++	current->blk_filter = flt;
++};
++
++#endif /* __BLKSNAP_TRACKER_H */
+diff --git a/include/uapi/linux/blksnap.h b/include/uapi/linux/blksnap.h
+new file mode 100644
+index 000000000000..47d7f61d0e52
+--- /dev/null
++++ b/include/uapi/linux/blksnap.h
+@@ -0,0 +1,399 @@
++/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
++/* Copyright (C) 2023 Veeam Software Group GmbH */
++#ifndef _UAPI_LINUX_BLKSNAP_H
++#define _UAPI_LINUX_BLKSNAP_H
++
++#include <linux/types.h>
++
++#define BLKSNAP_CTL "blksnap-control"
++#define BLKSNAP_IMAGE_NAME "blksnap"
++#define BLKSNAP 'V'
++
++/**
++ * DOC: Block device filter interface.
++ *
++ * Control commands that are transmitted through the block device filter
++ * interface.
++ */
++
++/**
++ * enum blkfilter_ctl_blksnap - List of commands for BLKFILTER_CTL ioctl
++ *
++ * @BLKFILTER_CTL_BLKSNAP_CBTINFO:
++ *	Get CBT information.
++ *	The result of executing the command is a &struct blksnap_cbtinfo.
++ *	Return 0 if succeeded, negative errno otherwise.
++ * @BLKFILTER_CTL_BLKSNAP_CBTMAP:
++ *	Read the CBT map.
++ *	The option passes the &struct blksnap_cbtmap.
++ *	The size of the table can be quite large. Thus, the table is read in
++ *	a loop, in each cycle of which the next offset is set to
++ *	&blksnap_tracker_read_cbt_bitmap.offset.
++ *	Return a count of bytes read if succeeded, negative errno otherwise.
++ * @BLKFILTER_CTL_BLKSNAP_CBTDIRTY:
++ *	Set dirty blocks in the CBT map.
++ *	The option passes the &struct blksnap_cbtdirty.
++ *	There are cases when some blocks need to be marked as changed.
++ *	This ioctl allows to do this.
++ *	Return 0 if succeeded, negative errno otherwise.
++ * @BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD:
++ *	Add device to snapshot.
++ *	The option passes the &struct blksnap_snapshotadd.
++ *	Return 0 if succeeded, negative errno otherwise.
++ * @BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO:
++ *	Get information about snapshot.
++ *	The result of executing the command is a &struct blksnap_snapshotinfo.
++ *	Return 0 if succeeded, negative errno otherwise.
++ */
++enum blkfilter_ctl_blksnap {
++	BLKFILTER_CTL_BLKSNAP_CBTINFO = 0,
++	BLKFILTER_CTL_BLKSNAP_CBTMAP = 1,
++	BLKFILTER_CTL_BLKSNAP_CBTDIRTY = 2,
++	BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD = 3,
++	BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO = 4,
++};
++
++/**
++ * struct blksnap_uuid - Unique 16-byte identifier.
++ *
++ * @b:
++ *	An array of 16 bytes.
++ */
++struct blksnap_uuid {
++	__u8 b[16];
++};
++
++/**
++ * struct blksnap_cbtinfo - Result for the command
++ *	&BLKFILTER_CTL_BLKSNAP_CBTINFO.
++ *
++ * @device_capacity:
++ *	Device capacity in bytes.
++ * @block_size:
++ *	Block size in bytes.
++ * @block_count:
++ *	Number of blocks.
++ * @generation_id:
++ *	Unique identifier of change tracking generation.
++ * @changes_number:
++ *	Current changes number.
++ */
++struct blksnap_cbtinfo {
++	__u64 device_capacity;
++	__u32 block_size;
++	__u32 block_count;
++	struct blksnap_uuid generation_id;
++	__u8 changes_number;
++};
++
++/**
++ * struct blksnap_cbtmap - Option for the command
++ *	&BLKFILTER_CTL_BLKSNAP_CBTMAP.
++ *
++ * @offset:
++ *	Offset from the beginning of the CBT bitmap in bytes.
++ * @length:
++ *	Size of @buff in bytes.
++ * @buffer:
++ *	Pointer to the buffer for output.
++ */
++struct blksnap_cbtmap {
++	__u32 offset;
++	__u32 length;
++	__u64 buffer;
++};
++
++/**
++ * struct blksnap_sectors - Description of the block device region.
++ *
++ * @offset:
++ *	Offset from the beginning of the disk in sectors.
++ * @count:
++ *	Count of sectors.
++ */
++struct blksnap_sectors {
++	__u64 offset;
++	__u64 count;
++};
++
++/**
++ * struct blksnap_cbtdirty - Option for the command
++ *	&BLKFILTER_CTL_BLKSNAP_CBTDIRTY.
++ *
++ * @count:
++ *	Count of elements in the @dirty_sectors.
++ * @dirty_sectors:
++ *	Pointer to the array of &struct blksnap_sectors.
++ */
++struct blksnap_cbtdirty {
++	__u32 count;
++	__u64 dirty_sectors;
++};
++
++/**
++ * struct blksnap_snapshotadd - Option for the command
++ *	&BLKFILTER_CTL_BLKSNAP_SNAPSHOTADD.
++ *
++ * @id:
++ *	ID of the snapshot to which the block device should be added.
++ */
++struct blksnap_snapshotadd {
++	struct blksnap_uuid id;
++};
++
++#define IMAGE_DISK_NAME_LEN 32
++
++/**
++ * struct blksnap_snapshotinfo - Result for the command
++ *	&BLKFILTER_CTL_BLKSNAP_SNAPSHOTINFO.
++ *
++ * @error_code:
++ *	Zero if there were no errors while holding the snapshot.
++ *	The error code -ENOSPC means that while holding the snapshot, a snapshot
++ *	overflow situation has occurred. Other error codes mean other reasons
++ *	for failure.
++ *	The error code is reset when the device is added to a new snapshot.
++ * @image:
++ *	If the snapshot was taken, it stores the block device name of the
++ *	image, or empty string otherwise.
++ */
++struct blksnap_snapshotinfo {
++	__s32 error_code;
++	__u8 image[IMAGE_DISK_NAME_LEN];
++};
++
++/**
++ * DOC: Interface for managing snapshots
++ *
++ * Control commands that are transmitted through the blksnap module interface.
++ */
++enum blksnap_ioctl {
++	BLKSNAP_IOCTL_VERSION = 0,
++	BLKSNAP_IOCTL_SNAPSHOT_CREATE = 1,
++	BLKSNAP_IOCTL_SNAPSHOT_DESTROY = 2,
++	BLKSNAP_IOCTL_SNAPSHOT_TAKE = 3,
++	BLKSNAP_IOCTL_SNAPSHOT_COLLECT = 4,
++	BLKSNAP_IOCTL_SNAPSHOT_WAIT_EVENT = 5,
++};
++
++/**
++ * struct blksnap_version - Module version.
++ *
++ * @major:
++ *	Version major part.
++ * @minor:
++ *	Version minor part.
++ * @revision:
++ *	Revision number.
++ * @build:
++ *	Build number. Should be zero.
++ */
++struct blksnap_version {
++	__u16 major;
++	__u16 minor;
++	__u16 revision;
++	__u16 build;
++};
++
++/**
++ * define IOCTL_BLKSNAP_VERSION - Get module version.
++ *
++ * The version may increase when the API changes. But linking the user space
++ * behavior to the version code does not seem to be a good idea.
++ * To ensure backward compatibility, API changes should be made by adding new
++ * ioctl without changing the behavior of existing ones. The version should be
++ * used for logs.
++ *
++ * Return: 0 if succeeded, negative errno otherwise.
++ */
++#define IOCTL_BLKSNAP_VERSION							\
++	_IOR(BLKSNAP, BLKSNAP_IOCTL_VERSION, struct blksnap_version)
++
++/**
++ * struct blksnap_snapshot_create - Argument for the
++ *	&IOCTL_BLKSNAP_SNAPSHOT_CREATE control.
++ *
++ * @diff_storage_limit_sect:
++ *	The maximum allowed difference storage size in sectors.
++ * @diff_storage_filename:
++ *	The difference storage file name.
++ * @id:
++ *	Generated new snapshot ID.
++ */
++struct blksnap_snapshot_create {
++	__u64 diff_storage_limit_sect;
++	__u64 diff_storage_filename;
++	struct blksnap_uuid id;
++};
++
++/**
++ * define IOCTL_BLKSNAP_SNAPSHOT_CREATE - Create snapshot.
++ *
++ * Creates a snapshot structure and initializes the difference storage.
++ * A snapshot is created for several block devices at once. Several snapshots
++ * can be created at the same time, but with the condition that one block
++ * device can only be included in one snapshot.
++ *
++ * The difference storage can be dynamically increase as it fills up.
++ * The file is increased in portions, the size of which is determined by the
++ * module parameter &diff_storage_minimum. Each time the amount of free space
++ * in the difference storage is reduced to the half of &diff_storage_minimum,
++ * the file is expanded by a portion, until it reaches the allowable limit
++ * &diff_storage_limit_sect.
++ *
++ * Return: 0 if succeeded, negative errno otherwise.
++ */
++#define IOCTL_BLKSNAP_SNAPSHOT_CREATE						\
++	_IOWR(BLKSNAP, BLKSNAP_IOCTL_SNAPSHOT_CREATE,				\
++	     struct blksnap_snapshot_create)
++
++/**
++ * define IOCTL_BLKSNAP_SNAPSHOT_DESTROY - Release and destroy the snapshot.
++ *
++ * Destroys snapshot with &blksnap_snapshot_destroy.id. This leads to the
++ * deletion of all block device images of the snapshot. The difference storage
++ * is being released. But the change tracker keeps tracking.
++ *
++ * Return: 0 if succeeded, negative errno otherwise.
++ */
++#define IOCTL_BLKSNAP_SNAPSHOT_DESTROY						\
++	_IOW(BLKSNAP, BLKSNAP_IOCTL_SNAPSHOT_DESTROY,				\
++	     struct blksnap_uuid)
++
++/**
++ * define IOCTL_BLKSNAP_SNAPSHOT_TAKE - Take snapshot.
++ *
++ * Creates snapshot images of block devices and switches change trackers tables.
++ * The snapshot must be created before this call, and the areas of block
++ * devices should be added to the difference storage.
++ *
++ * Return: 0 if succeeded, negative errno otherwise.
++ */
++#define IOCTL_BLKSNAP_SNAPSHOT_TAKE						\
++	_IOW(BLKSNAP, BLKSNAP_IOCTL_SNAPSHOT_TAKE,				\
++	     struct blksnap_uuid)
++
++/**
++ * struct blksnap_snapshot_collect - Argument for the
++ *	&IOCTL_BLKSNAP_SNAPSHOT_COLLECT control.
++ *
++ * @count:
++ *	Size of &blksnap_snapshot_collect.ids in the number of 16-byte UUID.
++ * @ids:
++ *	Pointer to the array of struct blksnap_uuid for output.
++ */
++struct blksnap_snapshot_collect {
++	__u32 count;
++	__u64 ids;
++};
++
++/**
++ * define IOCTL_BLKSNAP_SNAPSHOT_COLLECT - Get collection of created snapshots.
++ *
++ * Multiple snapshots can be created at the same time. This allows for one
++ * system to create backups for different data with a independent schedules.
++ *
++ * If in &blksnap_snapshot_collect.count is less than required to store the
++ * &blksnap_snapshot_collect.ids, the array is not filled, and the ioctl
++ * returns the required count for &blksnap_snapshot_collect.ids.
++ *
++ * So, it is recommended to call the ioctl twice. The first call with an null
++ * pointer &blksnap_snapshot_collect.ids and a zero value in
++ * &blksnap_snapshot_collect.count. It will set the required array size in
++ * &blksnap_snapshot_collect.count. The second call with a pointer
++ * &blksnap_snapshot_collect.ids to an array of the required size will allow to
++ * get collection of active snapshots.
++ *
++ * Return: 0 if succeeded, -ENODATA if there is not enough space in the array
++ * to store collection of active snapshots, or negative errno otherwise.
++ */
++#define IOCTL_BLKSNAP_SNAPSHOT_COLLECT						\
++	_IOR(BLKSNAP, BLKSNAP_IOCTL_SNAPSHOT_COLLECT,				\
++	     struct blksnap_snapshot_collect)
++
++/**
++ * enum blksnap_event_codes - Variants of event codes.
++ *
++ * @blksnap_event_code_corrupted:
++ *	Snapshot image is corrupted event.
++ *	If a chunk could not be allocated when trying to save data to the
++ *	difference storage, this event is generated. However, this does not mean
++ *	that the backup process was interrupted with an error. If the snapshot
++ *	image has been read to the end by this time, the backup process is
++ *	considered successful.
++ * @blksnap_event_code_no_space:
++ *	No more space left in the difference storage.
++ *	This event is generated at the moment when the difference storage resize
++ *	request cannot be satisfied.
++ */
++enum blksnap_event_codes {
++	blksnap_event_code_corrupted,
++	blksnap_event_code_no_space,
++};
++
++/**
++ * struct blksnap_snapshot_event - Argument for the
++ *	&IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT control.
++ *
++ * @id:
++ *	Snapshot ID.
++ * @timeout_ms:
++ *	Timeout for waiting in milliseconds.
++ * @time_label:
++ *	Timestamp of the received event.
++ * @code:
++ *	Code of the received event &enum blksnap_event_codes.
++ * @data:
++ *	The received event body.
++ */
++struct blksnap_snapshot_event {
++	struct blksnap_uuid id;
++	__u32 timeout_ms;
++	__u32 code;
++	__s64 time_label;
++	__u8 data[4096 - 32];
++};
++
++/**
++ * define IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT - Wait and get the event from the
++ *	snapshot.
++ *
++ * While holding the snapshot, the kernel module can transmit information about
++ * changes in its state in the form of events to the user level.
++ * It is very important to receive these events as quickly as possible, so the
++ * user's thread is in the state of interruptible sleep.
++ *
++ * Return: 0 if succeeded, negative errno otherwise.
++ */
++#define IOCTL_BLKSNAP_SNAPSHOT_WAIT_EVENT					\
++	_IOR(BLKSNAP, BLKSNAP_IOCTL_SNAPSHOT_WAIT_EVENT,			\
++	     struct blksnap_snapshot_event)
++
++/**
++ * struct blksnap_event_corrupted - Data for the
++ *	&blksnap_event_code_corrupted event.
++ *
++ * @dev_id_mj:
++ *	Major part of original device ID.
++ * @dev_id_mn:
++ *	Minor part of original device ID.
++ * @err_code:
++ *	Error code.
++ */
++struct blksnap_event_corrupted {
++	__u32 dev_id_mj;
++	__u32 dev_id_mn;
++	__s32 err_code;
++};
++
++/**
++ * struct blksnap_event_no_space - Data for the
++ *	&blksnap_event_code_no_space event.
++ * @requested_nr_sect:
++ *	The required number of sectors.
++ */
++struct blksnap_event_no_space {
++	__u64 requested_nr_sect;
++};
++
++#endif /* _UAPI_LINUX_BLKSNAP_H */
+-- 
+2.43.0
+
