@@ -61,6 +61,8 @@ Thanks to Christoph Hellwig attention to the project, it was possible to raise t
 
 A "v7" patch on [lore](https://lore.kernel.org/all/20240209160204.1471421-1-sergei.shtepa@linux.dev/) or [patchwork](https://patchwork.kernel.org/project/linux-block/list/?series=824711&archive=both) was posted at 9 February 2024.
 
+A patch for LK v6.15 has been prepared. A patch has not yet been proposed for upstream.
+
 ## Work in progress and news
 
 There is a work in progress for "v8",
