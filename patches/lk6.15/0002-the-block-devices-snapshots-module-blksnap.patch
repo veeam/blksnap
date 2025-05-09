@@ -1,7 +1,7 @@
 From affc22b7e5e3bb084564ca7d8de814cbaf085e09 Mon Sep 17 00:00:00 2001
 From: Sergei Shtepa <sergei.shtepa@linux.dev>
 Date: Tue, 6 May 2025 12:41:53 +0200
-Subject: [PATCH 2/2] the block devices snapshots module (blksnap)
+Subject: [PATCH 2/3] the block devices snapshots module (blksnap)
 
 Signed-off-by: Sergei Shtepa <sergei.shtepa@linux.dev>
 ---

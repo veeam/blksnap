@@ -1,0 +1,28 @@
+From ee58ffbc504a1e82264ff9508f3a2990666a4e34 Mon Sep 17 00:00:00 2001
+From: Sergei Shtepa <sergei.shtepa@linux.dev>
+Date: Fri, 9 May 2025 09:28:18 +0200
+Subject: [PATCH 3/3] use u64_to_user_ptr() instead cast to pointer from
+ integer
+
+https://github.com/veeam/blksnap/issues/2#issuecomment-2862638281
+Signed-off-by: Sergei Shtepa <sergei.shtepa@linux.dev>
+---
+ drivers/block/blksnap/main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/block/blksnap/main.c b/drivers/block/blksnap/main.c
+index 4e034d412c42..ed29bbde1dba 100644
+--- a/drivers/block/blksnap/main.c
++++ b/drivers/block/blksnap/main.c
+@@ -185,7 +185,7 @@ static int ioctl_snapshot_create(struct blksnap_snapshot_create __user *uarg)
+ 		pr_err("Unable to create snapshot: invalid user buffer\n");
+ 		return -ENODATA;
+ 	}
+-	fname = strndup_user((const char __user *)karg.diff_storage_filename,
++	fname = strndup_user(u64_to_user_ptr(karg.diff_storage_filename),
+ 			     PATH_MAX);
+ 	if (IS_ERR(fname))
+ 		return PTR_ERR(fname);
+-- 
+2.43.0
+
