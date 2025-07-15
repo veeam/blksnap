@@ -15,6 +15,8 @@
 #include "memstat.h"
 #endif
 
+static atomic_t diff_buffer_pages = {0};
+
 static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
 	size_t inx = 0;
@@ -23,7 +25,10 @@ static void diff_buffer_free(struct diff_buffer *diff_buffer)
 		return;
 
 	for (inx = 0; inx < diff_buffer->nr_pages; inx++)
+	{
 		ms_free_page(diff_buffer->bvec[inx].bv_page);
+		atomic_dec(&diff_buffer_pages);
+	}
 
 	ms_kfree(diff_buffer);
 }
@@ -46,15 +51,17 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	diff_buffer->nr_pages = 0;
 
 	for (inx = 0; inx < nr_pages; inx++) {
-		struct page *page = ms_alloc_page(GFP_KERNEL);
+		struct page *page = ms_alloc_page(GFP_KERNEL | __GFP_NOWARN | __GFP_NOMEMALLOC);
 
 		if (!page)
 			goto fail;
+		atomic_inc(&diff_buffer_pages);
 		bvec_set_page(&diff_buffer->bvec[inx], page, PAGE_SIZE, 0);
 		diff_buffer->nr_pages++;
 	}
 	return diff_buffer;
 fail:
+	pr_err("Failed to allocate new page. Already allocated %d pages.", atomic_read(&diff_buffer_pages));
 	diff_buffer_free(diff_buffer);
 	return NULL;
 }
