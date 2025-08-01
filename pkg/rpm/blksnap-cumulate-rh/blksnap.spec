@@ -80,19 +80,19 @@ then
 		SB_ENABLE=$(od --address-radix=n --format=u1 --skip=4 -N 1 /sys/firmware/efi/efivars/SecureBoot-* | tr -d ' ')
 		if [ ${SB_ENABLE} = "1" ]
 		then
-			echo "[TBD]Secure boot enabled has been detected."
+			echo "Active Secure Boot detected."
 			if which mokutil
 			then
 				if mokutil --list-enrolled | grep -qw "CN=Veeam Software Group GmbH"
 				then
-					echo "[TBD]The Veeam Software certificate is installed."
+					echo "Veeam Software certificate is installed."
 				else
-					echo "DEPLOY_WARNING: [TBD]The Veeam Software certificate should be installed."
-					echo "DEPLOY_WARNING: [TBD]Please install 'veeam-ueficert' package and complete MOK enrollment to continue."
+					echo "DEPLOY_WARNING: Veeam Software certificate not found."
+					echo "DEPLOY_WARNING: Install 'veeam-ueficert' package and complete MOK enrollment."
 				fi
 			else
-				echo "DEPLOY_WARNING: [TBD]The 'mokutil' is not installed."
-				echo "DEPLOY_WARNING: [TBD]Please install 'mokutil' package, install 'veeam-ueficert' package and complete MOK enrollment to continue."
+				echo "DEPLOY_WARNING: 'mokutil' is not installed."
+				echo "DEPLOY_WARNING: Install 'mokutil' package, install 'veeam-ueficert' package and complete MOK enrollment."
 			fi
 		fi
 	fi
