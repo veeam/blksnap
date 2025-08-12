@@ -25,14 +25,14 @@ cp module/Makefile* ${BUILD_DIR}/src/
 generate_version ${BUILD_DIR}/src/version.h ${VERSION}
 
 cp ./pkg/blksnap.dkms ${BUILD_DIR}/src/dkms.conf
-cp ./pkg/deb/post_install.sh ${BUILD_DIR}/src/post_install.sh
 sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/src/dkms.conf
-sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/src/post_install.sh
-chmod +x ${BUILD_DIR}/src/post_install.sh
-echo "POST_INSTALL=post_install.sh" >> ${BUILD_DIR}/src/dkms.conf
 
 # prepare other package files
 cp -r ${CURR_DIR}/blksnap-dkms ${BUILD_DIR}/debian
+sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/debian/postinst
+chmod +x ${BUILD_DIR}/debian/postinst
+chmod +x ${BUILD_DIR}/debian/rules
+
 
 cat > ${BUILD_DIR}/debian/changelog << EOF
 blksnap-dkms (${VERSION}) stable; urgency=low

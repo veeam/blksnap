@@ -8,7 +8,7 @@ Testsuite: autopkgtest-pkg-dkms
 
 Package: blksnap
 Architecture: all
-Depends: dkms, ${shlibs:Depends}, ${misc:Depends}
+Depends: dkms, ${misc:Depends}
 Conflicts: veeamsnap
 Replaces: veeamsnap
 Recommends: blksnap-tools
