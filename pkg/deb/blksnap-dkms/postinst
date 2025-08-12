@@ -1,37 +1,12 @@
-#!/bin/sh
-set -e
-
-DKMS_NAME=blksnap
-DKMS_PACKAGE_NAME=$DKMS_NAME-dkms
-DKMS_VERSION=#PACKAGE_VERSION#
-
-postinst_found=0
+#DEBHELPER#
 
 case "$1" in
 	configure)
-		for DKMS_POSTINST in /usr/lib/dkms/common.postinst /usr/share/$DKMS_PACKAGE_NAME/postinst; do
-			if [ -f $DKMS_POSTINST ]; then
-				$DKMS_POSTINST $DKMS_NAME $DKMS_VERSION /usr/share/$DKMS_PACKAGE_NAME "" $2
-				postinst_found=1
-				break
-			fi
-		done
-		if [ "$postinst_found" -eq 0 ]; then
-			echo "ERROR: DKMS version is too old and $DKMS_PACKAGE_NAME was not"
-			echo "built with legacy DKMS support."
-			echo "You must either rebuild $DKMS_PACKAGE_NAME with legacy postinst"
-			echo "support or upgrade DKMS to a more current version."
-			exit 1
-		fi
-
-		if [ -z "$(dkms status -m blksnap -v $DKMS_VERSION -k $(uname -r) | grep 'installed')" ]
+		if [ -z "$(dkms status -m $DKMS_NAME -v $DKMS_VERSION -k $(uname -r) | grep 'installed')" ]
 		then
 			echo "DEPLOY_ERROR: 'linux-headers' package for the current '$(uname -r)' kernel was not found."
 			echo "DEPLOY_ERROR: Install 'linux-headers-$(uname -r)' package into the system"
 			echo "DEPLOY_ERROR: or Install latest 'linux-image-$(dpkg --print-architecture)' and 'linux-headers-$(dpkg --print-architecture)' packages and reboot the system."
 		fi
-	;;
-	*)
-		echo "postinst called with argument '$1'"
 	;;
 esac

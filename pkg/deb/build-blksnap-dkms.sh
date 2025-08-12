@@ -29,7 +29,6 @@ sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/src/dkms.conf
 
 # prepare other package files
 cp -r ${CURR_DIR}/blksnap-dkms ${BUILD_DIR}/debian
-sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/debian/postinst
 chmod +x ${BUILD_DIR}/debian/postinst
 chmod +x ${BUILD_DIR}/debian/rules
 
