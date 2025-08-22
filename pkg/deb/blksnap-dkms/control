@@ -11,7 +11,7 @@ Architecture: all
 Depends: dkms, ${misc:Depends}
 Conflicts: veeamsnap
 Replaces: veeamsnap
-Recommends: blksnap-tools
+Recommends: blksnap-tools, linux-headers-generic | linux-headers-amd64 | linux-headers
 Suggests: blksnap-dev
 Description: Veeam Agent for Linux (kernel module)
  This kernel module implements snapshot and changed block tracking
