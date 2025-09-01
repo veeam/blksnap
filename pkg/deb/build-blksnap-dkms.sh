@@ -1,10 +1,9 @@
 #!/bin/bash -e
 
 VERSION="$1"
-if [ -n "$1" ]
+ARCH="$2"
+if [ -z ${VERSION} ]
 then
-	VERSION="$1"
-else
 	VERSION="1.0.0.0"
 fi
 
@@ -31,7 +30,16 @@ sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/src/dkms.conf
 cp -r ${CURR_DIR}/blksnap-dkms ${BUILD_DIR}/debian
 chmod +x ${BUILD_DIR}/debian/postinst
 chmod +x ${BUILD_DIR}/debian/rules
-
+if [ -n ${ARCH} ]
+then
+	if sed -i 's/amd64/'${ARCH}'/g' ${BUILD_DIR}/debian/control
+	then
+		echo "Set ${ARCH} architecture"
+		cat ${BUILD_DIR}/debian/control
+	else
+		exit $?
+	fi
+fi
 
 cat > ${BUILD_DIR}/debian/changelog << EOF
 blksnap-dkms (${VERSION}) stable; urgency=low
