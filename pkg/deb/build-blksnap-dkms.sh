@@ -30,8 +30,10 @@ sed -i 's/#PACKAGE_VERSION#/'${VERSION}'/g' ${BUILD_DIR}/src/dkms.conf
 cp -r ${CURR_DIR}/blksnap-dkms ${BUILD_DIR}/debian
 chmod +x ${BUILD_DIR}/debian/postinst
 chmod +x ${BUILD_DIR}/debian/rules
-if [ -n ${ARCH} ]
+if [ -z ${ARCH} ]
 then
+	echo "Set default architecture (amd64)"
+else
 	if sed -i 's/amd64/'${ARCH}'/g' ${BUILD_DIR}/debian/control
 	then
 		echo "Set ${ARCH} architecture"
