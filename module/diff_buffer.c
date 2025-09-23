@@ -61,7 +61,7 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	}
 	return diff_buffer;
 fail:
-	pr_err("Failed to allocate new page. Already allocated %d pages.", atomic_read(&diff_buffer_pages));
+	pr_err("Failed to allocate new page. Already allocated %d pages.\n", atomic_read(&diff_buffer_pages));
 	diff_buffer_free(diff_buffer);
 	return NULL;
 }
