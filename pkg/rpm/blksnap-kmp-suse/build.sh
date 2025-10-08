@@ -75,5 +75,5 @@ echo "SPECS:"
 ls ${BUILD_DIR}/SPECS
 
 cd ${BUILD_DIR}
-rpmbuild --define "_topdir ${BUILD_DIR}" --ba SPECS/${PACKAGE_NAME}.spec
+rpmbuild --define "_topdir ${BUILD_DIR}" --ba -D 'debug_package %{nil}' SPECS/${PACKAGE_NAME}.spec
 cd ${PROJECT_DIR}
