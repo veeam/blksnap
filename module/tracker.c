@@ -92,6 +92,17 @@ static bool tracker_submit_bio(struct bio *bio)
 		return false;
 	}
 #endif
+
+	switch (bio_op(bio)) {
+	case REQ_OP_READ:
+		return false;
+	case REQ_OP_DISCARD:
+		pr_err("Operation 'Discard' is not supported while snapshot taken\n");
+		diff_area_set_corrupted(tracker->diff_area, -EPERM);
+		return false;
+	default:
+	}
+
 	return diff_area_cow(tracker->diff_area, bio);
 }
 
