@@ -566,9 +566,9 @@ bool diff_area_cow(struct diff_area *diff_area, struct bio *bio)
 {
 #ifdef CONFIG_BLKSNAP_COW_SCHEDULE
 	int ret;
+	unsigned int flags;
 #endif
 	bool skip_bio = true;
-	unsigned int flags;
 
 	if (bio->bi_opf & REQ_NOWAIT) {
 		bio->bi_status = BLK_STS_AGAIN;
@@ -576,18 +576,17 @@ bool diff_area_cow(struct diff_area *diff_area, struct bio *bio)
 		return skip_bio;
 	}
 
-	flags = memalloc_noio_save();
 #ifdef CONFIG_BLKSNAP_COW_SCHEDULE
+	flags = memalloc_noio_save();
 	ret = diff_area_cow_schedule(diff_area, bio);
 	if (ret) {
 		diff_area_set_corrupted(diff_area, ret);
 		skip_bio = false;
 	}
+	memalloc_noio_restore(flags);
 #else
 	skip_bio  = diff_area_cow_process_bio(diff_area, bio);
 #endif
-	memalloc_noio_restore(flags);
-
 	return skip_bio;
 }
 
