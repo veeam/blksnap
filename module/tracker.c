@@ -97,6 +97,7 @@ static bool tracker_submit_bio(struct bio *bio)
 	case REQ_OP_READ:
 		return false;
 	case REQ_OP_DISCARD:
+		pr_err("Try to discard %lld bytes\n", count << SECTOR_SHIFT);
 		pr_err("Operation 'Discard' is not supported while snapshot taken\n");
 		diff_area_set_corrupted(tracker->diff_area, -EPERM);
 		return false;
