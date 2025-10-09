@@ -16,6 +16,7 @@
 #endif
 
 static atomic_t diff_buffer_pages = {0};
+static atomic_t diff_buffer_cnt = {0};
 
 static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
@@ -41,10 +42,14 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	if (unlikely(nr_pages <= 0))
 		return NULL;
 
+	WARN_ONCE(atomic_read(&diff_buffer_cnt) > 512,
+		  "Already allocated too much buffers");
+
 	diff_buffer = ms_kzalloc(sizeof(struct diff_buffer) +
 			      nr_pages * sizeof(struct bio_vec), GFP_KERNEL);
 	if (!diff_buffer)
 		return NULL;
+	atomic_inc(&diff_buffer_cnt);
 
 	INIT_LIST_HEAD(&diff_buffer->link);
 	diff_buffer->size = size;
@@ -61,7 +66,8 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	}
 	return diff_buffer;
 fail:
-	pr_err("Failed to allocate new page. Already allocated %d pages.\n", atomic_read(&diff_buffer_pages));
+	pr_err("Failed to allocate new page.\nAlready allocated %d buffers with %d pages.\n",
+		atomic_read(&diff_buffer_cnt), atomic_read(&diff_buffer_pages));
 	diff_buffer_free(diff_buffer);
 	return NULL;
 }
