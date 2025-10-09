@@ -412,6 +412,9 @@ bool diff_area_cow_process_bio(struct diff_area *diff_area, struct bio *bio)
 	LIST_HEAD(chunks);
 	int ret = 0;
 	unsigned int flags;
+#ifdef BLKSNAP_STANDALONE
+	unsigned int bi_size = iter.bi_size;
+#endif
 
 #if !defined(BLKSNAP_STANDALONE)
 	if (bio_flagged(bio, BIO_REMAPPED))
@@ -557,6 +560,15 @@ fail:
 		skip_bio = true;
 	} else
 		diff_area_set_corrupted(diff_area, ret);
+	if (ret == -ENOMEM) {
+#ifdef BLKSNAP_STANDALONE
+		pr_err("Not enough memory for bio with %d bytes\n", bi_size);
+#endif
+#ifdef BLKSNAP_HISTOGRAM
+		log_histogram_show(&diff_area->cow_hg);
+#endif
+	}
+
 out:
 	memalloc_noio_restore(flags);
 	return skip_bio;
