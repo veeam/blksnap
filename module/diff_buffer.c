@@ -51,7 +51,7 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	diff_buffer->nr_pages = 0;
 
 	for (inx = 0; inx < nr_pages; inx++) {
-		struct page *page = ms_alloc_page(GFP_KERNEL | __GFP_NOWARN | __GFP_NOMEMALLOC);
+		struct page *page = ms_alloc_page(GFP_KERNEL | __GFP_NOWARN);
 
 		if (!page)
 			goto fail;
