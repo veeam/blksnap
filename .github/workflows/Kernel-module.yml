@@ -32,6 +32,8 @@ jobs:
             image: "library/debian:bullseye"
           - kversion: "6.1"
             image: "library/debian:bookworm"
+          - kversion: "6.12"
+            image: "library/debian:trixie"
           - kversion: "last stable"
             image: "library/debian:sid"
 
