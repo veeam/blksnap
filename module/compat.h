@@ -47,32 +47,23 @@ static inline int _freeze_bdev(struct block_device *bdev,
 	pr_debug("Freezing device [%u:%u]\n", MAJOR(bdev->bd_dev),
 		 MINOR(bdev->bd_dev));
 
-	if (bdev->bd_super == NULL) {
-		pr_warn("Unable to freeze device [%u:%u]: no superblock was found\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-		return 0;
-	}
-
 	superblock = freeze_bdev(bdev);
-	if (IS_ERR_OR_NULL(superblock)) {
-		int result;
+	if (IS_ERR(superblock)) {
 
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
-		       MINOR(bdev->bd_dev));
-
-		if (superblock == NULL)
-			result = -ENODEV;
-		else {
-			result = PTR_ERR(superblock);
-			pr_err("Error code: %d\n", result);
-		}
-		return result;
+	    	   MINOR(bdev->bd_dev));
+		pr_err("Error code: %d\n", PTR_ERR(superblock));
+		return PTR_ERR(superblock);
 	}
 
-	pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
-		 MINOR(bdev->bd_dev));
-	*psuperblock = superblock;
+	if (unlikely(!superblock))
+		pr_warn("Superblock for device [%u:%u] not found\n",
+			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
+	else
+		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
+			 MINOR(bdev->bd_dev));
 
+	*psuperblock = superblock;
 	return 0;
 }
 

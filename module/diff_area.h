@@ -138,6 +138,7 @@ struct diff_area {
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 	struct super_block *sb;
 #endif
+    bool is_frozen;
 
 #ifdef BLKSNAP_STANDALONE
 	atomic64_t stat_processed;

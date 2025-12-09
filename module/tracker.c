@@ -101,7 +101,6 @@ static bool tracker_submit_bio(struct bio *bio)
 		pr_err("Operation 'Discard' is not supported while snapshot taken\n");
 		diff_area_set_corrupted(tracker->diff_area, -EPERM);
 		return false;
-	default:
 	}
 
 	return diff_area_cow(tracker->diff_area, bio);

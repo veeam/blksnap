@@ -274,20 +274,26 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	 */
 	list_for_each_entry(tracker, &snapshot->trackers, link) {
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-		_freeze_bdev(tracker->diff_area->orig_bdev, &tracker->diff_area->sb);
+		ret = _freeze_bdev(tracker->diff_area->orig_bdev, &tracker->diff_area->sb);
 #else
 #if defined(HAVE_BDEV_FREEZE)
-		if (bdev_freeze(tracker->diff_area->orig_bdev))
+		ret = bdev_freeze(tracker->diff_area->orig_bdev);
 #else
-		if (freeze_bdev(tracker->diff_area->orig_bdev))
+		ret = freeze_bdev(tracker->diff_area->orig_bdev);
 #endif
-			pr_warn("Failed to freeze device [%u:%u]\n",
+#endif
+		if (ret) {
+			pr_err("Failed to freeze device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-		else
-			pr_debug("Device [%u:%u] was frozen\n",
-				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-#endif
+			break;
+		}
+		pr_debug("Device [%u:%u] was frozen\n",
+			MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+		tracker->diff_area->is_frozen = true;
 	}
+
+	if (ret)
+		goto thaw;
 
 	current_flag = memalloc_noio_save();
 	/*
@@ -309,7 +315,11 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	/*
 	 * Thaw file systems on original block devices.
 	 */
+thaw:
 	list_for_each_entry(tracker, &snapshot->trackers, link) {
+		if (!tracker->diff_area->is_frozen)
+			continue;
+		tracker->diff_area->is_frozen = false;
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
 		_thaw_bdev(tracker->diff_area->orig_bdev, tracker->diff_area->sb);
 #else
