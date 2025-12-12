@@ -503,9 +503,9 @@ int snapshot_append_storage(const uuid_t *id, const char *devpath, size_t count,
 {
 	int ret = 0;
 	struct snapshot *snapshot;
-	bdev_holder_t *bdev_holder;
+	bdev_holder_t *bdev_holder = NULL;
 
-	struct block_device *bdev;
+	struct block_device *bdev = NULL;
 	struct blksnap_sectors range;
 	struct blksnap_sectors* __user src;
 

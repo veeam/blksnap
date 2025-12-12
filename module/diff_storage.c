@@ -222,8 +222,8 @@ static inline int diff_storage_set_bdev(struct diff_storage *diff_storage,
 					const char *devpath)
 {
 	int ret;
-	bdev_holder_t *bdev_holder;
-	struct block_device *bdev;
+	bdev_holder_t *bdev_holder = NULL;
+	struct block_device *bdev = NULL;
 
 	ret = bdev_open_excl(devpath, diff_storage, &bdev_holder, &bdev);
 	if (ret) {

@@ -45,17 +45,16 @@ static void tracker_free(struct tracker *tracker)
 }
 #ifdef BLKSNAP_STANDALONE
 static bool tracker_submit_bio(struct bio *bio, struct blkfilter *flt)
-{
 #else
 static bool tracker_submit_bio(struct bio *bio)
-{
-	struct blkfilter *flt = bio->bi_bdev->bd_filter;
 #endif
+{
 	struct tracker *tracker = container_of(flt, struct tracker, filter);
 	sector_t count = bio_sectors(bio);
 	sector_t sector = bio->bi_iter.bi_sector;
-
 #if !defined(BLKSNAP_STANDALONE)
+	struct blkfilter *flt = bio->bi_bdev->bd_filter;
+
 	if (WARN_ON_ONCE(current->blk_filter != flt))
 		return false;
 #endif
@@ -93,10 +92,10 @@ static bool tracker_submit_bio(struct bio *bio)
 	}
 #endif
 
-	switch (bio_op(bio)) {
-	case REQ_OP_READ:
+	if (bio_op(bio) == REQ_OP_READ)
 		return false;
-	case REQ_OP_DISCARD:
+
+	if (bio_op(bio) == REQ_OP_DISCARD) {
 		pr_err("Try to discard %lld bytes\n", count << SECTOR_SHIFT);
 		pr_err("Operation 'Discard' is not supported while snapshot taken\n");
 		diff_area_set_corrupted(tracker->diff_area, -EPERM);

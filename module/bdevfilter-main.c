@@ -42,7 +42,7 @@ static int ioctl_attach(struct bdevfilter_attach __user *argp)
 	struct bdevfilter_operations *fops;
 	struct bdev_extension *ext_tmp, *ext_new;
 	struct blkfilter *flt;
-	bdev_holder_t *bdev_holder;
+	bdev_holder_t *bdev_holder = NULL;
 	struct block_device *bdev = NULL;
 	unsigned int task_flags;
 	int ret = 0;
@@ -176,8 +176,8 @@ static int ioctl_detach(struct bdevfilter_name __user *argp)
 {
 	char *devpath;
 	struct bdevfilter_name karg;
-	bdev_holder_t *bdev_holder;
-	struct block_device *bdev;
+	bdev_holder_t *bdev_holder = NULL;
+	struct block_device *bdev = NULL;
 	int ret = 0;
 
 	pr_debug("Block device filter detach\n");
@@ -212,8 +212,8 @@ static int ioctl_ctl(struct bdevfilter_ctl __user *argp)
 {
 	char *devpath;
 	struct bdevfilter_ctl karg;
-	bdev_holder_t *bdev_holder;
-	struct block_device *bdev;
+	bdev_holder_t *bdev_holder = NULL;
+	struct block_device *bdev = NULL;
 	struct bdev_extension *ext;
 	struct blkfilter *flt = NULL;
 	int ret = 0;
