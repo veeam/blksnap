@@ -52,7 +52,7 @@ static inline int _freeze_bdev(struct block_device *bdev,
 
 		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
 	    	   MINOR(bdev->bd_dev));
-		pr_err("Error code: %d\n", PTR_ERR(superblock));
+		pr_err("Error code: %lu\n", PTR_ERR(superblock));
 		return PTR_ERR(superblock);
 	}
 
