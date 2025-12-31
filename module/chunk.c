@@ -349,10 +349,12 @@ static inline void chunk_diff_bio_schedule(struct diff_area *diff_area,
 	atomic_inc(&diff_area->image_io_queue_count);
 	spin_unlock(&diff_area->image_io_queue_lock);
 
-	WARN_ONCE(atomic_read(&diff_area->image_io_queue_count) > 10000,
-		"Image I/O queue length up to 10000");
 	blksnap_queue_work(&diff_area->image_io_work);
 
+	/* for debug purpose */
+	WARN_ONCE(atomic_read(&diff_area->image_io_queue_count) >= get_chunk_maximum_in_queue(),
+		"DEBUG! Image I/O queue length too long");
+	/**/
 	while (atomic_read(&diff_area->image_io_queue_count) >=
 						get_chunk_maximum_in_queue()) {
 		io_schedule();
@@ -635,9 +637,9 @@ void chunk_diff_write(struct chunk *chunk)
 }
 
 #ifdef BLKSNAP_HISTOGRAM
-static struct bio *chunk_origin_load_async(struct chunk *chunk, struct log_histogram *hg)
+static struct bio *chunk_origin_load_async(struct chunk *chunk, struct log_histogram *hg, bool is_cow)
 #else
-static struct bio *chunk_origin_load_async(struct chunk *chunk)
+static struct bio *chunk_origin_load_async(struct chunk *chunk, bool is_cow)
 #endif
 {
 	struct block_device *bdev;
@@ -646,9 +648,9 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 	unsigned int inx = 0;
 	sector_t sector, count = chunk->sector_count;
 
-	diff_buffer = diff_buffer_take(chunk->diff_area);
-	if (IS_ERR(diff_buffer))
-		return ERR_CAST(diff_buffer);
+	diff_buffer = diff_buffer_take(chunk->diff_area, is_cow);
+	if (!diff_buffer)
+		return NULL;
 	chunk->diff_buffer = diff_buffer;
 
 	bdev = chunk->diff_area->orig_bdev;
@@ -711,12 +713,15 @@ int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
 	struct bio *prev = *chunk_bio, *bio;
 
 #ifdef BLKSNAP_HISTOGRAM
-	bio = chunk_origin_load_async(chunk, &chunk->diff_area->cow_hg);
+	bio = chunk_origin_load_async(chunk, &chunk->diff_area->cow_hg, true);
 #else
-	bio = chunk_origin_load_async(chunk);
+	bio = chunk_origin_load_async(chunk, true);
 #endif
-	if (IS_ERR(bio))
-		return PTR_ERR(bio);
+	if (!bio)
+	{
+		pr_err("Failed to load a chunk from the original block device.");
+		return -ENOMEM;
+	}
 
 	if (prev) {
 		bio_chain(prev, bio);
@@ -760,11 +765,12 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 	struct bio *bio;
 
 #ifdef BLKSNAP_HISTOGRAM
-	bio = chunk_origin_load_async(chunk, &chunk->diff_area->image_hg);
+	bio = chunk_origin_load_async(chunk, &chunk->diff_area->image_hg, false);
 #else
-	bio = chunk_origin_load_async(chunk);
+	bio = chunk_origin_load_async(chunk, false);
 #endif
-	if (IS_ERR(bio)) {
+	if (!bio) {
+		pr_err("Failed to load a chunk from the original block device.");
 		chunk_up(chunk);
 		return false;
 	}

@@ -17,6 +17,10 @@
 
 static atomic_t diff_buffer_pages = {0};
 static atomic_t diff_buffer_cnt = {0};
+/* for debug purpose */
+static atomic_t diff_buffer_cow = {0};
+static atomic_t diff_buffer_image = {0};
+/**/
 
 static void diff_buffer_free(struct diff_buffer *diff_buffer)
 {
@@ -34,7 +38,7 @@ static void diff_buffer_free(struct diff_buffer *diff_buffer)
 	ms_kfree(diff_buffer);
 }
 
-static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
+static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size, bool is_cow)
 {
 	struct diff_buffer *diff_buffer;
 	size_t inx = 0;
@@ -45,11 +49,28 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	WARN_ONCE(atomic_read(&diff_buffer_cnt) > 512,
 		  "Already allocated too much buffers");
 
+	/* for debug purpose */
+	if (atomic_read(&diff_buffer_cnt) > 256) {
+		pr_err("DEBUG! Already allocated too much buffers");
+		pr_err("DEBUG! Actual buffer count: %d", atomic_read(&diff_buffer_cnt));
+		pr_err("DEBUG! Total COW buffers: %d", atomic_read(&diff_buffer_cow));
+		pr_err("DEBUG! Total image buffers: %d", atomic_read(&diff_buffer_image));
+		return NULL;
+	}
+	/**/
+
 	diff_buffer = ms_kzalloc(sizeof(struct diff_buffer) +
 			      nr_pages * sizeof(struct bio_vec), GFP_KERNEL);
 	if (!diff_buffer)
 		return NULL;
 	atomic_inc(&diff_buffer_cnt);
+
+	/* for debug purpose */
+	if (is_cow)
+		atomic_inc(&diff_buffer_cow);
+	else
+		atomic_inc(&diff_buffer_image);
+	/**/
 
 	INIT_LIST_HEAD(&diff_buffer->link);
 	diff_buffer->size = size;
@@ -58,6 +79,7 @@ static struct diff_buffer *diff_buffer_new(size_t nr_pages, size_t size)
 	for (inx = 0; inx < nr_pages; inx++) {
 		struct page *page = ms_alloc_page(GFP_KERNEL | __GFP_NOWARN);
 
+		WARN(!page, is_cow ? "Failed to allocate new page for COW." : "Failed to allocate new page for snapshot image reading." );
 		if (!page)
 			goto fail;
 		atomic_inc(&diff_buffer_pages);
@@ -72,7 +94,7 @@ fail:
 	return NULL;
 }
 
-struct diff_buffer *diff_buffer_take(struct diff_area *diff_area)
+struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, bool is_cow)
 {
 	struct diff_buffer *diff_buffer = NULL;
 	sector_t chunk_sectors;
@@ -93,7 +115,7 @@ struct diff_buffer *diff_buffer_take(struct diff_area *diff_area)
 	chunk_sectors = diff_area_chunk_sectors(diff_area);
 	page_count = round_up(chunk_sectors, PAGE_SECTORS) / PAGE_SECTORS;
 	diff_buffer = diff_buffer_new(page_count,
-				      chunk_sectors << SECTOR_SHIFT);
+				      chunk_sectors << SECTOR_SHIFT, is_cow);
 	if (unlikely(!diff_buffer))
 		return ERR_PTR(-ENOMEM);
 	return diff_buffer;
