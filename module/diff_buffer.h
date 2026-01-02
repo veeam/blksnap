@@ -30,7 +30,7 @@ struct diff_buffer {
 	struct bio_vec bvec[];
 };
 
-struct diff_buffer *diff_buffer_take(struct diff_area *diff_area, bool is_cow);
+struct diff_buffer *diff_buffer_take(struct diff_area *diff_area);
 void diff_buffer_release(struct diff_area *diff_area,
 			 struct diff_buffer *diff_buffer);
 void diff_buffer_cleanup(struct diff_area *diff_area);

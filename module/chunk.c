@@ -351,10 +351,6 @@ static inline void chunk_diff_bio_schedule(struct diff_area *diff_area,
 
 	blksnap_queue_work(&diff_area->image_io_work);
 
-	/* for debug purpose */
-	WARN_ONCE(atomic_read(&diff_area->image_io_queue_count) >= get_chunk_maximum_in_queue(),
-		"DEBUG! Image I/O queue length too long");
-	/**/
 	while (atomic_read(&diff_area->image_io_queue_count) >=
 						get_chunk_maximum_in_queue()) {
 		io_schedule();
@@ -637,9 +633,9 @@ void chunk_diff_write(struct chunk *chunk)
 }
 
 #ifdef BLKSNAP_HISTOGRAM
-static struct bio *chunk_origin_load_async(struct chunk *chunk, struct log_histogram *hg, bool is_cow)
+static struct bio *chunk_origin_load_async(struct chunk *chunk, struct log_histogram *hg)
 #else
-static struct bio *chunk_origin_load_async(struct chunk *chunk, bool is_cow)
+static struct bio *chunk_origin_load_async(struct chunk *chunk)
 #endif
 {
 	struct block_device *bdev;
@@ -648,7 +644,7 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk, bool is_cow)
 	unsigned int inx = 0;
 	sector_t sector, count = chunk->sector_count;
 
-	diff_buffer = diff_buffer_take(chunk->diff_area, is_cow);
+	diff_buffer = diff_buffer_take(chunk->diff_area);
 	if (!diff_buffer)
 		return NULL;
 	chunk->diff_buffer = diff_buffer;
@@ -713,9 +709,9 @@ int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
 	struct bio *prev = *chunk_bio, *bio;
 
 #ifdef BLKSNAP_HISTOGRAM
-	bio = chunk_origin_load_async(chunk, &chunk->diff_area->cow_hg, true);
+	bio = chunk_origin_load_async(chunk, &chunk->diff_area->cow_hg);
 #else
-	bio = chunk_origin_load_async(chunk, true);
+	bio = chunk_origin_load_async(chunk);
 #endif
 	if (!bio)
 	{
@@ -765,9 +761,9 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 	struct bio *bio;
 
 #ifdef BLKSNAP_HISTOGRAM
-	bio = chunk_origin_load_async(chunk, &chunk->diff_area->image_hg, false);
+	bio = chunk_origin_load_async(chunk, &chunk->diff_area->image_hg);
 #else
-	bio = chunk_origin_load_async(chunk, false);
+	bio = chunk_origin_load_async(chunk);
 #endif
 	if (!bio) {
 		pr_err("Failed to load a chunk from the original block device.");
