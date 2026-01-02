@@ -349,8 +349,6 @@ static inline void chunk_diff_bio_schedule(struct diff_area *diff_area,
 	atomic_inc(&diff_area->image_io_queue_count);
 	spin_unlock(&diff_area->image_io_queue_lock);
 
-	WARN_ONCE(atomic_read(&diff_area->image_io_queue_count) > 10000,
-		"Image I/O queue length up to 10000");
 	blksnap_queue_work(&diff_area->image_io_work);
 
 	while (atomic_read(&diff_area->image_io_queue_count) >=
@@ -647,8 +645,8 @@ static struct bio *chunk_origin_load_async(struct chunk *chunk)
 	sector_t sector, count = chunk->sector_count;
 
 	diff_buffer = diff_buffer_take(chunk->diff_area);
-	if (IS_ERR(diff_buffer))
-		return ERR_CAST(diff_buffer);
+	if (!diff_buffer)
+		return NULL;
 	chunk->diff_buffer = diff_buffer;
 
 	bdev = chunk->diff_area->orig_bdev;
@@ -715,8 +713,11 @@ int chunk_load_and_postpone_io(struct chunk *chunk, struct bio **chunk_bio)
 #else
 	bio = chunk_origin_load_async(chunk);
 #endif
-	if (IS_ERR(bio))
-		return PTR_ERR(bio);
+	if (!bio)
+	{
+		pr_err("Failed to load a chunk from the original block device.");
+		return -ENOMEM;
+	}
 
 	if (prev) {
 		bio_chain(prev, bio);
@@ -764,7 +765,8 @@ bool chunk_load_and_schedule_io(struct chunk *chunk, struct bio *orig_bio)
 #else
 	bio = chunk_origin_load_async(chunk);
 #endif
-	if (IS_ERR(bio)) {
+	if (!bio) {
+		pr_err("Failed to load a chunk from the original block device.");
 		chunk_up(chunk);
 		return false;
 	}
