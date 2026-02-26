@@ -5,7 +5,7 @@ function check_certificate()
 	local MODULE_NAME="veeamblksnap"
 	local NAME="blksnap"
 
-	if ! modinfo ${MODULE_NAME}
+	if ! modinfo ${MODULE_NAME} 1>/dev/null
 	then
 		echo "DEPLOY_WARNING: [TBD]Failed to execute 'modinfo' for module ${MODULE_NAME}."
 		echo "DEPLOY_WARNING: [TBD]Check package '${NAME}' is installed."
@@ -68,6 +68,7 @@ function check_certificate()
 	return 0
 }
 
+SB_ENABLE=""
 if [ -d /sys/firmware/efi ]
 then
 	if [ -f /sys/firmware/efi/efivars/SecureBoot-* ]
@@ -86,6 +87,12 @@ then
 				echo "DEPLOY_WARNING: 'mokutil' is not installed."
 				echo "DEPLOY_WARNING: Install 'mokutil' package, install 'veeam-ueficert' package and complete MOK enrollment."
 			fi
+		else
+			echo "Secure Boot is not active."
 		fi
 	fi
+fi
+if [ -z ${SB_ENABLE} ]
+then
+	echo "Secure Boot was not detected."
 fi

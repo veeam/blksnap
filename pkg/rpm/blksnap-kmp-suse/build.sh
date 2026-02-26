@@ -45,7 +45,7 @@ cp ${PROJECT_DIR}/${PACKAGE_NAME}-preamble ${BUILD_DIR}/SOURCES/${PACKAGE_NAME}-
 # If you know a better way, let me know.
 cp /usr/lib/rpm/kernel-module-subpackage ${BUILD_DIR}/SOURCES/kernel-module-subpackage
 cat ${PROJECT_DIR}/${PACKAGE_NAME}-unload.sh | sed -i '/^%preun/ r /dev/stdin' ${BUILD_DIR}/SOURCES/kernel-module-subpackage
-cat ${PROJECT_DIR}/${PACKAGE_NAME}-post.sh | sed -i '/^%post/ r /dev/stdin' ${BUILD_DIR}/SOURCES/kernel-module-subpackage
+cat ${PROJECT_DIR}/${PACKAGE_NAME}-posttrans.sh | sed -i '/^%posttrans/ r /dev/stdin' ${BUILD_DIR}/SOURCES/kernel-module-subpackage
 
 # generate module sources tarbal
 SRC_DIR=${BUILD_DIR}/SOURCES/${PACKAGE_NAME}-${PACKAGE_VERSION}/source
