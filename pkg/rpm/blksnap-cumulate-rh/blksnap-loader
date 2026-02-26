@@ -51,20 +51,19 @@ class CKernelVersion:
 		if len(self._flavour) != len(other._flavour):
 			return False
 
-		inx = 0;
+		inx = 0
 		while inx < len(self._flavour):
 			if self._flavour[inx][0:3] in ["el7", "el8", "el9"]:
 				if self._flavour[inx][0:3] != other._flavour[inx][0:3]:
-					return False;
+					return False
 			elif self._flavour[inx][0:4] in ["el10"]:
 				if self._flavour[inx][0:4] != other._flavour[inx][0:4]:
-					return False;
+					return False
 			else:
 				if self._flavour[inx] != other._flavour[inx]:
-					return False;
+					return False
 			inx += 1
-		return True;
-
+		return True
 	def IsSameRelease(self, other):
 		if not isinstance(other,CKernelVersion):
 			return NotImplemented
@@ -84,7 +83,6 @@ class CKernelVersion:
 		if len(self._patchNumbers) == 0:
 			return False
 
-		result = self._revisionString+"-"+str(self._patchNumbers[0])
 		for flavour in self._flavour:
 			if flavour in ["el7uek", "el8uek", "el9uek", "el10uek"]:
 				return True
@@ -183,7 +181,7 @@ class CKernelVersion:
 
 class CKernelModule:
 	def __init__(self, _kernelVersion, _modulePath):
-		self._kernelVersion = _kernelVersion;
+		self._kernelVersion = _kernelVersion
 		self._modulePath = _modulePath
 
 def ExecuteCommand(cmd):
@@ -198,7 +196,7 @@ def TryExecuteCommand(cmd):
 	sys.stdout.flush()
 	result = os.system(cmd)
 
-def EnumerateAvaildableKernels(moduleNames):
+def EnumerateAvailableKernels(moduleNames):
 	modulesList = []
 
 	path = "/lib/modules"
@@ -218,13 +216,13 @@ def EnumerateAvaildableKernels(moduleNames):
 		if found:
 			modulesList.append(CKernelModule(CKernelVersion(dirName), fullDirPath))
 
-	return modulesList;
+	return modulesList
 
 def FindSameReleaseModule(kver, moduleNames):
 	if not isinstance(kver, CKernelVersion):
 		return NotImplemented
 
-	modulesList = EnumerateAvaildableKernels(moduleNames)
+	modulesList = EnumerateAvailableKernels(moduleNames)
 	modulesList = sorted(modulesList, key=lambda CKernelModule: CKernelModule._kernelVersion, reverse=True)
 
 	print("Kmod binaries were found:")
@@ -241,7 +239,7 @@ def FindSuitableModule(strFoundVersion, moduleNames):
 	foundVersion = CKernelVersion(strFoundVersion)
 	print("Linux kernel found:"+str(foundVersion))
 
-	modulesList = EnumerateAvaildableKernels(moduleNames)
+	modulesList = EnumerateAvailableKernels(moduleNames)
 	modulesList = sorted(modulesList, key=lambda CKernelModule: CKernelModule._kernelVersion, reverse=True)
 
 	print("Blksnap kmod binaries were found:")
@@ -298,7 +296,7 @@ def TryLoadBdevFilter(modulePath):
 	CheckModuleExist(modulePath)
 
 	if os.path.isfile("/sys/kernel/livepatch/bdevfilter/enabled"):
-		UnloadModule();
+		TryUnloadModules()
 
 	cmd = "insmod " + modulePath
 	ExecuteCommand(cmd)
@@ -352,33 +350,33 @@ def Usage():
 	usageText += "\t--modinfo - Call 'modinfo' for a compatible kernel module.\n"
 	usageText += "\t--kmodAnyKernel - Try to find a module with a suitable release. In this case the system kernel may be incompatible with the module.\n"
 	usageText += "\t--unload - Try to unload kernel module.\n"
-	print(usageText);
+	print(usageText)
 
 def main(params):
-	isCheck = False;
-	isModinfo = False;
-	isKmodAnyKernel = False;
+	isCheck = False
+	isModinfo = False
+	isKmodAnyKernel = False
 
 	try:
 		# Process parameters
-		isParameter = True;
+		isParameter = True
 		while isParameter and (len(params) > 0):
 			if params[0] == "--help" or params[0] == "-h":
 				Usage()
 				return 0
 			if params[0] == "--check":
-				isCheck = True;
-				isKmodAnyKernel = True;
+				isCheck = True
+				isKmodAnyKernel = True
 			elif params[0] == "--modinfo":
-				isModinfo = True;
-				isKmodAnyKernel = True;
+				isModinfo = True
+				isKmodAnyKernel = True
 			elif params[0] == "--kmodAnyKernel":
-				isKmodAnyKernel = True;
+				isKmodAnyKernel = True
 			elif params[0] == "--unload":
 				TryUnloadModules()
 				return 0
 			else:
-				isParameter = False;
+				isParameter = False
 
 			if isParameter:
 				del params[0]
@@ -386,7 +384,7 @@ def main(params):
 		if (platform.system() != "Linux"):
 			raise RuntimeError("Found unsupported platform [{0}]".format(platform.system()) )
 
-		distName, distVersion = dist_os_release();
+		distName, distVersion = dist_os_release()
 		unameKernelVersion = platform.uname()[2]
 
 		if not distName in ["oracle", "ol", "redhat", "rhel", "centos", "rocky", "almalinux"]:
@@ -415,7 +413,7 @@ def main(params):
 				print("Same release kernel module path: "+kmodPath)
 				try:
 					TryProcess(kmodPath, params, isCheck, isModinfo)
-					return 0;
+					return 0
 				except Exception as ex:
 					print("Failed to load module for same release kernel version")
 
@@ -435,7 +433,7 @@ def main(params):
 			print("Failed to find suitable kernel module. {0}".format(ex))
 			return -1
 	except:
-		print("Unexpected error:"+sys.exc_info()[0])
+		print("Unexpected error: {0}".format(sys.exc_info()[0]))
 		raise
 
 params = sys.argv
