@@ -1,4 +1,4 @@
-#!/bin/bash -e
+set +x -e
 
 function check_certificate()
 {

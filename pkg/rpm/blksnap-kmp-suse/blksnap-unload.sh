@@ -1,3 +1,5 @@
+set +x -e
+
 if [ -e "/dev/blksnap" ]
 then
   modprobe -r blksnap 2>/dev/null || true
