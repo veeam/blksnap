@@ -38,50 +38,6 @@ static inline void bvec_set_page(struct bio_vec *bv, struct page *page,
 }
 #endif
 
-#if defined(HAVE_SUPER_BLOCK_FREEZE)
-static inline int _freeze_bdev(struct block_device *bdev,
-			       struct super_block **psuperblock)
-{
-	struct super_block *superblock;
-
-	pr_debug("Freezing device [%u:%u]\n", MAJOR(bdev->bd_dev),
-		 MINOR(bdev->bd_dev));
-
-	superblock = freeze_bdev(bdev);
-	if (IS_ERR(superblock)) {
-
-		pr_err("Failed to freeze device [%u:%u]\n", MAJOR(bdev->bd_dev),
-	    	   MINOR(bdev->bd_dev));
-		pr_err("Error code: %lu\n", PTR_ERR(superblock));
-		return PTR_ERR(superblock);
-	}
-
-	if (unlikely(!superblock))
-		pr_warn("Superblock for device [%u:%u] not found\n",
-			MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	else
-		pr_debug("Device [%u:%u] was frozen\n", MAJOR(bdev->bd_dev),
-			 MINOR(bdev->bd_dev));
-
-	*psuperblock = superblock;
-	return 0;
-}
-
-static inline void _thaw_bdev(struct block_device *bdev,
-			      struct super_block *superblock)
-{
-	if (superblock == NULL)
-		return;
-
-	if (thaw_bdev(bdev, superblock))
-		pr_err("Failed to unfreeze device [%u:%u]\n",
-		       MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev));
-	else
-		pr_debug("Device [%u:%u] was unfrozen\n", MAJOR(bdev->bd_dev),
-			 MINOR(bdev->bd_dev));
-}
-#endif
-
 #ifndef BIO_MAX_VECS
 static inline unsigned int bio_max_segs(unsigned int nr_segs)
 {

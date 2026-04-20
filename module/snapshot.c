@@ -274,7 +274,25 @@ static int snapshot_take_trackers(struct snapshot *snapshot)
 	 */
 	list_for_each_entry(tracker, &snapshot->trackers, link) {
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-		ret = _freeze_bdev(tracker->diff_area->orig_bdev, &tracker->diff_area->sb);
+		{
+			struct super_block *superblock;
+
+			superblock = freeze_bdev(tracker->diff_area->orig_bdev);
+			if (IS_ERR(superblock))
+			{
+				ret = PTR_ERR(superblock);
+				tracker->diff_area->sb = NULL;
+			}
+			else
+			{
+				ret = 0;
+				tracker->diff_area->sb = superblock;
+
+				if (!superblock)
+					pr_info("Device [%u:%u] is not mounted\n",
+						MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
+			}
+		}
 #else
 #if defined(HAVE_BDEV_FREEZE)
 		ret = bdev_freeze(tracker->diff_area->orig_bdev);
@@ -321,19 +339,19 @@ thaw:
 			continue;
 		tracker->diff_area->is_frozen = false;
 #if defined(HAVE_SUPER_BLOCK_FREEZE)
-		_thaw_bdev(tracker->diff_area->orig_bdev, tracker->diff_area->sb);
+		if (thaw_bdev(tracker->diff_area->orig_bdev, tracker->diff_area->sb))
 #else
 #if defined(HAVE_BDEV_FREEZE)
 		if (bdev_thaw(tracker->diff_area->orig_bdev))
 #else
 		if (thaw_bdev(tracker->diff_area->orig_bdev))
 #endif
+#endif
 			pr_warn("Failed to thaw device [%u:%u]\n",
 			       MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
 		else
-			pr_debug("Device [%u:%u] was unfrozen\n",
+			pr_debug("Device [%u:%u] has thawed out\n",
 				MAJOR(tracker->dev_id), MINOR(tracker->dev_id));
-#endif
 	}
 fail:
 	if (ret) {
