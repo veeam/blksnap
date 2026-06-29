@@ -107,40 +107,34 @@ function check_certificate()
 	fi
 	echo "Found Veeam Software module with signature key: ${MODULE_SIG_KEY}."
 
-	local CERT_SN=$(mokutil --list-enrolled 2>/dev/null | awk -v cn="CN=${MODULE_AUTHOR}" '
+	local SIG_KEY_CLEAN=$(echo "${MODULE_SIG_KEY}" | tr -d ': ' | tr '[:lower:]' '[:upper:]')
+
+	local CERT_SN=$(mokutil --list-enrolled 2>/dev/null | awk -v cn="CN=${MODULE_AUTHOR}" -v key="${SIG_KEY_CLEAN}" '
 		/Serial Number:/ {
 			getline
 			gsub(/^[[:space:]]+/, "")
 			gsub(/[[:space:]]+$/, "")
 			serial = $0
+			clean = toupper(serial)
+			gsub(/[: ]/, "", clean)
 		}
 		/Subject:/ {
-			if ($0 ~ cn && serial != "") {
+			if ($0 ~ cn && clean == key) {
 				print serial
 				exit
 			}
 			serial = ""
+			clean = ""
 		}
 	')
 	if [ -z "${CERT_SN}" ]
 	then
-		echo "DEPLOY_WARNING: Veeam Software certificate not found."
+		echo "DEPLOY_WARNING: [TBD]Veeam Software certificate matching the module signature was not found."
+		echo "DEPLOY_WARNING: [TBD]Module signature key: ${MODULE_SIG_KEY}."
 		echo "DEPLOY_WARNING: Install 'veeam-ueficert' package and complete MOK enrollment."
 		return 1
 	fi
 	echo "Found Veeam Software certificate with serial number: ${CERT_SN}."
-
-	local SIG_KEY_CLEAN=$(echo "${MODULE_SIG_KEY}" | tr -d ': ' | tr '[:lower:]' '[:upper:]')
-	local SN_CLEAN=$(echo "${CERT_SN}" | tr -d ': ' | tr '[:lower:]' '[:upper:]')
-
-	if [ "${SIG_KEY_CLEAN}" != "${SN_CLEAN}" ]
-	then
-		echo "DEPLOY_WARNING: [TBD]Certificate validation failed - signature mismatch detected."
-		echo "DEPLOY_WARNING: [TBD]Certificate serial number: ${CERT_SN}."
-		echo "DEPLOY_WARNING: [TBD]Module signature key: ${MODULE_SIG_KEY}."
-		echo "DEPLOY_WARNING: Reinstall 'veeam-ueficert' package and complete MOK enrollment."
-		return 1
-	fi
 
 	return 0
 }
