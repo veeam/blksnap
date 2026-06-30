@@ -7,16 +7,16 @@ function check_certificate()
 
 	if ! modinfo ${MODULE_NAME} 1>/dev/null
 	then
-		echo "DEPLOY_WARNING: [TBD]Failed to execute 'modinfo' for module ${MODULE_NAME}."
-		echo "DEPLOY_WARNING: [TBD]Check package '${NAME}' is installed."
+		echo "DEPLOY_WARNING: Failed to execute 'modinfo' for ${MODULE_NAME} module."
+		echo "DEPLOY_WARNING: Check is '${NAME}' package is installed."
 		return 1
 	fi
 
 	local MODULE_AUTHOR=$(modinfo ${MODULE_NAME} 2>/dev/null | grep "^author:" | sed 's/author:[[:space:]]*//')
 	if [ $? -ne 0 ] || [ -z "${MODULE_AUTHOR}" ]
 	then
-		echo "DEPLOY_WARNING: [TBD]Cannot get 'author' value for module ${MODULE_NAME}."
-		echo "DEPLOY_WARNING: [TBD]Check package '${NAME}' is installed."
+		echo "DEPLOY_WARNING: Cannot get 'author' value for ${MODULE_NAME} module."
+		echo "DEPLOY_WARNING: Check if '${NAME}' package is installed."
 		return 1
 	fi
 	echo "Found module by ${MODULE_AUTHOR}"
@@ -24,8 +24,8 @@ function check_certificate()
 	local MODULE_SIG_KEY=$(modinfo ${MODULE_NAME} 2>/dev/null | grep "^sig_key:" | sed 's/sig_key:[[:space:]]*//')
 	if [ $? -ne 0 ] || [ -z "${MODULE_SIG_KEY}" ]
 	then
-		echo "DEPLOY_WARNING: [TBD]Cannot get 'sig_key' value for module ${MODULE_NAME}."
-		echo "DEPLOY_WARNING: [TBD]Check package '${NAME}' is installed."
+		echo "DEPLOY_WARNING: Cannot get 'sig_key' value for ${MODULE_NAME} module."
+		echo "DEPLOY_WARNING: Check if '${NAME}' package is installed."
 		return 1
 	fi
 	echo "Found Veeam Software module with signature key: ${MODULE_SIG_KEY}."
@@ -52,8 +52,8 @@ function check_certificate()
 	')
 	if [ -z "${CERT_SN}" ]
 	then
-		echo "DEPLOY_WARNING: [TBD]Veeam Software certificate matching the module signature was not found."
-		echo "DEPLOY_WARNING: [TBD]Module signature key: ${MODULE_SIG_KEY}."
+		echo "DEPLOY_WARNING: Veeam Software certificate matching the module signature was not found."
+		echo "DEPLOY_WARNING: Module signature key: ${MODULE_SIG_KEY}."
 		echo "DEPLOY_WARNING: Install 'veeam-ueficert' package and complete MOK enrollment."
 		return 1
 	fi
