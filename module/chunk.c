@@ -364,7 +364,8 @@ int chunk_diff_bio(struct chunk *chunk, struct bio *bio)
 {
 	bool is_write = op_is_write(bio_op(bio));
 	loff_t chunk_ofs, chunk_left;
-	struct bio_vec iter_bvec, *bio_bvec;
+	struct bio_vec iter_bvec;
+	const struct bio_vec *bio_bvec;
 	struct bvec_iter iter;
 	unsigned long nr_segs = 0;
 	size_t nbytes = 0;
