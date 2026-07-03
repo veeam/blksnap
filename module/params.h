@@ -11,6 +11,7 @@ unsigned int get_chunk_maximum_shift(void);
 unsigned long get_chunk_maximum_count(void);
 unsigned int get_chunk_maximum_in_queue(void);
 sector_t get_diff_storage_minimum(void);
+sector_t get_discard_fail_limit(void);
 
 bool blksnap_queue_work(struct work_struct *work);
 

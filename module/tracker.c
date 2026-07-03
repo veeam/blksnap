@@ -95,9 +95,9 @@ static bool tracker_submit_bio(struct bio *bio)
 	if (bio_op(bio) == REQ_OP_READ)
 		return false;
 
-	if (bio_op(bio) == REQ_OP_DISCARD) {
+	if (bio_op(bio) == REQ_OP_DISCARD && count > get_discard_fail_limit()) {
 		pr_err("Try to discard %lld bytes\n", count << SECTOR_SHIFT);
-		pr_err("Operation 'Discard' is not supported while snapshot taken\n");
+		pr_err("Operation 'Discard' cannot be processed\n");
 		diff_area_set_corrupted(tracker->diff_area, -EPERM);
 		return false;
 	}

@@ -114,6 +114,26 @@ static unsigned int chunk_maximum_in_queue = 256;
  */
 static unsigned int diff_storage_minimum = 2097152;
 
+/*
+ * The limit on the allowable amount of data for a DISCARD operation.
+ *
+ * A single bio with the REQ_OP_DISCARD operation may request to zero a very
+ * large amount of data. Since bio processing is performed asynchronously, while
+ * a snapshot is held this amount of data has to be copied to the difference
+ * storage. This requires allocating a buffer in RAM for all the copy bios. As a
+ * result, there may be not enough RAM, which can lead to a system crash. This
+ * limit sets the allowable number of sectors for which the DISCARD operation
+ * is processed and the COW algorithm is performed. If a bio with the
+ * REQ_OP_DISCARD operation requests to zero more sectors than the specified
+ * limit, the snapshot is marked as corrupted.
+ * 0 - always mark the snapshot as corrupted if a DISCARD operation with a
+ *     non-zero number of sectors is encountered.
+ * 0xFFFFFFFF - sets the limit to 4294967295 sectors, which corresponds to about
+ *     2 TiB.
+ */
+static unsigned int discard_fail_limit;
+
+
 #if defined(BLKSNAP_STANDALONE)
 static const struct blksnap_version version = {
 	.major = VERSION_MAJOR,
@@ -192,6 +212,11 @@ unsigned int get_chunk_maximum_in_queue(void)
 sector_t get_diff_storage_minimum(void)
 {
 	return (sector_t)diff_storage_minimum;
+}
+
+sector_t get_discard_fail_limit(void)
+{
+	return (sector_t)discard_fail_limit;
 }
 
 bool blksnap_queue_work(struct work_struct *work)
@@ -501,6 +526,7 @@ static int __init parameters_init(void)
 
 	pr_debug("chunk_maximum_in_queue: %d\n", chunk_maximum_in_queue);
 	pr_debug("diff_storage_minimum: %d\n", diff_storage_minimum);
+	pr_debug("discard_fail_limit: %d\n", discard_fail_limit);
 
 	if (tracking_block_maximum_shift < tracking_block_minimum_shift) {
 		tracking_block_maximum_shift = tracking_block_minimum_shift;
@@ -642,6 +668,9 @@ module_param_named(diff_storage_minimum, diff_storage_minimum, uint, 0644);
 MODULE_PARM_DESC(diff_storage_minimum,
 	"The minimum allowable size of the difference storage in sectors");
 
+module_param_named(discard_fail_limit, discard_fail_limit, uint, 0644);
+MODULE_PARM_DESC(discard_fail_limit,
+	"The maximum number of sectors allowed for a DISCARD operation");
 MODULE_DESCRIPTION("Block Device Snapshots Module");
 MODULE_VERSION(VERSION_STR);
 MODULE_AUTHOR("Veeam Software Group GmbH");
