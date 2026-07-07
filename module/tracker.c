@@ -14,6 +14,7 @@
 #else
 #include <uapi/linux/blksnap.h>
 #endif
+#include "params.h"
 #include "tracker.h"
 #include "cbt_map.h"
 #include "diff_area.h"
