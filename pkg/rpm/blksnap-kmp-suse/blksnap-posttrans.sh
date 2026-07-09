@@ -8,7 +8,7 @@ function check_certificate()
 	if ! modinfo ${MODULE_NAME} 1>/dev/null
 	then
 		echo "DEPLOY_WARNING: Failed to execute 'modinfo' for ${MODULE_NAME} module."
-		echo "DEPLOY_WARNING: Check is '${NAME}' package is installed."
+		echo "DEPLOY_WARNING: Check if '${NAME}' package is installed."
 		return 1
 	fi
 
