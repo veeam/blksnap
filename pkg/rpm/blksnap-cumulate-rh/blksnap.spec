@@ -93,7 +93,7 @@ function check_certificate()
 	if [ $? -ne 0 ] || [ -z "${MODULE_AUTHOR}" ]
 	then
 		echo "DEPLOY_WARNING: Cannot get 'author' value for ${MODULE_NAME} module."
-		echo "DEPLOY_WARNING: Check is '${NAME}' package is installed."
+		echo "DEPLOY_WARNING: Check if '${NAME}' package is installed."
 		return 1
 	fi
 	echo "Found module by ${MODULE_AUTHOR}."
@@ -102,7 +102,7 @@ function check_certificate()
 	if [ $? -ne 0 ] || [ -z "${MODULE_SIG_KEY}" ]
 	then
 		echo "DEPLOY_WARNING: Cannot get 'sig_key' value for ${MODULE_NAME} module."
-		echo "DEPLOY_WARNING: Check is '${NAME}' package is installed."
+		echo "DEPLOY_WARNING: Check if '${NAME}' package is installed."
 		return 1
 	fi
 	echo "Found Veeam Software module with signature key: ${MODULE_SIG_KEY}."
