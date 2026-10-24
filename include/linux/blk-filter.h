@@ -47,7 +47,6 @@ struct blkfilter_attach {
 
 /**
  * struct blkfilter_detach - parameter for BLKFILTER_DETACH ioctl.
- *      ioctl.
  *
  * @name:       Name of block device filter.
  */
